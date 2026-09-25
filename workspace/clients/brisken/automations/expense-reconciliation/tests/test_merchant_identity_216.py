@@ -10,10 +10,13 @@ refuses, so an answer can only come from the identity reaching a rule.
 """
 from __future__ import annotations
 
-from datetime import date
+import io
+import json
+from datetime import date, datetime
 from decimal import Decimal
 
 import pytest
+from openpyxl import Workbook
 
 from expense_recon.categorize import categorize_receipts_with_registry
 from expense_recon.learning import (
@@ -24,7 +27,7 @@ from expense_recon.learning import (
     learn_from_expense_run,
 )
 from expense_recon.learning.capture import category_key
-from expense_recon.llm.client import ClassificationResult, MockLLMClient
+from expense_recon.llm.client import ClassificationResult, ExtractedReceipt, MockLLMClient
 from expense_recon.matching.types import (
     ClassificationSource,
     Match,
@@ -336,3 +339,194 @@ def test_two_registry_merchants_on_one_pair_are_a_conflict_not_an_alias():
         person_confirmed_tx_ids={"t0"}, identity=ident,
     )
     assert cands == [] and conflicts == 1
+
+
+# ---- the memory plan and Publish (routes) ----------------------------------------
+#
+# Driven through `GET /api/runs/{id}/memory-plan` and `POST .../publish`, the
+# callers the wiring changed: a month with a statement whose one pairing a
+# person or the tool confirmed, and corrections on a receipt the registry
+# names under a longer canonical than its extracted name.
+
+JPG = b"\xff\xd8\xff\xe0fake-jpeg-identity-216"
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+CONTOSO = {"Contoso Cloud": {"aliases": [], "category": SOFTWARE, "zoho_account": None}}
+DESC = "CTSO*CLOUDSUB 8NK"
+_UPLOADS = [0]
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    testclient = pytest.importorskip("fastapi.testclient")
+    from expense_recon.web.app import create_app
+
+    monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("EXPENSE_RECON_CARDS", raising=False)
+    with testclient.TestClient(create_app(tmp_path)) as c:
+        c._data_root = tmp_path
+        yield c
+
+
+def _done(client, resp):
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+
+
+def _month(client, monkeypatch, merchants, *vendors) -> str:
+    """A July month for Corporate Services, one receipt per vendor (USD 20.00,
+    21.00, ... so no two read as copies), the registry set first."""
+    assert client.put("/api/settings", json={"merchants": merchants}).status_code == 200
+    mock = MockLLMClient(extraction_responses=[
+        ExtractedReceipt(
+            date="2026-07-02", total=f"{20 + i}.00", currency="USD", vendor=v,
+            reference="", line_items=(), confidence=0.9, notes="",
+        )
+        for i, v in enumerate(vendors)
+    ])
+    monkeypatch.setattr("expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
+    resp = client.post("/api/expense-batches", data={"legal_entity": CORP, "label": "July 2026"})
+    _done(client, resp)
+    batch = resp.json()["batch_id"]
+    files = []
+    for _v in vendors:
+        _UPLOADS[0] += 1
+        body = JPG + bytes([_UPLOADS[0] % 256]) * 3
+        files.append(("files", (f"r{_UPLOADS[0]}.jpg", body, "application/octet-stream")))
+    _done(client, client.post(f"/api/expense-batches/{batch}/receipts", files=files))
+    return batch
+
+
+def _paired_month(client, monkeypatch, merchants, vendor, description, *, by) -> str:
+    """`_month` with one receipt, a statement holding its USD 20.00 charge, and
+    the pairing confirmed by a person (the decisions route) or by the tool
+    (`set_tool_decision`, what `apply_self_confirmations` writes)."""
+    from expense_recon.web.store import RunStore
+
+    batch = _month(client, monkeypatch, merchants, vendor)
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["Date", "Description", "Type", "Amount"])
+    ws.append([datetime(2026, 7, 2), description, "Sale", -20.00])
+    buf = io.BytesIO()
+    wb.save(buf)
+    _done(client, client.post(
+        f"/api/expense-batches/{batch}/statement",
+        files={"statement": ("July2026.xlsx", buf.getvalue(), XLSX)},
+        data={
+            "account_id": "card-2838",
+            "account_legal_entities": json.dumps({"card-2838": CORP}),
+            "account_card_currency": "USD",
+        },
+    ))
+    (row,) = [
+        r for r in client.get(f"/api/runs/{batch}").json()["rows"]
+        if description in (r["vendor"] or "")
+    ]
+    tx, doc = row["transaction_id"], row["candidates"][0]["document_id"]
+    if by == "person":
+        resp = client.post(f"/api/runs/{batch}/decisions", json={
+            "transaction_id": tx, "status": "confirmed", "chosen_document_id": doc,
+        })
+        assert resp.status_code == 200, resp.text
+    else:
+        store = RunStore(client._data_root / "recon-web.sqlite")
+        try:
+            assert store.set_tool_decision(
+                batch, tx, "confirmed", doc, "2026-07-03T00:00:00Z", "exact_vendor_75",
+            )
+        finally:
+            store.close()
+    return batch
+
+
+def _lessons(client, batch) -> dict[str, dict]:
+    resp = client.get(f"/api/runs/{batch}/memory-plan")
+    assert resp.status_code == 200, resp.text
+    return {lsn["id"]: lsn for lsn in resp.json()["lessons"]}
+
+
+def _publish(client, batch, **ticks) -> dict:
+    resp = client.post(f"/api/runs/{batch}/publish", json={"override": True, **ticks})
+    assert resp.status_code == 200, resp.text
+    return resp.json()["memory"]
+
+
+def _merchants(client) -> dict:
+    return client.get("/api/settings").json()["merchants"]
+
+
+def _set_category(client, batch, doc, category) -> None:
+    resp = client.put(
+        f"/api/runs/{batch}/expenses/{doc}", json={"field": "category", "value": category},
+    )
+    assert resp.status_code == 200, resp.text
+
+
+def test_route_a_person_confirmed_pairing_offers_its_spelling_and_publish_saves_it(
+    client, monkeypatch,
+):
+    batch = _paired_month(client, monkeypatch, CONTOSO, "Contoso Cloud, Inc.", DESC, by="person")
+    lesson = _lessons(client, batch)["registry:Contoso Cloud"]
+    assert f"new spelling {DESC}" in lesson["description"]
+    assert lesson["default_keep"] is True and lesson["owner_gated"] is False
+    # The lesson names the pairing that proved it: the bank's line and the receipt.
+    assert [(s["kind"], s["vendor"]) for s in lesson["sources"]] == [
+        ("charge", DESC), ("receipt", "Contoso Cloud, Inc."),
+    ]
+    _publish(client, batch)
+    assert _merchants(client)["Contoso Cloud"]["aliases"] == [DESC]
+
+
+def test_route_a_tool_confirmed_pairing_offers_no_spelling(client, monkeypatch):
+    batch = _paired_month(client, monkeypatch, CONTOSO, "Contoso Cloud, Inc.", DESC, by="tool")
+    assert not any("new spelling" in lsn["description"] for lsn in _lessons(client, batch).values())
+    _publish(client, batch)
+    assert _merchants(client)["Contoso Cloud"]["aliases"] == []
+
+
+def test_route_an_owner_gated_merchants_spelling_is_shown_and_never_saved(client, monkeypatch):
+    anthropic = {"Anthropic": {"aliases": [], "category": SOFTWARE, "zoho_account": None}}
+    batch = _paired_month(
+        client, monkeypatch, anthropic, "Anthropic, PBC", "ANTHROPIC* CLAUDE SUB", by="person",
+    )
+    lesson = _lessons(client, batch)["registry:Anthropic"]
+    assert "new spelling ANTHROPIC* CLAUDE SUB" in lesson["description"]
+    assert lesson["owner_gated"] is True and lesson["default_keep"] is False
+    memory = _publish(client, batch, keep=["registry:Anthropic"])
+    assert memory["learned"]["lessons"]["refused_owner_gated"] == ["registry:Anthropic"]
+    assert _merchants(client)["Anthropic"]["aliases"] == []
+
+
+def test_route_a_correction_is_planned_under_the_registry_merchant_with_its_row(
+    client, monkeypatch,
+):
+    # "CONTOSO" resolves to the registry's "Contoso Cloud", whose key is not
+    # the extracted name's: the write and the lesson's rows must share it.
+    batch = _month(client, monkeypatch, CONTOSO, "CONTOSO")
+    (row,) = client.get(f"/api/expense-batches/{batch}").json()["expenses"]
+    _set_category(client, batch, row["document_id"], "Office Supplies & Consumables")
+    lesson = _lessons(client, batch)[f"merchant_category:{CORP}|contoso cloud"]
+    assert [s["document_id"] for s in lesson["sources"]] == [row["document_id"]]
+
+
+def test_route_a_kept_conflict_candidate_is_saved_under_the_registry_merchant(
+    client, monkeypatch,
+):
+    batch = _month(client, monkeypatch, CONTOSO, "CONTOSO", "CONTOSO")
+    a, b = (r["document_id"] for r in client.get(f"/api/expense-batches/{batch}").json()["expenses"])
+    _set_category(client, batch, a, "Office Supplies & Consumables")
+    _set_category(client, batch, b, "Equipment & Hardware")
+    pick = next(
+        lsn for lsn in _lessons(client, batch).values()
+        if lsn["kind"] == "conflict" and lsn["table"] == "merchant_category"
+        and "Equipment" in lsn["description"]
+    )
+    assert pick["key"] == {"legal_entity_id": CORP, "vendor_norm": "contoso cloud"}
+    _publish(client, batch, keep=[pick["id"]])
+    cats = {
+        (c["entity"], c["vendor"]): c["category"]
+        for c in client.get("/api/memory").json()["categories"]
+    }
+    assert cats == {(CORP, "contoso cloud"): "Equipment & Hardware"}

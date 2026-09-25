@@ -11277,6 +11277,56 @@ GitHub). Every pick from now on prints as hers. The journal's receiptless rows
 are off on every live month (`zoho.export_receiptless_learned` unset), so that
 surface changes nothing she downloads today.
 
+**Cause 3, built 2026-09-25 (merchant identity).** One resolver,
+`merchant_identity.MerchantIdentityResolver`, now decides which merchant a name
+is, for memory recall, memory capture, the registry match and the per-company
+account map: the registry's canonical names and aliases first, otherwise the
+name with its non-merchant parts taken off (legal forms, handles, the card
+network's location tail, web-address parts, phone and reference numbers).
+Measured on the live GL months before merging, read once and nothing written:
+
+- Registry reach on the 55 model-unsure receipts 13 -> 35, memory recall
+  14 -> 41.
+- The charge categorizer replayed over all 191 receiptless charges, base tree
+  against this build with a model that refuses: 7 -> 24 answered by a rule,
+  17 changed, none lost. Against Criss's Zoho postings the 17 are 11 right,
+  0 wrong, 6 not booked by 2026-09-18 (BASE44 x4, Wix, DigitalOcean/ServerPilot
+  September). Charges change at each month's next re-match; a receipt changes
+  only when it is re-categorized (a new ingest or the refused-rerun route).
+- Every merge the rules make was listed over 1,562 distinct strings (the three
+  months, memory keys, 24 months of Zoho descriptors and vendor names) and
+  checked against her Zoho vendor name. The first rule set folded
+  `GOOGLE *ADS9208169978` into Google LLC; a word glued to digits is now kept.
+  The four merges where her names differ are one merchant each (Antropic /
+  Anthropic, two OpenAI spellings, two Registro.br spellings, one Uber charge
+  she posted as DB).
+- Memory folds by identity at read time instead of being rekeyed: 108 rules,
+  107 identities, one fold (Corporate Services `anthropic` + `antropic`, the
+  person's row decides), no refusals.
+
+The alias learner is on the Publish checklist. A pairing a person confirmed
+(never one the tool confirmed itself) where one side resolves to a registry
+merchant and the other does not offers the other spelling as that merchant's
+alias: a "new spelling" lesson, ticked by default, naming the charge and the
+receipt behind it; for OpenAI, Anthropic and Lovable it is shown and refused.
+Two sides resolving to two different merchants teach nothing.
+
+Left as is: the registry's fuzzy tier scores a one-word name inside a longer
+merchant at 100, so `Google LLC` would read as a lone `Google Ads` entry and
+`Twilio Inc` as `Twilio SendGrid`. The same rule carries `LOVABLE` -> Lovable
+Labs on 65 live rows and all six fuzzy matches on live strings are right, so it
+waits for a wrong case.
+
+What only a person can add (counted, not proposed). Dirk, gated: the alias
+`ANTHROPIC* CLAUDE SUB`; an OpenAI entry (`OPENAI`, `OPENAI OPENAI.COM CA`,
+`OPENAI *CHATGPT SUBSCR`, `OPENAI* CHATGPT CREDIT`, 29 live rows); the Lovable
+merchant held twice (`Lovable Labs`, `Lovable Labs Incorporated`). Operator
+edits: SAP (`SAP SE`, `SAP SE WALLDORF`, `SAP IRELAND LIMITED DUBLIN 24`, 20
+rows), Zoho (`ZOHO* ZOHO-ONE`, `ZOHO_BOOKS`), AT&T (`AT&amp;T MOBILITY EPAY`,
+`ATT*BILL PAYMENT`), Amazon (`AMZ*Amazon.D*...`), and entries for Wispr Flow,
+Rize Labs, OpenRouter, Railway, Vercel and Pressmaster, which take the 55's
+reach from 35 to 47.
+
 ### 217. A duplicate shows its controls twice, and the tool keeps the invoice instead of the receipt (notes #89 + #90, owner 2026-09-25 03:45 / 03:47 UTC) (BACKEND BUILT 2026-09-25; SPA prompt `docs/lovable-duplicate-controls-once-prompt.md` not pasted)
 
 **Owner**, on September's Pressmaster FZCO unit (row `0078`, the invoice),
