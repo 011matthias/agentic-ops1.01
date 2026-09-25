@@ -9,6 +9,8 @@ updated: 2026-09-25
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-25: shorter review lines (backlog item 213, owner note #87), backend live `c5a426aa`, SPA half NOT pasted.** The waiting line names the cards only when one or two wait; three more reasons keep their instruction and lose the explanation (47 live rows, 0 counts moved). The published SPA writes the waiting line itself, so September's 13 waiting rows still read 284-346 characters until `automations/expense-reconciliation/docs/lovable-short-review-lines-prompt.md` is pasted.
+
 **2026-09-25: suggested duplicates stay bound together until someone releases them (backlog item 209), SPA prompt written, design approved on screenshots, NOT pasted.** Expenses: one unit per suggested duplicate (main as a full row, presumed copies folded under it), placed in its most urgent copy's section; the "Show duplicates" filter shows only units. Matching: each presumed copy sits directly under the row showing its main. No backend change: presumed copies were already out of matching and "Not a copy" already re-includes both receipts (read live). Prompt `automations/expense-reconciliation/docs/lovable-duplicate-groups-prompt.md`, verified on a scratch clone of Lovable `9b822f1` (PROMPT-STATUS row).
 
 **2026-09-25: a copy is no longer lent a card its twin's charge disputes** (backlog item 204 step 4 follow-up; Shipped row 132). July's copy of the Lovable 200.00 purchase showed card 1176 from the account's later purchases although the purchase was settled on 2838; it now stays blank.
@@ -59,7 +61,8 @@ Measured on live July and August: August's Lovable invoice on BASE44 50.00
 (the one wrong booking) goes to review, and so do three pairs the labels
 call excluded or leave unlabelled; clean right bookings and the six bundles
 (70/95) are unchanged. Rows move at each month's next natural re-match. The
-Lovable prompt (`docs/lovable-no-card-vendor-guard-prompt.md`) is not pasted.
+Lovable prompt (`docs/lovable-no-card-vendor-guard-prompt.md`) is published
+(bundle, 2026-09-25 ~01:47 UTC; not driven).
 
 **2026-09-25: the private-card list, a personal card confirmed private once**
 (backlog item 208, owner direction 2026-09-24 fusing cases 2 + 4 of the
@@ -84,8 +87,8 @@ company, carries a recurring-charge `card_suggestion` with its evidence
 (never applied), and one picked card can be applied to the same vendor's
 other card-less rows with an explicit click (`POST .../cards/by-vendor`). A
 statement upload names its majority month and advises when it is filed in
-another. SPA half `docs/lovable-case9-status-prompt.md` waits on the owner's
-paste. Builds 1 to 4 run in sibling sessions.
+another. SPA half `docs/lovable-case9-status-prompt.md` is published (bundle +
+cold drive 2026-09-25). Builds 1 to 4 run in sibling sessions.
 **2026-09-25: July, August and September are on the Zoho accounts** (owner
 directive; backlog items 201 and 205, PR #1356, Fly `071b19d7`, snapshot
 `vs_V9ka1J80opbTj8gxvqQ59X5` taken before). Owner's ruling on Criss's 35 bucket
