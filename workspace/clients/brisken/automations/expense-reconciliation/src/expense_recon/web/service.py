@@ -12423,20 +12423,30 @@ def settled_charge_amounts(
     What it adds over the card twin is only the money: the amount and the
     currency the charge posted in, so a converter can refuse a charge that
     did not post in the base currency rather than convert through two rates.
+
+    Item 212: the twin's other half too. A receipt a NEIGHBOUR month's
+    charge settles takes that charge's money through the same reader its
+    card comes from (`charges_settled_elsewhere`), read after this month's
+    own charges, which win on the same id. Before, the row named the
+    neighbour charge's card and converted at the reference rate. That half
+    runs on a month with no statement of its own too, which is the usual
+    case: the receipt's month is the one the statement did not cover.
     """
-    if not states:
-        return {}
-    borrowed = set((run.snapshot or {}).get(RECEIPT_SOURCES_KEY) or {})
-    tx_by_id = {t.transaction_id: t for t in charges}
     out: dict[str, tuple[Decimal, str]] = {}
-    for tx_id, state in states.items():
-        doc = state.get("held_doc")
-        tx = tx_by_id.get(tx_id)
-        if state.get("bucket") != "reconciled" or not doc or tx is None:
-            continue
-        if doc in borrowed or tx.amount is None:
-            continue
-        out[doc] = (tx.amount, (tx.transaction_currency or "").upper())
+    if states:
+        borrowed = set((run.snapshot or {}).get(RECEIPT_SOURCES_KEY) or {})
+        tx_by_id = {t.transaction_id: t for t in charges}
+        for tx_id, state in states.items():
+            doc = state.get("held_doc")
+            tx = tx_by_id.get(tx_id)
+            if state.get("bucket") != "reconciled" or not doc or tx is None:
+                continue
+            if doc in borrowed or tx.amount is None:
+                continue
+            out[doc] = (tx.amount, (tx.transaction_currency or "").upper())
+    for doc, tx in charges_settled_elsewhere(run).items():
+        if tx.amount is not None:
+            out.setdefault(doc, (tx.amount, (tx.transaction_currency or "").upper()))
     return out
 
 
@@ -18139,7 +18149,24 @@ _RUN_DB_NAME = "recon-web.sqlite"
 def cards_settled_elsewhere(run: RunRow, cards: dict) -> dict[str, str]:
     """`{document_id: card key}` for every receipt of this month that ANOTHER
     month's charge settles, keyed to that charge's card in THIS batch's
-    registry (the one the row resolves the key against).
+    registry (the one the row resolves the key against). A card the registry
+    cannot name lends nothing."""
+    if not cards:
+        return {}
+    out: dict[str, str] = {}
+    for doc, tx in charges_settled_elsewhere(run).items():
+        key = _charge_card_identity(tx, cards).card_key
+        if key:
+            out[doc] = key
+    return out
+
+
+def charges_settled_elsewhere(run: RunRow) -> dict:
+    """`{document_id: charge}` for every receipt of this month that ANOTHER
+    month's charge settles: the one reader both of that charge's consequences
+    go through, its card (`cards_settled_elsewhere`) and its money
+    (`settled_charge_amounts`, item 212), so the card a row names and the
+    rate it converts at always describe the same charge.
 
     A receipt printed on the 31st is paid by a charge that posts on the 1st,
     so the next month's statement borrows it (`adjacent_pool_for_month`) and
@@ -18167,7 +18194,7 @@ def cards_settled_elsewhere(run: RunRow, cards: dict) -> dict[str, str]:
 
     from .store import open_read_only
 
-    if not cards or not run.work_dir:
+    if not run.work_dir:
         return {}
     work = Path(run.work_dir)
     if work.parent.name != "runs":
@@ -18175,7 +18202,7 @@ def cards_settled_elsewhere(run: RunRow, cards: dict) -> dict[str, str]:
     store = open_read_only(work.parent.parent / _RUN_DB_NAME)
     if store is None:
         return {}
-    out: dict[str, str] = {}
+    out: dict = {}
     try:
         held_by: dict[str, list[tuple[str, str]]] = {}
         for doc, claim in store.get_claims_on_receipts(run.run_id).items():
@@ -18201,9 +18228,7 @@ def cards_settled_elsewhere(run: RunRow, cards: dict) -> dict[str, str]:
                     continue
                 if receipt_source_run(other, doc) != run.run_id:
                     continue
-                key = _charge_card_identity(tx, cards).card_key
-                if key:
-                    out[doc] = key
+                out[doc] = tx
     except sqlite3.Error:
         return {}
     finally:
