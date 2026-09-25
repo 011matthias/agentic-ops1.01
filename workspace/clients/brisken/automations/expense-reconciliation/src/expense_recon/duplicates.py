@@ -321,14 +321,60 @@ def find_duplicate_receipt_groups(
     return out
 
 
+def lending_groups(
+    receipts: list[Receipt],
+    resolutions: dict[str, str] | None = None,
+    decisions: "list[ReceiptGroupDecision] | None" = None,
+) -> list[list[str]]:
+    """The groups whose copies lend each other a card: every reference group
+    (item 69 round A), then every group the app SHOWS as one document, i.e.
+    the groups behind ``expenses[].duplicate`` (``duplicate_row_flags``'s
+    filter: not ruled ``ignore``, not decided ``distinct``). A group both
+    lists hold is listed once.
+
+    Item 204 step 2 (case 9, 2026-09-25). A Stripe vendor mails the INVOICE,
+    which prints no card, and the RECEIPT, which prints "Visa - 9693"; the
+    two carry different numbers (``HMVWDWIL-0032`` / ``2811-8284-7349``), so
+    no reference group holds them and the invoice read "No legal entity yet"
+    beside a twin the grid already marks as its copy (rung 3: the receipt
+    prints the invoice's number). A group the ladder decides is two
+    purchases (two numbers nobody cross-prints, two different cards, the
+    statement check) is not shown and lends nothing: the three OpenAI 80.12
+    invoices of 16 September 2026 are that case.
+
+    ``decisions`` are the caller's own (``web.service.duplicate_decisions``,
+    which reads the stored files for rungs 1 and 3 and the last re-match's
+    rung 7). Without them the ladder runs here with no file evidence, so a
+    pair only rung 3 can join stays apart: an evidence-free caller lends
+    less, never more.
+    """
+    groups = find_duplicate_receipts_by_reference(receipts)
+    known = {tuple(g) for g in groups}
+    if decisions is None:
+        decisions = decide_receipt_groups(receipts, resolutions=resolutions)
+    for d in decisions:
+        if d.resolution == "ignore" or d.verdict == VERDICT_DISTINCT:
+            continue
+        members = sorted({m for m in d.members if m})
+        if len(members) < 2 or tuple(members) in known:
+            continue
+        known.add(tuple(members))
+        groups.append(members)
+    return groups
+
+
 def inherit_card_from_copies(
     receipts: list[Receipt],
     resolutions: dict[str, str] | None = None,
     card_hints: dict[str, str] | None = None,
+    decisions: "list[ReceiptGroupDecision] | None" = None,
 ) -> list[Receipt]:
-    """The same list, where every copy of one document (by its reference)
-    that names no card carries the card its copies name, and every copy
-    with no legal entity carries the one entity its copies name.
+    """The same list, where every copy of one document that names no card
+    carries the card its copies name, and every copy with no legal entity
+    carries the one entity its copies name. The groups are
+    ``lending_groups``: the reference groups, and since item 204 every group
+    the app shows as one document (``decisions``, the caller's ladder
+    verdicts; None decides them here without file evidence).
 
     ``resolutions`` is the run's duplicate resolutions (group id ->
     ``ignore`` / ``confirmed``): a group the reviewer ruled "not a
@@ -365,13 +411,18 @@ def inherit_card_from_copies(
       lend nothing, because then the document does not say which card paid;
     * a member with an empty ``legal_entity_id`` receives the group's entity
       only when exactly one is named across the group; a member that names
-      one keeps it.
+      one keeps it;
+    * a member two groups would lend two different cards (or entities)
+      receives neither (item 204): a blank prompts Criss to look, a wrong
+      card silently books the receipt to the wrong entity and person.
     """
     resolutions = resolutions or {}
     hinted = {k for k in (card_hints or {}) if k}
     by_id = {r.document_id: r for r in receipts}
-    patched: dict[str, Receipt] = {}
-    for members in find_duplicate_receipts_by_reference(receipts):
+    lent_mode: dict[str, str] = {}
+    lent_entity: dict[str, str] = {}
+    torn: set[tuple[str, str]] = set()
+    for members in lending_groups(receipts, resolutions, decisions):
         if resolutions.get(duplicate_group_id("receipt", members)) == "ignore":  # lends nothing
             continue
         group = [by_id[d] for d in members if d in by_id]
@@ -384,17 +435,27 @@ def inherit_card_from_copies(
         entities = {(r.legal_entity_id or "").strip() for r in group} - {""}
         lend_entity = next(iter(entities)) if len(entities) == 1 else None
         for r in group:
-            kw: dict = {}
+            doc = r.document_id
             if (
                 lend_mode is not None
                 and not _card_keys(r.payment_mode)
                 and (r.payment_mode or "").strip() not in hinted
             ):
-                kw["payment_mode"] = lend_mode
+                prev = lent_mode.setdefault(doc, lend_mode)
+                if _card_keys(prev) != _card_keys(lend_mode):
+                    torn.add((doc, "payment_mode"))
             if lend_entity is not None and not (r.legal_entity_id or "").strip():
-                kw["legal_entity_id"] = lend_entity
-            if kw:
-                patched[r.document_id] = replace(r, **kw)
+                if lent_entity.setdefault(doc, lend_entity) != lend_entity:
+                    torn.add((doc, "legal_entity_id"))
+    patched: dict[str, Receipt] = {}
+    for doc, r in by_id.items():
+        kw: dict = {}
+        if doc in lent_mode and (doc, "payment_mode") not in torn:
+            kw["payment_mode"] = lent_mode[doc]
+        if doc in lent_entity and (doc, "legal_entity_id") not in torn:
+            kw["legal_entity_id"] = lent_entity[doc]
+        if kw:
+            patched[doc] = replace(r, **kw)
     if not patched:
         return receipts
     return [patched.get(r.document_id, r) for r in receipts]

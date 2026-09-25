@@ -6460,3 +6460,48 @@ same filter since item 112.
 
 Tests: `tests/test_trip_lifecycle_rematch.py` (12, route-level), eight
 wiring points proven red under `tools/regress_check.py`.
+
+## An invoice takes the card its own receipt prints (backlog item 204 step 2, case 9, 2026-09-25)
+
+No field is added or retyped. What changes is WHICH rows the existing
+fields fill: `expenses[].payment_hint`, `card`, `card_source`,
+`legal_entity_id`, `entity_source`, `person` and `person_source` on a copy
+that prints no card, the export's `Legal Entity` for that row, and the card
+scope the matcher gives it at the next re-match.
+
+**The rule.** A copy that names no card carries the card its twin prints
+when the two sit in a group the app SHOWS as one document: the groups behind
+`expenses[].duplicate` (not ruled "Not a duplicate", not decided `distinct`).
+Until now only a group sharing one document number lent a card. A Stripe
+vendor's invoice (`HMVWDWIL-0032`, prints no card) and its receipt
+(`2811-8284-7349`, prints "Visa - 3645") carry two numbers, so the invoice
+read "No legal entity yet" beside a twin the grid already marked as its
+copy (`basis: "printed_reference"`, the receipt prints the invoice's
+number). A vendor/date twin (`basis: "vendor_date"`) lends too.
+
+**Unchanged guards.** Copies naming different cards lend nothing. A group
+ruled `ignore` lends nothing. A member whose payment mode is an
+operator-assigned hint (`POST /api/expense-batches/{id}/cards`) keeps it.
+The entity lends only when exactly one is named. New with this item: a copy
+two shown groups would lend two different cards (or entities) receives
+neither, because a blank prompts review and a wrong card books the row to
+the wrong entity and person.
+
+**Never lent across a group the ladder keeps apart.** Three invoices from
+one vendor on one day for one amount with three document numbers
+(`basis: "distinct_reference"`, no row marked a copy) share nothing. The
+three OpenAI 80.12 of 16 September 2026 are that case.
+
+**Where it runs.** The grid (`GET /api/expense-batches/{id}`), the export
+(`_expense_export_inputs`: the CSV and the month report) and the re-match
+bake all pass the same evidence-backed verdicts (`duplicate_decisions`: file
+digests, text layers, the last statement check). A caller without them
+(`recon-match-attribution.py`, the months list's copy count) decides the
+groups without file evidence and so lends less, never more. Rows move on
+the next read; the matcher scope moves at the month's next natural re-match.
+
+Tests: `tests/test_twin_card_c9.py` (9, route-level through the grid, the
+CSV and one re-match). `test_reference_duplicates.py`'s unit test that
+pinned "a vendor/date pair lends nothing" is flipped to the new rule. Four
+wiring points proven red under `tools/regress_check.py` (the group source
+in `inherit_card_from_copies`, and each of the three service call lines).

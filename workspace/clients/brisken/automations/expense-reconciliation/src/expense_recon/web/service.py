@@ -7516,7 +7516,7 @@ def build_expense_view(
     # its receipt copy names the card. A group ruled `ignore` lends nothing,
     # and an operator-assigned hint word is never overwritten (grid).
     grid_hints = _batch_card_hints(run.config)
-    receipts = inherit_card_from_copies(receipts, resolutions, grid_hints)  # grid
+    receipts = inherit_card_from_copies(receipts, resolutions, grid_hints, duplicate_decisions(run, receipts, resolutions))  # grid
     # Item 169: and the card a correction remembers, read live rather than
     # off the stamp ingest left, so a fix taught after this month was
     # ingested reaches it. Silent without a learning store.
@@ -8378,7 +8378,7 @@ def _expense_export_inputs(
     # Item 69 round A: the grid's card inheritance, so grid and export move
     # together on a copy that borrowed its card.
     export_hints = _batch_card_hints(run.config)
-    receipts = inherit_card_from_copies(receipts, dup_resolutions, export_hints)  # export
+    receipts = inherit_card_from_copies(receipts, dup_resolutions, export_hints, duplicate_decisions(run, receipts, dup_resolutions))  # export
     # Item 169: the grid's live read of a remembered card, so the file a
     # reviewer downloads files a receipt under the card the screen showed it
     # on. Cards R3 is the whole reason this sits on both paths.
@@ -14097,7 +14097,7 @@ def rematch_month(
     # to match), and a hint word the operator assigned is kept.
     dup_resolutions = store.get_duplicate_resolutions(run.run_id)
     bake_hints = _batch_card_hints(cfg)
-    receipts = inherit_card_from_copies(receipts, dup_resolutions, bake_hints)  # before the card chain
+    receipts = inherit_card_from_copies(receipts, dup_resolutions, bake_hints, duplicate_decisions(run, receipts, dup_resolutions))  # before the card chain
     # Cards R3: bake the SAME per-receipt entity the grid and the export
     # showed (override -> hint assignment -> card registry -> stamped
     # value) into the pool the matcher sees. Matching is entity-scoped
