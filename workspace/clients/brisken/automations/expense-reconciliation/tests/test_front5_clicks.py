@@ -440,6 +440,53 @@ def test_a_payoff_on_a_typeless_statement_reads_payment_on_the_page(tmp_path, mo
     assert {r["effective_bucket"] for r in view["rows"] if r["amount"].startswith("-")} == {"refund"}
 
 
+# ── step 5: a merchant refund names the purchase it reverses ───────────
+
+
+def _attach_csv(tmp_path, monkeypatch, csv_text):
+    from fastapi.testclient import TestClient
+
+    import tests.test_rematch_judgment_cache as rj
+    from expense_recon.web.app import create_app
+
+    monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    rj._wire(monkeypatch, MockLLMClient(extraction_responses=[rj._eur_receipt()]))
+    with TestClient(create_app(tmp_path)) as client:
+        batch_id = rj._create_batch(client)
+        resp = client.post(
+            f"/api/expense-batches/{batch_id}/statement",
+            files={"statement": ("s.csv", csv_text.encode(), "text/csv")},
+            data={
+                "account_id": "amex-9001",
+                "account_legal_entities": '{"amex-9001": "Corporate Services"}',
+                "account_card_currency": "USD",
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        return client.get(f"/api/runs/{batch_id}").json()
+
+
+def test_a_merchant_refund_names_the_one_purchase_it_reverses(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    view = _attach_csv(tmp_path, monkeypatch, _TYPELESS_CSV + (
+        "04/10/2026,DELANCEY TAVERN,-57.50,MATTHIAS NEUMANN\n"
+        "04/11/2026,AMAZON.COM,200.00,MATTHIAS NEUMANN\n"
+        "04/12/2026,AMAZON.COM,-200.00,MATTHIAS NEUMANN\n"
+    ))
+    rows = {(r["vendor"], r["amount"], r["date"]): r for r in view["rows"]}
+    purchase = rows[("DELANCEY TAVERN", "57.50", "2026-04-03")]
+    refund = rows[("DELANCEY TAVERN", "-57.50", "2026-04-10")]
+    assert refund["reverses_transaction_id"] == purchase["transaction_id"]
+    # Two identical AMAZON.COM 200.00 purchases: a question, not an answer.
+    assert "reverses_transaction_id" not in rows[("AMAZON.COM", "-200.00", "2026-04-12")]
+    # No other amount, a payoff, and a purchase never carry it.
+    for key in (("DELANCEY TAVERN", "-12.00", "2026-04-08"),
+                ("Payment Thank You-Mobile", "-7,567.50", "2026-04-05"),
+                ("DELANCEY TAVERN", "57.50", "2026-04-03")):
+        assert "reverses_transaction_id" not in rows[key]
+
+
 # ── the cache key carries the prompt version (through the re-match) ────
 
 

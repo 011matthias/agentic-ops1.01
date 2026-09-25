@@ -4480,6 +4480,7 @@ def build_view(
     # snapshot as stored, so the month page can say a re-match ran.
     visibility = rematch_visibility(run.snapshot)
     attach_review_causes(rows)  # front 5: review.cause / cause_detail
+    attach_refund_reversals(rows)  # front 5: reverses_transaction_id
 
     return {
         "run_id": run.run_id,
@@ -19065,3 +19066,61 @@ def attach_review_causes(rows: list[dict]) -> None:
         cause = review_cause_for_row(row, charges_by_doc)
         if cause and isinstance(row.get("review"), dict):
             row["review"] = {**row["review"], **cause}
+
+
+# Front 5 (2026-09-25): a merchant refund names the purchase it reverses.
+# Every credit is split into the refunds bucket before matching and never
+# paired with anything; a credit from a merchant (row_type `refund`, not the
+# cardholder's `payment`) now names the one earlier purchase it plausibly
+# reverses: same currency, same absolute amount, the merchant agreeing, dated
+# up to `REFUND_REVERSAL_WINDOW_DAYS` before it. Exactly one candidate or
+# none: two identical purchases are a question, not an answer. Advisory
+# only: no bucket, count or decision reads it. Parallel field
+# `reverses_transaction_id`, ABSENT otherwise (live July to September 2026:
+# 0 merchant refunds, so absent on every row).
+REFUND_REVERSAL_WINDOW_DAYS = 90
+REFUND_REVERSAL_VENDOR_FLOOR = 0.75
+
+
+def attach_refund_reversals(rows: list[dict]) -> None:
+    from datetime import date as _date
+    from decimal import InvalidOperation
+
+    from ..matching.deterministic import vendor_similarity
+
+    def _amount(row: dict) -> Decimal | None:
+        try:
+            return abs(Decimal(str(row.get("amount") or "").replace(",", "")))
+        except (InvalidOperation, ValueError):
+            return None
+
+    def _day(row: dict) -> "_date | None":
+        try:
+            return _date.fromisoformat(str(row.get("date") or ""))
+        except ValueError:
+            return None
+
+    purchases = [r for r in rows if r.get("row_type") == "purchase"]
+    for row in rows:
+        if row.get("row_type") != "refund" or not (row.get("vendor") or "").strip():
+            continue
+        amount, day = _amount(row), _day(row)
+        if amount is None or day is None:
+            continue
+        hits = []
+        for p in purchases:
+            p_day = _day(p)
+            if (
+                p_day is None
+                or p.get("currency") != row.get("currency")
+                or _amount(p) != amount
+                or not (0 <= (day - p_day).days <= REFUND_REVERSAL_WINDOW_DAYS)
+            ):
+                continue
+            if vendor_similarity(p.get("vendor") or "", row.get("vendor") or "") < (
+                REFUND_REVERSAL_VENDOR_FLOOR
+            ):
+                continue
+            hits.append(p)
+        if len(hits) == 1:
+            row["reverses_transaction_id"] = hits[0].get("transaction_id")
