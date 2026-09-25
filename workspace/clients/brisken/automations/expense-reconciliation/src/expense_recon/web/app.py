@@ -95,8 +95,13 @@ from ..cards import (
     private_cards_from_setting,
     private_company_collision,
 )
-from ..cards_provision import card_by_key, load_cards
+from ..cards_provision import CARDS_ENV, card_by_key, load_cards
 from ..card_suggestion import EvidenceSource  # item 204, case 9 steps 1 and 5
+from .card_status_memo import (
+    CardStatusMemo,
+    CardStatusWarmer,
+)
+from .card_status_memo import data_version as card_status_data_version
 from ..error_codes import Refusal, code_of, fields_of  # Refusal: item 104
 from ..ingest.expense_report_images import render_receipt_page
 from ..learning import CATEGORY_SOURCE_HUMAN, CATEGORY_SOURCE_INHERITED
@@ -5009,19 +5014,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             ]
         return JSONResponse({"batches": batches})
 
-    @app.get("/api/cards/status")
-    def api_card_status():
-        """The cross-month card roll-up (item 185): one line per card over
-        every expense batch, each with the months it is on. The per-card
-        filter the month page already has, outside the months."""
-        if not _receipt_first_on():
-            return _flag_off()
-        with open_store() as store:
+    def _card_status_body() -> bytes:
+        """The roll-up's response body. It opens its own billing-account
+        scope because the warm-up builds it on a thread no request
+        middleware wraps, and without the scope the account link would go
+        silent there and file some receipts under no card."""
+        with account_request_scope(_account_index), open_store() as store:
             # Every month's view asks the same all-months statement read, so
-            # the request reads it once (2026-09-25: it was read once per
+            # the build reads it once (2026-09-25: it was read once per
             # month, ~0.5 s of this route on seven months).
             evidence = EvidenceSource(store)
-            return JSONResponse(build_card_status(
+            payload = build_card_status(
                 store,
                 receipt_cards=lambda run: receipt_card_counts(
                     _expense_page_view(store, run, evidence=evidence)
@@ -5031,7 +5034,33 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 parents=card_parents(
                     effective_cards(store.get_settings(), load_cards())
                 ),
-            ))
+            )
+        return JSONResponse(payload).body
+
+    # 2026-09-25, owner "memo + warm-up": the body is kept while nothing in
+    # the data folder has changed, and rebuilt once writes go quiet.
+    card_status_memo = CardStatusMemo(
+        version=lambda: card_status_data_version(
+            data_root_path,
+            tuple(Path(p) for p in [os.environ.get(CARDS_ENV)] if p),
+        ),
+        build=_card_status_body,
+    )
+    app.state.card_status_memo = card_status_memo
+    app.state.card_status_warmer = CardStatusWarmer(
+        card_status_memo, enabled=_receipt_first_on,
+    )
+    if os.environ.get("EXPENSE_RECON_CARD_STATUS_WARM") == "1":
+        app.state.card_status_warmer.start()
+
+    @app.get("/api/cards/status")
+    def api_card_status():
+        """The cross-month card roll-up (item 185): one line per card over
+        every expense batch, each with the months it is on. The per-card
+        filter the month page already has, outside the months."""
+        if not _receipt_first_on():
+            return _flag_off()
+        return Response(card_status_memo.get(), media_type="application/json")
 
     @app.get("/api/cost-centers/totals")
     def cost_center_totals(
