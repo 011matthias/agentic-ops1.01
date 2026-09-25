@@ -187,9 +187,12 @@ def test_a_bucket_month_is_switched_and_her_pick_is_set_aside(web, monkeypatch):
     assert body["category_vocabulary"] == "gl"
     assert body["gl_accounts"][CORP], "the picker now offers the company's accounts"
     row = body["expenses"][0]
-    assert row["posting_category"]["category"] == code, "the engine decides, her pick is gone"
-    assert row["posting_category"]["zoho_account"] == _name(CORP_ORG, code)
-    assert row["posting_category"]["source"] != "override"
+    # Item 216 Build 2 step 2: the engine's answer is the model's, so it is
+    # the row's suggestion until she confirms it; her old pick is gone.
+    assert row["posting_category"] is None, "her pick is gone"
+    assert row["suggested_category"]["category"] == code, "the engine suggests"
+    assert row["suggested_category"]["zoho_account"] == _name(CORP_ORG, code)
+    assert row["suggested_category"]["source"] != "override"
     assert _overrides(web, batch_id) == []
     archive = _snapshot(web, batch_id)["gl_conversion"]
     (kept,) = archive["category_overrides"]
@@ -197,7 +200,7 @@ def test_a_bucket_month_is_switched_and_her_pick_is_set_aside(web, monkeypatch):
     assert archive["receipt_categorizations"]["receipts"][doc][0]["category"] == BUCKET
 
     csv_rows = list(csv.reader(io.StringIO(web.get(f"/runs/{batch_id}/expenses.csv").text)))
-    assert [r[COL_ACCOUNT] for r in csv_rows[1:]] == [_name(CORP_ORG, code)]
+    assert [r[COL_ACCOUNT] for r in csv_rows[1:]] == [f"suggested: {_name(CORP_ORG, code)}"]
 
 
 def test_a_row_whose_company_comes_from_its_card_is_categorized_for_it(
@@ -231,8 +234,9 @@ def test_a_row_whose_company_comes_from_its_card_is_categorized_for_it(
     assert _convert(web, batch_id, "July 2026")["status"] == "done"
 
     row = _row(web, batch_id)
-    assert row["posting_category"]["category"] == code
-    assert row["posting_category"]["zoho_account"] == _name(CORP_ORG, code)
+    # Item 216 Build 2 step 2: the model's answer is the row's suggestion.
+    assert row["suggested_category"]["category"] == code
+    assert row["suggested_category"]["zoho_account"] == _name(CORP_ORG, code)
 
 
 def test_the_switch_asks_for_the_label_and_runs_once(web, monkeypatch):
@@ -319,5 +323,7 @@ def test_a_receiptless_charge_is_switched_for_its_own_company(tmp_path, monkeypa
         assert job["result"]["n_charges_categorized"] == 1
         (row,) = [x for x in client.get("/api/runs/aug").json()["rows"]
                   if x["transaction_id"] == "tx1"]
-        assert row["posting_category"]["category"] == code
-        assert row["posting_category"]["zoho_account"] == _name(CLOUD_ORG, code)
+        # Item 216 Build 2 step 2: the model's guess is the row's suggestion.
+        assert row["posting_category"] is None, row["posting_category"]
+        assert row["suggested_category"]["category"] == code
+        assert row["suggested_category"]["zoho_account"] == _name(CLOUD_ORG, code)

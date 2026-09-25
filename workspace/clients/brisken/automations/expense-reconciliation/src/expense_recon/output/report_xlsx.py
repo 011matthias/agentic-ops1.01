@@ -40,8 +40,10 @@ from ..matching.types import (
     MatchType,
     Receipt,
     Transaction,
+    is_suggestion_only,
     origin_of_source_value,
 )
+from .posting_common import suggested_cell
 
 
 FILL_LINE = PatternFill("solid", fgColor="FFC6EFCE")       # green
@@ -97,7 +99,16 @@ class _Row:
 
     @property
     def fill(self) -> PatternFill:
-        return _fill_for_source(self.source)
+        return _fill_for(self)
+
+
+def _fill_for(answer) -> PatternFill:
+    """The fill for an answer (a `_Row` or a `Categorization`). Item 216
+    Build 2 step 2: the model's answer on a GL month is a suggestion to
+    confirm, yellow like a vendor-name guess, never the trusted green."""
+    if is_suggestion_only(answer):
+        return FILL_VENDOR
+    return _fill_for_source(answer.source)
 
 
 def _fill_for_source(source: ClassificationSource) -> PatternFill:
@@ -604,7 +615,13 @@ def _write_needs_review(wb: Workbook, rows: list[_Row]) -> None:
         }.get(r.source, 9)
         return (src_order, r.card, r.date or date.min)
 
-    review_rows = [r for r in rows if r.source is not ClassificationSource.LINE]
+    # Item 216 Build 2 step 2: the model's answer on a GL month joins the
+    # sheet; a person's pick (EDITED since then, LINE before) stays off it.
+    review_rows = [
+        r for r in rows
+        if r.source not in (ClassificationSource.LINE, ClassificationSource.EDITED)
+        or is_suggestion_only(r)
+    ]
     review_rows.sort(key=sort_key)
 
     for r in review_rows:
@@ -644,13 +661,13 @@ def _write_unmatched(
             float(tx.amount),
             tx.transaction_currency,
             cat.category if has_cat else "",
-            (cat.zoho_account or "") if has_cat else "",
+            _account_label(cat) if has_cat else "",
             cat.source.value if has_cat else "",
         ])
         # A categorized charge colors by its tier (LEARNED blue, VENDOR
         # yellow) so the postable ones read at a glance; bare unmatched
         # rows keep the red-ish fill.
-        _fill_last_row(ws, _fill_for_source(cat.source) if has_cat else FILL_UNMATCHED)
+        _fill_last_row(ws, _fill_for(cat) if has_cat else FILL_UNMATCHED)
 
     # Refunds / credits (3.10): their own section so a credit is never
     # read as a purchase awaiting a receipt. Reviewed, not receipt-matched.
@@ -794,12 +811,23 @@ def _write_explain(
 # ── cell / formatting helpers ────────────────────────────────────────
 
 
+def _account_label(answer) -> str:
+    """The posting-account cell: the account, or `suggested: <account>` for
+    the model's answer on a GL month (item 216 Build 2 step 2)."""
+    account = answer.zoho_account or ""
+    if account and is_suggestion_only(answer):
+        return suggested_cell(account)
+    return account
+
+
 def _card_row_cells(r: _Row) -> list[object]:
     """Cells in CARD_TAB_COLUMNS order. Used by both card tabs and
     the Needs Review sheet (which prepends Card)."""
     source_label = r.source.value
     if r.source is ClassificationSource.VENDOR:
         source_label = "VENDOR (review)"
+    elif is_suggestion_only(r):
+        source_label = f"{r.source.value} (suggestion)"
     return [
         r.date.isoformat() if r.date else "",
         r.vendor,
@@ -808,7 +836,7 @@ def _card_row_cells(r: _Row) -> list[object]:
         float(r.amount),
         r.category or "",
         source_label,
-        r.zoho_account or "",
+        _account_label(r),
         r.note,
         r.disposition,
     ]

@@ -52,8 +52,9 @@ from ..matching.types import (
     Receipt,
     Transaction,
     answer_origin,
+    is_suggestion_only,
 )
-from .posting_common import _UNMAPPED, _resolve_account
+from .posting_common import _UNMAPPED, _resolve_account, suggested_cell
 
 if TYPE_CHECKING:
     from ..ingest.chart_of_accounts import ChartOfAccounts
@@ -153,6 +154,9 @@ def _account_cell_value(
         value = ref
         if coa is not None:
             value = _resolve_account(ref, coa) or ref
+        if is_suggestion_only(cat):
+            # Item 216 Build 2 step 2: the model's reading is a suggestion.
+            value = suggested_cell(value)
         if value not in values:
             values.append(value)
     if not values:
@@ -201,6 +205,10 @@ def _cell_value(
             value = (_resolve_account(ref, coa) or ref) if coa is not None else ref
             if answer_origin(cat) in DECIDED_ORIGINS:
                 return value
+            if is_suggestion_only(cat):
+                # Item 216 Build 2 step 2: on a GL month the guess is a
+                # labelled suggestion, the same cell `expenses.csv` writes.
+                return suggested_cell(value)
             return f"{value} (confirm)"
         return _NO_RECEIPT
     return None

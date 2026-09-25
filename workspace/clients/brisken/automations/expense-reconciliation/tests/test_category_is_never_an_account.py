@@ -108,9 +108,15 @@ def test_the_column_no_longer_depends_on_whether_a_chart_loaded(tmp_path):
 
 
 def test_a_picked_account_still_passes_through(tmp_path):
-    rec = _receipt(_line("usage", "10.00", "E500010-30", ACCOUNT))
+    rec = _receipt(_line(
+        "usage", "10.00", "E500010-30", ACCOUNT, source=ClassificationSource.REGISTRY))
     assert _accounts(tmp_path, rec) == [ACCOUNT]
     assert _accounts(tmp_path, rec, CHART) == [ACCOUNT]
+    # Item 216 Build 2 step 2: the model's pick on a leaf code passes through
+    # as a labelled suggestion, still the account and never the category.
+    model = _receipt(_line("usage", "10.00", "E500010-30", ACCOUNT))
+    assert _accounts(tmp_path, model) == [f"suggested: {ACCOUNT}"]
+    assert _accounts(tmp_path, model, CHART) == [f"suggested: {ACCOUNT}"]
 
 
 def test_a_refused_gl_line_stays_uncategorized(tmp_path):
@@ -152,7 +158,13 @@ def test_a_matched_line_with_no_account_writes_the_marker(tmp_path):
 
 def test_a_split_names_its_account_and_flags_the_rest(tmp_path):
     rec = _receipt(
-        _line("usage", "6.00", "E500010-30", ACCOUNT),
+        _line("usage", "6.00", "E500010-30", ACCOUNT, source=ClassificationSource.REGISTRY),
         _line("support", "4.00", "Software & Subscriptions", None),
     )
     assert _writeback_cell(tmp_path, rec) == f"{ACCOUNT}; {UNMAPPED}"
+    # Item 216 Build 2 step 2: the model's own line reads as its suggestion.
+    model = _receipt(
+        _line("usage", "6.00", "E500010-30", ACCOUNT),
+        _line("support", "4.00", "Software & Subscriptions", None),
+    )
+    assert _writeback_cell(tmp_path, model) == f"suggested: {ACCOUNT}; {UNMAPPED}"

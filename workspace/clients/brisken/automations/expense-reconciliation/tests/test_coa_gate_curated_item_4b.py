@@ -94,10 +94,14 @@ GL_VERDICTS = {
 def _receipts():
     out = []
     for doc, account in LINES.items():
+        # A rule's answer (the merchant list), so the cells below are the
+        # gate's verdict on the ACCOUNT alone: the model's own answer on a
+        # leaf code would print as `suggested: <account>` (item 216 Build 2
+        # step 2), which is who answered, not what the gate decided.
         cat = Categorization(
             category=curated_leaves.code_of(account, CLOUD) or "Software & Subscriptions",
             zoho_account=account, confidence=0.9,
-            source=ClassificationSource.LINE, reasoning="read",
+            source=ClassificationSource.REGISTRY, reasoning="read",
         )
         out.append(Receipt(
             document_id=doc, legal_entity_id=LABEL, detected_date=None,

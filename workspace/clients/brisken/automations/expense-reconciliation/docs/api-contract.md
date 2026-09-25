@@ -42,7 +42,7 @@ receives after `jsonable_encoder`.
 | `coverage[].digits[]` · `coverage[].statements[]` | string |
 | `expenses[]` | object |
 | `expenses[].line_items[]` | object |
-| `expenses[].books_as[]` | object `{account, unassigned, amount}` |
+| `expenses[].books_as[]` | object `{account, unassigned, amount}`, plus `suggested: true` on a part whose `account` is the export's `suggested: <account>` cell (item 216 Build 2 step 2; ABSENT otherwise) |
 | `expenses[].edited_fields[]` | string |
 | `expenses[].boxes[]` | string, a count name without `n_` (item 84) |
 | `expenses[].category_variance.categories[]` | string |
@@ -5991,7 +5991,7 @@ tests) now holds each as a literal against its source of truth:
 | Vocabulary | Source of truth | Pinned values |
 |---|---|---|
 | `rows[].row_type` | `ingest._common.ROW_TYPES` and every `ROW_TYPE_*` constant | `purchase` · `payment` · `refund` · `reversal` · `fee` · `interest` |
-| `review.state` / `review.reason_code` (both payloads) | the literals every `_review(...)` call in `web/service.py` passes (no single constant exists; read with `ast`, a non-literal code fails the pin) | states `ready` · `check` · `pick` · `none`; codes `uncategorized` · `partial_uncategorized` · `category_account_mismatch` · `vendor_guess` · `unknown_provenance` · `uncertain_match` · `receiptless_suggested` · `missing_fields` · `date_outside_period` · `suggested_private` · `needs_entity` · `needs_entity_settled_outside` · `untrusted_instructions` · `invoice_read_as_statement` · `needs_person` · `needs_cost_center` |
+| `review.state` / `review.reason_code` (both payloads) | the literals every `_review(...)` call in `web/service.py` passes (no single constant exists; read with `ast`, a non-literal code fails the pin) | states `ready` · `check` · `pick` · `none`; codes `uncategorized` · `partial_uncategorized` · `category_account_mismatch` · `vendor_guess` · `unknown_provenance` · `model_suggestion` · `uncertain_match` · `receiptless_suggested` · `missing_fields` · `date_outside_period` · `suggested_private` · `needs_entity` · `needs_entity_settled_outside` · `untrusted_instructions` · `invoice_read_as_statement` · `needs_person` · `needs_cost_center` |
 | unmatched `reason_code` | `unmatched_reasons.RECEIPT_REASON_CODES` / `CHARGE_REASON_CODES` | the nine codes in "The unmatched lists say what they hold" |
 | `summary.month_health.state` (+ `reason`, `suspects[]`) | every `HEALTH_*` / `REASON_*` / `SUSPECT_*` constant in `web/month_health.py` | `ok` · `broken`; `zero_match_with_exact_pairs`; `sign` · `currency` · `entity` · `card` · `unknown` |
 | `rematch_log[].trigger` | the `trigger=` literals every `web/*.py` module passes to a re-match call (no single constant exists; read with `ast`) | `statement` · `reread` · `receipts` · `cards` · `master_data` · `set_aside` · `trip` · `adjacent_receipts` · `expense_edit` · `resume` · `duplicates` · `month_move` |
@@ -7061,6 +7061,56 @@ beside the uploads.
 
 Tests: `tests/test_attach_month_guard_item_215.py` (13, route-level through
 the attach, job poll, re-read and a second `create_app` boot).
+
+## The model suggests, a rule or a person decides: `suggested_category` (item 216 Build 2 step 2, owner ruling 2026-09-25)
+
+On a GL month (`category_vocabulary: "gl"`) the model's answer, whether it
+read the receipt's lines (`LINE`) or the bank's description (`VENDOR`), is a
+suggestion and never a posting. A merchant-list or remembered rule and a
+person's pick post as before. Bucket-era months (April to June) are unchanged.
+
+**Both payloads.** `posting_category` holds only what a person or a rule
+answered, and is `null` when the model answered everything. The model's
+answer moves to a parallel field, ABSENT when there is none:
+
+| Field | Shape |
+|---|---|
+| `expenses[].suggested_category` (grid) · `rows[].suggested_category` (run) | the `posting_category` shape: `{category, zoho_account, source, origin}`, `origin` always `"suggestion"`; `source` coarse (`llm`) on the grid, fine (`LINE` / `VENDOR`) on the run |
+| `expenses[].books_as[].suggested` | `true` on a part whose `account` is `suggested: <account>`, ABSENT otherwise |
+
+A receipt mixing decided and model lines carries both fields. The run row's
+`charge_category` is unchanged (it keeps the model's guess with its `origin`),
+and `posting_category_proposed` (item 70) now says both fields came from the
+candidate.
+
+**The review.** A receipt whose lines the model read reads `state: "check"`,
+`reason_code: "model_suggestion"`, and `category_confirmable: true`. One click
+on `POST /api/runs/{id}/expenses/{doc}/confirm-category` stores each line
+`category_source: "inherited"` (never taught at sign-off), and the row posts:
+`posting_category.origin: "person"`, no `suggested_category`, the category
+question gone. These rows no longer read `ready`, so "Confirm all Ready" leaves
+them alone. `vendor_guess` and a receiptless `receiptless_suggested` are
+unchanged.
+
+**The files.** Every account cell the model answered reads `suggested:
+<account>`: `expenses.csv` (`Expense Account`), the statement sheet (in place
+of `<account> (confirm)`), `report.xlsx` (`Posting account`, yellow, listed on
+Needs Review, source `LINE (suggestion)`), `reconciled.csv` (`AI posting
+account`, `Charge posting account`) and the reconciliation PDF's account
+column. The API poster (`zoho.accounts.resolve_account_id`) and the journal
+check refuse the cell as `unresolved_placeholder`.
+
+A person's category pick on a receipt now reads `EDITED` in the export and
+`report.xlsx`, as a charge pick always did (it read `LINE`, the model's own
+tier). Measured on the 2026-09-25 03:05 backup: 85 expenses print
+`suggested:` (July 27, August 27, September 31), 32 leave `ready`, 80 are
+one-click confirmable (the other 5 still have a line with no category), and a
+Confirm on one turns its row back into the account.
+
+Tests: `tests/test_model_suggests_item_216_build2_step2.py` (7, three
+route-level: a receipt upload + the confirm route, the category PUT, and a
+statement's receiptless guess through the run view, `reconciled.csv`,
+`report.xlsx`, the statement sheet and the PDF).
 
 ## Bills path (item 218)
 

@@ -65,6 +65,9 @@ from ..duplicates import (
 from ..ingest._common import merge_transactions
 from ..matching.types import (
     DECIDED_ORIGINS,
+    ORIGIN_PERSON,
+    ORIGIN_RULE,
+    ORIGIN_SUGGESTION,
     Categorization,
     ClassificationSource,
     EXPENSE_CATEGORIES,
@@ -75,6 +78,7 @@ from ..matching.types import (
     Receipt,
     Transaction,
     answer_origin,
+    is_suggestion_only,
     origin_of_source_value,
 )
 from ..learning import (
@@ -107,6 +111,7 @@ from ..output.zoho_expense_export import (
     resolve_paid_through,
     write_zoho_expense_export,
 )
+from ..output.posting_common import is_suggested_cell
 from ..output.zoho_export import write_zoho_export
 from ..cost_centers import COST_CENTER_SCOPE_NOTE
 from ..cost_centers import (
@@ -1345,7 +1350,12 @@ def apply_overrides(
                                 entity_orgs=entity_orgs,
                             ),
                             confidence=1.0,
-                            source=ClassificationSource.LINE,
+                            # Item 216 Build 2 step 2: a person's answer
+                            # (a pick, or a Confirm stored `inherited`),
+                            # EDITED like a charge's pick. It read LINE, the
+                            # model's own tier, which every surface now
+                            # shows as a suggestion on a GL month.
+                            source=ClassificationSource.EDITED,
                             reasoning="reclassified by reviewer",
                         ),
                     )
@@ -2739,39 +2749,62 @@ def apply_charge_category_overrides(
     return out
 
 
-def _row_posting_category(
+def _category_roll_up(
+    cats: list[str], accts: list[str], srcs: list[str]
+) -> dict | None:
+    """One `{category, zoho_account, source, origin}` view over some lines,
+    or None when they carry neither a category nor an account."""
+    if not cats and not accts:
+        return None
+    return {
+        "category": "; ".join(cats),
+        "zoho_account": "; ".join(accts),
+        "source": "; ".join(srcs),
+        # Item 216 cause 1: the weakest origin among the lines, since the row is
+        # only as decided as its least decided line.
+        "origin": origin_of_source_value("; ".join(srcs)),
+    }
+
+
+def _row_categories(
     matched_receipt: "Receipt | None",
     overrides: dict[tuple[str, int], dict],
     charge_cat_view: dict | None,
     *,
+    charge_cat: "Categorization | None" = None,
     entity_orgs: dict | None = None,
     entity: str | None = None,
-) -> dict | None:
-    """The category + Zoho account a charge will post to, resolved onto the
-    workbench row (2026-07-27).
+) -> tuple[dict | None, dict | None]:
+    """`(posting_category, suggested_category)`: the category + Zoho account
+    a row will post to, and the model's suggestion that will not post until a
+    person confirms it, resolved server-side (the api.ts "frontend does zero
+    business logic" rule).
 
-    The row previously exposed a category only for a RECEIPTLESS charge
-    (`charge_category`, None on matched rows); a matched charge's category
-    lived nested in the chosen candidate's receipt line items, and the
-    posting ACCOUNT was not in the view at all, so the SPA could not show
-    what a reconciled charge posts to. This resolves it server-side (the
-    api.ts "frontend does zero business logic" rule):
-
-    - matched charge: aggregate the chosen receipt's line-item categories +
-      accounts, distinct values joined with '; ', override-aware (a reviewer
-      reclassification wins). Mirrors the journal export's `_ai_category_cells`
-      so the workbench and the journal agree.
-    - receiptless charge: the Slice-10 `charge_category` view.
+    - matched charge / receipt: the receipt's line-item categories +
+      accounts, distinct values joined with '; ', override-aware (a
+      reviewer's reclassification wins). Mirrors the journal export's
+      `_ai_category_cells` so the workbench and the journal agree
+      (2026-07-27).
+    - receiptless charge: the Slice-10 `charge_category` view; `charge_cat`
+      is the raw categorization it is the view of.
     - neither (an uncategorized receipt, e.g. a not-yet-categorized folder
       upload): None, so the UI shows a plain "assign" state, not noise.
-    """
+
+    Item 216 Build 2 step 2 (owner 2026-09-25, "the model suggests, a rule or
+    a person decides"): on a GL month the model's answer
+    (`is_suggestion_only`) is never the posting. Its lines roll up into the
+    suggestion instead, so the SPA shows it labelled beside a Confirm, and a
+    Confirm (an `inherited` override) moves them back to the posting. A
+    receiptless charge's model answer is the suggestion whole."""
     if matched_receipt is not None:
-        cats: list[str] = []
-        accts: list[str] = []
-        srcs: list[str] = []
+        # suggestion? -> (categories, accounts, sources), first-seen order
+        parts: dict[bool, tuple[list[str], list[str], list[str]]] = {
+            False: ([], [], []), True: ([], [], []),
+        }
         for i, li in enumerate(matched_receipt.line_items):
             ov = overrides.get((matched_receipt.document_id, i))
             base = li.categorization
+            held = False
             if ov and ov.get("category"):
                 category = ov["category"]
                 # Item 70: same rule as `apply_overrides` -- a reclassified
@@ -2786,25 +2819,20 @@ def _row_posting_category(
                 category = base.category
                 account = base.zoho_account
                 src = base.source.value if base.source else None
+                held = is_suggestion_only(base)
             else:
                 continue
+            cats, accts, srcs = parts[held]
             if category and category not in cats:
                 cats.append(category)
             if account and account not in accts:
                 accts.append(account)
             if src and src not in srcs:
                 srcs.append(src)
-        if not cats and not accts:
-            return None
-        return {
-            "category": "; ".join(cats),
-            "zoho_account": "; ".join(accts),
-            "source": "; ".join(srcs),
-            # Item 216 cause 1: the weakest origin among the lines, since the row is
-            # only as decided as its least decided line.
-            "origin": origin_of_source_value("; ".join(srcs)),
-        }
-    return charge_cat_view
+        return _category_roll_up(*parts[False]), _category_roll_up(*parts[True])
+    if charge_cat is not None and is_suggestion_only(charge_cat):
+        return None, charge_cat_view
+    return charge_cat_view, None
 
 
 # Categorization.decision verdicts that mean "category and account may not
@@ -2822,35 +2850,29 @@ _ADJ_VERDICTS = _ADJ_DISAGREE | {"kept_er"}
 # the same glance a vendor-name guess does -- the category came from the
 # merchant's name, not from this receipt's items.
 _LEARNED_OVER_LINE = "learned_over_line"
-# Source tiers that are trusted enough to post without a glance. REGISTRY
-# (2026-07-29) is a curated merchant default — a deterministic top tier like
-# LEARNED — so it reads `ready`, not `check`.
-_TRUSTED_SOURCE = frozenset({"LINE", "LEARNED", "EDITED", "REGISTRY"})
-
-# Coarse provenance the expense grid shows for WHY a category / vendor is what
-# it is (2026-07-29): the fine ClassificationSource tiers collapse to the
-# reviewer-facing set registry | learned | llm | override (REVIEW /
-# UNCLASSIFIED fold to "review"). Expense-grid only; the reconcile workbench
-# keeps the fine tiers.
-_COARSE_SOURCE = {
-    "EDITED": "override",
-    "REGISTRY": "registry",
-    "LEARNED": "learned",
-    "LINE": "llm",
-    "VENDOR": "llm",
-    "REVIEW": "review",
-    "UNCLASSIFIED": "review",
-}
 
 
 def _coarse_source_join(joined: str | None) -> str:
-    """Map a '; '-joined run of fine source tiers to distinct coarse tokens."""
+    """The expense grid's coarse provenance for WHY a category is what it is
+    (2026-07-29), read off `answer_origin` (item 216 Build 2 step 2 retired
+    the grid's own table): a person's answer reads `override`, a rule its
+    kind (`registry` | `learned`), the model's `llm`, no answer `review`.
+    Distinct tokens of a '; '-joined run of fine tiers, first-seen order.
+    Expense-grid only; the reconcile workbench keeps the fine tiers."""
     out: list[str] = []
     for tok in (joined or "").split(";"):
         tok = tok.strip()
         if not tok:
             continue
-        coarse = _COARSE_SOURCE.get(tok, "llm")
+        origin = origin_of_source_value(tok)
+        if origin == ORIGIN_PERSON:
+            coarse = "override"
+        elif origin == ORIGIN_RULE:
+            coarse = tok.lower()  # REGISTRY -> registry, LEARNED -> learned
+        elif origin == ORIGIN_SUGGESTION:
+            coarse = "llm"
+        else:
+            coarse = "review"
         if coarse not in out:
             out.append(coarse)
     return "; ".join(out)
@@ -2955,7 +2977,7 @@ def _matched_category_review(rec: "Receipt | None", overrides: dict) -> dict:
     will post (2026-07-27). Verdict order is pick > check > ready.
 
     Judged STRUCTURALLY over the receipt's own line items, not the row's
-    "; "-joined posting source: `_row_posting_category` silently drops a line
+    "; "-joined posting source: `_row_categories` silently drops a line
     with no categorization object, so a partly-uncategorized receipt can read
     as all-trusted in that string. Iterating the lines is the only way to see
     the gap (adversarial-verify finding, 2026-07-27).
@@ -2964,6 +2986,11 @@ def _matched_category_review(rec: "Receipt | None", overrides: dict) -> dict:
         return _review("pick", "No category yet. Assign one before this charge can post.", "uncategorized")
     srcs: list[str | None] = []
     decs: list[str | None] = []
+    # Item 216 Build 2 step 2: who answered each categorized line
+    # (`answer_origin`, the one mapping; `_TRUSTED_SOURCE` retired), and
+    # whether it is the model's suggestion on a GL month.
+    origins: list[str | None] = []
+    held: list[bool] = []
     # Item 160: the same predicate the row's `uncategorized_lines` is built
     # from, so the verdict and the lines it names cannot disagree.
     uncategorized = bool(uncategorized_line_indexes(rec, overrides))
@@ -2972,6 +2999,8 @@ def _matched_category_review(rec: "Receipt | None", overrides: dict) -> dict:
         if ov and ov.get("category"):
             srcs.append("EDITED")
             decs.append(None)
+            origins.append(ORIGIN_PERSON)
+            held.append(False)
             continue
         base = li.categorization
         if base is None or not base.category:
@@ -2980,6 +3009,8 @@ def _matched_category_review(rec: "Receipt | None", overrides: dict) -> dict:
             continue
         srcs.append(base.source.value if base.source else None)
         decs.append(getattr(base, "decision", None))
+        origins.append(answer_origin(base))
+        held.append(is_suggestion_only(base))
     if uncategorized:
         # `srcs` holds a token per CATEGORIZED line; empty => nothing is
         # categorized (fully uncategorized), non-empty => some lines are and
@@ -3004,8 +3035,13 @@ def _matched_category_review(rec: "Receipt | None", overrides: dict) -> dict:
         return _review("check", "A remembered category for this merchant was used instead of what the receipt's items read. If it fits, keep it.", "vendor_guess")
     if any(s == "VENDOR" for s in srcs):
         return _review("check", "The category was guessed from the merchant name, not the receipt's line items. A quick look to confirm it fits.", "vendor_guess")
-    if any(s not in _TRUSTED_SOURCE for s in srcs):
-        # categorized, but the provenance is unknown/empty: not a trusted tier.
+    if any(held):
+        # Item 216 Build 2 step 2 (owner 2026-09-25): the model read the
+        # receipt's lines and suggested this account; it posts once a person
+        # confirms it. Until then `expenses.csv` writes `suggested: <account>`.
+        return _review("check", "The model suggested this account from the receipt's lines. Confirm it, or pick another, before it posts.", "model_suggestion")
+    if any(o is None for o in origins):
+        # categorized, but nobody is known to stand behind it: no source.
         return _review("check", "The tool couldn't record how it chose this category. Confirm it fits before posting.", "unknown_provenance")
     return _review("ready")
 
@@ -3013,7 +3049,9 @@ def _matched_category_review(rec: "Receipt | None", overrides: dict) -> dict:
 # Category verdicts a reviewer settles by keeping the category as it is. Not
 # `category_account_mismatch`: that one questions the ACCOUNT, and keeping the
 # category would clear it without anyone looking at the account.
-_CONFIRMABLE_CATEGORY_CODES = frozenset({"vendor_guess", "unknown_provenance"})
+_CONFIRMABLE_CATEGORY_CODES = frozenset(
+    {"vendor_guess", "unknown_provenance", "model_suggestion"}
+)
 
 
 def category_confirmable(rec: "Receipt | None", overrides: dict) -> bool:
@@ -3756,8 +3794,11 @@ def build_view(
         # posting category+account, and the review-by-exception state, computed
         # once here so the SPA groups + bulk-confirms with no logic of its own.
         charge_cat_view = _charge_category_view(charge_cats.get(tx_id))
-        posting_category = _row_posting_category(
+        # Item 216 Build 2 step 2: the model's answer on a GL month is the
+        # suggestion, never the posting.
+        posting_category, suggested_category = _row_categories(
             matched_rec, overrides, charge_cat_view,
+            charge_cat=charge_cats.get(tx_id),
             entity_orgs=gl_run_entity_orgs(run),
         )
         # Item 70: a needs-review row holds no receipt until confirmed, so a
@@ -3770,7 +3811,7 @@ def build_view(
                 cands, rec_by_id, overrides, entity_orgs=gl_run_entity_orgs(run)
             )
             if proposed is not None:
-                posting_category = proposed
+                posting_category, suggested_category = proposed
                 proposed_flag = {"posting_category_proposed": True}
         review = resolve_review(
             is_posted=is_posted,
@@ -3849,9 +3890,17 @@ def build_view(
                 # SPA can show categorization on reconciled rows too. None when
                 # the matched receipt is not categorized (e.g. a folder upload).
                 "posting_category": posting_category,
-                # Item 70: `posting_category` came from the candidate the
-                # Confirm would take, not a held receipt. Parallel field,
-                # ABSENT (not false) on every other row.
+                # Item 216 Build 2 step 2: the model's answer on a GL month,
+                # same shape as `posting_category` (`origin: "suggestion"`),
+                # which it never is. Parallel field, ABSENT when there is none.
+                **(
+                    {"suggested_category": suggested_category}
+                    if suggested_category is not None else {}
+                ),
+                # Item 70: `posting_category` (and `suggested_category`) came
+                # from the candidate the Confirm would take, not a held
+                # receipt. Parallel field, ABSENT (not false) on every other
+                # row.
                 **proposed_flag,
                 # Review-by-exception state (2026-07-27): ready / check / pick
                 # / none + a plain "why". Server-computed so the SPA groups and
@@ -6473,7 +6522,9 @@ def _manual_expense_receipt(
             category=_s("category"),
             zoho_account=_s("zoho_account"),
             confidence=1.0,
-            source=ClassificationSource.LINE,
+            # Typed in by a person, so a person's answer (item 216 Build 2
+            # step 2): never read as the model's suggestion.
+            source=ClassificationSource.EDITED,
             reasoning="entered by reviewer",
         )
     line = LineItem(
@@ -8231,7 +8282,9 @@ def build_expense_view(
         row_bill = res.get("payment_path") == _pp.PATH_BILL
         if row_bill:
             review = _bill_review()
-        posting = _row_posting_category(
+        # Item 216 Build 2 step 2: the model's answer on a GL month is the
+        # row's suggestion, never its posting.
+        posting, suggested = _row_categories(
             r, overrides, None, entity_orgs=gl_run_entity_orgs(run),
             entity=res["entity"],
         )
@@ -8240,6 +8293,10 @@ def build_expense_view(
         # tiers stay on each line item and on the reconcile workbench.
         if posting is not None:
             posting = {**posting, "source": _coarse_source_join(posting.get("source"))}
+        if suggested is not None:
+            suggested = {
+                **suggested, "source": _coarse_source_join(suggested.get("source"))
+            }
         pt_account, pt_source = resolve_paid_through(
             r,
             field_overrides.get(r.document_id, {}).get("paid_through") or None,
@@ -8293,6 +8350,10 @@ def build_expense_view(
                 "account": None if account == _UNCATEGORIZED else account,
                 "unassigned": account == _UNCATEGORIZED,
                 "amount": _fmt_amount(amt),
+                # Item 216 Build 2 step 2: `account` is the export's own
+                # `suggested: <account>` cell, which posts nothing until a
+                # person confirms it. ABSENT on every other part.
+                **({"suggested": True} if is_suggested_cell(account) else {}),
             }
             for account, amt, _descs in expense_posting_parts(
                 ov_by_doc.get(r.document_id, r), chart_of_accounts=grid_chart
@@ -8379,6 +8440,10 @@ def build_expense_view(
             "tax_label": r.tax_label or "",
             "customer": field_overrides.get(r.document_id, {}).get("customer", ""),
             "posting_category": posting,
+            # Item 216 Build 2 step 2: the model's answer on a GL month, the
+            # `posting_category` shape with `origin: "suggestion"`. ABSENT
+            # when there is none; `category_confirmable` offers its Confirm.
+            **({"suggested_category": suggested} if suggested is not None else {}),
             "posting_paid_through": {"account": pt_account, "source": pt_source},
             "review": review,
             # Note #62: the category is the tool's guess and a reviewer can
@@ -8515,11 +8580,19 @@ def build_expense_view(
         display = str((e.get("vendor") or {}).get("display") or "").strip()
         if display:
             by_vendor.setdefault(display.casefold(), []).append(e)
+    def _row_category_text(e: dict) -> str:
+        # Item 216 Build 2 step 2: the model's lines moved to
+        # `suggested_category`; the chip still compares every line's category.
+        return "; ".join(
+            c for c in (
+                (e.get(k) or {}).get("category")
+                for k in ("posting_category", "suggested_category")
+            ) if c
+        )
+
     for group in by_vendor.values():
         cats = sorted({
-            (e.get("posting_category") or {}).get("category")
-            for e in group
-            if (e.get("posting_category") or {}).get("category")
+            _row_category_text(e) for e in group if _row_category_text(e)
         })
         for e in group:
             e["category_variance"] = {
@@ -16956,8 +17029,9 @@ def proposed_posting_category(
     overrides: dict,
     *,
     entity_orgs: dict | None = None,
-) -> dict | None:
-    """The posting category a needs-review row will book to once confirmed.
+) -> tuple[dict | None, dict | None] | None:
+    """The `(posting_category, suggested_category)` a needs-review row will
+    carry once confirmed, or None when no candidate has either.
 
     A review row holds no receipt until the reviewer confirms one, so its
     `posting_category` resolved to nothing and a category the reviewer set on
@@ -16965,7 +17039,8 @@ def proposed_posting_category(
     candidate or else the first one; this reads the candidate carrying a
     reviewer category edit first (the one she just reclassified), then the
     first candidate in emitted order. Display only: readiness and the booking
-    still follow the receipt actually confirmed."""
+    still follow the receipt actually confirmed. Item 216 Build 2 step 2: the
+    candidate's model answer on a GL month is its suggestion, as on any row."""
     edited = {
         doc for (doc, _line), ov in (overrides or {}).items()
         if (ov or {}).get("category")
@@ -16976,10 +17051,8 @@ def proposed_posting_category(
         rec = rec_by_id.get(doc)
         if rec is None:
             continue
-        hit = _row_posting_category(
-            rec, overrides, None, entity_orgs=entity_orgs
-        )
-        if hit is not None:
+        hit = _row_categories(rec, overrides, None, entity_orgs=entity_orgs)
+        if hit != (None, None):
             return hit
     return None
 

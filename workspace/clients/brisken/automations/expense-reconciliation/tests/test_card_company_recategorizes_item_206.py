@@ -206,13 +206,17 @@ def _answers_for(web, batch_id, company, org, code, *, csv_too=True) -> None:
     row = _row(web, batch_id)
     assert row["legal_entity_id"] == company
     assert row["entity_source"] != "override", "the company came from the card"
-    category = row["posting_category"]["category"]
+    # Item 216 Build 2 step 2: the engine's answer here is the model's, so it
+    # is the row's suggestion, never its posting, and the CSV labels it.
+    assert row["posting_category"] is None, row["posting_category"]
+    category = row["suggested_category"]["category"]
     assert LEAF.match(category) and curated_leaves.is_postable(org, category)
     assert category == code
     assert row["review"].get("reason_code") != "category_refused"
     assert "refusal" not in _stored(web, batch_id)
     if csv_too:
-        assert _csv_accounts(web, batch_id) == [curated_leaves.binding(code, org).name]
+        assert _csv_accounts(web, batch_id) == [
+            f"suggested: {curated_leaves.binding(code, org).name}"]
 
 
 def test_a_card_fix_that_gives_the_row_its_company_re_runs_the_engine(web, monkeypatch):

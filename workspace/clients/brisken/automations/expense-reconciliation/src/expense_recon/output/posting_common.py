@@ -14,7 +14,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from ..matching.types import Categorization, ClassificationSource
+from ..matching.types import Categorization, ClassificationSource, is_suggestion_only
 
 if TYPE_CHECKING:
     from ..ingest.chart_of_accounts import Account, ChartOfAccounts
@@ -23,6 +23,22 @@ if TYPE_CHECKING:
 _CARD_ACCOUNT = "Card: {account_id}"
 _UNCATEGORIZED = "(uncategorized - assign)"
 _UNMAPPED = "(account unmapped - assign)"
+# Item 216 Build 2 step 2: the account cell of a model answer on a GL month
+# (`is_suggestion_only`). The account stays readable so a person can confirm
+# it, and the prefix keeps it out of every posting: the API poster and the
+# journal check refuse a cell that starts with it, as they refuse the
+# placeholders above.
+SUGGESTED_PREFIX = "suggested: "
+
+
+def suggested_cell(account: str) -> str:
+    """The account cell for a suggestion: `suggested: <account>`."""
+    return f"{SUGGESTED_PREFIX}{account}"
+
+
+def is_suggested_cell(text: str | None) -> bool:
+    """Whether an account cell holds a suggestion rather than an account."""
+    return str(text or "").strip().startswith(SUGGESTED_PREFIX)
 
 # §17 disposition values (string-typed copies of web.store's
 # VALID_DISPOSITIONS members; the output layer stays import-free of the
@@ -143,8 +159,12 @@ def _debit_account_and_note(
         return _UNMAPPED, f"{cat.category} (no account match), assign"
     if coa is None:
         # No chart to resolve against: the pick passes through as written.
-        return cat.zoho_account, note
-    resolved = _resolve_account(cat.zoho_account, coa)
-    if resolved is None:
-        return _UNMAPPED, f"{cat.category} (no account match), assign"
+        resolved = cat.zoho_account
+    else:
+        resolved = _resolve_account(cat.zoho_account, coa)
+        if resolved is None:
+            return _UNMAPPED, f"{cat.category} (no account match), assign"
+    if is_suggestion_only(cat):
+        # Item 216 Build 2 step 2: the model's answer is a suggestion.
+        return suggested_cell(resolved), f"{note}, suggestion: confirm it"
     return resolved, note

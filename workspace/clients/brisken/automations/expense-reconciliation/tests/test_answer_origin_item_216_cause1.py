@@ -211,7 +211,9 @@ def test_criss_own_pick_on_a_charge_is_printed_as_hers_on_every_surface(web, mon
     cells = _sheet_cells(web, batch)
     assert cells["PRESSMASTER FZCO"] == _name(pick_code), cells
     assert cells["FIGMA"] == _name(rule_code), cells
-    assert cells["ACME ANALYTICS"] == f"{_name(model_code)} (confirm)", cells
+    # Item 216 Build 2 step 2: on a GL month the guess is a labelled
+    # suggestion, the cell `expenses.csv` writes, no longer "(confirm)".
+    assert cells["ACME ANALYTICS"] == f"suggested: {_name(model_code)}", cells
 
     # The Zoho journal books the decided two and never the guess.
     journal = _journal(web, batch)
@@ -228,7 +230,7 @@ def test_clearing_her_pick_hands_the_row_back_to_the_guess(web, monkeypatch):
     row = _rows(web, batch)["PRESSMASTER FZCO"]
     assert row["charge_category"]["origin"] == ORIGIN_SUGGESTION
     assert row["review"]["reason_code"] == "receiptless_suggested"
-    assert _sheet_cells(web, batch)["PRESSMASTER FZCO"] == f"{_name(model_code)} (confirm)"
+    assert _sheet_cells(web, batch)["PRESSMASTER FZCO"] == f"suggested: {_name(model_code)}"
     assert "PRESSMASTER" not in _journal(web, batch)
 
 

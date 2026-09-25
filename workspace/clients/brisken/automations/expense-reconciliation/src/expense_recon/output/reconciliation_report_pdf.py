@@ -37,6 +37,7 @@ import io
 from collections.abc import Sequence
 
 from ..unmatched_reasons import RECEIPT_REASON_SHORT
+from .posting_common import suggested_cell
 from ._pdf_common import (
     PAGE_MARGIN_MM,
     booked_without_receipt,
@@ -590,6 +591,19 @@ def _charge_table(rows: list[dict], styles: dict):
             {} if row.get("posting_category_proposed")
             else row.get("posting_category") or {}
         )
+        posting_text = posting.get("zoho_account") or posting.get("category") or ""
+        suggested = (
+            {} if row.get("posting_category_proposed")
+            else row.get("suggested_category") or {}
+        )
+        suggested_text = (
+            suggested.get("zoho_account") or suggested.get("category") or ""
+        )
+        if suggested_text:
+            # Item 216 Build 2 step 2: the model's answer on a GL month is
+            # printed labelled, as `expenses.csv` writes it, never as a posting.
+            suggested_text = suggested_cell(suggested_text)
+        account_text = "; ".join(t for t in (posting_text, suggested_text) if t)
         matched_vendor = ""
         for cand in row.get("candidates") or []:
             if cand.get("document_id") == row.get("chosen_document_id"):
@@ -608,10 +622,7 @@ def _charge_table(rows: list[dict], styles: dict):
             Paragraph(esc(row.get("currency") or ""), styles["cell"]),
             Paragraph(esc(status), styles["cell"]),
             Paragraph(esc(matched_vendor or "none"), styles["cell"]),
-            Paragraph(
-                esc(posting.get("zoho_account") or posting.get("category") or ""),
-                styles["cell"],
-            ),
+            Paragraph(esc(account_text), styles["cell"]),
         ])
     table = Table(table_rows, colWidths=[w for _n, w in _CHARGES], repeatRows=1)
     table.setStyle(table_style())

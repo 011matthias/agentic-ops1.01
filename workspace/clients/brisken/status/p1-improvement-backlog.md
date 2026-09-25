@@ -11358,6 +11358,38 @@ owner ruling 2026-09-25: a model-only line prints as a labelled suggestion
 `check`, and one click on Confirm (stored `inherited`, never taught) turns a row
 back into a posting.
 
+**Build 2 step 2, built 2026-09-25 (Shipped row 138, PR #1451): the model
+suggests, a rule or a person decides.** Cause: every surface decided whether an
+account posts by whether the line had one; `answer_origin` said who answered,
+and no posting path read it (`_debit_account_and_note`, the row roll-up, and
+the review's `_TRUSTED_SOURCE`, which called LINE trusted). Structure: one
+predicate beside `answer_origin`, `is_suggestion_only` (the model's answer on a
+curated leaf code, which is what a GL month's category is; a bucket-era answer
+is no code, so April to June are untouched), and one cell label beside the
+export's placeholders, `suggested: <account>`. Both views move the model's
+answer from `posting_category` to a parallel `suggested_category`; the review
+reads `check` / `model_suggestion` (confirmable); `expenses.csv`, the statement
+sheet (in place of `(confirm)`), `report.xlsx` (yellow, on Needs Review),
+`reconciled.csv` and the reconciliation PDF print the label; the API poster and
+the journal check refuse it. `_TRUSTED_SOURCE` and `_COARSE_SOURCE` are gone;
+the grid's coarse token is read off `answer_origin`. Found on the way:
+`apply_overrides` stamped a person's pick (and so a Confirm) as LINE, the
+model's own tier, so under the new rule her pick would have printed
+`suggested:`; it reads EDITED now, as a charge pick always did (the hand-typed
+expense too). Measured on the 03:05 backup after the change: the 85 model-only
+expenses print `suggested:` (27 / 27 / 31), 0 read `ready` (32 moved to
+`check`), 80 are one-click confirmable (the other 5 still have a line with no
+category, so they read `pick`), and one Confirm turns its row back into the
+account (grid `origin: person`, `ready`). Receiptless: every model guess on the
+run view is a `suggested_category` (68 / 109 / 43 rows); no `posting_category`
+carries a suggestion. Tests: `tests/test_model_suggests_item_216_build2_step2.py`
+(7, three route-level: an upload + the confirm route, the category PUT, and a
+statement's guess through the run view, `reconciled.csv`, `report.xlsx`, the
+statement sheet and the PDF); eleven wiring points bite under `regress_check`.
+Nine older tests re-pinned from "the model's answer posts" to the suggestion.
+What changes live: nothing is written; each month's views and files read the
+new way on the first request after deploy.
+
 ### 217. A duplicate shows its controls twice, and the tool keeps the invoice instead of the receipt (notes #89 + #90, owner 2026-09-25 03:45 / 03:47 UTC) (SHIPPED 2026-09-25: backend PR #1429, Fly `e47f2a8d`; SPA prompt `docs/lovable-duplicate-controls-once-prompt.md` PUBLISHED and driven the same morning)
 
 **Owner**, on September's Pressmaster FZCO unit (row `0078`, the invoice),
@@ -11563,6 +11595,7 @@ once, as a copy.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 138 | Item 216 Build 2 step 2: the model suggests, a rule or a person decides. On a GL month the model's answer moves from `posting_category` to `suggested_category` on both views, reads `check` / `model_suggestion` (one-click confirmable, stored `inherited`), and every file prints `suggested: <account>`, which the poster and the journal check refuse. `is_suggestion_only` + `SUGGESTED_PREFIX` are the one predicate and the one cell; `_TRUSTED_SOURCE` / `_COARSE_SOURCE` retired for `answer_origin`; a person's pick reads EDITED in the export (it read LINE) | Owner ruling 2026-09-25. 85 model-only expenses no longer post as accounts (27 / 27 / 31), the 32 `ready` ones stop being ratified by "Confirm all Ready", and one Confirm restores a posting (measured on the 03:05 backup) | PR #1451 |
 | 137 | Item 216 Build 2 step 1: the model is offered leaf accounts only (`curated_leaves.llm_leaf_labels` drops every account with a postable account under it, read from the chart's parent names), and `_gl_model_result` refuses a parent the model names anyway (`model_picked_parent`); the merchant list, a remembered rule and a person may still pick one. | The model was handed 11 to 13 roll-ups per company and took one 58 times in 164 where Criss took one once in 152 (owner ruling 2026-09-25). The prefix test the sizing used got four accounts wrong per company (`E600010-10-20` is a leaf; `E600010-20` CRM travel and Corporate Services' `E100000` / `E500000` are parents). Tests: `tests/test_model_offered_leaves_item_216_build2.py` (4, two route-level: a receipt upload, and a GL month's charges with a merchant-list parent and Criss's parent pick kept); both wiring points bit under `regress_check`. | #1447 |
 | 136 | Item 216 cause 1: one mapping of who answered, `answer_origin` (person / rule / suggestion), read by the statement sheet, the Zoho journal's receiptless rows, the row review and the report colour, and served as `origin` on `charge_category` / `posting_category`. | Criss's own account on a charge printed in her statement sheet as `<account> (confirm)`, the tool asking her to confirm her own decision, because each surface derived trust from the raw source on its own. The premise "no correction ever landed" was wrong: 35 of her picks existed until the GL conversion retired them by ruling. Tests: `tests/test_answer_origin_item_216_cause1.py` (18, route-level through the charge route, the sheet download, `zoho.csv` and the run view); three `regress_check` proofs bit. | #1437 |
 | 135 | Item 216 cause 5: `tools/recon-categorization-score.py` scores the tool's accounts against Criss's own Zoho postings in one command, split by where each answer came from (merchant list, remembered rule, receipt line, bank-descriptor guess), with open rows, amounts, and the per-company account map once settings carry one; `--fetch` reads each month once, 15 s apart. | "Categorized" counted answers, not whether they were right, and the app's guess counter shows 0 / 0 / 1 for three months holding 164 guesses. On today's live months it reproduces item 216 exactly (135 joined, 21 of 97 right; strict 120, 19 of 87; 1 of 23 on the rows Criss still had to book), so the builds after it are judged by right answers, not fewer blanks. | #1435 |

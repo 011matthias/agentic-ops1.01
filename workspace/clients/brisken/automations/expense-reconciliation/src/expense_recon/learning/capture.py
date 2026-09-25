@@ -34,10 +34,15 @@ from ..matching.types import ClassificationSource, MatchOutcome, Receipt, Transa
 from .store import LearningStore, category_is_human, normalize_vendor
 
 # Line-item category sources we treat as a real, learnable category. After
-# an override, web.service rewrites the line as source=LINE with reasoning
-# "reclassified by reviewer", so reclassifications land here; REVIEW /
-# UNCLASSIFIED never do.
-_CONCRETE_SOURCES = (ClassificationSource.LINE, ClassificationSource.VENDOR)
+# an override, web.service rewrites the line as source=EDITED (LINE until item
+# 216 Build 2 step 2) with reasoning "reclassified by reviewer"; REVIEW /
+# UNCLASSIFIED never land here. Category learning reads the overrides table
+# itself, not this tuple.
+_CONCRETE_SOURCES = (
+    ClassificationSource.LINE,
+    ClassificationSource.VENDOR,
+    ClassificationSource.EDITED,
+)
 
 
 def charge_pseudo_receipts(transactions) -> dict[str, Receipt]:
