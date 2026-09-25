@@ -52,6 +52,7 @@ from ..correspondence import quarantine_correspondence
 from ..error_codes import Refusal, code_of, detail_of, fields_of
 from ..duplicates import (
     STATE_OPEN,
+    choose_kept,
     copies_to_collapse,
     decide_receipt_groups,
     duplicate_row_flags,
@@ -59,6 +60,7 @@ from ..duplicates import (
     inherit_card_from_copies,
     n_extra_copies,
     restore_copies_with_their_own_charge,
+    with_kept_first,
 )
 from ..ingest._common import merge_transactions
 from ..matching.types import (
@@ -15213,8 +15215,10 @@ def rematch_month(
     # document number, a page printing the other's number, two numbers, two
     # cards, vendor + date), and only a `copy` verdict collapses.
     pool_before_collapse = pool
+    # Item 216: the copy a charge already holds stays the kept one, so a
+    # confirmed decision never ends up naming a set-aside copy.
     pool, collapsed, dup_decisions = duplicate_pool(
-        run, pool, dup_resolutions
+        run, pool, dup_resolutions, held=held_documents(store, run)
     )
     receipt_digest_map = receipt_digests(run, receipts)
     # R4b (item 38 ruling 3): the pool spans trips. Receipts from trips
@@ -15507,6 +15511,13 @@ def rematch_month(
             new_snapshot[DUPLICATE_STATEMENT_KEY] = sorted(statement_restored)
         else:
             new_snapshot.pop(DUPLICATE_STATEMENT_KEY, None)
+        kept_copies = {
+            d.group_id: d.members[0] for d in dup_decisions if d.is_copy and d.members
+        }
+        if kept_copies:
+            new_snapshot[DUPLICATE_KEPT_KEY] = kept_copies
+        else:
+            new_snapshot.pop(DUPLICATE_KEPT_KEY, None)
         if charge_categorizations:
             new_snapshot["charge_categorizations"] = {
                 tx_id: categorization_to_dict(c)
@@ -16939,6 +16950,11 @@ RECEIPT_DIGESTS_KEY = "receipt_digests"
 # Snapshot key: the group ids the last re-match's statement check (rung 7)
 # restored as two purchases. Rewritten by every re-match, never accumulated.
 DUPLICATE_STATEMENT_KEY = "duplicate_statement_restored"
+# Snapshot key (item 216): group id -> the document the last re-match kept
+# as the real expense (`duplicates.kept_member`). Rewritten by every
+# re-match, read by every view, so a page and the match agree on which copy
+# is set aside until the month next re-matches.
+DUPLICATE_KEPT_KEY = "duplicate_kept"
 
 _FILE_EVIDENCE: dict[tuple[str, int, int, str], "str | None"] = {}
 _FILE_EVIDENCE_MAX = 4096
@@ -17030,13 +17046,40 @@ def duplicate_decisions(
         (run.snapshot or {}).get(DUPLICATE_STATEMENT_KEY) or []
         if with_statement_check else []
     )
-    return decide_receipt_groups(
+    decisions = decide_receipt_groups(
         receipts,
         digests=receipt_digests(run, receipts, work_dir=work_dir),
         text_of=receipt_text_layer(run, work_dir=work_dir),
         resolutions=resolutions or {},
         statement_distinct=statement,
     )
+    if not with_statement_check:
+        return decisions  # a re-match chooses the kept copy itself
+    # Item 216: a view keeps the copy the last re-match kept. A month with no
+    # statement is never matched, so nothing can hold a copy and the rule
+    # applies as the page is read; a statement month waits for its next
+    # re-match, because its matches were made against the old kept copy.
+    kept = (run.snapshot or {}).get(DUPLICATE_KEPT_KEY)
+    if kept is None and not has_statement(run):
+        kept = choose_kept(decisions, receipts)
+    return with_kept_first(decisions, kept)
+
+
+def held_documents(store: "RunStore", run: RunRow) -> set[str]:
+    """The receipts a charge holds in the month as it stands BEFORE a
+    re-match: the last match's outcome with the reviewer's decisions applied
+    (a confirmed pick claims its document). Empty for a month never
+    matched. Read-only."""
+    try:
+        transactions, pool, outcome, _errors = snapshot_from_dict(run.snapshot)
+    except Exception:  # noqa: BLE001 - an unreadable snapshot holds nothing
+        return set()
+    if not transactions:
+        return set()
+    effective = apply_decisions(
+        outcome, transactions, pool, store.get_decisions(run.run_id)
+    )
+    return {m.document_id for m in effective.matches}
 
 
 def decided_copies(
@@ -17144,13 +17187,21 @@ def duplicate_pool(
     resolutions: "dict[str, str] | None",
     *,
     work_dir: "Path | None" = None,
+    held: "set[str] | None" = None,
 ):
     """`(pool without collapsed copies, collapsed ids, decisions)`: the
     candidate pool a re-match hands the matcher before the statement check.
     Shared by `rematch_month` and `tools/recon-match-attribution.py`, so the
-    replay cannot assemble a different pool than the app."""
+    replay cannot assemble a different pool than the app.
+
+    Item 216: each group's kept copy is chosen here (`choose_kept`): the one a
+    charge already holds (`held`), else the payment receipt over its
+    invoice, else the first. The returned decisions carry it first."""
     decisions = duplicate_decisions(
         run, pool, resolutions, work_dir=work_dir, with_statement_check=False,
+    )
+    decisions = with_kept_first(
+        decisions, choose_kept(decisions, pool, frozenset(held or ()))
     )
     collapsed = copies_to_collapse(decisions)
     kept = [r for r in pool if r.document_id not in collapsed] if collapsed else pool

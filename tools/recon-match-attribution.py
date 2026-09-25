@@ -237,8 +237,14 @@ def load_live(
     dup_decisions: list = []
     work_dir = (Path(files) / run_id) if files is not None else None
     if dup_pool is not None:
+        # Item 216: the app keeps the copy a charge already holds; replay it
+        # with the same held set when the module has it.
+        held_fn = getattr(service, "held_documents", None)
+        pool_kw = {"work_dir": work_dir}
+        if held_fn is not None:
+            pool_kw["held"] = held_fn(store, run)
         pool, collapsed, dup_decisions = dup_pool(
-            run, pool, store.get_duplicate_resolutions(run_id), work_dir=work_dir,
+            run, pool, store.get_duplicate_resolutions(run_id), **pool_kw,
         )
     else:
         collapsed = collapsed_duplicate_copies(pool, store.get_duplicate_resolutions(run_id))

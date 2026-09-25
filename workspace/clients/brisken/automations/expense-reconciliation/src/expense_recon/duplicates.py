@@ -741,6 +741,119 @@ def decide_receipt_groups(
     return out
 
 
+# ── Item 216: which copy is the real expense ─────────────────────────
+#
+# Notes #89 / #90 (owner, 2026-09-25, on September's Pressmaster pair): "the
+# real expense should be big and duplicate should be small so they should
+# effectively switch places". Every copy after a group's FIRST member is the
+# one set aside, and "first" used to be the sorted document id, i.e. the
+# order the mail's attachments arrived in. A Stripe vendor attaches the
+# INVOICE before the RECEIPT, so the tool kept the bill and set aside the
+# proof of payment in every such pair (19 of 19 in September 2026).
+#
+# The kept copy is chosen at MATCH time and nowhere else, because a charge's
+# confirmed decision names the exact document it settled: swapping the copy a
+# charge already holds would leave that decision claiming the invoice while
+# the receipt sat unmatched, and both would count. So a copy a charge holds
+# stays kept, and only a group no charge holds moves to its receipt.
+
+KIND_RECEIPT = "receipt"
+KIND_INVOICE = "invoice"
+_NAME_PREFIX = re.compile(r"^\d+__")
+
+
+def payment_document_kind(receipt: Receipt) -> str | None:
+    """``receipt`` for a document that proves a payment, ``invoice`` for the
+    bill it pays, None when the document says neither.
+
+    The extraction's own numbers decide first (a read ``receipt_number`` is a
+    receipt; an ``invoice_number`` with no receipt number is an invoice), then
+    the file name, which is how the stored months tell them apart: the
+    amendment fields exist only on receipts read since 2026-09-16, while
+    Stripe names its two attachments ``Invoice-...`` and ``Receipt-...``."""
+    if (getattr(receipt, "receipt_number", None) or "").strip():
+        return KIND_RECEIPT
+    if (getattr(receipt, "invoice_number", None) or "").strip():
+        return KIND_INVOICE
+    name = (receipt.receipt_name or _NAME_PREFIX.sub("", receipt.document_id or "")).lower()
+    if name.startswith("receipt"):
+        return KIND_RECEIPT
+    if name.startswith("invoice"):
+        return KIND_INVOICE
+    return None
+
+
+def kept_member(
+    members: tuple[str, ...] | list[str],
+    by_id: dict[str, Receipt],
+    held: set[str] | frozenset[str] = frozenset(),
+) -> str | None:
+    """The member a group keeps as its real expense. First rule that applies:
+
+    1. the one member a charge holds (two or more held are all real spend, so
+       nothing moves);
+    2. the one payment receipt in a group that also holds its invoice, when
+       every member reads the same total and currency;
+    3. the first member, as before."""
+    members = [m for m in members if m]
+    if not members:
+        return None
+    held_members = [m for m in members if m in held]
+    if len(held_members) == 1:
+        return held_members[0]
+    if held_members:
+        return members[0]
+    group = [by_id.get(m) for m in members]
+    if any(r is None for r in group):
+        return members[0]
+    money = {(str(r.detected_total), (r.detected_currency or "").upper()) for r in group}
+    if len(money) != 1 or None in {r.detected_total for r in group}:
+        return members[0]
+    kinds = [payment_document_kind(r) for r in group]
+    receipts = [m for m, k in zip(members, kinds) if k == KIND_RECEIPT]
+    if len(receipts) == 1 and KIND_INVOICE in kinds:
+        return receipts[0]
+    return members[0]
+
+
+def with_kept_first(
+    decisions: list[ReceiptGroupDecision], kept: dict[str, str] | None
+) -> list[ReceiptGroupDecision]:
+    """The same decisions with each group's kept document (``kept``: group id
+    -> document id) moved to the front of ``members``, so every reader of
+    ``members[0]`` (the collapse, the row markers, the copies set aside, the
+    statement check) agrees on it. An id that is not a member changes
+    nothing; the group id hashes the sorted members, so it does not move."""
+    if not kept:
+        return decisions
+    out: list[ReceiptGroupDecision] = []
+    for d in decisions:
+        doc = kept.get(d.group_id)
+        if doc and doc in d.members and d.members[0] != doc:
+            rest = tuple(m for m in d.members if m != doc)
+            d = replace(d, members=(doc, *rest))
+        out.append(d)
+    return out
+
+
+def choose_kept(
+    decisions: list[ReceiptGroupDecision],
+    receipts: list[Receipt],
+    held: set[str] | frozenset[str] = frozenset(),
+) -> dict[str, str]:
+    """group id -> kept document for every group whose verdict is ``copy``
+    (``kept_member`` over the group). Only a re-match calls this."""
+    by_id = {r.document_id: r for r in receipts}
+    out: dict[str, str] = {}
+    for d in decisions:
+        if not d.is_copy:
+            continue
+        doc = kept_member(d.members, by_id, held)
+        if doc:
+            out[d.group_id] = doc
+    return out
+
+
 def copies_to_collapse(
     decisions: list[ReceiptGroupDecision], restored=()
 ) -> set[str]:

@@ -3192,6 +3192,37 @@ Pinned by `tests/test_view_contract.py`
 the index alignment). SPA half: `docs/lovable-duplicates-decided-prompt.md`,
 folded into item 79's month page.
 
+## Which copy is the real expense: the kept copy (item 216, 2026-09-25)
+
+No new field. What changed is WHICH member of a duplicate group is
+`members[0]`, i.e. the copy every existing field treats as kept:
+`duplicate.is_extra: false`, `duplicate.of`, counted in `totals_by_ccy`,
+offered to the matcher, and not in `copies_set_aside`.
+
+A re-match chooses it, first rule that applies:
+
+1. the one member a charge holds in the month as it stood before the re-match
+   (the last outcome with the reviewer's decisions applied; two or more held
+   means nothing moves);
+2. the one payment receipt in a group that also holds its invoice, when every
+   member reads the same total and currency. A receipt is a document whose
+   extraction read a `receipt_number`, or, failing both numbers, whose file
+   name starts with `Receipt`; an invoice reads an `invoice_number` without a
+   receipt number, or its file name starts with `Invoice`;
+3. the first member by document id (the old rule).
+
+The choice is stored in the month's snapshot as `duplicate_kept` (group id ->
+document id) and every view reads it, so a page and the last match agree. A
+month with a statement and no stored choice (every month matched before
+2026-09-25) keeps rule 3 until its next re-match. A month with no statement is
+never matched, so nothing can hold a copy and rules 2 and 3 apply as the page
+is read. `duplicate_groups[].group_id` hashes the sorted members and does not
+move, so every stored ruling keeps its group.
+
+Why rule 1: a confirmed decision names the exact document it settled.
+Swapping the copy a charge holds would leave that decision claiming the
+invoice while the receipt became a second counted expense.
+
 ## Whose turn a row is, and who decided it: `turn` + `decided_by` + `decided_rule` (item 76, 2026-09-16)
 
 `rows[].status` is `pending` on every row nobody has decided, and that is

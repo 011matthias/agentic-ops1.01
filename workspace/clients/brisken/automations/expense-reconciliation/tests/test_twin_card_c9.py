@@ -223,17 +223,23 @@ def test_an_invoice_reads_the_card_entity_and_person_its_receipt_prints(
     assert invoice["entity_source"] == "card"
     assert invoice["person"] == person
     assert invoice["person_source"] == "card"
-    assert invoice["duplicate"]["copy"] == 1, "the kept copy is the one that moved"
+    # Item 216: the RECEIPT is the kept copy (the real expense) and the
+    # invoice the set-aside one; the invoice still reads its twin's card.
+    assert invoice["duplicate"]["is_extra"] is True
+    receipt = _expense(grid, "Receipt-")
+    assert receipt["duplicate"]["copy"] == 1
     assert grid["summary"]["n_needs_entity"] == 0
 
-    # The export builds from `_expense_export_inputs`: the invoice row ships
-    # under the twin's entity, not the placeholder.
+    # The export builds from `_expense_export_inputs`: the kept row ships
+    # under the card's entity, not the placeholder, and the invoice copy
+    # writes no row (item 94).
     import csv
 
     resp = client.get(f"/runs/{batch_id}/expenses.csv")
     assert resp.status_code == 200, resp.text
     by_ref = {r["Reference#"]: r for r in csv.DictReader(io.StringIO(resp.text))}
-    assert by_ref[inv_ref]["Legal Entity"] == entity
+    assert by_ref[rcpt_ref]["Legal Entity"] == entity
+    assert inv_ref not in by_ref
 
 
 def test_a_vendor_date_twin_lends_its_card_too(client, monkeypatch):

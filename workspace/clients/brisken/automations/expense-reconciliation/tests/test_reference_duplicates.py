@@ -238,16 +238,19 @@ def test_a_copy_that_borrows_its_card_does_not_take_a_strangers_charge(
     assert invoice["entity_source"] == "card"
 
     # And the export (the Zoho CSV, the month PDF and report.xlsx all build
-    # from `_expense_export_inputs`): the invoice row ships as Consulting,
-    # not with the batch's Corporate Services or the entity placeholder.
+    # from `_expense_export_inputs`): the kept copy ships as Consulting, not
+    # with the batch's Corporate Services or the entity placeholder. Since
+    # item 216 (notes #89/#90) the kept copy is the RECEIPT, the proof of
+    # payment, and the invoice is the one set aside.
     by_ref = _csv_rows_by_reference(client, batch_id)
-    assert by_ref["H0LHY2WQ-0032"]["Legal Entity"] == "Consulting"
-    # Item 94: the receipt copy is a decided copy, so it writes no row; the
-    # grid still shows it, on its own card.
-    assert "H0LHY2WQ0032" not in by_ref
+    assert by_ref["H0LHY2WQ0032"]["Legal Entity"] == "Consulting"
+    # Item 94: the invoice copy is a decided copy, so it writes no row; the
+    # grid still shows it, with the card it borrowed.
+    assert "H0LHY2WQ-0032" not in by_ref
+    assert invoice["counts_in_total"] is False
     receipt = next(e for e in grid["expenses"] if "Receipt-" in e["document_id"])
     assert receipt["legal_entity_id"] == "Consulting"
-    assert receipt["counts_in_total"] is False
+    assert receipt.get("counts_in_total") is not False
 
 
 def test_an_invoice_and_its_receipt_spelled_differently_make_one_exact_match(
@@ -814,10 +817,12 @@ def test_an_operator_assignment_on_the_tender_word_beats_the_twins_card(
         assert invoice["card"]["key"] == "corp-2838"
         assert invoice["legal_entity_id"] == "Corporate Services"
         assert invoice["entity_source"] == "card"
+    # Item 216: the receipt is the kept copy (a month with no statement
+    # applies the rule as it is read), so the export ships the receipt on the
+    # card it printed, and the invoice, with its assignment, writes no row.
     by_ref = _csv_rows_by_reference(client, batch_id)
-    assert by_ref["H0LHY2WQ-0032"]["Legal Entity"] == "Corporate Services"
-    # Item 94: the receipt copy writes no row; the grid keeps its own card.
-    assert "H0LHY2WQ0032" not in by_ref
+    assert by_ref["H0LHY2WQ0032"]["Legal Entity"] == "Consulting"
+    assert "H0LHY2WQ-0032" not in by_ref
     receipt = next(
         e for e in _grid(client, batch_id)["expenses"]
         if "Receipt-" in e["document_id"]
@@ -862,10 +867,11 @@ def test_a_collecting_batch_grid_and_export_apply_the_inheritance(
     (group,) = grid["duplicate_groups"]
     assert group["basis"] == "reference"
 
+    # Item 216: the receipt is the kept copy, so it ships; the invoice copy
+    # writes no row and its grid row carries the borrowed card.
     by_ref = _csv_rows_by_reference(client, batch_id)
-    assert by_ref["890D70BF-0032"]["Legal Entity"] == "Cloud Services"
-    # Item 94: the receipt copy writes no row; the grid row carries the card.
-    assert "890D70BF0032" not in by_ref
+    assert by_ref["890D70BF0032"]["Legal Entity"] == "Cloud Services"
+    assert "890D70BF-0032" not in by_ref
     receipt = next(e for d, e in rows.items() if "Receipt-" in d)
     assert receipt["legal_entity_id"] == "Cloud Services"
 
