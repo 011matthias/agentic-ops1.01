@@ -872,6 +872,16 @@ where the receipt carries no payment info, and its dropdown lists cards only
 2 withdrawn unpasted. `lovable-case9-status-prompt.md` is HELD by the owner
 until item 213 amends it.
 
+**2026-09-25 morning: item 214 backend live (PR #1411, Fly `4f8e36f8`).** A
+private row whose card is known (listed number, or the strip's own month
+assignment) leaves the strip into `n_private_rows`; the strip sends
+`private_cards[]` + per-group `private_card_options[]`; the route takes
+`{"hint", "private_card"}`. Live diff: only September's 3281 group moved (plus
+July `0044__` from sibling #1404, first deployed here). SPA half
+`docs/lovable-card-strip-cards-only-prompt.md` NOT pasted. Item 213 was
+shipped by a sibling (PR #1393, live `c5a426aa`); its SPA half is
+`docs/lovable-short-review-lines-prompt.md`.
+
 ## Elements (index)
 
 State at a glance only. Live slice-level status, next actions, and detail are in
