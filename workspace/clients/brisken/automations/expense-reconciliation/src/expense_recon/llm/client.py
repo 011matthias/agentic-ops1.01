@@ -59,6 +59,44 @@ class ClassificationResult:
 
 
 @dataclass(frozen=True)
+class FxEvidence:
+    """What the tool already knows about one cross-currency pair, handed to
+    the FX judge so it judges the tool's evidence instead of re-deriving it
+    (front 5, 2026-09-25).
+
+    Until then the judge got amounts, dates, vendors and the raw card
+    strings, and was asked to convert "using your best estimate": live July
+    and August 2026 printed a conversion off tenfold (55.74 BRL as ~1.00
+    USD) and three inverse rates, and rejected a pair for "card numbers
+    differ" where the tool's own card evidence read unknown.
+
+    The rate fields are the matcher's reference conversion
+    (`deterministic._reference_rate_for` + `reference_gap`, the numbers the
+    month page shows in the candidate's `fx` block), all None when the pair
+    has no rate. `receipt_card` / `charge_card` are `card_evidence` sources,
+    `cards_differ` its verdict (None = unknown, never a disagreement), and
+    `vendor_pct` the merchant agreement 0-100 the matcher measured.
+    """
+
+    reference_rate: Decimal | None = None
+    reference_rate_source: str | None = None
+    reference_converted: Decimal | None = None
+    reference_gap_pct: Decimal | None = None
+    reference_gap_band: str | None = None
+    receipt_card: str = "none"
+    charge_card: str = "none"
+    cards_differ: bool | None = None
+    vendor_pct: int | None = None
+
+
+# The FX judgment prompt's version. Part of the judgment-cache key
+# (`web/judgment_cache.call_key`), so a verdict bought under an older prompt
+# is never read back as an answer to this one: a month re-judges its FX pairs
+# at its next natural re-match. Bump on any edit to the prompt below.
+FX_JUDGMENT_PROMPT_VERSION = "2"
+
+
+@dataclass(frozen=True)
 class FxJudgmentResult:
     """One FX-judgment decision from the LLM (v2 spec §15.2).
 
@@ -221,13 +259,14 @@ class LLMClient(Protocol):
         tx_currency: str,
         tx_date: str,
         tx_vendor: str,
-        receipt_amount: Decimal,
+        receipt_amount: Decimal | None,
         receipt_currency: str,
         receipt_date: str | None,
         receipt_vendor: str | None,
         receipt_reference: str | None,
         tx_card: str | None = None,
         receipt_payment_mode: str | None = None,
+        evidence: FxEvidence | None = None,
     ) -> FxJudgmentResult:
         """FX judgment (v2 spec §15.2). One call per FX-mismatch
         candidate pair. Unlike LD-2 categorization, vendor name IS a
@@ -238,7 +277,12 @@ class LLMClient(Protocol):
         records of which card paid — the statement's card column or
         account id, and the Zoho expense's payment-mode label. Optional
         so an older client implementation still satisfies the protocol;
-        omitted means "unknown card", never "different card"."""
+        omitted means "unknown card", never "different card".
+
+        `evidence` (front 5) is the tool's own reference conversion, card
+        evidence and merchant agreement; with a rate in it the model is
+        told the rate, never asked to estimate one. `receipt_amount` None
+        means the receipt's total could not be read."""
         ...
 
     def judge_ambiguous(
@@ -367,20 +411,151 @@ Receipt:
   reference: {receipt_reference}
   card the expense report says paid it: {receipt_payment_mode}
 
+What the tool already established (its own records; take these as given):
+{evidence_block}
+
 How to judge:
-- Convert the receipt amount from {receipt_currency} to {tx_currency} using your best estimate of the exchange rate around {tx_date}. Card networks usually add a small FX fee (roughly 1 to 3 percent), so the statement amount is often slightly higher than the raw converted amount.
+{rate_rule}
 - Compare the converted amount to the transaction amount, then weigh vendor-name similarity, reference overlap, and how close the dates are.
-- Check the two card labels. They come from different systems and are written differently, so compare the card numbers inside them rather than the whole string. Matching numbers corroborate the pair. Numbers that clearly disagree are strong evidence these are two different purchases, even when the converted amounts land close, because a small amount in one currency often coincides with a small amount in another. Say so in your reasoning when the cards decide it. When either label names no card, treat the card as unknown and judge on the other signals; unknown is not disagreement.
-- Weigh the vendors as evidence too. A recurring software subscription, a cloud bill, or another charge that clearly is not a travel purchase does not belong to a restaurant, taxi, or toll receipt however well the amounts convert.
-- Be honest about uncertainty. Your exchange-rate estimate is approximate and this judgment always goes to a human for review, so do not overstate confidence.
+- The card verdict above is final; do not re-check it. The same card supports the pair. Different cards are strong evidence of two different purchases, even when the converted amounts land close, because a small amount in one currency often coincides with a small amount in another. An unknown card says nothing either way.
+- Weigh the vendors as evidence too, but remember the bank prints a truncated trading name while a receipt often prints the legal name (a supermarket's company name, a fuel station's tax registration), so different wording for the same shop is common. A recurring software subscription, a cloud bill, or another charge that clearly is not a travel purchase does not belong to a restaurant, taxi, or toll receipt however well the amounts convert.
+- Be honest about uncertainty. This judgment always goes to a human for review, so do not overstate confidence.
 
 Return a JSON object with:
 - is_match: true if the receipt is plausibly the same purchase, false otherwise
 - same_purchase_confidence: your probability from 0.0 to 1.0 that they are the same purchase
-- implied_rate: the {receipt_currency}-to-{tx_currency} rate you used as a number, or null
-- converted_amount: the receipt amount converted to {tx_currency} as a number, or null
+- implied_rate: the {receipt_currency}-to-{tx_currency} rate you used as a number (the tool's rate when one is given above), or null
+- converted_amount: the receipt amount converted to {tx_currency} as a number (the tool's converted amount when one is given above), or null
 - reasoning: one or two short sentences explaining the judgment
 """
+
+# How a rate source reads in the judge's prompt.
+_FX_SOURCE_TEXT = {
+    "opentickers_day": "the daily reference rate for the charge date",
+    "ecb_month": "the ECB monthly average for the charge's month",
+    "statement": "a rate read off this month's card statement",
+    "receipts": "a rate read off this month's receipts",
+}
+_FX_BAND_TEXT = {
+    "match": "inside the clean band the tool accepts for this rate",
+    "review": "outside the clean band, inside the zone the tool sends to review",
+    "outside": "outside the zone the tool would accept at all",
+}
+_CARD_EVIDENCE_TEXT = {
+    "override": "picked by a reviewer",
+    "hint": "resolved from the receipt's payment wording",
+    "learned": "remembered from an earlier month",
+    "printed": "digits printed on the receipt",
+    "row": "the statement's card column",
+    "account": "the statement account",
+    "none": "unknown",
+}
+
+
+def fx_evidence_block(
+    evidence: FxEvidence | None, *, receipt_currency: str, tx_currency: str
+) -> tuple[str, str]:
+    """`(evidence_block, rate_rule)` for the FX judgment prompt. With a rate,
+    the rule forbids estimating one; without, it forbids inventing one."""
+    if evidence is None:
+        evidence = FxEvidence()
+    lines: list[str] = []
+    has_rate = (
+        evidence.reference_rate is not None
+        and evidence.reference_converted is not None
+    )
+    if has_rate:
+        source = _FX_SOURCE_TEXT.get(
+            evidence.reference_rate_source or "", "a reference rate"
+        )
+        lines.append(
+            f"  exchange rate: 1 {receipt_currency} = {evidence.reference_rate} "
+            f"{tx_currency} ({source})"
+        )
+        lines.append(
+            f"  receipt converted at that rate: {evidence.reference_converted} "
+            f"{tx_currency}"
+        )
+        if evidence.reference_gap_pct is not None:
+            band = _FX_BAND_TEXT.get(evidence.reference_gap_band or "", "")
+            lines.append(
+                f"  charge vs converted receipt: {evidence.reference_gap_pct:+}%"
+                + (f", {band}" if band else "")
+            )
+    else:
+        lines.append("  exchange rate: none available for this pair")
+    # One verdict, no source labels: on the 2026-09-25 replay a line naming
+    # both sides' sources read to the model as two cards.
+    if evidence.cards_differ is True:
+        card = "DIFFERENT cards paid the receipt and the charge"
+    elif evidence.cards_differ is False:
+        card = "the SAME card paid the receipt and the charge"
+    else:
+        card = "unknown, which is not a disagreement"
+    lines.append(f"  card (final, already checked by the tool): {card}")
+    if evidence.vendor_pct is not None:
+        lines.append(f"  merchant-name agreement measured: {evidence.vendor_pct}%")
+    if has_rate:
+        rule = (
+            "- The exchange rate is given above: use it and do not estimate your "
+            "own. Card networks usually add a small FX fee (roughly 1 to 3 "
+            "percent), so the statement amount is often slightly higher than "
+            "the converted amount."
+        )
+    else:
+        rule = (
+            "- No exchange rate is available. Do not invent one: judge on the "
+            "card, vendor, reference and dates, and keep your confidence "
+            "moderate."
+        )
+    return "\n".join(lines), rule
+
+
+def render_fx_judgment_prompt(
+    *,
+    tx_amount: Decimal,
+    tx_currency: str,
+    tx_date: str,
+    tx_vendor: str | None,
+    receipt_amount: Decimal | None,
+    receipt_currency: str | None,
+    receipt_date: str | None,
+    receipt_vendor: str | None,
+    receipt_reference: str | None,
+    tx_card: str | None = None,
+    receipt_payment_mode: str | None = None,
+    evidence: FxEvidence | None = None,
+) -> str:
+    """The FX judgment prompt as the model reads it. Public so a test can
+    assert what reaches the model without a network call."""
+    evidence_block, rate_rule = fx_evidence_block(
+        evidence,
+        receipt_currency=receipt_currency or "(unknown)",
+        tx_currency=tx_currency,
+    )
+    if evidence is not None:
+        # The replay of the 13 live verdicts (2026-09-25): shown both the
+        # raw labels ("9693" beside "CARTAO ...3876") and the tool's "the
+        # cards AGREE", the model answered "the cards differ" on 7 of 9. The
+        # tool already compared them; the model gets the verdict only.
+        tx_card = receipt_payment_mode = "see the tool's card verdict below"
+    return _FX_JUDGMENT_PROMPT_TEMPLATE.format(
+        tx_amount=tx_amount,
+        tx_currency=tx_currency,
+        tx_date=tx_date,
+        tx_vendor=tx_vendor or "(unknown)",
+        receipt_amount=(
+            receipt_amount if receipt_amount is not None else "(unknown)"
+        ),
+        receipt_currency=receipt_currency or "(unknown)",
+        receipt_date=receipt_date or "(unknown)",
+        receipt_vendor=receipt_vendor or "(unknown)",
+        receipt_reference=receipt_reference or "(none)",
+        tx_card=tx_card or "(unknown)",
+        receipt_payment_mode=receipt_payment_mode or "(unknown)",
+        evidence_block=evidence_block,
+        rate_rule=rate_rule,
+    )
 
 
 _FX_JUDGMENT_SCHEMA = {
@@ -780,19 +955,21 @@ class OpenAIClient:
         receipt_reference: str | None,
         tx_card: str | None = None,
         receipt_payment_mode: str | None = None,
+        evidence: FxEvidence | None = None,
     ) -> FxJudgmentResult:
-        prompt = _FX_JUDGMENT_PROMPT_TEMPLATE.format(
+        prompt = render_fx_judgment_prompt(
             tx_amount=tx_amount,
             tx_currency=tx_currency,
             tx_date=tx_date,
-            tx_vendor=tx_vendor or "(unknown)",
+            tx_vendor=tx_vendor,
             receipt_amount=receipt_amount,
-            receipt_currency=receipt_currency or "(unknown)",
-            receipt_date=receipt_date or "(unknown)",
-            receipt_vendor=receipt_vendor or "(unknown)",
-            receipt_reference=receipt_reference or "(none)",
-            tx_card=tx_card or "(unknown)",
-            receipt_payment_mode=receipt_payment_mode or "(unknown)",
+            receipt_currency=receipt_currency,
+            receipt_date=receipt_date,
+            receipt_vendor=receipt_vendor,
+            receipt_reference=receipt_reference,
+            tx_card=tx_card,
+            receipt_payment_mode=receipt_payment_mode,
+            evidence=evidence,
         )
         response = self._client.chat.completions.create(
             model=self.model,
@@ -1203,12 +1380,23 @@ class MockLLMClient:
         receipt_reference: str | None,
         tx_card: str | None = None,
         receipt_payment_mode: str | None = None,
+        evidence: FxEvidence | None = None,
     ) -> FxJudgmentResult:
         self.calls.append(("judge_fx_match", (tx_vendor, receipt_vendor)))
         # WS3: the card pair is recorded on the side rather than in `calls`,
         # so the existing (vendor, vendor) call assertions stay valid while
         # a test can still assert the cards reached the model.
         self.last_fx_cards = (tx_card, receipt_payment_mode)
+        # Front 5: likewise the tool's evidence, and the prompt it renders.
+        self.last_fx_evidence = evidence
+        self.last_fx_prompt = render_fx_judgment_prompt(
+            tx_amount=tx_amount, tx_currency=tx_currency, tx_date=tx_date,
+            tx_vendor=tx_vendor, receipt_amount=receipt_amount,
+            receipt_currency=receipt_currency, receipt_date=receipt_date,
+            receipt_vendor=receipt_vendor, receipt_reference=receipt_reference,
+            tx_card=tx_card, receipt_payment_mode=receipt_payment_mode,
+            evidence=evidence,
+        )
         self.cost_tracker.record(self._per_call_cost)
 
         if self._fx_queue:

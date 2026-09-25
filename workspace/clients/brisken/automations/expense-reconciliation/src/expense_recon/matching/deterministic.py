@@ -1818,6 +1818,41 @@ NO_CARD_RIVAL_REVIEW = "no_card_rival_on_other_card"
 # the same 0.5 the API shows as `vendor_pct` 50).
 NO_CARD_VENDOR_REVIEW = "no_card_vendor_disagrees"
 NO_CARD_VENDOR_FLOOR = 0.5
+# `Match.review_code` when the bilateral-uniqueness gate demoted a clean
+# rate-derived pair because a rival agrees just as cleanly (front 5,
+# 2026-09-25). A card-contradiction demotion keeps no code: its cards differ.
+UNIQUENESS_RIVAL_REVIEW = "uniqueness_rival"
+
+
+def _uniqueness_rival_note(
+    verdict: "UniquenessVerdict",
+    tx_by_id: "Mapping[str, Transaction]",
+    rec_by_id: "Mapping[str, Receipt]",
+) -> str:
+    """`: <rival>, <rival>` naming the charges and receipts that blocked a
+    pair, or "" when none resolves. Charges print as the statement shows
+    them, receipts as their vendor and total; at most three, then a count."""
+    names: list[str] = []
+    for tx_id in verdict.rival_txs:
+        t = tx_by_id.get(tx_id)
+        if t is not None:
+            names.append(
+                f"charge {t.vendor_from_statement} {t.amount} "
+                f"{t.transaction_currency} on {t.transaction_date.isoformat()}"
+            )
+    for doc in verdict.rival_docs:
+        r = rec_by_id.get(doc)
+        if r is not None:
+            when = r.detected_date.isoformat() if r.detected_date else "no date"
+            names.append(
+                f"receipt {r.detected_vendor or doc} {r.detected_total} "
+                f"{r.detected_currency or ''} on {when}".replace("  ", " ")
+            )
+    if not names:
+        return ""
+    shown = ", ".join(names[:3])
+    more = f" and {len(names) - 3} more" if len(names) > 3 else ""
+    return f": {shown}{more}"
 
 
 def card_evidence(tx: Transaction, receipt: Receipt) -> tuple[str, str]:
@@ -2159,6 +2194,14 @@ def match_month(
                     vendor_signal=c.vendor_signal,
                 )
                 continue
+            # Front 5 (2026-09-25): a look-alike demotion names its rival and
+            # carries a code, so the judgment layer can skip the model on a
+            # pair whose own evidence is clean and the SPA can say which
+            # charge or receipt competes, instead of "more than one receipt".
+            rival_note = (
+                _uniqueness_rival_note(verdict, tx_by_id, rec_by_id)
+                if verdict.kind == "uniqueness" else ""
+            )
             demoted = replace(
                 c.match,
                 match_type=MatchType.FX_JUDGMENT,
@@ -2167,7 +2210,11 @@ def match_month(
                 reason=(
                     c.match.reason.rstrip(".")
                     + f". Demoted to judgment: this rate-derived pairing is "
-                    f"not conclusive ({verdict.note})."
+                    f"not conclusive ({verdict.note}{rival_note})."
+                ),
+                review_code=(
+                    UNIQUENESS_RIVAL_REVIEW if verdict.kind == "uniqueness"
+                    else c.match.review_code
                 ),
             )
             cands[i] = _Candidate(
