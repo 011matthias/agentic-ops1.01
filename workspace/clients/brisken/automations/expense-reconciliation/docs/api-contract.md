@@ -185,6 +185,34 @@ refusals it replaced. Codes: `rerun_confirm_required` / `rerun_confirm_mismatch`
 `month_changed_during_conversion` (job error). Operator only; a write on the
 month, so it runs on an owner order.
 
+### Decided accounts: `accounts_locked` (item 219, 2026-09-25)
+
+`settings.merchants[name].accounts_locked` is optional, `true` or absent. It
+marks the entry's `accounts` as decided: no learner changes a locked entry's
+`accounts`, `zoho_account` or `category`, and its answers post as a rule
+(`origin: "rule"`) exactly as any map entry does. Settings may still change a
+locked account (that is the on-purpose route). **An entry that omits the key
+keeps the stored flag**; only an explicit `false` clears it. A person's pick on
+a row still wins on that row.
+
+`GET /api/runs/{id}/memory-plan` `lessons[]` gains `kind: "drift"`: on a GL
+month, rows of a locked merchant booked in a company to a postable account
+other than the decided one, one lesson per account, `default_keep: false`,
+`owner_gated: false`, id `drift:<merchant>|<company label>:<code>`,
+`conflict_group` `drift:<merchant>|<company label>`, `key: {merchant, company,
+account}`. Its `description` reads "Change the default for <merchant> in
+<company> to <account>? N of this month's M <merchant> rows there were booked
+to it; the decided account is <account>." Ticking it (`POST .../publish`
+`keep`) sets that one company's account and writes the memory rule the same
+rows teach; that rule is never offered as its own lesson for a decided cell.
+Two drift lessons of one group ticked together write nothing and are named in
+`learned.lessons.unresolved_conflicts`. Rows that agree with the decision keep
+their ordinary lesson. The publish summary's `registry` block gains
+`skipped_locked` (groups of a locked merchant the learner left alone).
+
+OpenAI, Anthropic and Lovable keep `owner_gated` on their `registry:` lesson
+whether or not they are locked; a drift lesson about them is not gated.
+
 ## `parse_issues` specifically
 
 ```json

@@ -126,6 +126,7 @@ from ..category_vocabulary import (
 from ..merchant_registry import (
     MerchantRegistry,
     drop_unvouched_remembered_cards,
+    is_accounts_locked,
     normalize_merchants_setting,
 )
 # Note item M1: the registry's bare provenance sentence (a line whose
@@ -5011,7 +5012,11 @@ def registry_upserts_from_expense_run(
     changes the returned map carries (a re-affirmed category is not counted).
 
     Item 183: `gl` (see `registry_category_groups`) makes a GL month's
-    account correction land in that company's `accounts` entry."""
+    account correction land in that company's `accounts` entry.
+
+    Item 219: a merchant carrying `accounts_locked` keeps its category, its
+    single account and every company's account whatever the month's
+    corrections say (counted as `skipped_locked`). Aliases still land."""
     from ..learning import merge_taught
 
     orig_by_id = {r.document_id: r for r in receipts}
@@ -5039,6 +5044,11 @@ def registry_upserts_from_expense_run(
     n_skipped = 0
     n_account_skipped = 0
     n_accounts = 0
+    # Item 219: a merchant whose accounts are decided is never re-pointed by
+    # a correction. A disagreeing pick reaches it only as the Publish drift
+    # lesson (`memory_lessons`), which a person ticks.
+    locked = {c for c, e in base.items() if is_accounts_locked(e)}
+    n_locked = 0
 
     # 1) Vendor edits -> canonical + alias.
     for document_id, fields in (field_overrides or {}).items():
@@ -5089,6 +5099,9 @@ def registry_upserts_from_expense_run(
     )
     skipped_merchants: set[str] = set()
     for (canonical, company), rows in groups.items():
+        if canonical in locked:
+            n_locked += 1
+            continue
         if company:
             continue
         values = [v for _row, v in rows]
@@ -5113,7 +5126,7 @@ def registry_upserts_from_expense_run(
             category_changed.add(canonical)
     # Item 183 step 4: a GL month's account correction, per company.
     for (canonical, company), rows in groups.items():
-        if not company or canonical in skipped_merchants:
+        if not company or canonical in skipped_merchants or canonical in locked:
             continue
         _cat, code, conflict = merge_taught(v for _row, v in rows)
         if conflict:
@@ -5154,6 +5167,7 @@ def registry_upserts_from_expense_run(
         "skipped_conflict": n_skipped,
         "skipped_account_conflict": n_account_skipped,
         "accounts_set": n_accounts,
+        "skipped_locked": n_locked,
     }
     return new_merchants, summary
 

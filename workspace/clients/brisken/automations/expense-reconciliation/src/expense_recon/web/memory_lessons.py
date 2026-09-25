@@ -14,6 +14,12 @@ checklist, and turns the ticks back into exactly the writes that are made.
   learner over that candidate's rows, never by a call built here.
 - OpenAI, Anthropic and Lovable are owner-gated in the merchant list: their
   registry lesson is shown, never ticked, and refused if sent as kept.
+- Item 219: a merchant whose accounts are decided (`accounts_locked`) is never
+  re-pointed by a correction. Rows booked in a company to an account other
+  than the decided one are offered as ONE unticked drift lesson per account
+  ("change the default for <vendor> in <company>?"); ticking it is the only
+  learner path that changes that company's account. The memory rule the same
+  rows would teach rides inside it and is never written on its own.
 
 Owner decisions (2026-09-25): corrections ticked, conflicts unticked; an
 unticked lesson is dropped and offered again next time (no declined store);
@@ -25,7 +31,7 @@ import copy
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..category_vocabulary import gl_leaf_status
+from ..category_vocabulary import gl_leaf_status, gl_postable_ref
 from ..coa_provision import org_id_for_entity
 from ..learning import (
     TABLE_KEYS,
@@ -36,9 +42,13 @@ from ..learning import (
     merge_taught,
     normalize_vendor,
 )
+from ..learning.capture import category_key
+from ..merchant_identity import identity_key
+from ..merchant_registry import company_account, is_accounts_locked
 
 KIND_CORRECTION = "correction"
 KIND_CONFLICT = "conflict"
+KIND_DRIFT = "drift"
 REGISTRY = "registry"
 
 # Owner 2026-09-18: these three are written into the merchant list only when
@@ -263,6 +273,81 @@ def _registry_candidate(ctx: LessonContext, base: dict, rows: list[tuple]) -> di
     return out
 
 
+def _drift_lessons(ctx: LessonContext, cat_groups: dict) -> tuple[list[Lesson], set]:
+    """Item 219: `(drift lessons, the memory keys they replace)`.
+
+    A memory group `(company, merchant)` is a decided cell when the merchant
+    is locked in the merchant list and its map names an account for that
+    company (matched on the org, as the categorizer matches it). Rows there
+    booked to another postable account are drift, one lesson per account,
+    unticked; their memory rule is folded into the lesson. A cell whose rows
+    all agree with the decision keeps its ordinary lesson."""
+    if not ctx.gl:
+        return [], set()
+    locked = {
+        identity_key(name): name
+        for name, entry in ctx.merchants_before.items()
+        if is_accounts_locked(entry)
+    }
+    entity_orgs = ctx.gl.get("entity_orgs") or {}
+    lessons: list[Lesson] = []
+    folded: set = set()
+    for key, members in cat_groups.items():
+        entity, vendor = key
+        merchant = locked.get(vendor)
+        if not merchant:
+            continue
+        company, org = _company(ctx, entity)
+        decided = company_account(
+            ctx.merchants_before[merchant].get("accounts") or {}, org, entity_orgs)
+        if decided is None:
+            continue
+        label, decided_code = decided
+        by_code: dict[str, list] = {}
+        for row, (category, account) in members:
+            code = next(
+                (c for c in (gl_postable_ref(ref, org) for ref in (category, account)) if c),
+                None,
+            )
+            if code and code != decided_code:
+                by_code.setdefault(code, []).append(row)
+        if not by_code:
+            continue
+        folded.add(key)
+        total = sum(
+            1 for r in ctx.rec_by_id.values() if category_key(r, ctx.identity) == key
+        )
+        group = f"drift:{merchant}|{label}"
+        for code, rows in by_code.items():
+            rec = RecordingStore()
+            learn_category_candidate(
+                rec, ctx.rec_by_id, ctx.overrides, rows, ctx.run.run_id, ctx.now_iso,
+                identity=ctx.identity,
+            )
+            sources = [_row_source(ctx, d, ln) for d, ln in rows]
+            booked = len({d for d, _ln in rows})
+            lessons.append(Lesson(
+                id=f"{group}:{code}",
+                kind=KIND_DRIFT,
+                table=REGISTRY,
+                key={"merchant": merchant, "company": label, "account": code},
+                description=(
+                    f"Change the default for {merchant} in {company} to "
+                    f"{_account_text(code, org)}? {booked} of this month's "
+                    f"{max(total, booked)} {merchant} rows there were booked to it; "
+                    f"the decided account is {_account_text(decided_code, org)}."
+                    + _rows_text(sources)
+                ),
+                sources=sources,
+                default_keep=False,
+                conflict_group=group,
+                writes=rec.writes,
+                merchant=merchant,
+                rows=rows,
+            ))
+    return lessons, folded
+
+
 def build_lessons(ctx: LessonContext) -> list[Lesson]:
     lessons: list[Lesson] = []
 
@@ -271,8 +356,11 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
     for w in ctx.writes:
         by_key.setdefault((w.table, w.key), []).append(w)
     cat_groups = category_groups(ctx.rec_by_id, ctx.overrides, ctx.identity)
+    drift, folded = _drift_lessons(ctx, cat_groups)
     field_src = _field_sources(ctx) if ctx.field_overrides or ctx.manual_payloads else {}
     for (table, key), writes in by_key.items():
+        if table == "merchant_category" and key in folded:
+            continue
         if table == "merchant_category":
             sources = [_row_source(ctx, d, ln) for (d, ln), _v in cat_groups.get(key, [])]
         else:
@@ -314,7 +402,7 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
 
     # 3) Conflicts, one UNTICKED lesson per candidate value.
     for key, members in cat_groups.items():
-        if not merge_taught(v for _r, v in members)[2]:
+        if key in folded or not merge_taught(v for _r, v in members)[2]:
             continue
         entity, vendor = key
         company, org = _company(ctx, entity)
@@ -375,7 +463,7 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
                 merchant=merchant,
                 rows=rows,
             ))
-    return lessons
+    return lessons + drift
 
 
 # ── from ticks to writes ────────────────────────────────────────────────
@@ -431,10 +519,27 @@ def apply_selection(ctx: LessonContext, lessons: list[Lesson], kept_ids) -> dict
 
     unresolved: list[str] = []
     groups: dict[str, list[Lesson]] = {}
+    drift: dict[str, list[Lesson]] = {}
     for lid in kept:
         lsn = by_id[lid]
         if lsn.kind == KIND_CONFLICT:
             groups.setdefault(lsn.conflict_group, []).append(lsn)
+        elif lsn.kind == KIND_DRIFT:
+            drift.setdefault(lsn.conflict_group, []).append(lsn)
+    # Item 219: a ticked drift lesson re-points ONE company's decided account
+    # and writes the memory rule its rows teach. Two accounts ticked for one
+    # company decide nothing.
+    for group, members in sorted(drift.items()):
+        if len(members) != 1:
+            unresolved.append(group)
+            continue
+        lsn = members[0]
+        entry = copy.deepcopy(merchants.get(lsn.merchant) or {})
+        entry["accounts"] = dict(sorted({
+            **(entry.get("accounts") or {}), lsn.key["company"]: lsn.key["account"],
+        }.items()))
+        merchants[lsn.merchant] = entry
+        writes.extend(lsn.writes)
     for group, members in sorted(groups.items()):
         rows = [r for lsn in members for r in lsn.rows]
         if members[0].table == REGISTRY:
