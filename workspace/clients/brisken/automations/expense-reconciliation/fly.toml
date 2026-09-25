@@ -18,6 +18,10 @@ primary_region = "fra"
 
 [env]
   EXPENSE_RECON_WEB_DATA = "/data"
+  # 2026-09-25, owner "memo + warm-up": rebuild the months card strip's
+  # roll-up in the background once writes have been quiet for 20 s, so the
+  # strip is ready before it is opened (web/card_status_memo.py).
+  EXPENSE_RECON_CARD_STATUS_WARM = "1"
   # Mail intake (the app's own mailbox): the in-app SMTP listener on :2525,
   # published on public port 25 below (needs the app's dedicated IPv4 —
   # MX targets can only be port 25). expenses.brisken.com MX points here.
