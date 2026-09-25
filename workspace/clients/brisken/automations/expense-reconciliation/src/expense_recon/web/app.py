@@ -3188,6 +3188,61 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             view = _workbench_view(store, run)
         return JSONResponse({"ok": True, "summary": view["summary"]})
 
+    @app.post("/api/runs/{run_id}/receipt-requests/mark-all")
+    async def post_receipt_requests_mark_all(run_id: str, request: Request):
+        """Front 1 step 4: record one ask for every open charge of ONE card
+        holder, the way Criss asks: one mail per person, not one click per
+        charge.
+
+        Body: `{holder, to?, reask?}`. `holder` is a `receipt_chase[].holder`
+        value ("" is the no-holder group). Charges already marked keep their
+        date unless `reask` is true (a reminder restamps them). Writes the
+        marks only; nothing is composed or sent (receipt_chase.py). Refuses
+        a holder with no open charge rather than answering "0 marked"."""
+        body = await request.json()
+        if not isinstance(body, dict) or not isinstance(body.get("holder"), str):
+            return JSONResponse(
+                {"error": "holder is required (a receipt_chase[].holder value)",
+                 "code": "invalid_body", "missing": "holder"},
+                status_code=400,
+            )
+        holder = body["holder"].strip()
+        to = str(body.get("to") or "").strip() or None
+        reask = body.get("reask") is True
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse(
+                    {"error": "run not found", "code": "run_not_found"},
+                    status_code=404,
+                )
+            view = _workbench_view(store, run)
+            group = next(
+                (g for g in view.get("receipt_chase") or []
+                 if g.get("holder") == holder),
+                None,
+            )
+            if group is None:
+                return JSONResponse(
+                    {"error": "This card holder has no charge waiting for a "
+                              "receipt in this month.",
+                     "code": "holder_has_no_open_charge"},
+                    status_code=400,
+                )
+            stamp = _now_iso()
+            marked = [
+                c["transaction_id"] for c in group["charges"]
+                if reask or not c.get("receipt_requested_at")
+            ]
+            for tx_id in marked:
+                store.set_receipt_requested(run_id, tx_id, stamp, to, stamp)
+            if marked:
+                view = _workbench_view(store, run)
+        return JSONResponse({
+            "ok": True, "holder": holder, "n_marked": len(marked),
+            "summary": view["summary"],
+        })
+
     @app.post("/api/runs/{run_id}/no-receipt-expected")
     async def post_no_receipt_expected(run_id: str, request: Request):
         """Rule that no receipt will ever exist for this charge, and say why.
