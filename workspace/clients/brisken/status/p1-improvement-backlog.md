@@ -10736,8 +10736,8 @@ PLACEHOLDER** (note "Placeholder set by the owner 2026-09-25; card owner not
 confirmed"), saved through Settings > Private cards. Change it there: edit the
 person, switch Active off, or remove the row. Effect, API-diffed over all 7
 months: only September's DB Fernverkehr row (`0024__`) moved, to private /
-`private_card_list` / Dirk Neumann. Open: Follow-up 2 (the strip's "Reimburse
-to" never pre-fills) and item 214 (a private receipt still waits on the strip).
+`private_card_list` / Dirk Neumann. The strip half is superseded by item 214's
+owner ruling (dropdown = cards only); Follow-up 2 was withdrawn unpasted.
 
 ### 209. A suggested duplicate stays bound together until someone releases it (owner 2026-09-25) (PROMPT REWRITTEN and design APPROVED on screenshots 2026-09-25, not pasted)
 
@@ -10888,23 +10888,57 @@ line: the next-longest reasons on the same page are `suggested_private` (233
 characters, 4 rows) and, in July, `date_outside_period` (191) and
 `needs_entity_settled_outside` (173).
 
-### 214. A private receipt still waits on the card strip (found 2026-09-25, listing 3281) (RECORDED, not built; owner call)
+### 214. The card strip asks only where the receipt carries no payment info, and its dropdown lists cards only (owner ruling 2026-09-25; found listing 3281) (RULED, not built)
 
-After 3281 was listed (item 208), September's DB Fernverkehr row reads
-private / `private_card_list` / Dirk Neumann, yet `card_review` still lists
-its hint under `unresolved_hints` and `n_unresolved_rows` stays 7, so the
-strip keeps offering "Assign to card..." (and "Private card of...") for a
-receipt whose payer is settled, in every month the card appears. That
-undercuts "confirmed once". The builder (`web/service.py`, the `card_review`
-function ~7130) groups every row with a hint and no company card and never
-reads `private`; row-confirmed private rows (July `0028__`, September
-`0046__`) sit there the same way, so the gap predates the list.
+**Found.** After 3281 was listed (item 208), September's DB Fernverkehr row
+reads private / `private_card_list` / Dirk Neumann, yet `card_review` still
+lists its hint under `unresolved_hints` (`n_unresolved_rows` 7), so the strip
+kept offering "Assign to card..." for a receipt whose payer is settled. The
+builder (`web/service.py`, the `card_review` function ~7130) groups every row
+with a hint and no company card and never reads `private`. Verified live for
+all three private rows: July `0028__` ("DEBIT MASTERCARD", row-confirmed),
+September `0024__` (3281, list) and `0046__` ("Kartenzahlung erhalten",
+row-confirmed).
 
-Fix shape (recommended): a row the resolution marks private leaves
-`unresolved_hints` and `n_unresolved_rows` (it is already counted in
-`n_private`); the strip header then counts only receipts that still need an
-answer. Alternative: keep the group but mark it settled with no Assign (SPA
-change). Owner call because it changes what Criss sees on the strip.
+**Owner ruling, 2026-09-25, verbatim:**
+- "yes it should show assign to card, if the payment info is not in the
+  receipt. dropdown should only consist of cards"
+- Private-list cards in the dropdown: "yes and expenses that are suggested a
+  private have only private cards in drop down unless user clicks that its not
+  private"
+- "New card..." in the dropdown: remove (the recommended option).
+- Then, unprompted: "private card registry".
+
+**What that means (our reading, confirm against the words above):**
+1. A receipt whose PRINTED number resolves, to a company card or to a card on
+   the private list, leaves the strip. A receipt with no payment info keeps
+   "Assign to card...", even when it is already private by hand (July `0028__`
+   and September `0046__` stay; September `0024__` leaves).
+2. The Assign dropdown holds cards only: the company cards plus the private
+   list's cards (e.g. "3281 · Dirk Neumann (private)"). "Private card of..."
+   and "New card..." go. New cards are defined in Settings (Cards / Private
+   cards). Picking a private card makes the group's rows private for that
+   card's person.
+3. On a group suggested private (`suggested_private`), the dropdown shows only
+   the private cards, until the reviewer says it is not private; then the
+   company cards show.
+4. "private card registry": read as the name of the private list, the
+   counterpart of the company card registry, and the source of the dropdown's
+   private cards (Settings tab label may follow). Unconfirmed.
+
+**Build shape (backend first, then one SPA prompt).** Backend: `card_review`
+drops a row the resolution marks private through a printed number
+(`private_source` `private_card_list`; decide `month` with the owner's rule 1),
+keeps no-number rows; the strip route accepts a private-card pick for a
+no-number hint (e.g. `{"hint", "private_card": "3281"}`, stored as the month's
+private hint with that card's person; `learn` has no digits to teach, so it
+stays month-only) and refuses a digits key the list does not hold; a
+"not private" dismissal for a suggested group (check what item 203 already
+offers before adding a route). SPA prompt: the dropdown's items from
+`cards` + `settings.private_cards`, both actions removed, the suggested-private
+filter with its "Not private" control. The published "Private card of..."
+option (Follow-up 1) stays harmless until then; `private_to` stays accepted
+so nothing already sent breaks.
 
 ## Shipped (loop history)
 
