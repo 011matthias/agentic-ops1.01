@@ -91,6 +91,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass, replace
+from functools import lru_cache
 
 from .cards_provision import CardPreset
 from .error_codes import CodedValueError
@@ -148,6 +149,10 @@ GENERIC_TENDER_WORDS = frozenset({
 })
 
 
+# Pure over the text, and `resolve_card` asks it of every alias of every card
+# for every string it resolves (~9,700 resolutions in one all-months card
+# roll-up, 2026-09-25), so each distinct alias is read once per process.
+@lru_cache(maxsize=4096)
 def is_generic_tender(text: str | None) -> bool:
     """True when a hint names only a tender type / card network: no digit
     token, at least one vocabulary word, and EVERY word is either generic
@@ -282,6 +287,45 @@ _WHOLE_WORDS = GENERIC_TENDER_WORDS | frozenset(
 )
 
 
+def _registry_wording(cards: "dict[str, Card]") -> tuple[str, ...]:
+    """The only input the two readers below take from a registry: each
+    ACTIVE card's `label` and `zoho_account` wording, sorted because both
+    readers return sets."""
+    return tuple(sorted(
+        f"{card.label} {card.zoho_account or ''}"
+        for card in (cards or {}).values() if card.active
+    ))
+
+
+# 2026-09-25: `positive_non_brisken_evidence` asks both readers once per
+# payment hint, and each re-tokenized every active card: ~2.9 ms a hint and
+# ~0.7 s of the all-months card roll-up. Keyed on the wording itself, so a
+# Settings edit to a label, an account or `active` is a new key, never a
+# stale answer.
+_REGISTRY_READS_MAX = 32
+
+
+@lru_cache(maxsize=_REGISTRY_READS_MAX)
+def _card_types_of(wording: tuple[str, ...]) -> tuple[frozenset[str], frozenset[str]]:
+    networks: set[str] = set()
+    kinds: set[str] = set()
+    for text in wording:
+        for word in payment_words(text):
+            if word in CARD_NETWORK_WORDS:
+                networks.add(CARD_NETWORK_WORDS[word])
+            if word in CARD_KIND_WORDS:
+                kinds.add(CARD_KIND_WORDS[word])
+    return frozenset(networks), frozenset(kinds)
+
+
+@lru_cache(maxsize=_REGISTRY_READS_MAX)
+def _issuers_of(wording: tuple[str, ...]) -> frozenset[str]:
+    found: set[str] = set()
+    for text in wording:
+        found |= _phrases_in(payment_words(text), _ISSUER_IDS)
+    return frozenset(found)
+
+
 def registry_card_types(
     cards: "dict[str, Card]",
 ) -> tuple[frozenset[str], frozenset[str]]:
@@ -290,17 +334,7 @@ def registry_card_types(
     3645" -> visa, credit; "GSBANK Apple Master Card 0113" -> mastercard).
     Derived, never stored: the Settings cards editor replaces the whole map
     on save, so a new card field would be erased by the published screen."""
-    networks: set[str] = set()
-    kinds: set[str] = set()
-    for card in (cards or {}).values():
-        if not card.active:
-            continue
-        for word in payment_words(f"{card.label} {card.zoho_account or ''}"):
-            if word in CARD_NETWORK_WORDS:
-                networks.add(CARD_NETWORK_WORDS[word])
-            if word in CARD_KIND_WORDS:
-                kinds.add(CARD_KIND_WORDS[word])
-    return frozenset(networks), frozenset(kinds)
+    return _card_types_of(_registry_wording(cards))
 
 
 def registry_issuers(cards: "dict[str, Card]") -> frozenset[str]:
@@ -308,12 +342,7 @@ def registry_issuers(cards: "dict[str, Card]") -> frozenset[str]:
     and `zoho_account` wording like `registry_card_types` ("Chase United
     Visa 8311" -> chase, united; "GSBANK Apple Master Card" -> goldman,
     apple). Derived, never stored, for the same reason."""
-    found: set[str] = set()
-    for card in (cards or {}).values():
-        if card.active:
-            words = payment_words(f"{card.label} {card.zoho_account or ''}")
-            found |= _phrases_in(words, _ISSUER_IDS)
-    return frozenset(found)
+    return _issuers_of(_registry_wording(cards))
 
 
 def _phrases_in(words: list[str], names: "dict[str, str]") -> set[str]:
@@ -789,11 +818,20 @@ class Card:
     def digit_keys(self) -> set[str]:
         """The normalized digit tokens that identify this card, using the
         SAME extraction the matcher uses so statement markers, payment-mode
-        labels, and stored digits land on one key space."""
-        keys: set[str] = set()
-        for d in self.digits:
-            keys |= _card_keys(d)
-        return keys
+        labels, and stored digits land on one key space. A fresh set every
+        call; the extraction behind it runs once per digits tuple."""
+        return set(_digit_keys_of(tuple(self.digits)))
+
+
+@lru_cache(maxsize=1024)
+def _digit_keys_of(digits: tuple[str, ...]) -> frozenset[str]:
+    """`Card.digit_keys` without the copy. `resolve_card` asks it of every
+    card on every resolution (~44,000 times in one all-months card roll-up,
+    2026-09-25), and the answer depends on the digits alone."""
+    keys: set[str] = set()
+    for d in digits:
+        keys |= _card_keys(d)
+    return frozenset(keys)
 
 
 def card_to_dict(card: Card) -> dict:
@@ -1314,6 +1352,18 @@ def effective_cards(
     return cards
 
 
+@lru_cache(maxsize=1024)
+def _matchable_aliases(aliases: tuple[str, ...]) -> tuple[str, ...]:
+    """A card's aliases as `resolve_card` compares them: normalized, in
+    order, blank and generic-tender ones left out. Read once per alias set
+    rather than once per resolution (2026-09-25: ~126,000 normalizations in
+    one all-months card roll-up)."""
+    return tuple(
+        a for a, alias in ((_normalize(alias), alias) for alias in aliases)
+        if a and not is_generic_tender(alias)
+    )
+
+
 def resolve_card(
     observed: str | None,
     cards: dict[str, Card],
@@ -1381,10 +1431,7 @@ def resolve_card(
     exact_hits: list[Card] = []
     for card in live.values():
         matched = exact = False
-        for alias in card.aliases:
-            a = _normalize(alias)
-            if not a or is_generic_tender(alias):
-                continue
+        for a in _matchable_aliases(tuple(card.aliases)):
             if obs_norm == a:
                 matched = exact = True
                 break
