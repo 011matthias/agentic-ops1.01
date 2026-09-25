@@ -10835,7 +10835,7 @@ reader item 204 step 3 added (`cards_settled_elsewhere` in `web/service.py`,
 extended to return the charge's amount and currency), so card and conversion
 describe the same charge. Small and self-contained. Not built.
 
-### 213. The "waits for statement" reason names every card on the account (note #87, owner 2026-09-25 01:12 UTC) (RECORDED, not built; follow-up to item 204 build 5)
+### 213. The "waits for statement" reason names every card on the account (note #87, owner 2026-09-25 01:12 UTC) (SHIPPED 2026-09-25, PR #1393, live `c5a426aa`; SPA half pending paste)
 
 Note #87, September Expenses, anchored on row `0010__rendered-body.pdf`'s
 review line: "NO NEED FOR THIS MUCH VOLUME AI SLOP. TONE IT DOWN; COMPRESS
@@ -10861,10 +10861,38 @@ line: the next-longest reasons on the same page are `suggested_private` (233
 characters, 4 rows) and, in July, `date_outside_period` (191) and
 `needs_entity_settled_outside` (173).
 
+**Shipped (PR #1393, merge `c5a426aa`, deployed 2026-09-25 ~02:00 UTC).** The
+backend line names the cards only when one or two wait
+(`service.WAITS_NAMED_MAX`), otherwise "No card on this receipt, and no
+statement is loaded for its date yet."; `review.waits_for_statements` is
+unchanged. `date_outside_period` (191 -> 123), `suggested_private` (233 ->
+157) and `needs_entity_settled_outside` (173 -> 104) keep each instruction
+and lose the explanation. Predicted from the GET payload and matched after
+the deploy on every row: 47 rows across seven months (31 waiting, 14
+suggested private, 1 date, 1 settled outside), 0 mismatches, every other
+reason count identical. Every live waiting row waits on 3 to 9 cards, so the
+named form has no live case yet.
+
+**What the owner sees has not changed yet, and why.** The case-9 status
+prompt was already published when this was built, and the SPA composes the
+waiting line itself from `review.waits_for_statements` (its own "Waiting for
+the statement of {cards}..." copy). A cold drive after the deploy read
+September's 13 waiting rows at 284-346 characters. The SPA half is
+`docs/lovable-short-review-lines-prompt.md` (two keys for the waiting line,
+shorter `needs_entity_settled_outside`); until it is pasted, only July's date
+line (no SPA key, so the backend prose renders) shows the change, driven in
+EN and PT. September row `0010__rendered-body.pdf`, the note's anchor, no
+longer waits at all: the 01:4x statement attach took it to `vendor_guess`
+(September's waiting rows fell from 19 to 13).
+
+Tests: `tests/test_reason_copy_item_213.py` (6; two route-level); the wiring
+proven red with `tools/regress_check.py`; suite 3620 passed / 2 skipped.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 131 | Item 213 (note #87): review lines say one thing each. `waits_for_statement` names the cards only when one or two wait; `date_outside_period`, `suggested_private`, `needs_entity_settled_outside` keep the instruction and lose the explanation. SPA half `docs/lovable-short-review-lines-prompt.md` pending | 13 September rows read one 284-346 character sentence naming up to nine cards; the owner called it slop. 47 live rows change prose, 0 counts move | #1393 |
 | 130 | Item 204 build 5 follow-up: a decided copy (`counts_in_total: false`) is never offered a `card_suggestion`; `build_expense_view` passes `copy=r.document_id in grid_copies` into `case9_row_fields`, and the copy keeps `waits_for_statements` (no count moves). | 2 of the 6 live suggestions sat on copies (May Lovable 200.00 -> 3645, July Lovable 200.00 -> card-2838), where a click writes an override on a row that counts for nothing; the original already carries the same suggestion. | #1388 |
 | 129 | Item 204 step 4 (case 9, build 4 of 5; owner D4): a receipt that prints no card takes the card its Stripe billing account (`WWT1PNYP-0016` -> `WWT1PNYP`) was paid with on at least two other purchases and on no other card, `card_source: "account"`, company and person riding it. New `billing_account.py`; one link in `resolve_batch_row_cards` between the settled charge and the remembered card; a lazy per-request index (one app middleware) passed by the grid, CSV, month PDF, card tabs, cost-center roll-up, refresh preview and so `/api/cards/status`; never the matcher or the sign-off learner. Lovable prompt `lovable-account-card-prompt.md` pending | Keyed on the vendor name the same memory gave the wrong person 3 times in 21; keyed on the account it scored 34 right, 0 wrong. Ten live May, June and September rows stop asking Criss for a company and a person; the multi-card accounts (Lovable, Dirk's Anthropic) and OpenAI's single pick (D6) stay blank on purpose | PR (this) |
 | 128 | Items 180/181: a merchant's GL account per company. `merchants[].accounts` `{company: leaf code}` decides first on a GL month (matched on the company's org), refuses a code the company cannot post to, works for a merchant with no default category and for receiptless charges; a save omitting the key keeps it; `GET /api/settings` names each code per company and lists `needs_account`; `POST /api/runs/{id}/recategorize-refused` (typed confirm) re-runs a GL month's refused rows | The 126 "model unsure" lines on July to September are mostly AI vendors on Corporate Services, where several accounts fit and the registry had no per-company answer to give | 2026-09-25; `tests/test_merchant_accounts_item_180.py` (10, route-level, a client that fails if the model is asked); nine wiring points proven RED under `tools/regress_check.py`; SPA prompt `docs/lovable-merchant-accounts-per-company-prompt.md` not pasted |
