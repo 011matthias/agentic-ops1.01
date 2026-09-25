@@ -10950,7 +10950,7 @@ longer waits at all: the 01:4x statement attach took it to `vendor_guess`
 Tests: `tests/test_reason_copy_item_213.py` (6; two route-level); the wiring
 proven red with `tools/regress_check.py`; suite 3620 passed / 2 skipped.
 
-### 214. The card strip asks only where the receipt carries no payment info, and its dropdown lists cards only (owner ruling 2026-09-25; found listing 3281) (BACKEND BUILT 2026-09-25; SPA prompt `docs/lovable-card-strip-cards-only-prompt.md` not pasted)
+### 214. The card strip asks only where the receipt carries no payment info, and its dropdown lists cards only (owner ruling 2026-09-25; found listing 3281) (BACKEND LIVE 2026-09-25: PR #1411, Fly `4f8e36f8`; SPA prompt `docs/lovable-card-strip-cards-only-prompt.md` not pasted)
 
 **Found.** After 3281 was listed (item 208), September's DB Fernverkehr row
 reads private / `private_card_list` / Dirk Neumann, yet `card_review` still
@@ -11023,6 +11023,23 @@ holds (April 1340 / 78 / 2598 / 4167, June 3976, July 2544 / 9129 / 3076),
 6 with no number (June DINHEIRO, July DEBIT, August EC-Karte, September Bar
 / girocard / girocardOLV). Tests `tests/test_card_strip_private_item_214.py`;
 four wires proven RED.
+
+**Live 2026-09-25 (PR #1411, merge `4f8e36f8`, `/healthz` commit matches;
+suite 3654 passed / 2 skipped).** Predicted from the before payload and
+diffed after the deploy, GET only: six of seven months match exactly, and
+September moved as predicted (the 3281 group, `0024__`, left; 7 -> 6 groups;
+`n_private_rows` 1; every number-less group offers `["3281"]`, every
+numbered group `[]`; `private_cards` = the one placeholder entry). July
+shows one unrelated move: `0044__` (Stripe "Link") lost its billing-account
+card 1176 and joined the strip as a "Link" group. That is PR #1404's copy
+veto (item 204 step 4 follow-up, merged 02:38 UTC), which this deploy carried
+live for the first time; the item 214 change only removes rows from the
+strip, so it cannot add one. Scripted cold drive (headless Chrome, from the
+login gate, only non-GET the login): September's strip no longer shows
+"Card ending 3281" (the 208 Follow-up 1 drive saw it), and "Kartenzahlung
+erhalten" (hand-marked), "girocard" (suggested) and "credit card" still
+render. The published SPA still offers "New card..." and "Private card
+of..." until the prompt is pasted; both keep working against this backend.
 
 ### 215. A statement attach keeps only the month's own charges (owner decision 2026-09-25, D2 going forward) (RECORDED, not built)
 
