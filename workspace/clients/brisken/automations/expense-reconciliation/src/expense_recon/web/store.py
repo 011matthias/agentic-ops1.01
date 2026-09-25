@@ -222,6 +222,12 @@ SETTINGS_DERIVED_KEYS = (
     "merchants_inert",
     "cost_center_options",
     "fx_daily_rates",
+    # Items 180/181: each merchant's account per company with that
+    # company's name for it, the companies a picker offers, and the
+    # merchants booked to a company their map names no account for.
+    "account_companies",
+    "merchant_accounts",
+    "needs_account",
     "applied",
     "ignored",
 )

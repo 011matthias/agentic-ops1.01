@@ -8866,7 +8866,36 @@ table nobody has ruled on.
 direction closing item 170 landed 53 minutes after the note. Do not start it
 on the strength of the note alone.
 
-### 180. One merchant holds one GL account, and it is applied forward (note #84, owner 2026-09-23)
+### 180. One merchant holds one GL account, and it is applied forward (note #84, owner 2026-09-23) (BACKEND SHIPPED 2026-09-25 with item 181; SPA prompt `docs/lovable-merchant-accounts-per-company-prompt.md` not pasted)
+
+**Shipped 2026-09-25 (owner order: implement).** A merchant entry carries an
+optional `accounts: {company: leaf code}` map, codes only. On a GL month the
+receipt's own company's entry decides first in `categorize._registry_gl`
+(matched on the company's Zoho org, so "Cloud Services" and "Brisken Cloud
+Services, LLC" are one key), ahead of the learned company rule, the single
+`zoho_account` and the default category; a code the company cannot post to
+refuses with its reason and never reaches the model; a merchant with no
+default category still books by its map; receiptless charges take the same
+path through `categorize_charges`; bucket months never read it. That answers
+parts 1 and 3 of the note (two accounts, per company). Part 2, "not applied
+automatically to new months", is answered by the map being what a person set
+per company rather than a single value carried everywhere; nothing is learned
+into it until item 183's Publish checklist keeps a correction.
+
+The published Settings editor carries unknown merchant keys through a save
+(`Vi()` collects them into `extra`, `Hi()` spreads them back; read off the
+live bundle 2026-09-25), and the backend additionally keeps a stored map when
+a save omits the key (only `{}` / null clears), so the wholesale save (item
+177) cannot wipe it. `GET /api/settings` gains `account_companies`,
+`merchant_accounts` (each code with each company's name for it) and
+`needs_account` (registry merchants booked to a company on a GL month with no
+account for it). `POST /api/runs/{id}/recategorize-refused` (typed confirm,
+job) re-runs the engine on a GL month's refused rows only; it is how accounts
+set later reach July to September, and it runs only on an owner order.
+Tests `tests/test_merchant_accounts_item_180.py` (10, route-level, a model
+client that fails if called); nine wiring points proven RED under
+`tools/regress_check.py`. The suggested accounts per vendor and company went
+to the owner for Dirk; none are written to live settings.
 
 **Owner:** *"This should not be applied automatically to new months because
 some merchants can have more than one GL account. Manual editing by the user
@@ -8898,7 +8927,7 @@ category work to move.
 
 **FILED AS RECORD, NOT QUEUED**, same reason as 179.
 
-### 181. Every cloud vendor in the registry has no account at all (note #85, owner 2026-09-23)
+### 181. Every cloud vendor in the registry has no account at all (note #85, owner 2026-09-23) (the per-company slot SHIPPED 2026-09-25 with item 180; the accounts themselves are Dirk's, suggestions handed to the owner)
 
 **Owner:** *"dont forget the accounts criss would match for cloud expenses"*
 
@@ -10340,7 +10369,7 @@ on two July cycles filed in August). Live counts after deploy: see the
 Shipped row. SPA half `docs/lovable-case9-status-prompt.md`, not pasted.
 
 **Build 4 (step 4), 2026-09-25:** the billing-account card, BUILT (Shipped
-row 128). `src/expense_recon/billing_account.py` keys a receipt on the Stripe
+row 129). `src/expense_recon/billing_account.py` keys a receipt on the Stripe
 prefix (`invoice_number`, else `reference`, `^[A-Z0-9]{8}[- ]?\d{4}$`, prefix
 not all digits), collapses copies to one purchase (prefix + counter, across
 months; decided copies out), counts a printed number, the settling charge and
@@ -10472,27 +10501,7 @@ Not covered, by design: a workbench accept or reject, and a duplicate ruling on
 a month with no statement, move a company without a re-match. The sweep
 catches the `entity_missing` half of those at the row's next edit or re-match.
 
-### 210. The export gate checks a row against its stamped company, not the one it shows (found 2026-09-25, building item 206)
-
-`coa_gate` splits a month's receipts by the receipt's stored
-`legal_entity_id` (`coa_gate.py`, the per-entity split), while the grid, the
-engine (item 206) and the export's Entity column use the company the card
-chain resolves. Two consequences, both reproduced:
-
-- A row whose company came from a card and whose stamp is blank is never
-  chart-checked (`UNGATED`): its account goes out as-is. Most live rows are
-  like this.
-- A row stamped with one company at ingest (a printed card) and moved to
-  another by a card fix is checked against the OLD company's chart. In the
-  item 206 test a Cloud-only account on a row now showing Cloud Services
-  exports as `(account unmapped - assign)`.
-
-Fix shape: give the gate the shown company (`resolved_entities(card_res)`, as
-item 201 gave `apply_overrides`). That changes export verdicts on live months,
-most visibly by gating rows that today pass unchecked. **Owner, 2026-09-25:
-record only, decide later.** Not built.
-
-### 207. The live export gate blanks an account Dirk marked postable (found 2026-09-25 on the switched September)
+### 207. The live export gate blanks an account Dirk marked postable (found 2026-09-25 on the switched September) (FIXED LIVE 2026-09-25: chart file replaced on the volume, owner yes; `/healthz` coverage check added)
 
 September's SendGrid receipt (Cloud Services, USD 89.95) is filed by a
 learned rule to `E700030-30` "COGS - Other Infra and IT Costs for Cloud
@@ -10506,6 +10515,52 @@ holds another id for it. One row of 209 across the three exports. Not read on
 production (a volume read was refused earlier in the session); the next step
 is a read of the live chart file's entry for that code, then a refresh of the
 file if it is stale.
+
+**Cause, confirmed 2026-09-25.** Ruled out from code first:
+- September's gate maps each company to the right org and chart. Its
+  curated verdict decides, not the old `scope_groups`, because the month
+  carries `gl_entity_orgs`.
+- Name resolution is exact code or exact name, so the "(INTER COMPANY)"
+  near-namesake (E700040-30) cannot catch it.
+- A learned rule on a GL month stores the binding's name, never its own
+  bucket-era string.
+
+A read-only production read (owner yes) then showed the chart file the gate
+reads, `/data/zoho-books-coa.json`, was the **2026-07-01 pull** (sha256
+`e4055931...`, 199 Cloud Services accounts, no `E700030-30`), never replaced
+since the first deploy. It lacked 18 of the 64 accounts Dirk marks postable
+for Cloud Services: seven COGS leaves, Marketing (3), Management Services
+(3), Utilities, IT equipment, Repairs, Interest, Tax Paid. Corporate Services
+and Consulting were complete. September stores SendGrid under Cloud Services
+with the right account name, so only the file blanked it.
+
+**Fixed live 2026-09-25 (owner yes, after the problem was explained).**
+Volume snapshot `vs_V9ka1J80opbTj5qDJOpy9Gg` first. Then the 2026-09-24 pull
+(Zoho READ, `tools/pull-brisken-zoho-coa.py`, 442,136 bytes, sha256
+`aa855aea...`, 255 Cloud Services accounts) was written beside the old file,
+checked by size and sha on the server, and moved into place. The July file is
+kept as `/data/zoho-books-coa.2026-07-01.json`. The new file only adds
+accounts against the old one (56 Cloud Services, 4 Holding, 1 sandbox; none
+dropped or renamed in any of the 8 orgs), so no row that exported correctly
+could change. Read back through `GET /runs/{id}/expenses.csv`: SendGrid
+exports `COGS - Other Infra and IT Costs for Cloud Business`, USD 89.95,
+Chase Visa 9693, and "(account unmapped - assign)" is on 0 rows in July,
+August and September. No deploy, no row edit, no Zoho write.
+
+Upload recipe (worked, no sftp):
+- `cat <file> | flyctl ssh console -C "sh -c 'cat > /data/<name>.new'"`
+  (Windows flyctl prints "The handle is invalid" and the write still lands);
+- check `wc -c` and `sha256sum` on the server;
+- `cp -p` the old file aside, then `mv` the new one in.
+
+**Structural half (no SPA change).** `/healthz` now carries `coa_chart`: the
+chart file's path, date and size, and per curated company the postable codes
+it lacks (`category_vocabulary.chart_coverage`, cached on the file's mtime
+and size, since the probe runs every 30 s). `ok: false` while any are
+missing, so a stale file is visible where the operator already looks, not
+first as a blanked row. Tests: `tests/test_chart_coverage_item_207.py` (5,
+through `GET /healthz`), with three wiring points proven red under
+`tools/regress_check.py`.
 
 ### 208. The private-card list: a personal card is confirmed private once, not every month (owner direction 2026-09-24, cases 2 + 4 of the card-attribution map) (SHIPPED 2026-09-25)
 
@@ -10569,7 +10624,12 @@ row, `private_cards: {}` in settings. June's Fenix `3976` is probably an OCR
 slip of 3876 and Google's two numbers may not be cards at all: nothing built
 for either, and neither is a stand-in for a real private card.
 
-**SPA half:** `docs/lovable-private-card-list-prompt.md` (Not applied): a
+**SPA half, applied in part 2026-09-25** (owner published the same day; the
+Settings tab and the badge are live and were driven cold; the strip's
+"Private card of..." renders nowhere because the published renderer's
+`allowPrivate` flag is never passed, Follow-up 1 in the prompt file and on
+PROMPT-STATUS; until it lands the Settings tab is the only way onto the
+list). `docs/lovable-private-card-list-prompt.md`: a
 "Private cards" Settings panel, "Private card of..." on the strip's Assign
 dropdown, and "(from the private card list)" on the badge. Until it is
 pasted nobody can add an entry, so the backend alone moves nothing.
@@ -10599,12 +10659,84 @@ card scope would show them half, which defeats the grouping.
 
 SPA-only: `docs/lovable-duplicate-groups-prompt.md`, NOT pasted.
 
+### 210. The export gate checks a row against its stamped company, not the one it shows (found 2026-09-25, building item 206)
+
+`coa_gate` splits a month's receipts by the receipt's stored
+`legal_entity_id` (`coa_gate.py`, the per-entity split), while the grid, the
+engine (item 206) and the export's Entity column use the company the card
+chain resolves. Two consequences, both reproduced:
+
+- A row whose company came from a card and whose stamp is blank is never
+  chart-checked (`UNGATED`): its account goes out as-is. Most live rows are
+  like this.
+- A row stamped with one company at ingest (a printed card) and moved to
+  another by a card fix is checked against the OLD company's chart. In the
+  item 206 test a Cloud-only account on a row now showing Cloud Services
+  exports as `(account unmapped - assign)`.
+
+Fix shape: give the gate the shown company (`resolved_entities(card_res)`, as
+item 201 gave `apply_overrides`). That changes export verdicts on live months,
+most visibly by gating rows that today pass unchecked. **Owner, 2026-09-25:
+record only, decide later.** Not built.
+
+### 211. A month-end receipt paid on the 1st is never borrowed once statements are calendar-month exports (found 2026-09-25, building item 204 step 3)
+
+A neighbour month lends a receipt only when the receipt's printed date falls
+inside the borrowing month's statement period (`adjacent_pool_for_month`), and
+that period is the min..max of the borrowing month's OWN charge dates
+(`statement_period_for_month`). The label month widened by
+`ADJACENT_FALLBACK_DAYS` (3) applies only to a month with no statement.
+
+Chase card-cycle cuts made this work: August's cycle opened on 07-31, so
+July's Google receipt printed 07-31 sat inside August's period and paired with
+the 08-01 charge. Under owner decision D1 the 9693 and 1176 cards move to
+calendar-month activity exports. August's period then starts 08-01, the 07-31
+receipt is outside it, and July's own statement never holds the 08-01 charge.
+The receipt is paired nowhere, and item 204 step 3 (the card flows back,
+Shipped row 126) cannot reach it, because there is no claim to follow.
+
+Affected shape: a receipt printed the day BEFORE its charge's transaction date
+across a month boundary, typically a subscription invoiced on the last day and
+charged on the 1st. A receipt dated the same day as its charge lands in the
+charge's own month and is unaffected. Live count: TBD, because no
+calendar-month statement is loaded yet. Measure it on the first one.
+
+Fix shape: pad the borrow window by a few days on each side (for example, the
+charge span widened by `ADJACENT_FALLBACK_DAYS`, or its union with the label
+month's fallback). Trade-off: the window was kept narrow on purpose (item 61),
+so every day added offers the matcher more neighbour receipts and more chances
+of a wrong pairing. **Needs an owner decision:** widen the window, or accept
+that such a receipt stays unpaired and is matched by hand. Not built.
+
+### 212. A receipt settled by a neighbour month converts at the reference rate, not at the charge's amount (found 2026-09-25, building item 204 step 3)
+
+Item 204 step 3 made the card, company and person of a receipt follow the
+claim a neighbour month holds on it. The money did not follow.
+`settled_charge_amounts` / `export_settled_amounts` (item 98) read only the
+month's own settled charges and skip borrowed receipts. They feed the Zoho CSV
+`Exchange Rate` column (`single_currency_for_export`) and the month report's
+conversion (`build_expense_report`). So a foreign-currency receipt settled by
+next month's charge converts at the reference rate (ECB month or OpenTickers
+day), not at the amount the card was actually charged, while the same row
+already names that charge's card. `settled_charge_amounts`' own docstring
+warns about exactly this split: two derivations of "which charge settled this
+receipt".
+
+Affects only a receipt NOT in the base currency (USD). Live today: 0 rows.
+The only two receipts another month settled (August's OpenAI 80.12 and 80.04,
+settled by September) are USD.
+
+Fix shape: have `settled_charge_amounts` read the same claim through the
+reader item 204 step 3 added (`cards_settled_elsewhere` in `web/service.py`,
+extended to return the charge's amount and currency), so card and conversion
+describe the same charge. Small and self-contained. Not built.
 
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
-| 128 | Item 204 step 4 (case 9, build 4 of 5; owner D4): a receipt that prints no card takes the card its Stripe billing account (`WWT1PNYP-0016` -> `WWT1PNYP`) was paid with on at least two other purchases and on no other card, `card_source: "account"`, company and person riding it. New `billing_account.py`; one link in `resolve_batch_row_cards` between the settled charge and the remembered card; a lazy per-request index (one app middleware) passed by the grid, CSV, month PDF, card tabs, cost-center roll-up, refresh preview and so `/api/cards/status`; never the matcher or the sign-off learner. Lovable prompt `lovable-account-card-prompt.md` pending | Keyed on the vendor name the same memory gave the wrong person 3 times in 21; keyed on the account it scored 34 right, 0 wrong. Ten live May, June and September rows stop asking Criss for a company and a person; the multi-card accounts (Lovable, Dirk's Anthropic) and OpenAI's single pick (D6) stay blank on purpose | PR (this) |
+| 129 | Item 204 step 4 (case 9, build 4 of 5; owner D4): a receipt that prints no card takes the card its Stripe billing account (`WWT1PNYP-0016` -> `WWT1PNYP`) was paid with on at least two other purchases and on no other card, `card_source: "account"`, company and person riding it. New `billing_account.py`; one link in `resolve_batch_row_cards` between the settled charge and the remembered card; a lazy per-request index (one app middleware) passed by the grid, CSV, month PDF, card tabs, cost-center roll-up, refresh preview and so `/api/cards/status`; never the matcher or the sign-off learner. Lovable prompt `lovable-account-card-prompt.md` pending | Keyed on the vendor name the same memory gave the wrong person 3 times in 21; keyed on the account it scored 34 right, 0 wrong. Ten live May, June and September rows stop asking Criss for a company and a person; the multi-card accounts (Lovable, Dirk's Anthropic) and OpenAI's single pick (D6) stay blank on purpose | PR (this) |
+| 128 | Items 180/181: a merchant's GL account per company. `merchants[].accounts` `{company: leaf code}` decides first on a GL month (matched on the company's org), refuses a code the company cannot post to, works for a merchant with no default category and for receiptless charges; a save omitting the key keeps it; `GET /api/settings` names each code per company and lists `needs_account`; `POST /api/runs/{id}/recategorize-refused` (typed confirm) re-runs a GL month's refused rows | The 126 "model unsure" lines on July to September are mostly AI vendors on Corporate Services, where several accounts fit and the registry had no per-company answer to give | 2026-09-25; `tests/test_merchant_accounts_item_180.py` (10, route-level, a client that fails if the model is asked); nine wiring points proven RED under `tools/regress_check.py`; SPA prompt `docs/lovable-merchant-accounts-per-company-prompt.md` not pasted |
 | 127 | Item 204 build 5 (case 9 steps 1 and 5): `expenses[].waits_for_statements` + review `waits_for_statement` in `needs_entity`'s place (coverage by date across every month, one printed card covering its `parent` family), `unmatched_receipts[].reason_code` `card_statement_not_loaded` for the same no-card receipt, `card_suggestion` (lever E, never applied), `POST /api/expense-batches/{id}/cards/by-vendor` (+ `dry_run`), `statements[].month_suggestion` + advisory `statement_month_differs` | Every card-less receipt asked Criss for a company while the statement that would name its card was simply not loaded yet; the row now says which statements it waits for, one pick reaches the vendor's other rows only on her click, and a cycle PDF filed in the wrong month is named | 2026-09-25; `tests/test_case9_status_c9.py` (11, route-level) + contract pins; six wiring points proven RED under `tools/regress_check.py`; suite 3482 passed / 2 skipped before the merge (6 failures fixed: 3 older tests widened, 2 contract pins, 1 wall-clock test under load); live counts in the PR |
 | 126 | Item 204 build 3 (case 9 step 3): the card flows back to a receipt a neighbour month's statement settled. `settled_charge_cards` also reads the claim another month holds (`cards_settled_elsewhere`, re-checked against the holder's effective verdict, card resolved through `_charge_card_identity` in the receipt's own batch registry), so the row reads `card_source: "settled_charge"` with its company and person, and `settled_by` names the borrower | Charges post a day or three after the purchase, so a month-end receipt is settled by the next statement while its own month showed only `settled_by`: no card, company or person. Grid, CSV, month PDF and the learner read the one map. Live: 0 rows move today (the 2 borrowed receipts already print 9693; July's borrowed FENIX receipt sits in review) | PR #1364 |
 | 125 | Item 204 step 6 (case-9 build 2, owner D5): a receipt with no card evidence whose chosen charge's merchant words disagree (`_vendor_score` < 0.5) keeps its assignment but goes to review with `review_code` `no_card_vendor_disagrees` (knob `no_card_vendor_guard`); the FX judgment layer now judges FX pairs only, so it no longer rewrites or unbinds such a pair (owner ruling in session) | A no-card receipt booked to another merchant's same-amount charge took that charge's card, company and person silently: live August's Lovable invoice on BASE44 50.00 (3645). Measured: wrong bookings 1 to 0, clean right 26 / 6 unchanged, bundles 70/95 unchanged; five live rows (April, July x2, August x2) move to review at their next natural re-match | PR #1367 |

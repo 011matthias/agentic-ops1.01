@@ -281,3 +281,226 @@ def convert_month_to_gl(
     }
     logger.info("gl conversion %s (%s): %s", run_id, run.label, result)
     return result
+
+
+# ── Items 180/181: re-run the engine on a GL month's refused rows ─────────
+#
+# A merchant account added to the registry reaches a month created AFTER it
+# at ingest. A month already on the GL engine (July to September 2026 were
+# switched before any merchant had one) keeps its refusals until something
+# re-runs the engine on them, and `convert-to-gl` answers `month_already_gl`.
+# This is that re-run, for REFUSED rows only: a line or charge that already
+# carries an account is never touched, and neither is a line a person picked.
+
+GL_RERUNS_KEY = "gl_reruns"
+
+
+def rerun_refusal(run) -> RunInputError | None:
+    """Why this run's refused rows cannot be re-run, or None."""
+    if run is None:
+        return RunInputError("run not found", code="run_not_found")
+    if GL_ENTITY_ORGS_KEY not in (run.config or {}):
+        return RunInputError(
+            "this month still uses the eight categories; switch it to the "
+            "Zoho accounts first", code="month_not_gl")
+    if run.published:
+        return RunInputError(
+            "this month is published; unpublish it before re-running its "
+            "refused rows", code="month_published")
+    if batch_type(run) == BATCH_TYPE_TRIP:
+        return RunInputError(
+            "a trip takes its months' accounts; re-run the months instead",
+            code="trip_not_convertible")
+    return None
+
+
+def _refused(cat: dict | None) -> bool:
+    return isinstance(cat, dict) and bool(cat.get("refusal"))
+
+
+def rerun_refused_on_gl(
+    db_path,
+    learning_db_path: Path | None,
+    run_id: str,
+    now_iso: str,
+    *,
+    entity_by_doc: dict[str, str] | None = None,
+    on_stage=None,
+) -> dict:
+    """Re-categorize a GL month's refused receipt lines and refused
+    receiptless charges on the engine, for the company each row SHOWS.
+    Returns what changed; raises `RunInputError` (nothing written) when it
+    cannot. A run with no model client still runs: the registry and taught
+    rules need none, and a row they do not cover refuses again, as before."""
+    from ..categorize import categorize_receipts_with_registry
+    from ..categorize_charges import categorize_charges
+
+    def _stage(name: str) -> None:
+        if on_stage is not None:
+            try:
+                on_stage(name)
+            except Exception:  # noqa: BLE001 - progress is best-effort
+                pass
+
+    with RunStore(db_path) as store:
+        run = store.get_run(run_id)
+        refused = rerun_refusal(run)
+        if refused is not None:
+            raise refused
+        settings = store.get_settings()
+        field_overrides = store.get_expense_field_overrides(run_id)
+        human_lines = set(store.get_category_overrides(run_id))
+    cfg = dict(run.config or {})
+    entity_orgs = cfg.get(GL_ENTITY_ORGS_KEY)
+    batch_entity = str((cfg.get("expense") or {}).get("legal_entity_id") or "")
+    llm_client, tracker, _source = _batch_llm_client(cfg)
+    registry = MerchantRegistry.from_settings(settings)
+    learned = (
+        MerchantCategoryLookup.from_db_path(learning_db_path)
+        if learning_db_path is not None else None
+    )
+    shown = entity_by_doc or {}
+    snapshot0 = run.snapshot or {}
+
+    def _company(r: Receipt) -> str:
+        return (
+            shown.get(r.document_id)
+            or (field_overrides.get(r.document_id) or {}).get("legal_entity")
+            or r.legal_entity_id
+            or batch_entity
+        )
+
+    # Which (document, line) pairs refuse now, per receipt list.
+    targets: dict[str, dict[str, set[int]]] = {}
+    for key in _RECEIPT_LISTS:
+        for d in snapshot0.get(key) or []:
+            if not isinstance(d, dict):
+                continue
+            doc = d.get("document_id")
+            idx = {
+                i for i, c in enumerate(_cats(d))
+                if _refused(c) and (doc, i) not in human_lines
+            }
+            if idx:
+                targets.setdefault(key, {})[doc] = idx
+    docs = {doc for per in targets.values() for doc in per}
+
+    _stage("receipts")
+    pool = [
+        replace(r, legal_entity_id=_company(r))
+        for r in baseline_receipts(run) if r.document_id in docs
+    ]
+    for d in snapshot0.get(BORROWED_RECEIPTS_KEY) or []:
+        if isinstance(d, dict) and d.get("document_id") in docs:
+            try:
+                pool.append(receipt_from_dict(d))
+            except (KeyError, TypeError, ValueError):
+                continue
+    new_pool, _ = categorize_receipts_with_registry(
+        pool, registry=registry, client=llm_client, learned=learned,
+        entity_orgs=entity_orgs,
+    ) if pool else ([], {})
+    by_doc = {r.document_id: r for r in new_pool}
+
+    _stage("charges")
+    old_charges = snapshot0.get("charge_categorizations") or {}
+    refused_tx = [tx for tx, c in old_charges.items() if _refused(c)]
+    charge_cats = {}
+    if refused_tx:
+        transactions, _receipts, outcome, _issues = snapshot_from_dict(snapshot0)
+        charge_cats = categorize_charges(
+            replace(outcome, unmatched_transactions=[
+                t for t in outcome.unmatched_transactions if t in set(refused_tx)]),
+            transactions, client=llm_client, learned=learned,
+            registry=registry, entity_orgs=entity_orgs,
+        )
+
+    _stage("saving")
+    n_lines = n_lines_resolved = 0
+    with batch_write_lock():
+        with RunStore(db_path) as store:
+            fresh = store.get_run(run_id)
+            refused = rerun_refusal(fresh)
+            if refused is not None:
+                raise refused
+            snapshot = dict(fresh.snapshot or {})
+            if _fingerprint(snapshot) != _fingerprint(snapshot0):
+                raise RunInputError(
+                    "the month changed while its refused rows were re-run; "
+                    "nothing was saved, run it again",
+                    code="month_changed_during_conversion")
+            previous: dict = {}
+            for key, per_doc in targets.items():
+                rows = []
+                for d in snapshot.get(key) or []:
+                    doc = d.get("document_id") if isinstance(d, dict) else None
+                    new = by_doc.get(doc)
+                    if doc not in per_doc or new is None:
+                        rows.append(d)
+                        continue
+                    items = [dict(li) for li in d.get("line_items") or []]
+                    fresh_cats = [
+                        categorization_to_dict(li.categorization)
+                        if li.categorization is not None else None
+                        for li in new.line_items
+                    ]
+                    for i in sorted(per_doc[doc]):
+                        cat = fresh_cats[i] if i < len(fresh_cats) else (
+                            fresh_cats[0] if len(fresh_cats) == 1 else None)
+                        if cat is None or i >= len(items):
+                            continue
+                        if key == "receipts":
+                            n_lines += 1
+                            n_lines_resolved += int(bool(cat.get("category")))
+                            previous.setdefault(doc, {})[i] = items[i].get(
+                                "categorization")
+                        items[i]["categorization"] = cat
+                    rows.append({**d, "line_items": items})
+                snapshot[key] = rows
+            new_charges = dict(snapshot.get("charge_categorizations") or {})
+            for tx_id, c in charge_cats.items():
+                new_charges[tx_id] = categorization_to_dict(c)
+            if charge_cats:
+                snapshot["charge_categorizations"] = new_charges
+            n_charges_resolved = sum(1 for c in charge_cats.values() if c.category)
+            log = list(snapshot.get(GL_RERUNS_KEY) or [])
+            log.append({
+                "at": now_iso,
+                "n_lines": n_lines,
+                "n_lines_resolved": n_lines_resolved,
+                "n_charges": len(charge_cats),
+                "n_charges_resolved": n_charges_resolved,
+                "previous_line_categorizations": previous,
+                "previous_charge_categorizations": {
+                    tx: old_charges.get(tx) for tx in charge_cats
+                },
+            })
+            snapshot[GL_RERUNS_KEY] = log
+            if n_lines or charge_cats:
+                store.update_run_snapshot(run_id, snapshot)
+                n_categorized, n_uncategorized = categorized_counts(
+                    [receipt_from_dict(d) for d in snapshot.get("receipts") or []]
+                )
+                store.update_run_summary(run_id, {
+                    **(fresh.summary or {}),
+                    "n_categorized": n_categorized,
+                    "n_uncategorized": n_uncategorized,
+                })
+
+    result = {
+        "ok": True,
+        "run_id": run_id,
+        "label": run.label,
+        "n_lines_refused": n_lines,
+        "n_lines_resolved": n_lines_resolved,
+        "n_charges_refused": len(charge_cats),
+        "n_charges_resolved": n_charges_resolved,
+        "line_refusals_after": dict(Counter(
+            li.categorization.refusal for r in new_pool for li in r.line_items
+            if li.categorization is not None and li.categorization.refusal)),
+        "charge_refusals_after": dict(Counter(
+            c.refusal for c in charge_cats.values() if c.refusal)),
+        "llm_cost_usd": str(tracker.total_cost_usd) if tracker is not None else None,
+    }
+    logger.info("gl refused re-run %s (%s): %s", run_id, run.label, result)
+    return result
