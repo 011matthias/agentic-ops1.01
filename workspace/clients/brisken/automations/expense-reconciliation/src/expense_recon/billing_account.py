@@ -247,26 +247,59 @@ def build_account_index(store: "RunStore") -> AccountIndex:
     from .web.service import MODE_EXPENSE_GENERATION
 
     index: AccountIndex = {}
+    db = str(store.db_path)
+    seen: set[tuple[str, str]] = set()
     for run in store.list_runs():
         if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
             continue
         if str(run.label or "").strip().upper().startswith(_FIXTURE_PREFIXES):
             continue
+        slot = (db, run.run_id)
+        seen.add(slot)
         try:
-            rows = month_evidence(
-                run,
-                field_overrides=store.get_expense_field_overrides(run.run_id),
-                edits=store.get_expense_edits(run.run_id),
-                decisions=store.get_decisions(run.run_id),
-                resolutions=store.get_duplicate_resolutions(run.run_id),
-            )
+            rows = _month_rows(store, slot)
         except Exception:  # noqa: BLE001 - the link goes silent, never the page
             log.warning("billing-account index empty: %s unreadable", run.run_id,
                         exc_info=True)
             return {}
         for account, purchase, key, counts in rows:
             _add(index, account, purchase, key, counts)
+    for gone in [s for s in _MONTH_EVIDENCE if s[0] == db and s not in seen]:
+        _MONTH_EVIDENCE.pop(gone, None)
     return index
+
+
+# (db path, run id) -> (the run's `run_inputs_digest`, its `month_evidence`).
+# Live 2026-09-25 the index cost ~28 s per request (every month re-derived
+# for every page that shows an account-keyed row), which starved the health
+# check and failed the SPA's fetches. A month's evidence reads only that
+# run's own rows, so it is reused while their digest is unchanged: derived
+# from the current data every time, never memorized past a write.
+_MONTH_EVIDENCE: dict[tuple[str, str], tuple[str, list]] = {}
+
+
+def _month_rows(store: "RunStore", slot: tuple[str, str]) -> list:
+    run_id = slot[1]
+    before = store.run_inputs_digest(run_id)
+    cached = _MONTH_EVIDENCE.get(slot)
+    if cached is not None and cached[0] == before:
+        return cached[1]
+    # Re-read the run under the digest just taken: `list_runs` ran earlier,
+    # and a write in between would otherwise pair old rows with a new key.
+    run = store.get_run(run_id)
+    if run is None:
+        return []
+    rows = month_evidence(
+        run,
+        field_overrides=store.get_expense_field_overrides(run_id),
+        edits=store.get_expense_edits(run_id),
+        decisions=store.get_decisions(run_id),
+        resolutions=store.get_duplicate_resolutions(run_id),
+    )
+    # Kept only when nothing wrote to the month while it was being read.
+    if store.run_inputs_digest(run_id) == before:
+        _MONTH_EVIDENCE[slot] = (before, rows)
+    return rows
 
 
 class AccountCards:
