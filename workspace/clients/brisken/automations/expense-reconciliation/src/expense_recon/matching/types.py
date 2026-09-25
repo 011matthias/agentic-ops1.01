@@ -55,6 +55,75 @@ class ClassificationSource(str, Enum):
     UNCLASSIFIED = "UNCLASSIFIED"  # pre-categorization default
 
 
+# ── Who answered (item 216 cause 1) ───────────────────────────────────────────────
+#
+# `ClassificationSource` records HOW an answer was produced. Every surface
+# also needs WHO stands behind it, and each used to derive that on its own:
+# the statement sheet trusted LEARNED only (so Criss's own pick on a charge
+# printed "(confirm)"), the Zoho journal trusted LEARNED and EDITED (so a
+# merchant-list answer never posted), the row review called every answer but
+# hers "the tool guessed this", and the report coloured her pick as
+# needs-review. This is the one mapping; a surface reads it, never the enum.
+#
+# - person: a reviewer decided it (EDITED).
+# - rule: a deterministic source a person curated (the merchant list, a
+#   remembered correction). The owner's 2026-09-25 ruling: an account comes
+#   from a rule or a person.
+# - suggestion: the model's reading, of the receipt's lines or of the bank's
+#   description.
+# - None: no answer (REVIEW, UNCLASSIFIED, or no category at all).
+ORIGIN_PERSON = "person"
+ORIGIN_RULE = "rule"
+ORIGIN_SUGGESTION = "suggestion"
+DECIDED_ORIGINS = frozenset({ORIGIN_PERSON, ORIGIN_RULE})
+
+_ORIGIN_OF_SOURCE = {
+    ClassificationSource.EDITED: ORIGIN_PERSON,
+    ClassificationSource.LEARNED: ORIGIN_RULE,
+    ClassificationSource.REGISTRY: ORIGIN_RULE,
+    ClassificationSource.LINE: ORIGIN_SUGGESTION,
+    ClassificationSource.VENDOR: ORIGIN_SUGGESTION,
+}
+
+
+def answer_origin(cat) -> str | None:
+    """Who stands behind a categorization: person, rule, suggestion or None.
+
+    Takes a `Categorization`, or anything carrying `.source` and `.category`;
+    a source given as its string value is read the same way."""
+    if cat is None or not getattr(cat, "category", None):
+        return None
+    source = getattr(cat, "source", None)
+    if isinstance(source, str):
+        try:
+            source = ClassificationSource(source)
+        except ValueError:
+            return None
+    return _ORIGIN_OF_SOURCE.get(source)
+
+
+def origin_of_source_value(value: str | None) -> str | None:
+    """`answer_origin` for a view dict's `source` string. A joined value
+    (`"LINE; EDITED"`, several lines of one receipt) answers the weakest
+    origin among its parts, because the row is only as decided as its least
+    decided line; an unknown part answers None."""
+    parts = [p.strip() for p in str(value or "").split(";") if p.strip()]
+    if not parts:
+        return None
+    origins = []
+    for p in parts:
+        try:
+            origins.append(_ORIGIN_OF_SOURCE.get(ClassificationSource(p)))
+        except ValueError:
+            return None
+    if any(o is None for o in origins):
+        return None
+    for weakest in (ORIGIN_SUGGESTION, ORIGIN_RULE, ORIGIN_PERSON):
+        if weakest in origins:
+            return weakest
+    return None
+
+
 # The eight expense categories Brisken uses (BLUEPRINT LD-1). The
 # classifier returns one of these strings (or None for REVIEW tier).
 # Changing this list is an explicit config change, never inferred.
