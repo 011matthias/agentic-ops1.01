@@ -77,9 +77,12 @@ landed in the same window, so not attributable to this build alone).
    then `uv run tools/lovable-bundle-audit.py` and drive May's two account rows.
 2. Measure `/api/cards/status` per build (profile the index build vs build 3's
    neighbour reads) if the owner finds the Cards page slow.
-3. Optional: count build 3's neighbour-month settled cards as account evidence
-   (today only this month's statement counts, which can only make the rule
-   more silent, never wrong).
+3. (Corrected 2026-09-25.) No follow-up for build 3's neighbour-month cards:
+   build 3 put the flow-back inside `settled_charge_cards`
+   (`cards_settled_elsewhere`), which `month_evidence` already reads through
+   `export_settled_cards`, so they count as statement evidence today. The
+   earlier line also claimed missing evidence could only make the rule more
+   silent; false: missing CONTRADICTING evidence decides wrong (the v237 shape).
 4. Owner / Criss: D2 (weekly Chase export, view access to 9693 / 1176), D3
    (the 9693 history), D7 (close day per card).
 
