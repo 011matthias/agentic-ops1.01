@@ -8284,6 +8284,23 @@ attribute at all. Coverage, not matching.
 
 ### Item 172 — card 3645 posts to another card's name (master data, owner's)
 
+**CHECK BUILT 2026-09-25 (no card edited; the value stays Dirk's).**
+`GET /api/settings` `cards_effective[].account_check`: `{status, detail,
+closest, account_id, company_org, chart_modified, chart_verified}`, status
+`ok` / `not_in_chart` / `wrong_type` / `inactive` / `no_account` /
+`no_chart`. The card's stored name is looked up in its company's chart (every
+org's chart when the card has no company) from the provisioned chart file,
+then held to item 184's standard by `zoho.accounts.resolve_paid_through`
+itself (present, active, not DO NOT USE, `credit_card`), through
+`category_vocabulary.card_account_check` since `web/` may not import
+`..zoho`. `closest` is the active card account whose name carries one of the
+card's four-digit groups (its stored name, its digits), else the nearest
+name. When `chart_coverage` (item 207) is not ok, a failing check says the
+chart may be what is stale. Tests `tests/test_card_account_check_item_172.py`
+(7, through the settings route); four wires proven RED (route wiring, the
+item-184 reason map, the digit hint, the stale-chart sentence). SPA half:
+`docs/lovable-card-account-check-prompt.md`.
+
 Found 2026-09-23 by the post-deploy consumer drive of item 169, which is what
 that drive is for: the twelve September OpenAI rows that newly resolved to
 card **3645** render "Paid through: **Credit Card - 2838**". The account is
