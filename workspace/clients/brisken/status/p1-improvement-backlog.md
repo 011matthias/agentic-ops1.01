@@ -10662,10 +10662,38 @@ pasted nobody can add an entry, so the backend alone moves nothing.
 Contract: `docs/api-contract.md`, "Whose money paid: the decision order, and
 the private-card list". Tests: `tests/test_private_card_list.py`.
 
-### 209. The duplicates filter keeps the flagged rows but not their groups (owner 2026-09-25) (PROMPT WRITTEN 2026-09-25, not pasted)
+### 209. A suggested duplicate stays bound together until someone releases it (owner 2026-09-25) (PROMPT REWRITTEN and design APPROVED on screenshots 2026-09-25, not pasted)
 
 **Owner:** *"add a duplicate filter inside each month so the user can see all
-the expenses that were flagged as duplicated grouped together"*.
+the expenses that were flagged as duplicated grouped together"*. Widened the
+same day, after the first prompt: *"all suggested duplicates should live bound
+together inside the tool until released by a users click (delete/not a copy)"*,
+*"feel free to compress the copies under it, as they can be viewed with the
+compare button"*, and for Matching: *"the duplicate pair stay bound together
+until a user separates them, even if in matching. only presumed copies must be
+excluded from matching so only the real expense get matched. also if user
+choses 'not a copy' the expense should then be reincluded into matching
+automatically."*
+
+**Both matching rules were already live, read 2026-09-25:** no presumed copy
+(`duplicate.is_extra`) is chosen, offered as a candidate or assignable (0 of
+35 across July, August, September; all 35 sit in `copies_set_aside`), and the
+six receipts of July's three groups ruled "Not a copy" carry no marker, count
+in the total and are back in matching (1 matched, 1 candidate, 4 in the
+pool). After either release click the backend drops `duplicate` from the rows
+(item 188 pins the delete half), so the binding is a pure render of that
+field. The item is SPA-only.
+
+**What the rewritten prompt does.** Expenses: every suggested duplicate is one
+unit (amber binding strip, the main as a full row, each presumed copy folded to
+one line with its state and the existing Compare / Delete / Not a copy
+controls), placed in the section of its most urgent copy; the filter shows
+only units. Matching: each presumed copy renders as one line directly under the
+row showing its main (the charge holding it, else the charge proposing it, else
+its row in Receipts without a charge), and the set-aside list keeps only copies
+whose main is nowhere on the page. Where the mains sit, live July: 7 held by a
+matched charge, 2 proposed by a Needs-review charge, 2 unmatched; August 3 / 0
+/ 2; September 2 / 0 / 17.
 
 Item 188's "Show duplicates (N)" button is live and keeps only rows whose
 `duplicate` is set, but `ExpensesReviewGrid` still sorts the survivors into the
@@ -10682,7 +10710,8 @@ this card". Several live pairs hold one copy with no card and one naming it
 (July Aposto Karlsruhe 80.00 EUR, September Lovable 50.00 USD), and a strict
 card scope would show them half, which defeats the grouping.
 
-SPA-only: `docs/lovable-duplicate-groups-prompt.md`, NOT pasted.
+SPA-only: `docs/lovable-duplicate-groups-prompt.md` (rewritten; the first
+draft was never pasted), NOT pasted.
 
 ### 210. The export gate checks a row against its stamped company, not the one it shows (found 2026-09-25, building item 206)
 
