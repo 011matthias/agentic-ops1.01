@@ -17999,7 +17999,15 @@ def confirmable_pair(row: dict) -> bool:
     if len(cands) != 1:
         return False
     c = cands[0]
-    if not c.get("is_chosen") or c.get("match_type") != MatchType.EXACT.value:
+    if not c.get("is_chosen"):
+        return False
+    if c.get("match_type") == MatchType.FX_REFERENCE.value:
+        # Item 221 / owner 2026-09-25 (item 76 revisited): a clean
+        # cross-currency pair confirms itself too, now that its rate is a
+        # central-bank one (items 82 / 167 postdate the item-76 ruling).
+        if not fx_pair_confirmable(row, c):
+            return False
+    elif c.get("match_type") != MatchType.EXACT.value:
         return False
     if c.get("requires_review"):
         return False
@@ -19150,3 +19158,31 @@ def attach_refund_reversals(rows: list[dict]) -> None:
             hits.append(p)
         if len(hits) == 1:
             row["reverses_transaction_id"] = hits[0].get("transaction_id")
+
+
+# Item 221 (front 5), owner decision 2026-09-25, item 76 revisited: the rate
+# sources a self-confirming cross-currency pair may ride (the day's reference
+# rate, else the ECB monthly average; never a rate read off the month's own
+# documents) and how close the converted receipt must land.
+FX_SELF_CONFIRM_SOURCES = frozenset({"opentickers_day", "ecb_month"})
+FX_SELF_CONFIRM_MAX_GAP_PCT = 1.0
+
+
+def fx_pair_confirmable(row: dict, cand: dict) -> bool:
+    """The FX half of `confirmable_pair`: the candidate rode a central-bank
+    rate, the converted receipt lands within 1% of the charge, the card
+    agrees or is unknown (never a pair whose cards differ), and the merchant
+    agrees at `SELF_CONFIRM_VENDOR_FLOOR` (checked by the caller, as for an
+    exact pair). An `fx_reference` candidate already passed the uniqueness
+    gate: a pair with a look-alike is `fx_judgment`. Measured 2026-09-25 on
+    the frozen payloads: August 10 of 20 pairs qualify (unlabelled), July 10
+    (6 labelled right, 0 wrong)."""
+    fx = cand.get("fx") or {}
+    if fx.get("reference_rate_source") not in FX_SELF_CONFIRM_SOURCES:
+        return False
+    gap = fx.get("reference_gap_pct")
+    if gap is None or abs(gap) > FX_SELF_CONFIRM_MAX_GAP_PCT:
+        return False
+    if cand.get("card_pct") not in (100, 50) or row.get("cards_differ"):
+        return False
+    return True

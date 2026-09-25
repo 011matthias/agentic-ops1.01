@@ -519,3 +519,74 @@ def test_a_prompt_version_bump_makes_the_rematch_re_judge(tmp_path, monkeypatch)
     monkeypatch.setattr("expense_recon.llm.client.FX_JUDGMENT_PROMPT_VERSION", "1000")
     _judge(charges, receipts, cache.wrap(mock))
     assert _fx_calls(mock) == 2 * bought, "a new prompt version must re-judge"
+
+
+# ── item 221: a clean FX pair confirms itself (owner 2026-09-25) ───────
+
+
+def _seed_fx(client, gap_eur: str, card: str | None = "card-2838"):
+    """One USD 50.00 charge on 08-06 against a EUR receipt, the daily rate
+    1.1660 in the run config: EUR 42.88 lands at -0.004%, EUR 44.00 at -2.5%."""
+    from expense_recon.matching.types import (
+        Categorization, ClassificationSource, LineItem, Match, MatchOutcome,
+    )
+    from expense_recon.web.serialize import snapshot_to_dict
+    from expense_recon.web.store import RunStore
+
+    tx = Transaction(
+        transaction_id="t-eur", legal_entity_id="le1", account_id="card-2838",
+        transaction_date=date(2026, 8, 6), posting_date=None,
+        amount=Decimal("50.00"), transaction_currency="USD",
+        account_card_currency="USD", vendor_from_statement="ANTHROPIC",
+    )
+    rec = Receipt(
+        document_id="r-eur", legal_entity_id="le1",
+        detected_date=date(2026, 8, 6), detected_total=Decimal(gap_eur),
+        detected_currency="EUR", detected_vendor="Anthropic",
+        payment_mode=card,
+        line_items=(LineItem(
+            description="item", line_total=Decimal(gap_eur),
+            categorization=Categorization(
+                category="Software", zoho_account="6100 Software",
+                confidence=1.0, source=ClassificationSource.LINE,
+            ),
+        ),),
+    )
+    pair = Match(
+        transaction_id="t-eur", document_id="r-eur",
+        match_type=MatchType.FX_REFERENCE, confidence=0.9, reason="seeded",
+        requires_review=False, score=90, amount_score=1.0, date_score=1.0,
+        vendor_score=1.0, card_score=1.0,
+    )
+    store = RunStore(client._data_root / "recon-web.sqlite")
+    try:
+        store.create_run(
+            run_id="fx221", created_at="2026-09-01T00:00:00+00:00",
+            label="August 2026", operator=None, summary={},
+            snapshot=snapshot_to_dict([tx], [rec], MatchOutcome(matches=[pair]), []),
+            config={"matching": {"fx_daily_rates": {"2026-08-06": {"USD": "1.1660"}}}},
+            work_dir=str(client._data_root), llm_enabled=False, has_coa=False,
+        )
+    finally:
+        store.close()
+
+
+@pytest.mark.parametrize("eur,confirms", [("42.88", True), ("44.00", False)])
+def test_a_clean_fx_pair_is_confirmed_by_the_rule(tmp_path, monkeypatch, eur, confirms):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from expense_recon.web.app import create_app
+
+    monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    with TestClient(create_app(tmp_path)) as client:
+        client._data_root = tmp_path
+        _seed_fx(client, eur)
+        row = next(r for r in client.get("/api/runs/fx221").json()["rows"])
+        fx = row["candidates"][0]["fx"]
+        assert fx["reference_rate_source"] == "opentickers_day"
+        body = client.post("/api/runs/fx221/decisions/confirm-matched").json()
+        assert body["confirmed"] == (1 if confirms else 0), (body, fx)
+        after = next(r for r in client.get("/api/runs/fx221").json()["rows"])
+    assert after["status"] == ("confirmed" if confirms else "pending")
