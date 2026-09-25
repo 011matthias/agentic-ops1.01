@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-25 | Brisken Recon Item 216 Build 2 | client-dev | [→](docs/2026-09-25%20-%20Brisken%20Recon%20Item%20216%20Build%202/Checkpoint.md) |
 | 2026-09-25 | Brisken Recon AI Vendor Accounts | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20AI%20Vendor%20Accounts/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken Recon Item 216 Build 2 | client-dev | [Mini-Checkpoint-5](docs/2026-09-25%20-%20Brisken%20Recon%20Item%20216%20Build%202/Mini-Checkpoint-5.md) |
 | 2026-09-25 | Brisken Recon Item 216 Build 2 | client-dev | [Mini-Checkpoint-4](docs/2026-09-25%20-%20Brisken%20Recon%20Item%20216%20Build%202/Mini-Checkpoint-4.md) |
