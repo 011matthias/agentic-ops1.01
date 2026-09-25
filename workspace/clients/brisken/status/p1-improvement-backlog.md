@@ -11024,7 +11024,7 @@ holds (April 1340 / 78 / 2598 / 4167, June 3976, July 2544 / 9129 / 3076),
 / girocard / girocardOLV). Tests `tests/test_card_strip_private_item_214.py`;
 four wires proven RED.
 
-### 215. A statement attach keeps only the month's own charges (owner decision 2026-09-25, D2 going forward) (RECORDED, not built)
+### 215. A statement attach keeps only the month's own charges (owner decision 2026-09-25, D2 going forward) (SHIPPED 2026-09-25: PR #1412, Fly `418c3c6d`; SPA half NOT pasted)
 
 Criss's SharePoint card files are lifetime sheets (9693 since 2024, 724 rows;
 1176, 154; the 2838 family, 2,729). `POST /api/expense-batches/{id}/statement`
@@ -11048,6 +11048,46 @@ upload on disk. April's retry was stored as
 `Chase9693_2026-04_posted_0401-0430_from-SharePoint-2.xlsx`, so the first copy
 is still there. Nothing reads it (the re-read walks `statements[]`); the startup
 sweep could delete an upload no entry names.
+
+**2026-09-25, shipped (PR #1412, merge `418c3c6d`, deployed).** A company month
+given a file that prints post dates keeps the rows posted in its calendar month
+(an empty post-date cell falls back to the row's transaction date) and leaves
+out an in-month row that a neighbouring month, or another of its own files,
+already holds under a different reading. Sameness across readings = coverage
+card key + transaction date + amount + currency, counted as a multiset,
+because a cycle PDF (account `9693`, long vendor text) and the SharePoint
+export (`card-9693`, short text) give one charge two content ids. Recorded as
+`statements[].month_filter {month, n_file_rows, n_kept, n_left_out,
+outside_month, already_held}`, on the attach job's `result`, and in its warning
+sentence; a file the month keeps nothing of is refused
+(`statement_outside_month`, month unchanged). The three open points, decided:
+a label naming no month folds whole; **a file with no post date folds whole
+too, NOT cut by transaction date** as proposed above: a Chase cycle PDF spans
+two months by design (August's 9693 PDF runs Jul 3 to Aug 4), so the cut would
+leave its July rows in no month, and 40 existing cycle-file tests failed on
+exactly that; the re-read filters only entries carrying `month_filter`, so
+every live entry re-reads as before. Criss's own monthly workbooks are
+unaffected: July and August parse with Post Date mapped and post 112/112 and
+111/111 rows in their month. The restart leftover is closed without a
+work-dir sweep (the dir also holds `report.xlsx`, `zoho_journal.csv`,
+`reconciled.csv`, `expenses.csv`): the route writes
+`.attach-pending/{job_id}.json` naming its upload, the job removes it either
+way, and boot discards the unrecorded upload of each leftover marker. April's
+existing stray file predates the markers and stays (inert). Tests: 13
+route-level in `tests/test_attach_month_guard_item_215.py`, four wiring points
+red under `regress_check`, CI green. Live drill on two scratch months (TEST -
+October / November 2025, no live neighbour, deleted after, both 404): an
+October cycle file folded whole; a 7-row lifetime export into November kept
+its 2 own charges, with `outside_month` {2024-11, 2025-10, 2025-12, 2026-06: 1
+each} and `already_held` {2025-10: 1}, the job sentence "Kept 2 of this file's 7
+charges for November 2025: 4 belong to other months (November 2024 to June
+2026); 1 are already in October 2025."; a June-only file was refused with no
+entry. Cold SPA drive (headless Chrome, raw CDP, through the access-code gate):
+November's loaded-statement line rendered the kept count (2 charges), no
+fallback strings; the recon API saw only the login POST. The SPA does not show
+the left-out count yet: `docs/lovable-attach-month-filter-prompt.md` (loaded
+line, attach toast, translated refusal; EN + PT), PROMPT-STATUS Not applied.
+No live month was written.
 
 ## Shipped (loop history)
 
