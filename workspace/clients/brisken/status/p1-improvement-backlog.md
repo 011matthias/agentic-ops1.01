@@ -10384,6 +10384,35 @@ the new code (`needs_entity` or `waits_for_statement`; no DOUBLING advisory
 on two July cycles filed in August). Live counts after deploy: see the
 Shipped row. SPA half `docs/lovable-case9-status-prompt.md`, not pasted.
 
+**Build 4 (step 4), 2026-09-25:** the billing-account card, BUILT (Shipped
+row 129). `src/expense_recon/billing_account.py` keys a receipt on the Stripe
+prefix (`invoice_number`, else `reference`, `^[A-Z0-9]{8}[- ]?\d{4}$`, prefix
+not all digits), collapses copies to one purchase (prefix + counter, across
+months; decided copies out), counts a printed number, the settling charge and
+a pick, lets a two-digit ending or an assigned hint word only contradict, and
+decides at >=2 other purchases on one card and none on another, leave-one-out,
+derived per request. New link `card_source: "account"` in
+`resolve_batch_row_cards` between the settled charge and the remembered card;
+entity and person ride it; `can_mark_private` true; not a scope source. The
+`learned` half of the circularity fix had already shipped (#1353,
+`_CARD_OBSERVATION_SOURCES = {override, hint, settled_charge}`), so no change
+there; the learner never receives the index. Deviation from the round's
+ownership list, one append each: the index needs the store, and the grid, the
+export and the report builders hold none, so `web/app.py` gained one
+middleware that opens a lazy per-request scope (built only when a keyed
+card-less row reaches the link, once per request, so `/api/cards/status` pays
+once for all its months), and service.py one import line; the export pass
+takes the index only when its caller passes settled cards, so the matcher's
+neighbour and trip pools never see it. Live before (Fly `5bbb0ac2`, read-only,
+copies collapsed): exactly the ten predicted rows decide (May WWT1PNYP 0012 /
+0013 / 0014, HQXED19R 0004 / 0005, HYWGENV2 0003; June WWT1PNYP 0015, HQXED19R
+0006, HYWGENV2 0004, all 3876; September 890D70BF 0034 on card-9693, reading
+`none` before build 1); DZ9BH3VA, HMVWDWIL, H0LHY2WQ and OpenAI 58596F4C (one
+pick) stay silent. `/api/cards/status` 1.39 s before. Tests
+`tests/test_account_card_c9.py`; regress red at the chain link, the app
+middleware, the export site, the purchase collapse, the evidence
+classification, the threshold and the contradiction rule.
+
 ### 205. July, August and September switched to the Zoho accounts (owner directive 2026-09-25) (APPLIED 2026-09-25: PR #1356, Fly `071b19d7`, all three months switched live)
 
 Owner, 2026-09-25: "i need july, august and september recategorized with this
@@ -10722,6 +10751,7 @@ describe the same charge. Small and self-contained. Not built.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 129 | Item 204 step 4 (case 9, build 4 of 5; owner D4): a receipt that prints no card takes the card its Stripe billing account (`WWT1PNYP-0016` -> `WWT1PNYP`) was paid with on at least two other purchases and on no other card, `card_source: "account"`, company and person riding it. New `billing_account.py`; one link in `resolve_batch_row_cards` between the settled charge and the remembered card; a lazy per-request index (one app middleware) passed by the grid, CSV, month PDF, card tabs, cost-center roll-up, refresh preview and so `/api/cards/status`; never the matcher or the sign-off learner. Lovable prompt `lovable-account-card-prompt.md` pending | Keyed on the vendor name the same memory gave the wrong person 3 times in 21; keyed on the account it scored 34 right, 0 wrong. Ten live May, June and September rows stop asking Criss for a company and a person; the multi-card accounts (Lovable, Dirk's Anthropic) and OpenAI's single pick (D6) stay blank on purpose | PR (this) |
 | 128 | Items 180/181: a merchant's GL account per company. `merchants[].accounts` `{company: leaf code}` decides first on a GL month (matched on the company's org), refuses a code the company cannot post to, works for a merchant with no default category and for receiptless charges; a save omitting the key keeps it; `GET /api/settings` names each code per company and lists `needs_account`; `POST /api/runs/{id}/recategorize-refused` (typed confirm) re-runs a GL month's refused rows | The 126 "model unsure" lines on July to September are mostly AI vendors on Corporate Services, where several accounts fit and the registry had no per-company answer to give | 2026-09-25; `tests/test_merchant_accounts_item_180.py` (10, route-level, a client that fails if the model is asked); nine wiring points proven RED under `tools/regress_check.py`; SPA prompt `docs/lovable-merchant-accounts-per-company-prompt.md` not pasted |
 | 127 | Item 204 build 5 (case 9 steps 1 and 5): `expenses[].waits_for_statements` + review `waits_for_statement` in `needs_entity`'s place (coverage by date across every month, one printed card covering its `parent` family), `unmatched_receipts[].reason_code` `card_statement_not_loaded` for the same no-card receipt, `card_suggestion` (lever E, never applied), `POST /api/expense-batches/{id}/cards/by-vendor` (+ `dry_run`), `statements[].month_suggestion` + advisory `statement_month_differs` | Every card-less receipt asked Criss for a company while the statement that would name its card was simply not loaded yet; the row now says which statements it waits for, one pick reaches the vendor's other rows only on her click, and a cycle PDF filed in the wrong month is named | 2026-09-25; `tests/test_case9_status_c9.py` (11, route-level) + contract pins; six wiring points proven RED under `tools/regress_check.py`; suite 3482 passed / 2 skipped before the merge (6 failures fixed: 3 older tests widened, 2 contract pins, 1 wall-clock test under load); live counts in the PR |
 | 126 | Item 204 build 3 (case 9 step 3): the card flows back to a receipt a neighbour month's statement settled. `settled_charge_cards` also reads the claim another month holds (`cards_settled_elsewhere`, re-checked against the holder's effective verdict, card resolved through `_charge_card_identity` in the receipt's own batch registry), so the row reads `card_source: "settled_charge"` with its company and person, and `settled_by` names the borrower | Charges post a day or three after the purchase, so a month-end receipt is settled by the next statement while its own month showed only `settled_by`: no card, company or person. Grid, CSV, month PDF and the learner read the one map. Live: 0 rows move today (the 2 borrowed receipts already print 9693; July's borrowed FENIX receipt sits in review) | PR #1364 |

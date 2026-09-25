@@ -9,6 +9,15 @@ updated: 2026-09-25
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-25: case 9 step 4 shipped, the billing account's card** (backlog
+item 204, build 4; Shipped row 129). A receipt that prints no card and carries
+a Stripe invoice number takes the card its billing account was paid with on at
+least two other purchases and on no other card (`card_source: "account"`,
+company and person with it). Derived on every read, never memorized; a pick, a
+printed number and the statement outrank it; one pick decides nothing (D6).
+Predicted live: ten May / June / September rows gain a card. The SPA's source
+line waits on `docs/lovable-account-card-prompt.md`.
+
 **2026-09-25: a merchant can hold one Zoho account per company (backlog items 180/181).** On a Zoho-account month, a receipt or card charge from that merchant books to its company's account with no AI call; Settings lists which merchants still need one (`needs_account`). No live merchant has an account yet: the per-vendor suggestions are with the owner for Dirk. July to September pick them up only through the new refused-rows re-run, on an owner order. The Settings screen half is a Lovable prompt, not pasted.
 
 **2026-09-25: case 9 build 3 shipped, the card flows back** (item 204 step 3,
