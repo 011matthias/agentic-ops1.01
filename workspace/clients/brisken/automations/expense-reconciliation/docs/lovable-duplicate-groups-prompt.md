@@ -1,84 +1,112 @@
-# Lovable prompt: the duplicates filter shows each group together (item 209)
+# Lovable prompt: a suggested duplicate stays bound together until someone releases it (item 209)
 
-> **NOT PASTED.** SPA only, no backend change. Follows item 188, whose
-> "Show duplicates (N)" button is live since 2026-09-24.
+> **NOT PASTED.** SPA only, no backend change. Replaces this file's first
+> draft (the grouped duplicates filter, never pasted): the owner widened the
+> ask the same day to "all suggested duplicates should live bound together
+> inside the tool until released by a user's click (delete / not a copy)",
+> asked for the copies to be compressed under their main, and extended it to
+> the Matching tab. Design approved on screenshots of the real July data,
+> 2026-09-25.
 >
-> Written against the Lovable repo `011matthias/brisken-expense-review` at
-> `1081d57` (2026-09-24 21:00Z), `src/components/ExpensesReviewGrid.tsx`.
-> With the filter on, the page still sorts the surviving rows into the three
-> review-state tables, so a pair whose copies are in different states sits in
-> two tables, and a pair in one table can have other rows between its copies.
-> Measured read-only on the live months 2026-09-25: July 10 of 11 pairs are
-> not side by side (2 split across tables, 8 with rows between), September
-> 3 of 19, August 3 of 5, June 2 of 2. Every live group is a pair and every
-> member is an `expenses[]` row.
+> **Backend already does both matching rules**, read live 2026-09-25: a
+> presumed copy is never matched, offered as a candidate or pickable by hand
+> (0 of 35 copies across July, August and September), and every receipt of a
+> group ruled "Not a copy" is back in matching with no marker (all 6 from
+> July's three released groups). After either release click the backend
+> returns the rows without `duplicate`, so the binding needs no client state:
+> it holds exactly as long as the marker does.
 >
-> **Proven implementable before handover (2026-09-25).** The prompt was
-> applied by hand to a scratch clone of `1081d57` (+128 lines in the grid,
-> 8 i18n lines), `vite build` green, then run locally against the live API
-> and driven headless in Chrome with every non-GET except login aborted
-> (none was attempted). All checks below passed on September, July, August
-> and June, EN and PT, and under card 2838. The drive caught one defect in
-> the first draft of this prompt: `fmtDate` printed "02:00 AM" on the
-> date-only header, so §1.3 now uses `row.date` as the Date column does.
+> **Proven before handover:** applied by hand to a scratch clone of the
+> Lovable repo, `vite build` green, run locally against the live API and
+> driven headless with every write aborted. Results are in PROMPT-STATUS.
 
 ````markdown
-The app calls the FastAPI backend at `https://api.expenses.brisken.com` as a JSON API. Do NOT add Supabase or any database. Auth stays the existing `Authorization: Bearer <token>`. No backend change and no new request: this uses only fields the Expenses page already loads. With the duplicates filter OFF, the page renders exactly as today.
+The app calls the FastAPI backend at `https://api.expenses.brisken.com` as a JSON API. Do NOT add Supabase or any database. Auth stays the existing `Authorization: Bearer <token>`. No backend change and no new request: everything here uses fields both month pages already load.
 
 ## Why
 
-The owner: *"a duplicate filter inside each month so the user can see all the expenses that were flagged as duplicated grouped together."*
+The owner: *"all suggested duplicates should live bound together inside the tool until released by a user's click (delete / not a copy)"*, *"feel free to compress the copies under it, as they can be viewed with the compare button either way"*, and for the Matching tab: *"the duplicate pair stay bound together until a user separates them, even if in matching."*
 
-The "Show duplicates (N)" button already keeps only rows whose `duplicate` is set. But those rows are still sorted into the three review-state tables ("Needs a look", "Assign a category", "Ready"). A pair whose copies are in different states lands in two different tables, e.g. July's Supermercado Fenix 803.11 BRL (2026-07-27): the first copy is under "Ready", the second under "Needs a look". Within one table, other rows can sit between the two copies. The reviewer has to hunt for the partner copy, which is what the filter was supposed to save.
+Today the copies of one purchase are scattered: on the Expenses tab they sit in different review-state tables or with other rows between them, and on the Matching tab the presumed copy sits in a folded "copies set aside" list, away from the receipt it copies.
 
-## 1. With the filter on, one block per duplicate group
+## Words used below
 
-In `ExpensesReviewGrid`, when `dupFilter` is true, do NOT render the three review-state sections (`GROUP_ORDER.map(...)`). Render one section instead, with the same outer markup as a review-state section (`<section className="overflow-hidden rounded-lg border bg-card">`):
+- **Suggested duplicate:** every row whose `duplicate` is set. Its members share `duplicate.group_id`.
+- **Main:** the member with `duplicate.is_extra !== true` (copy 1). **Presumed copy:** a member with `duplicate.is_extra === true`.
+- **Release:** after "Delete this copy" / "Delete the extra" or "Not a copy", the backend returns the rows without `duplicate`. The binding reads only that field, so a released pair comes apart on the refetch with no extra client code, and a pair nobody released stays bound.
 
-1. **Section header:** the same header strip and `Badge` as a review-state section, in the amber tone of `GROUP_TONE.check`, reading `t("expx.dup.group.section")` + ` · ` + the number of groups shown.
-2. **One table**, with exactly the same column header row as the review-state tables (Date, Vendor, Amount, Currency, Tax, Category / Account, Legal entity, Paid through, Receipt, Actions). Moving that `TableHeader` into a small shared component is fine; its columns and widths must not change.
-3. **For each group, a group header row:** a `TableRow` with one `TableCell colSpan={10}` on a muted background (`bg-muted/40`, `py-1.5`, `text-xs`). Content, from the group's FIRST copy (lowest `duplicate.copy`): `vendorDisplay(row.vendor)` · `row.date` exactly as the Date column shows it (the ISO day; do NOT use `fmtDate`, which formats timestamps and would print a time such as "02:00 AM" on a date-only value) · `fmtAmount(row.total, locale)` `row.currency`, then a small outline badge `t("expx.dup.group.copies", { n })` with `n = duplicate.n_copies` (fall back to the number of member rows).
-4. **Under it, the group's rows**, sorted by `duplicate.copy` ascending, each rendered with the existing `ExpenseRowView` and the same props the review-state tables pass (`runId`, `row`, `options`, `onPreview`, `onDelete`, `onFilterVendor`). Nothing inside the row changes (the duplicate strip, "Compare copies", "Not a copy", the delete buttons all stay).
-5. **Group order:** by the first copy's `date` ascending (ISO string compare), then by vendor display, then by `group_id`. Deterministic, so the list does not reshuffle on refetch.
+## Part A. Expenses tab (`ExpensesReviewGrid`)
 
-## 2. The row says its review state
+### A1. A bound unit
 
-In the grouped view the table no longer tells the reviewer a row's state, so the row has to. Add an optional prop `stateBadge?: boolean` to `ExpenseRowView`. When true, render a small outline `Badge` (`text-[10px]`) with `t(GROUP_TITLE[state])` and the `GROUP_TONE[state]` classes, in the same flex wrapper that holds the `expx.review.manualTag` and `ccy?` badges. `state` is `row.review?.state` when it is `check`, `pick` or `ready`, otherwise `ready` (the same fallback the review-state sections use). Only the grouped view passes `stateBadge`; the normal view is unchanged.
+Every suggested duplicate renders as one unit, in this order, inside the table it belongs to:
 
-## 3. Which groups show
+1. **Binding strip** (`BoundGroupHeader`): one `TableRow` with a single `TableCell colSpan={10}`, `border-t-2 border-t-amber-400/60 bg-amber-500/10`, the cell `border-l-4 border-l-amber-400 py-1.5 text-xs`. Content in one wrapping flex line: lucide `Link2` icon (amber), `t("expx.dup.bound.label")` in amber medium weight, the main's `vendorDisplay(vendor)` in medium weight, then muted ` · {main.date} · {fmtAmount(main.total, locale)} {main.currency}` (print `date` as the Date column does, the ISO day; do NOT use `fmtDate`, which formats timestamps and prints a time such as "02:00 AM"), a small outline badge `t("expx.dup.group.copies", { n })` with `n = duplicate.n_copies` (fall back to the member count), and `t("expx.dup.bound.hint")` in muted italic `text-[11px]` right after the badge (not pushed to the far right: the table is wider than the screen and it would be off-screen).
+2. **The main**, rendered with the existing `ExpenseRowView`, unchanged except for two new optional props: `stateBadge` (a small outline badge `t(GROUP_TITLE[state])` with the `GROUP_TONE[state]` classes, `text-[10px]`, placed in the same flex wrapper as the `expx.review.manualTag` and `ccy?` badges) and `bound` (the row gets `bg-amber-500/[0.04] hover:bg-amber-500/[0.07]`, its first cell `border-l-4 border-l-amber-400`; when it is the unit's last row also `border-b-2 border-b-amber-400/60`). `state` is `row.review?.state` when it is `check`, `pick` or `ready`, otherwise `ready`.
+3. **Each presumed copy, folded to one line** (`CompressedCopyRow`), in `duplicate.copy` order: one `TableRow` (`id="exp-row-{document_id}"` so the existing jump-to-row still lands on it) with a single `TableCell colSpan={10}`, same amber tint as the main, the cell `border-l-4 border-l-amber-400 py-1 pl-8 text-xs`, muted text, `border-b-2 border-b-amber-400/60` on the unit's last row. Content in one wrapping flex line: lucide `CornerDownRight` icon, the copy's `date`, `fmtAmount(total)` + `currency`, its `receipt_name` as a truncated (`max-w-[18rem]`) button that opens the existing receipt preview (`onPreview`), its state badge (as in A1.2), the "Not on this card" badge when A4 applies, then the existing `DuplicateCell` unchanged (badge "duplicate · copy 2 of 2", "not in total", "Compare copies", "Delete the extra", "Not a copy"). Everything else about the copy is one click away in "Compare copies".
 
-1. Build the groups from ALL rows in `data.expenses` whose `duplicate` is set, keyed by `duplicate.group_id`.
-2. A group shows when at least one of its members passes the other active filters, with the same predicates as today: vendor filter, "not in report", box tile, card scope (`inCardTab(cardTab, row.card_section)`).
-3. When a group shows, ALL its members render, including a member those filters would hide. A pair is never shown half.
-4. A member outside the selected card (a card is selected and `inCardTab(cardTab, row.card_section)` is false) gets a muted outline badge `t("expx.dup.group.otherCard")` beside its state badge. Pass it as an optional prop `outOfScope?: boolean` on `ExpenseRowView`. This is common: in several live pairs one copy names the card and the other names none.
-5. If no group shows, render the same dashed empty box the page uses for `cardScope.emptyExpenses`, reading `t("expx.dup.group.empty")`.
-6. The existing empty-state check (`data.expenses.length === 0 || (cardTab !== null && tabRows.length === 0)`) still runs first, unchanged.
+### A2. Where a unit sits (filter off)
 
-## 4. The filter button's count
+Build the sections from `data.expenses` in payload order. A row without `duplicate` goes to its own state section as today. A suggested duplicate is placed once, when its first member is reached: the whole unit goes to the section of its MOST URGENT member (`check` before `pick` before `ready`), so nothing that needs a look is hidden under Ready. Each section's badge counts the rows it renders (a unit counts all its members), so the three badges still add up to every row of the month.
 
-While the filter is on, `expx.dup.filter.active` ("Showing {n} duplicates") takes `n` = the number of rows the grouped view renders (every member of every shown group). With the filter off, `expx.dup.filter.show` keeps `n = dupRowCount` as today. `shownCount` for the box-filter caption keeps its current computation.
+### A3. The "Show duplicates" filter
 
-## 5. Do not change
+When the filter is on, do not render the three state sections. Render one section, same outer markup, its badge `t("expx.dup.group.section") · {units shown}` in the `GROUP_TONE.check` tone, holding the same units as A1, ordered by the main's `date` (ISO string compare), then vendor, then `group_id`. The filter button reads `expx.dup.filter.active` with `n` = the rows rendered. If no unit shows, render the page's dashed empty box with `t("expx.dup.group.empty")`. "Show all rows" (`expx.dup.filter.clear`) turns it off as today.
 
-The filter off state, everywhere on the page. The filter stays page-local state (not in the URL) and is still toggled by the same button; "Show all rows" (`expx.dup.filter.clear`) still turns it off. The duplicate strip on each row and everything it posts. The summary tiles and every count in them. The Matching tab. No new request.
+### A4. Other filters and the card scope
+
+A unit shows when AT LEAST ONE member passes the other active filters (vendor, "not in report", box tile, card scope via `inCardTab(cardTab, row.card_section)`), and then ALL its members render: a pair is never shown half. A member outside the selected card gets a muted outline badge `t("expx.dup.group.otherCard")` (pass `outOfScope` to `ExpenseRowView` / `CompressedCopyRow`). This is common: in many live pairs one copy names the card and the other names none.
+
+## Part B. Matching tab (`RunWorkbench`)
+
+### B1. Copies by main
+
+`copiesByMain`: a map from main id to its presumed copies, built from `data.copies_set_aside` keyed by `duplicate.of`, each list sorted by `duplicate.copy`.
+
+### B2. Which row hosts a main
+
+A main can show on the Matching tab in three places. Host each main exactly once:
+
+1. The charge that HOLDS it: the first row whose `chosen_document_id` is the main.
+2. Otherwise the charge that PROPOSES it: the first row whose `chosen_document_id ?? candidates[0].document_id` is the main (a "Needs review" row).
+3. Otherwise, if the main is in `unmatched_receipts`, its own row in "Receipts without a charge".
+
+(Live July: 7 mains held by a matched charge, 2 proposed by a Needs-review charge, 2 in Receipts without a charge.)
+
+### B3. The copy line under its main
+
+Directly under the hosting row, render one line per presumed copy: in `chargeTable` (open AND decided tables) after the host `RowView`, wrapping `RowView` and its lines in a keyed `Fragment`, `colSpan={9}`; in `receiptTable` for the `"open"` kind after the main's row, `colSpan={5}`, and give that main row `border-t-2 border-t-amber-400/60 bg-amber-500/[0.04]` with its first cell `border-l-4 border-l-amber-400` so the pair reads as one unit. The line: same amber tint, rail and closing bottom border as A1.3, content in one wrapping flex line: `CornerDownRight` icon, `t("wb.bound.copyOf")` in amber medium weight, the copy's date (`formatDate`), `formatAmount(total, currency)`, the existing `ViewReceiptButton` for the copy, `t("wb.bound.outOfMatching")` in italic, the existing `CompareCopiesButton` with `dupGroupActions(group_id)`, a red outline "Delete the extra" (`expx.dup.deleteExtra`) and a "Not a copy" (`wb.dups.notCopy`) that calls the existing `duplicates` mutation with `resolution: "ignore"`.
+
+For "Delete the extra", export `DeleteExpenseDialog` from `ExpensesReviewGrid` and mount one instance in `RunWorkbench` driven by a `deleteCopy` state; it already calls `DELETE /api/runs/{runId}/expenses/{documentId}`, asks for confirmation and refetches. Do not add a second delete path.
+
+### B4. The set-aside list
+
+The folded "copies set aside" list in "Receipts without a charge" keeps only copies whose main is hosted NOWHERE by B2 (live July: none). A copy is never listed on its own while its main is on the page.
+
+## Part C. Do not change
+
+What any button posts. The Duplicates panel at the bottom of Matching. The summary tiles and every count in them. The "Compare copies" dialog. With no duplicate in a month, both pages render exactly as today.
 
 ## New strings
 
 | Key | EN | PT-BR |
 |---|---|---|
+| `expx.dup.bound.label` | Suggested duplicate | Duplicata sugerida |
+| `expx.dup.bound.hint` | Kept together until you delete a copy or click Not a copy | Ficam juntas até você excluir uma cópia ou clicar em Não é cópia |
 | `expx.dup.group.section` | Duplicate groups | Grupos de duplicadas |
 | `expx.dup.group.copies` | {n} copies | {n} cópias |
 | `expx.dup.group.otherCard` | Not on this card | Fora deste cartão |
 | `expx.dup.group.empty` | No duplicates match the filters in use | Nenhuma duplicada corresponde aos filtros em uso |
+| `wb.bound.copyOf` | Presumed copy of the receipt above | Cópia presumida do recibo acima |
+| `wb.bound.outOfMatching` | kept out of matching until you release it | fora da conciliação até você liberar |
 
 ## Checking it landed
 
-Read only. Do not click "Delete this copy", "Delete the extra" or "Not a copy".
+Read only. Do not click "Delete this copy", "Delete the extra" or "Not a copy" on a real month. Counts below were read 2026-09-25 and move as Criss works; the rules in brackets are what must always hold.
 
-1. September, Expenses tab: click "Show duplicates (38)". One section, "Duplicate groups · 19"; 19 group header rows, each followed by its two rows, the "1 of 2" row directly above "duplicate · copy 2 of 2". The "Needs a look" / "Assign a category" / "Ready" sections are gone while the filter is on. The button reads "Showing 38 duplicates".
-2. Every row in the grouped view carries a state badge, and the count per badge equals the number of duplicate rows per `review.state` in the month's payload. Group headers print the plain date (e.g. "2026-09-05"), never a time.
-3. July: "Duplicate groups · 11". Supermercado Fenix 803.11 BRL 2026-07-27 shows both copies together; on 2026-09-25 they were badged "Ready" and "Needs a look", the pair the old view split across two tables.
-4. On `/months` select card 2838, open July, turn the filter on: Aposto Karlsruhe 80.00 EUR 2026-07-13 shows both copies, the no-card copy badged "Not on this card".
-5. "Show all rows": the three review-state sections come back exactly as before, with no state badges on the rows.
-6. Portuguese: "Grupos de duplicadas", "2 cópias", "Precisa olhar".
+1. July, Expenses: 11 "Suggested duplicate" strips, each followed by a full main row and one folded copy line. [Every copy sits under its main; no "duplicate · copy" row appears outside a unit; the three section badges add up to every row of the month.] Supermercado Fenix 803.11 BRL (2026-07-27) sits whole under "Needs a look" (its copy needs a look, its main is Ready).
+2. July, "Show duplicates": one section "Duplicate groups · 11", the same units, nothing else.
+3. July, Expenses with card 2838 selected on `/months`: Aposto Karlsruhe 80.00 EUR shows its no-card copy folded under the main, marked "Not on this card".
+4. July, Matching: 7 copy lines under charges in "Matched", 2 under charges in "Needs review", 2 under receipts in "Receipts without a charge", and none left alone in the set-aside list. [A copy line always sits directly under the row showing its main.]
+5. Portuguese: "Duplicata sugerida", "Cópia presumida do recibo acima".
 ````
