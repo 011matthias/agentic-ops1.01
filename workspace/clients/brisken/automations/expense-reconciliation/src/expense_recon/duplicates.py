@@ -382,7 +382,16 @@ def vendors_agree(a: Receipt, b: Receipt) -> bool:
 
 
 def _one_misread_digit(a: str, b: str) -> bool:
-    return len(a) == len(b) and sum(x != y for x, y in zip(a, b)) == 1
+    """One length, exactly one position differs, and it is not one of the
+    last two: two slips from one till on one day carry consecutive numbers
+    that differ THERE (labelled bundle ER-00181: 7-ELEVEN 446525 / 446528,
+    39.00 DKK, two purchases), so a difference in the tail cannot tell a
+    misread from the next customer. July's 271025 / 271825 differs in the
+    hundreds."""
+    if len(a) != len(b):
+        return False
+    diffs = [i for i, (x, y) in enumerate(zip(a, b)) if x != y]
+    return len(diffs) == 1 and diffs[0] < len(a) - 2
 
 
 def _days_apart(a: Receipt, b: Receipt) -> int | None:

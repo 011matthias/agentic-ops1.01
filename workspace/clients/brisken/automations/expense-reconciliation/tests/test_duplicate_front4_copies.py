@@ -166,6 +166,20 @@ def test_two_numbers_two_digits_apart_stay_two_purchases(client, monkeypatch):
     assert grid["summary"]["totals_by_ccy"] == {"BRL": "86.24"}
 
 
+def test_two_slips_one_till_apart_stay_two_purchases(client, monkeypatch):
+    """Labelled bundle ER-00181: 446525 and 446528 at one 7-ELEVEN, one day,
+    one amount, labelled as two purchases. A difference in the last two
+    digits is the next customer, not a misread."""
+    batch_id = _month(client, monkeypatch, ["s1.jpg", "s2.jpg"], [
+        _x("7-ELEVEN", "2024-10-04", "39.00", "DKK", "446525"),
+        _x("7-ELEVEN", "2024-10-04", "39.00", "DKK", "446528"),
+    ], label="October 2024")
+    grid = _grid(client, batch_id)
+    (group,) = grid["duplicate_groups"]
+    assert group["verdict"] == "distinct"
+    assert grid["summary"]["totals_by_ccy"] == {"DKK": "78.00"}
+
+
 def test_three_real_openai_invoices_of_one_amount_stay_three(client, monkeypatch):
     """The pinned negative (September 2026): one account prefix, three
     invoice numbers, one day, one amount. No digit run reaches six digits."""
