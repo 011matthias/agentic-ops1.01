@@ -48,6 +48,7 @@ route 404s while the flag is unset):
     POST /api/runs/{id}/expenses                 manual expense add
     DELETE /api/runs/{id}/expenses/{doc}         soft-remove an expense
     GET  /runs/{id}/expenses.csv   Zoho Expenses import CSV, edits applied
+    GET  /runs/{id}/bills.csv      bills paid by bank transfer (item 218)
 """
 from __future__ import annotations
 
@@ -219,6 +220,8 @@ from .service import set_charge_category  # item 109
 from .service import sweep_interrupted_attaches  # item 215
 from .service import attach_expense_card_tabs, attach_run_card_tabs  # item 138
 from .service import TURN_DECIDE, confirm_matched_pairs  # item 101
+from .service import bill_move_refusal, regenerate_bills_export  # item 218
+from .. import payment_path as _pp  # Build 4 / item 218
 from .month_readiness import (  # items 99 + 100
     PUBLISH_MONTH_NOT_COMPLETE,
     PUBLISH_NO_STATEMENT,
@@ -5906,6 +5909,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 # Store the registry's own spelling, so a picked name and
                 # a typed one cannot read as two different centres.
                 value = canon
+            if field == _pp.OVERRIDE_FIELD and value == _pp.PATH_BILL:
+                # Build 4 / item 218: a charge of this month holding the
+                # receipt is proof a card paid it, so it cannot be a bill
+                # until that match is rejected.
+                refusal = bill_move_refusal(
+                    run, document_id, store.get_decisions(run_id)
+                )
+                if refusal is not None:
+                    return _refused(refusal)
             if field == "private" and value == "1":
                 stored = store.get_expense_field_overrides(run_id).get(
                     document_id, {}
@@ -6223,6 +6235,40 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return FileResponse(
             path,
             filename=f"expenses-{run_id}.csv",
+            media_type="text/csv",
+        )
+
+    # Build 4 / backlog item 218 (owner decisions 2026-09-25): the month's
+    # bills paid by bank transfer, the rows expenses.csv leaves out, for
+    # Criss to book by hand. Served beside expenses.csv and, as the SPA round
+    # asked for it, under /api as well: one handler, so the two cannot drift.
+    @app.get("/runs/{run_id}/bills.csv")
+    @app.get("/api/runs/{run_id}/bills.csv")
+    def download_bills_csv(run_id: str):
+        """`bills.csv` for an expense batch, every reviewer edit applied.
+        A month with no bills downloads the header alone."""
+        if not _receipt_first_on():
+            return _flag_off()
+        with open_store() as store:
+            run, err = _expense_run_or_error(store, run_id)
+            if err is not None:
+                return err
+            overrides = store.get_category_overrides(run_id)
+            field_overrides = store.get_expense_field_overrides(run_id)
+            edits = store.get_expense_edits(run_id)
+            dup_resolutions = store.get_duplicate_resolutions(run_id)
+            charge_decisions = store.get_decisions(run_id)
+            bills_settings = store.get_settings() or {}
+        path = regenerate_bills_export(
+            run, overrides, field_overrides, edits, dup_resolutions,
+            charge_decisions=charge_decisions,
+            merchants=bills_settings.get("merchants"),
+            learning_db_path=app.state.learning_db_path,
+            private_cards=bills_settings.get("private_cards"),
+        )
+        return FileResponse(
+            path,
+            filename=f"bills-{run_id}.csv",
             media_type="text/csv",
         )
 

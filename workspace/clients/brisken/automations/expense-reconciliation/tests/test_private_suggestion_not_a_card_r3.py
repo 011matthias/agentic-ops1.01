@@ -99,12 +99,18 @@ def _rows(client, batch_id) -> dict:
 
 
 def test_a_bank_transfer_tender_suggests_no_private_card(client, monkeypatch):
-    """The live row's shape: an invoice printing "Payment Method: Wire
-    Transfer", no company card in sight."""
+    """An invoice offering a bank transfer, no company card in sight.
+
+    Build 4 / item 218 (owner decisions 2026-09-25): the live row's own
+    wording, a STATED "Payment Method: Wire Transfer", now takes the bill
+    path by itself and leaves every box (pinned in test_bills_path_218). The
+    tender rule pinned here still governs a card-queue row whose mode reads
+    as a bank transfer without stating it: an invoice's payment offer."""
     batch = _batch(
         client, monkeypatch,
         _extraction(vendor="Tricarico Consultoria", total="27203.34",
-                    currency="BRL", payment_hint="Wire Transfer"),
+                    currency="BRL",
+                    payment_hint="Pay R$ 27.203,34 with a bank transfer"),
     )
     (row,) = _grid(client, batch)["expenses"]
 
@@ -161,7 +167,12 @@ def test_a_receipt_settled_outside_the_card_suggests_no_private_card(
     client, monkeypatch
 ):
     """The reviewer has already answered the question the suggestion asks:
-    no card paid this one."""
+    no card paid this one.
+
+    Settled in cash: since Build 4 / item 218 a bank-transfer disposition
+    makes the row a bill, out of every box (test_bills_path_218), so the
+    item-144 exits pinned below are read on the tenders that stay in the
+    card queue."""
     batch = _batch(
         client, monkeypatch,
         _extraction(vendor="Brauhaus Kuehler Krug", total="140.00",
@@ -173,12 +184,12 @@ def test_a_receipt_settled_outside_the_card_suggests_no_private_card(
 
     resp = client.post(
         f"/api/runs/{batch}/receipts/{doc}/settled-outside",
-        json={"how": "bank_transfer", "note": "wire sent 2026-08-11"},
+        json={"how": "cash", "note": "paid at the counter 2026-08-11"},
     )
     assert resp.status_code == 200, resp.text
 
     (row,) = _grid(client, batch)["expenses"]
-    assert row["settled_outside"]["how"] == "bank_transfer"
+    assert row["settled_outside"]["how"] == "cash"
     assert row["suggested_private"] is False
     assert "suggested_private" not in row["boxes"]
     # Item 144: the reviewer's own disposition, unlike a printed tender,
