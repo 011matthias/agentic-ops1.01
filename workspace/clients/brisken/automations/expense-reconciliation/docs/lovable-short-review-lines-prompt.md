@@ -7,10 +7,10 @@ count or box changes. **Do NOT add Supabase or any database.**
 ## Background
 
 The "waiting for a statement" line names every card whose statement is
-missing for the row's date. On September that is all nine company cards on
-19 rows, about 400 characters each, and it fills the page. The backend's own
-sentence now names the cards only when one or two are waiting; the page
-should do the same.
+missing for the row's date. On September that is seven to nine company cards
+on each of 13 rows, 284 to 346 characters each, and it fills the page. The
+backend's own sentence now names the cards only when one or two are waiting;
+the page should do the same.
 
 ## 1. The waiting line (Expenses page, each row)
 
@@ -39,6 +39,7 @@ Keep the current neutral styling and every count as it is.
 
 | Where | Expect |
 |---|---|
-| September Expenses, row `0010__rendered-body.pdf` | "No card on this receipt, and no statement is loaded for its date yet." / PT "Sem cartão neste recibo, e ainda não há extrato carregado para esta data." No card label in the line |
+| September Expenses, the 13 rows waiting for a statement | Each reads "No card on this receipt, and no statement is loaded for its date yet." / PT "Sem cartão neste recibo, e ainda não há extrato carregado para esta data." No card label in the line |
+| July Expenses, the one row settled outside the card system | The shorter `needs_entity_settled_outside` line, EN and PT |
 | Any row whose `review.waits_for_statements` has one or two labels | The line names those labels |
 | Every other review line | Unchanged |
