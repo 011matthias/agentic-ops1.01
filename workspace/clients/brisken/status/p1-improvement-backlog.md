@@ -11302,6 +11302,130 @@ choice); four older tests re-pinned to the receipt-kept contract
 regress (held into the re-match, the pool's choice, the view's read, the
 persist, the no-statement read).
 
+### 218. Invoices paid by bank transfer wait in the card queue for a statement that will never cover them (item 216 cause 4, Build 4; owner decisions 2026-09-25)
+
+**In plain words.** The tool assumes every receipt was paid by a company card
+and waits for that card's statement. Four July invoices were paid, or are
+payable, by bank transfer, so no statement will ever cover them. They sat in
+the card queue as "waits for statement" and inside the month's totals, and
+they are more open money than every categorization lever in item 216
+combined. They now leave the card queue for a Bills section in their month:
+still visible, out of the card counts and totals, out of `expenses.csv` and
+the journal, and listed in their own `bills.csv` for Criss to book by hand in
+Zoho. Nothing posts anywhere.
+
+**Measured first (read-only, 2026-09-25; one read of each month's payload, 15
+s apart, plus the five invoice files, 10 s apart).** Only July carries any.
+August and September hold no wire / boleto / PIX payment method, no large
+card-less invoice and no bill-only supplier.
+
+| Doc | Supplier | Amount | What the document says | Criss's Books (pull 2026-09-18) |
+|---|---|---|---|---|
+| 0003 | Konsultancy Finance | EUR 15,972.00 | a forwarded "Bill: July 2026 - New Contract, Status: Open" mail body; no payment words | Bill "July 2026 - New Contract" EUR 15,971.88, paid, Consulting LLC |
+| 0004 | Redis Inc., invoice IUS25300 | USD 13,200.00 | the supplier's remit-to bank details (SWIFT, ABA, ACH routing) as how to pay | not booked |
+| 0070 | Redis, IUS25300 again | USD 13,200.00 | Redis's past-due REMINDER of 2026-09-12 ("remains unpaid"), not a second invoice | n/a |
+| 0008 | 360Crossmedia, invoice 360172592 | EUR 900.00 | the supplier's IBAN as how to pay | an EXPENSE paid through `WISE EUR - 0179`, Corporate Services, not a Bill |
+| 0017 | Rodrigo Tanure Tricarico | BRL 27,203.34 | "Payment Method: Wire Transfer"; Criss had already settled it outside by bank transfer (item 144) | a July 2026 Bill of USD 5,364.00 for this supplier, paid; the pull cannot say whether it is this invoice converted |
+
+Three findings changed the build from the brief that opened it:
+
+1. **The payment-method field names a wire on one of the four** (0017). Redis
+   and Crossmedia print the supplier's bank details, which is a payment
+   OPTION that card-paid invoices print too (item 62's August Lovable caveat);
+   Konsultancy prints nothing about payment.
+2. **A supplier-name rule is unsafe.** SAP and Redis are charged to Brisken
+   cards every month (SAP on 9693 and 2838 from April to September, Redis
+   usage on 9693), and Criss books the card-paid SAP lines as Bills too. A
+   name rule would pull real card receipts out of the card queue. The Redis
+   April Bill `IUS24324` (USD 13,200) is the previous annual invoice, not a
+   copy of July's `IUS25300`, so item 216's "counted once more in Books" does
+   not hold.
+3. **The Redis pair did group.** `duplicates` grouped 0004 and 0070 on the
+   invoice number (`basis: reference`) and a reviewer ruled "Not a copy"
+   (`verdict: distinct`). The grouping key was never the defect. 0070 is
+   correspondence; the 2026-09-24 quarantine (`correspondence.py`) sets such
+   mail aside at ingest but does not reach a row ingested before it.
+
+Also found: a settled-outside row still went into `expenses.csv`, so
+Tricarico's wire invoice would have imported into Zoho Expenses beside the
+Bill Criss had already booked.
+
+**Owner decisions (2026-09-25, AskUserQuestion, all three on the recommended
+option).**
+
+* D1 destination: a Bills section inside the month (not a separate queue, not
+  mark-and-hide).
+* D2 trigger: a row moves by itself only when its stated payment method reads
+  wire / bank transfer / boleto / PIX and names no card, or when Criss's
+  settled-outside record says bank transfer. A row that only prints the
+  supplier's bank details gets a one-click suggestion. A person can move any
+  row either way.
+* D3 Redis 0070: the reviewer's "Not a copy" ruling stands; no code overrides
+  it. Criss deletes the reminder row herself (existing control); until then
+  July shows USD 13,200 twice.
+
+**Built (backend).** `payment_path.py` holds the rules, pure:
+`stated_bank_payment` (wire / bank transfer / EFT / transferência /
+Überweisung / SEPA / ACH / virement / bonifico / boleto / PIX, never when the
+method names a card, never on an invoice's "Pay ... with a bank transfer"
+offer), `printed_bank_details` (IBAN, SWIFT, BIC, ABA, routing number, bank
+account number, wire-transfer instructions; "remittance" alone is not one)
+and `resolve_payment_path`, in this order: a charge that holds the receipt
+(card, `statement`), a person's move (`person`), Criss's settled-outside
+bank-transfer record (`settled_outside`), the stated method (`stated`), else
+card. The service derives an EFFECTIVE settled-outside map (stored
+dispositions plus the bills), and every surface that already let a
+settled-outside receipt go reads it: month health and the unmatched list on
+the Matching payload, the card pass (no person ask, no private option, no
+waits-for-statement), the reconciliation report's caption. The displayed map
+and `n_settled_outside` keep their meaning. On top: every row carries
+`payment_path` and `payment_path_source`; a bill row is in no box, out of
+`n_expenses`, `n_review`, the card strip and `totals_by_ccy`
+(`counts_in_total: false`, review `state: none`, `reason_code: bill`); both
+summaries and the months list carry `n_bills` and `bills_by_ccy`; a card-less
+row no charge holds whose document prints bank details carries
+`bill_suggestion: {evidence}`. The move is the generic field PUT,
+`{field: "payment_path", value: "bill" | "card" | null}`, so `edited_fields`
+records it; refusals `bill_held_by_charge` and `invalid_payment_path`.
+`expenses.csv` and the month report's card sections leave bills out; the
+month report gains a "Bills (paid by bank transfer)" section with its own
+totals; `GET /runs/{id}/bills.csv` (also under `/api/`) lists them. Everything
+is decided at READ time: no re-match, no model call, no write.
+
+Checked on the real documents (the five files read once, offline):
+`printed_bank_details` fires on 0004 (its bank account line) and 0008 (its
+IBAN line), and on neither the Redis reminder nor the Konsultancy notice;
+"Electronic Funds Transfer ...2838" stays a card.
+
+**Predicted live effect at the next read of each month (no write needed):**
+July: Tricarico becomes a bill (source `settled_outside`, since Criss's
+record outranks the stated method); `n_expenses` 71 to 70; `totals_by_ccy`
+BRL 30,425.80 to 3,222.46; `n_bills` 1, `bills_by_ccy` BRL 27,203.34; its
+boxes leave `n_uncategorized`, `n_needs_entity` and
+`n_needs_company_or_person` (38, 14, 15 to 37, 13, 14). 0004 and 0008 carry
+`bill_suggestion` if the stored document text holds those lines (verified on
+the live read after deploy). August and September: `n_bills` 0, every other
+count unchanged. The Matching payload's lists do not move (Tricarico already
+left them in item 144).
+
+Tests: `tests/test_bills_path_218.py` (11, through the real routes: drop,
+mail intake, statement attached, month completeness, both PDFs, the move
+either way, the held refusal, bank transfer vs cash, the suggestion, a held
+row, a no-signal month unchanged key for key) and
+`tests/test_payment_path_218.py` (51, negative cases are the contract). Four
+existing tests re-pinned where the owner decision replaced what they asserted
+(item 144 and R3 now settle in cash; one `test_settled_outside` count).
+`regress_check` green to red to green on four wires: the card pass reading
+the displayed map (4 red), `build_view` reading stored only (3 red), the
+`expenses.csv` filter (1 red), the grid's per-row stamp (7 of 11 red). Suite
+3789 passed / 2 skipped. SPA half: `docs/lovable-bills-path-prompt.md`, not
+pasted.
+
+Left open: marking a bill row private is refused with the company-card
+sentence, the wrong words for a row no card paid (the SPA never offers that
+control on a bill row). A bill that is also a decided duplicate copy counts
+once, as a copy.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
