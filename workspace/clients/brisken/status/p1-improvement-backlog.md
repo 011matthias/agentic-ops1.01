@@ -10949,8 +10949,6 @@ longer waits at all: the 01:4x statement attach took it to `vendor_guess`
 Tests: `tests/test_reason_copy_item_213.py` (6; two route-level); the wiring
 proven red with `tools/regress_check.py`; suite 3620 passed / 2 skipped.
 
-### 214. A private receipt still waits on the card strip (found 2026-09-25, listing 3281) (RECORDED, not built; owner call)
-
 ### 214. The card strip asks only where the receipt carries no payment info, and its dropdown lists cards only (owner ruling 2026-09-25; found listing 3281) (RULED, not built)
 
 **Found.** After 3281 was listed (item 208), September's DB Fernverkehr row
