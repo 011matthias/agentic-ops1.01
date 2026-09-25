@@ -21,6 +21,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import logging
 import os
 import re
 import threading
@@ -7577,6 +7578,85 @@ def batch_list_summary(store: RunStore, run: RunRow) -> dict:
     return summary
 
 
+class GridCardChain(NamedTuple):
+    """What `grid_card_chain` resolves: the baseline and the edited pool the
+    grid shows, the month's charges with their effective states, the
+    settled-outside dispositions, and the per-row card resolution."""
+
+    orig_receipts: list
+    receipts: list
+    charges: list
+    charge_state_map: dict
+    settled_outside: dict
+    card_res: dict
+
+
+def grid_card_chain(
+    run: RunRow,
+    overrides: dict,
+    field_overrides: dict[str, dict[str, str]],
+    edits: list[dict],
+    resolutions: dict[str, str] | None = None,
+    *,
+    settings: dict | None = None,
+    decisions: dict | None = None,
+    learning_db_path: "Path | None" = None,
+) -> GridCardChain:
+    """The card chain the Expenses grid resolves each row's card and company
+    through. `build_expense_view` renders from it, and item 206 reads the
+    company off it (`shown_companies`), so the engine answers for the company
+    the row shows and there is one resolver, not two."""
+    # Compose from the EXTRACTION BASELINE, not the stored receipt block: on
+    # a month whose statement has been attached the latter is the baked pool
+    # (overlay already folded in), so laying the overlay on it again would
+    # show a cleared edit as still-edited and report the reviewer's own value
+    # as `raw`. Pre-attach the two are identical.
+    orig_receipts = baseline_receipts(run)
+    default_entity = (
+        ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
+    )
+    receipts = apply_expense_edits(
+        orig_receipts, field_overrides, edits,
+        category_overrides=overrides, default_entity=default_entity,
+    )
+    # Item 69 round A: the same card inheritance `rematch_month` bakes, so the
+    # row's card / entity and the match outcome cannot disagree. Applied to
+    # every batch, statement or not: on a collecting month (September 2026 on
+    # deploy) a card-less invoice copy leaves "No legal entity yet" the moment
+    # its receipt copy names the card. A group ruled `ignore` lends nothing,
+    # and an operator-assigned hint word is never overwritten (grid).
+    grid_hints = _batch_card_hints(run.config)
+    receipts = inherit_card_from_copies(receipts, resolutions, grid_hints, duplicate_decisions(run, receipts, resolutions))  # grid
+    # Item 169: and the card a correction remembers, read live rather than
+    # off the stamp ingest left, so a fix taught after this month was
+    # ingested reaches it. Silent without a learning store.
+    receipts = fill_remembered_cards(
+        receipts, learning_db_path, (settings or {}).get("merchants")
+    )  # grid
+    # Per-card coverage (PR 3) reads the charges and their effective states;
+    # one read of the snapshot feeds it and item 111 below.
+    charges, charge_state_map = month_charge_states(run, decisions or {})
+    # Cards R3: one resolution pass feeds the rows' card/entity, the
+    # review states, the paid-through card step, and the card_review
+    # strip — the same pass the export runs, so they cannot disagree.
+    # Item 111: on this payload only, a receipt a charge of this month
+    # settles takes that charge's card when it names none of its own.
+    # Residual R3: and a receipt settled outside the card suggests no
+    # private card (the reviewer already said no card paid it).
+    settled_outside = settled_outside_map(run.snapshot or {})
+    card_res = resolve_batch_row_cards(
+        receipts, run.config, field_overrides,
+        settled_cards=settled_charge_cards(run, charges, charge_state_map),
+        settled_outside=settled_outside,
+        merchants=(settings or {}).get("merchants"),
+        private_cards=(settings or {}).get("private_cards"),
+    )
+    return GridCardChain(
+        orig_receipts, receipts, charges, charge_state_map, settled_outside,
+        card_res,
+    )
+
+
 def build_expense_view(
     run: RunRow,
     overrides: dict,
@@ -7610,12 +7690,16 @@ def build_expense_view(
     edit tables, folded into `updated_at`. A field edit on a month without a
     statement is recorded nowhere else."""
     parse_errors = [tuple(e) for e in (run.snapshot or {}).get("parse_errors", [])]
-    # Compose from the EXTRACTION BASELINE, not the stored receipt block: on
-    # a month whose statement has been attached the latter is the baked pool
-    # (overlay already folded in), so laying the overlay on it again would
-    # show a cleared edit as still-edited and report the reviewer's own value
-    # as `raw`. Pre-attach the two are identical.
-    orig_receipts = baseline_receipts(run)
+    # The pool the grid shows and each row's card and company: one pass, the
+    # one item 206's re-categorization reads its company from too.
+    (
+        orig_receipts, receipts, charges, charge_state_map,
+        grid_settled_outside, card_res,
+    ) = grid_card_chain(
+        run, overrides, field_overrides, edits, resolutions,
+        settings=settings, decisions=decisions,
+        learning_db_path=learning_db_path,
+    )
     # Keep the pre-edit receipts so the vendor object can always show the
     # ORIGINAL extracted name as `raw`, even after a reviewer vendor edit
     # folded a new spelling into `detected_vendor`.
@@ -7623,27 +7707,9 @@ def build_expense_view(
     default_entity = (
         ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
     )
-    receipts = apply_expense_edits(
-        orig_receipts, field_overrides, edits,
-        category_overrides=overrides, default_entity=default_entity,
-    )
     # Item 77: typed-in expenses (a delete overwrites the add row, so these
     # are the live ones), as opposed to receipts attached to a charge by hand.
     manual_add_ids = {e["document_id"] for e in edits if e["op"] == "add"}
-    # Item 69 round A: the same card inheritance `rematch_month` bakes, so the
-    # row's card / entity and the match outcome cannot disagree. Applied to
-    # every batch, statement or not: on a collecting month (September 2026 on
-    # deploy) a card-less invoice copy leaves "No legal entity yet" the moment
-    # its receipt copy names the card. A group ruled `ignore` lends nothing,
-    # and an operator-assigned hint word is never overwritten (grid).
-    grid_hints = _batch_card_hints(run.config)
-    receipts = inherit_card_from_copies(receipts, resolutions, grid_hints, duplicate_decisions(run, receipts, resolutions))  # grid
-    # Item 169: and the card a correction remembers, read live rather than
-    # off the stamp ingest left, so a fix taught after this month was
-    # ingested reaches it. Silent without a learning store.
-    receipts = fill_remembered_cards(
-        receipts, learning_db_path, (settings or {}).get("merchants")
-    )  # grid
     receipts_dir = Path(run.work_dir) / "receipts"
     intake_provenance = (run.snapshot or {}).get("intake_provenance") or {}
     # Override-applied twins for the `books_as` fan-out (backlog item 2):
@@ -7688,24 +7754,6 @@ def build_expense_view(
     exp_cfg = (run.config or {}).get("expense") or {}
     default_pt = exp_cfg.get("default_paid_through")
     card_accts = exp_cfg.get("card_accounts")
-    # Per-card coverage (PR 3) reads the charges and their effective states;
-    # one read of the snapshot feeds it and item 111 below.
-    charges, charge_state_map = month_charge_states(run, decisions or {})
-    # Cards R3: one resolution pass feeds the rows' card/entity, the
-    # review states, the paid-through card step, and the card_review
-    # strip — the same pass the export runs, so they cannot disagree.
-    # Item 111: on this payload only, a receipt a charge of this month
-    # settles takes that charge's card when it names none of its own.
-    # Residual R3: and a receipt settled outside the card suggests no
-    # private card (the reviewer already said no card paid it).
-    grid_settled_outside = settled_outside_map(run.snapshot or {})
-    card_res = resolve_batch_row_cards(
-        receipts, run.config, field_overrides,
-        settled_cards=settled_charge_cards(run, charges, charge_state_map),
-        settled_outside=grid_settled_outside,
-        merchants=(settings or {}).get("merchants"),
-        private_cards=(settings or {}).get("private_cards"),
-    )
     # Item 201: on a GL month a picked leaf code reads its account name in
     # the company the row SHOWS (the card chain's answer above), which can be
     # set where the receipt's own stamp is blank. The export does the same.
@@ -12837,65 +12885,68 @@ def batch_write_lock() -> threading.Lock:
     return _BATCH_ADD_LOCK
 
 
-def recategorize_after_entity_change(
-    db_path, learning_db_path, run_id: str, document_id: str,
-) -> dict | None:
-    """Re-run the GL engine for ONE receipt after its company was set.
+def recategorize_for_companies(
+    db_path, learning_db_path, run_id: str, companies: dict[str, str],
+) -> list[dict]:
+    """Re-run the GL engine for each receipt in `companies` (document_id ->
+    the company to answer for) in one model pass and one locked write.
 
     Owner decision 2026-09-24: a receipt that arrived with no company halts
     with `entity_missing`, and assigning the company must categorize it
     against THAT company's leaves, or every such receipt becomes a manual
     pick. Also right when the company CHANGES: a leaf chosen for one entity
-    need not be postable in another.
+    need not be postable in another. The company comes from the caller, the
+    one the row SHOWS (item 206, `recategorize_moved_companies`); an empty
+    string is an answer too (the row shows none, and the engine refuses it).
 
     Only a batch on the GL engine (its config carries `gl_entity_orgs`) is
-    touched; a bucket-era batch returns None and keeps its vocabulary. The
-    reviewer's own category overrides are separate rows and are never
-    touched here: this rewrites the TOOL's answer only, in both the current
-    receipts and the extraction baseline (the views and every re-match read
-    the baseline). The model call runs outside the batch lock; the write
-    re-reads the row inside it, like the add job. Returns what changed, or
-    None when there was nothing to do.
+    touched; a bucket-era batch returns [] and keeps its vocabulary. A
+    document with no extracted receipt (a manual add, a borrowed receipt) is
+    skipped. The reviewer's own category overrides are separate rows and are
+    never touched here: this rewrites the TOOL's answer only, in both the
+    current receipts and the extraction baseline (the views and every
+    re-match read the baseline). The model calls run outside the batch lock;
+    the write re-reads the rows inside it, like the add job. Returns one
+    `{document_id, entity, refusals}` per receipt re-run, in `companies`
+    order.
     """
     from ..categorize import categorize_receipts_with_registry
 
+    if not companies:
+        return []
     with RunStore(db_path) as store:
         run = store.get_run(run_id)
         if run is None:
-            return None
+            return []
         cfg = run.config or {}
         entity_orgs = cfg.get(GL_ENTITY_ORGS_KEY)
         if entity_orgs is None:
-            return None
-        base = next(
-            (r for r in baseline_receipts(run) if r.document_id == document_id),
-            None,
-        )
-        if base is None:
-            return None  # a manual add or a borrowed receipt: nothing extracted
-        default_entity = (cfg.get("expense") or {}).get("legal_entity_id", "")
-        entity = (
-            (store.get_expense_field_overrides(run_id).get(document_id) or {})
-            .get("legal_entity")
-            or base.legal_entity_id
-            or default_entity
-        )
+            return []
+        by_doc = {r.document_id: r for r in baseline_receipts(run)}
+        todo = [
+            replace(by_doc[doc], legal_entity_id=entity or "")
+            for doc, entity in companies.items() if doc in by_doc
+        ]
+        if not todo:
+            return []
         registry = MerchantRegistry.from_settings(store.get_settings())
     learned = (
         MerchantCategoryLookup.from_db_path(learning_db_path)
         if learning_db_path is not None else None
     )
     llm_client, _tracker, _src = _batch_llm_client(cfg)
-    (new,), _ = categorize_receipts_with_registry(
-        [replace(base, legal_entity_id=entity)],
+    fresh_answers, _ = categorize_receipts_with_registry(
+        todo,
         registry=registry,
         client=llm_client,
         learned=learned,
         entity_orgs=entity_orgs,
     )
+    new_by_doc = {r.document_id: r for r in fresh_answers}
 
     def _swap(d: dict) -> dict:
         old = receipt_from_dict(d)
+        new = new_by_doc[old.document_id]
         if len(old.line_items) == len(new.line_items):
             items = tuple(
                 replace(li, categorization=n.categorization)
@@ -12905,33 +12956,131 @@ def recategorize_after_entity_change(
             items = new.line_items
         return receipt_to_dict(replace(old, line_items=items))
 
+    touched: set[str] = set()
     with _BATCH_ADD_LOCK:
         with RunStore(db_path) as store:
             fresh = store.get_run(run_id)
             if fresh is None:
-                return None
+                return []
             snapshot = dict(fresh.snapshot or {})
-            touched = False
             for key in ("receipts", EXTRACTED_RECEIPTS_KEY):
                 rows = snapshot.get(key)
                 if not isinstance(rows, list):
                     continue
                 out = []
                 for d in rows:
-                    if isinstance(d, dict) and d.get("document_id") == document_id:
+                    if isinstance(d, dict) and d.get("document_id") in new_by_doc:
                         d = _swap(d)
-                        touched = True
+                        touched.add(d["document_id"])
                     out.append(d)
                 snapshot[key] = out
             if not touched:
-                return None
+                return []
             store.update_run_snapshot(run_id, snapshot)
-    refusals = sorted({
-        li.categorization.refusal
-        for li in new.line_items
-        if li.categorization is not None and li.categorization.refusal
-    })
-    return {"document_id": document_id, "entity": entity, "refusals": refusals}
+    return [
+        {
+            "document_id": r.document_id,
+            "entity": r.legal_entity_id,
+            "refusals": sorted({
+                li.categorization.refusal
+                for li in r.line_items
+                if li.categorization is not None and li.categorization.refusal
+            }),
+        }
+        for r in fresh_answers if r.document_id in touched
+    ]
+
+
+def shown_companies(
+    store: RunStore, run: RunRow, learning_db_path: "Path | None" = None,
+) -> dict[str, str]:
+    """document_id -> the company the Expenses grid shows for the row (its
+    `legal_entity_id`), resolved through the grid's own card chain
+    (`grid_card_chain`). Rows showing no company are left out."""
+    rid = run.run_id
+    chain = grid_card_chain(
+        run,
+        store.get_category_overrides(rid),
+        store.get_expense_field_overrides(rid),
+        store.get_expense_edits(rid),
+        store.get_duplicate_resolutions(rid),
+        settings=store.get_settings(),
+        decisions=store.get_decisions(rid),
+        learning_db_path=learning_db_path,
+    )
+    return resolved_entities(chain.card_res)
+
+
+def gl_shown_companies(
+    db_path, learning_db_path, run_id: str,
+) -> dict[str, str] | None:
+    """`shown_companies` for a month on the GL engine; None for a bucket
+    month or a missing run, so a caller pays for the card chain only where
+    the engine answers per company."""
+    with RunStore(db_path) as store:
+        run = store.get_run(run_id)
+        if run is None or gl_run_entity_orgs(run) is None:
+            return None
+        return shown_companies(store, run, learning_db_path)
+
+
+def recategorize_moved_companies(
+    db_path,
+    learning_db_path,
+    run_id: str,
+    before: dict[str, str] | None,
+    *,
+    force: set[str] | frozenset[str] = frozenset(),
+) -> tuple[list[dict], dict[str, str] | None]:
+    """Item 206: keep the engine answering for the company each row SHOWS.
+
+    A row's company moves through the card chain as well as through the
+    company field: a per-row card fix, a card-hint assignment, a statement
+    charge that settles the receipt, a remembered card. Only the company
+    field used to re-run the engine, so on a GL month a row given its company
+    by a card kept its `entity_missing` refusal while the grid named the
+    company.
+
+    After a change, the company every row shows is read again and the engine
+    re-run, for that company, on each row where
+    - the company moved since `before` (the same read taken before the
+      change; None skips this part, for a caller that took none),
+    - `force` names it (the reviewer set the company herself: the owner
+      decision of 2026-09-24 re-runs it even when the card already showed
+      that company), or
+    - the row shows a company while the tool's answer still carries an
+      `entity_missing` refusal (the sweep: a row that gained its company
+      before this rule existed, or through a path that took no `before`).
+
+    Returns the rows re-run (`recategorize_for_companies`) and the company
+    map read after the change, which the caller can reuse as the `before` of
+    a following re-match. ([], None) on a bucket month.
+    """
+    from ..categorize import ENTITY_MISSING
+
+    with RunStore(db_path) as store:
+        run = store.get_run(run_id)
+        if run is None or gl_run_entity_orgs(run) is None:
+            return [], None
+        after = shown_companies(store, run, learning_db_path)
+        extracted = baseline_receipts(run)
+    todo: dict[str, str] = {}
+    if before is not None:
+        for doc in sorted(set(before) | set(after)):
+            if before.get(doc, "") != after.get(doc, ""):
+                todo[doc] = after.get(doc, "")
+    for doc in sorted(force):
+        todo[doc] = after.get(doc, "")
+    for r in extracted:
+        if r.document_id in todo or not after.get(r.document_id):
+            continue
+        if any(
+            li.categorization is not None
+            and li.categorization.refusal == ENTITY_MISSING
+            for li in r.line_items
+        ):
+            todo[r.document_id] = after[r.document_id]
+    return recategorize_for_companies(db_path, learning_db_path, run_id, todo), after
 
 
 def add_receipts_to_expense_batch(
@@ -15004,6 +15153,15 @@ def rematch_after_change(
     against, which is the ordinary pre-attach case and every non-expense
     run. Re-reads the row rather than trusting the caller's: the caller
     read its copy before it made its change.
+
+    Item 206: on a GL month, a re-match can move the company a row shows (a
+    charge now settles the receipt and lends its card), so the engine is
+    re-run for each row whose company moved, and for each row that shows a
+    company while still refused `entity_missing`
+    (`recategorize_moved_companies`). Only with `learning_db_path` given: the
+    grid reads the remembered card from it, and a company read without it
+    could differ from the one the grid shows. What was re-run rides back
+    under `recategorized`; a failure there never fails the re-match.
     """
     fresh = store.get_run(run_id)
     if fresh is None or not has_statement(fresh):
@@ -15024,7 +15182,8 @@ def rematch_after_change(
     except Exception:  # noqa: BLE001 - the mark is a safety net, not a gate
         pass
     cfg = fresh.config or {}
-    return _rematch_or_error(
+    shown_before = _gl_shown_or_none(store, fresh, learning_db_path)
+    result = _rematch_or_error(
         store,
         fresh,
         transactions=transactions,
@@ -15039,6 +15198,46 @@ def rematch_after_change(
         on_stage=on_stage,
         trigger=trigger,
     )
+    if shown_before is not None:
+        moved = recategorize_moved_companies_or_error(
+            store.db_path, learning_db_path, run_id, shown_before
+        )
+        if moved:
+            result = {**result, "recategorized": moved}
+    return result
+
+
+def _gl_shown_or_none(
+    store: RunStore, run: RunRow, learning_db_path: "Path | None",
+) -> dict[str, str] | None:
+    """The company map a re-match's item-206 pass diffs against, or None
+    where no pass runs: a bucket month, no learning store to read the
+    remembered card from, or a card chain that failed to resolve (the
+    re-match must not fail on it)."""
+    if learning_db_path is None or gl_run_entity_orgs(run) is None:
+        return None
+    try:
+        return shown_companies(store, run, learning_db_path)
+    except Exception:  # noqa: BLE001 - the pass is additive, never a gate
+        logging.getLogger(__name__).exception("item 206: could not read the shown companies")
+        return None
+
+
+def recategorize_moved_companies_or_error(
+    db_path, learning_db_path, run_id: str, before: dict[str, str] | None,
+) -> list[dict] | dict | None:
+    """`recategorize_moved_companies` for a caller whose own change is
+    already committed: the rows re-run, a `{"error"}` in place of raising (an
+    exhausted model key must not fail a re-match, an attach or an edit), or
+    None when nothing was re-run."""
+    try:
+        rows, _after = recategorize_moved_companies(
+            db_path, learning_db_path, run_id, before
+        )
+    except Exception as exc:  # noqa: BLE001 - reported, never raised
+        logging.getLogger(__name__).exception("item 206: re-categorizing moved companies failed")
+        return {"error": f"{type(exc).__name__}: {exc}"}
+    return rows or None
 
 
 def _rematch_or_error(*args, **kwargs) -> dict:
@@ -15648,6 +15847,16 @@ EXPENSE_MATCH_FIELDS = frozenset({
     # Note #63: the per-row card fix (item 87) decides the row's entity and,
     # through `bake_card_scope`, the card the matcher scopes it to.
     "card_key",
+})
+
+# Item 206: the header fields the grid's card chain reads, so an edit to one
+# can move the company a row SHOWS without a re-match: the company and the
+# card themselves, the vendor the remembered card and the merchant registry
+# key on, and the private pair (a confirmed private row takes no remembered
+# card). Date, total and currency move it only through the re-match, which
+# re-categorizes what it moves itself (`rematch_after_change`).
+COMPANY_CHAIN_FIELDS = frozenset({
+    "legal_entity", "card_key", "vendor", "private", "reimburse_to",
 })
 
 
