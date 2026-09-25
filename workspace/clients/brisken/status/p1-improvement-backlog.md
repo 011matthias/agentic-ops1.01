@@ -10472,6 +10472,40 @@ the purchase it repeats, and empties the whole index when any batch cannot be
 read. Test `test_a_card_printed_only_on_the_decided_copy_still_counts` is red on
 the v237 module and green with the fix; nothing was stored, the row reverts on read.
 
+**D2 / D3 history loaded 2026-09-25 (owner yes on the per-month prediction; no
+code).** Read via Graph app-only: `Chase9693_Activity2024_Start.xlsx`
+(ADMINLLC9, 724 rows since 2024), `Chase1176_Activity_historicactivity_since202402.xlsx`
+(admin_consulting, 154) and `Chase2838_historic_Activity.xlsx`
+(admin_corp_services, 2,729), which holds the whole 2838 family including 3876
+and 0340; no file names 3876 or 0340, and `Nicolas Neumann Monthly Expenses.xlsx`
+is a 3876-only copy of the same rows. Every live charge was found in these
+exports, and the loaded 2838-family months (April CSV, Criss's July / August
+xlsx) match the export split by POST date exactly, so post date is the month
+key. The attach folds every row of a file (build 5 only advises) and nothing
+detaches a statement, so a calendar-month 9693 file on July to September would
+have put the Jul 3-Sep 4 rows the cycle PDFs already hold into two months.
+Loaded instead: 13 gap-fill workbooks holding only rows no month held, by post
+month, Criss's fills kept (yellow on the Amount cell = booked in Zoho, so the
+April-July rows arrive `posted`: matched, never journaled), under `card-9693` /
+`card-1176` / `card-2838` so her later exports dedupe against them. Rows: 9693
+Apr 28, May 30, Jun 19, Jul 6, Sep 15; 1176 Apr 3, May 4, Jun 9, Jul 2, Aug 8,
+Sep 4; 2838 family May 87, Jun 137; every file `n_new` = `n_rows`, no advisory.
+Readback (API, against baselines taken under builds 4 and 5, which deployed
+mid-load): settled pairings May 0 to 16 (+2 proposed), June 0 to 17 (+3),
+September 1 to 10, April / July / August +1 each; needs-company Apr 8 to 7, May
+2 to 1, Jun 4 to 2, Jul 15 to 14, Sep 23 to 17, Aug 1 to 2. The prediction hit
+52 of 54 pairs, plus 8 it missed (September OpenAI / Anthropic). One row changed
+company, as predicted: August's Lovable `H0LHY2WQ-0032` left a 3645 BASE44
+charge for the 1176 LOVABLE one (Consulting). The other movers come from the
+attach's full-month re-match under current code, not from the new rows: April
+SJCOROA (FX judgment p=0.40, to review), August E A LOCAÇÕES (D5 vendor guard,
+33%), May Lovable 200 copy 2 (#1388). Criss's OpenAI pick (Sep 18, 80.20, 3645)
+is untouched. Cold SPA drive: May lists the three files, 121 charges, 17
+paired. 9693's Jul 3-31 and Aug 5-31 rows stay in August / September (cycle
+PDFs), where build 3's flow-back covers them. Two attaches were cut by sibling
+deploys ("interrupted by a server restart"), left no `statements[]` entry and
+succeeded on retry. Weekly D2 loads: item 214.
+
 ### 205. July, August and September switched to the Zoho accounts (owner directive 2026-09-25) (APPLIED 2026-09-25: PR #1356, Fly `071b19d7`, all three months switched live)
 
 Owner, 2026-09-25: "i need july, august and september recategorized with this
@@ -10860,6 +10894,31 @@ sentence back in both languages. "COMPRESS WHATEVER" reaches past this one
 line: the next-longest reasons on the same page are `suggested_private` (233
 characters, 4 rows) and, in July, `date_outside_period` (191) and
 `needs_entity_settled_outside` (173).
+
+### 214. A statement attach keeps only the month's own charges (owner decision 2026-09-25, D2 going forward) (RECORDED, not built)
+
+Criss's SharePoint card files are lifetime sheets (9693 since 2024, 724 rows;
+1176, 154; the 2838 family, 2,729). `POST /api/expense-batches/{id}/statement`
+folds every row of the file into the month, and build 5's `month_suggestion`
+only advises, so the weekly D2 upload of one of these sheets would copy two
+years of charges into a single month. Asked by example, the owner chose "the
+app keeps only that month"; Criss keeps uploading herself (no automatic
+SharePoint pull).
+
+Build: at attach, keep the rows whose POST date falls in the month's calendar
+range (the rule the loaded 2838-family months already follow, measured
+2026-09-25), drop rows the month or a neighbour already holds on the same
+account, and say how many rows were left out and which months they belong to,
+on the reply and on the `statements[]` entry. Open for the build: a trip or a
+label naming no month (no range, keep today's fold); a file with no Post Date
+column (fall back to the transaction date); whether the re-read applies the
+filter to files attached before it (the 13 D3 files are already single-month).
+
+Note from the same load: an attach job killed by a server restart leaves its
+upload on disk. April's retry was stored as
+`Chase9693_2026-04_posted_0401-0430_from-SharePoint-2.xlsx`, so the first copy
+is still there. Nothing reads it (the re-read walks `statements[]`); the startup
+sweep could delete an upload no entry names.
 
 ## Shipped (loop history)
 
