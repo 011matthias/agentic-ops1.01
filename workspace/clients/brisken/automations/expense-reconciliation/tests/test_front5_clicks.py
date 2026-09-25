@@ -521,7 +521,7 @@ def test_a_prompt_version_bump_makes_the_rematch_re_judge(tmp_path, monkeypatch)
     assert _fx_calls(mock) == 2 * bought, "a new prompt version must re-judge"
 
 
-# ── item 221: a clean FX pair confirms itself (owner 2026-09-25) ───────
+# ── item 222: a clean FX pair confirms itself (owner 2026-09-25) ───────
 
 
 def _seed_fx(client, gap_eur: str, card: str | None = "card-2838"):

@@ -7430,3 +7430,124 @@ evidence decided); ABSENT otherwise, never null or `[]`.
 Tests: `tests/test_receipt_waits_item_220.py` (route-level run payload and
 publish refusal, the rule and the regex, negative cases included); pinned in
 `tests/test_view_contract.py`. Renders in `docs/lovable-receipt-waits-prompt.md`.
+
+
+## Charges with nothing behind them say what they are (front 1, 2026-09-25)
+
+The charge side of a month disagreed with itself. Measured on the live
+payloads 2026-09-25: July's 24 and August's 40 gray-closed charges read
+`no_receipt_found` while the month gate counted them closed;
+`n_already_posted` counted card payments (July 93 with 3 "Payment Thank You"
+lines) and ignored a reviewer's already-booked click; "0 charges need a
+receipt" said nothing about the 3 / 4 / 7 active cards with no statement
+(July / August / September); the chase called 14 July-dated charges August's
+and 19 August-dated charges September's; and an ask had no age. Run payload
+and routes only; every field below is parallel (rule 1) and nothing existing
+changed type.
+
+### Two new charge `reason_code` values, with a label (rule 5)
+
+The charge table in "The unmatched lists say what they hold" grows two rows
+and one source for `already_booked`. First rule that applies wins:
+
+| Code | Rule |
+|---|---|
+| `not_a_purchase` | unchanged |
+| `receipt_held_by_another_charge` | unchanged |
+| `already_booked` | `entry_status` is `posted` (yellow) OR the row's `section` is `posted` (the reviewer's `already_posted` verdict, which the code never read before) |
+| `closed_recurring` | **new**: the gray fill closed it (`month_readiness.charge_booked_recurring`: `entry_status` `subscription` and `entry_status_source` not `derived`) |
+| `no_receipt_expected` | **new**: a reviewer marked no receipt will exist (item 107's reason) |
+| `no_receipt_found` | none of the above; exactly the charges `charge_needs_receipt` counts |
+
+A derived subscription mark stays `no_receipt_found`: it is the tool's guess
+and closes nothing. Every element that carries a charge `reason_code`
+(`unmatched_transactions[]` and `rows[]` with `effective_bucket`
+`unmatched`) now also carries `reason_label`, the English sentence
+(`unmatched_reasons.CHARGE_REASON_TEXT`), so an SPA that has no case for a
+code prints the backend's words, not somebody else's. The closed-set pin is
+`UNMATCHED_CHARGE_REASON_CODES_PIN` (now six charge codes, eleven in all).
+The reconciliation PDF's Status column reads `booked as recurring` /
+`no receipt expected` for the two new codes (was `no receipt`).
+
+Predicted on the 2026-09-25 payloads and to be checked after deploy: July 24
+rows `no_receipt_found` -> `closed_recurring` (0 left open), August 40,
+September 0; no other row moves; 0 reviewer verdicts and 0 no-receipt marks
+exist live.
+
+### `summary.n_already_posted` counts booked purchases
+
+It now counts rows whose `section` is `posted` (yellow OR the reviewer's
+verdict) and whose `row_type` is `purchase`. Same question ("how many charges
+are already booked"), without the card payments: July 93 -> 90, August 1 ->
+0 (its only yellow row is the -7,823.16 payment), September 1 -> 1.
+
+### `summary.n_cards_uncovered` + `summary.cards_uncovered[]`
+
+| Path | Type | Meaning |
+|---|---|---|
+| `summary.n_cards_uncovered` | int | active registry cards (a `coverage[]` entry with a `card_key`) with no statement AND no charge in this month |
+| `summary.cards_uncovered[]` | string | their labels, sorted; `[]` when every card has something loaded |
+
+Advisory, not a Publish gate (whether Publish refuses on it is an owner
+decision). A card with charges but no recorded upload arrived under another
+card's file and is not counted; a dormant card is counted, because nothing
+can tell dormant from missing. When Publish refuses an incomplete month the
+error sentence adds "N active cards have no statement loaded for this month
+(labels), so none of their charges is counted above.", and `readiness`
+carries `n_cards_uncovered`. Live 2026-09-25: July 3 (0113, 6013, 8311),
+August 4 (+0340), September 7 (+2838, 3645, 3876). July's 9693 is covered by
+a two-day export (6 charges, 07-01) and so is not counted.
+
+### The chase names its dates and ages its asks
+
+| Path | Type | Meaning |
+|---|---|---|
+| `receipt_chase[].date_range` | object `{start, end}` | the first and last date of the group's charges (ISO); absent when no charge carries a date |
+| `receipt_chase[].charges[].charge_month` | string `YYYY-MM` | the charge's own calendar month (may differ from the run's) |
+| `receipt_chase[].n_overdue` | int | the group's asks at or past the threshold |
+| `receipt_chase[].charges[].days_since_requested` | int | whole days since `receipt_requested_at` (UTC, read time); ABSENT when never asked |
+| `receipt_chase[].charges[].overdue` | bool | `days_since_requested >= settings.receipt_requests.overdue_days` (default 14); ABSENT when never asked |
+
+`settings.receipt_requests.overdue_days` is an optional whole number 1..365;
+anything else answers 400 at `PUT /api/settings`.
+
+The composed mail (`GET /api/runs/{id}/receipt-requests`, `mails[]`) names
+the dates: `subject` is "August 2026: 57 receipts still missing (charges
+dated 2026-07-03 to 2026-08-04)", the body opens "57 charges on your card,
+dated 2026-07-03 to 2026-08-04, have no receipt ...", and when a holder's
+charges span more than one calendar month they are listed under one header
+per month ("July 2026 (13 charges):"). PT-BR follows ("julho de 2026 (13
+lançamentos):"). Still composed only, never sent.
+
+### `POST /api/runs/{run_id}/receipt-requests/mark-all`
+
+Body `{holder, to?, reask?}`: stamps `receipt_requested_at` (and
+`requested_to`) on every open charge of that holder's `receipt_chase[]`
+group, keeping the date of charges already asked unless `reask` is `true`.
+Replies `{ok, holder, n_marked, summary}`. Writes the marks only. Refusals:
+400 `invalid_body` (no string `holder`), 400 `holder_has_no_open_charge`,
+404 `run_not_found`.
+
+### Zoho already holds it: a CLI report, not a field
+
+`python -m expense_recon.zoho.booked_report --run-id <id> --month YYYY-MM
+--env-file <context/.env> --csv out.csv` (or `--run-payload` / `--settings` /
+`--zoho-pull` with saved files) reads the month with GET and the three
+orgs' expenses with `list_expenses` (read-only) and prints two lists: open
+charges a Zoho expense in the same company matches (same currency, same
+amount to the cent, dates within 3 days, one Zoho expense per charge), with
+its expense id; and charges closed by yellow / the reviewer / gray / a
+no-receipt mark that no Zoho expense matches. Every run scores a control
+(every amount moved one cent); exit 3 and a WARNING when the control does
+not come out near zero. Nothing is written back; marking a charge booked
+from the report is Criss's click. Live 2026-09-25 (control 0 in every
+month): July 0 open, 3 of 39 yellow not in Zoho, 24 of 24 gray in Zoho;
+August 11 of 57 open in Zoho, 40 of 40 gray not in Zoho; September 11 of 28
+open in Zoho, the 1 yellow (SAP SE 481.07) not in Zoho.
+
+Tests: `tests/test_front1_chase_honesty.py` (route-level: codes and labels,
+`n_already_posted`, the uncovered cards and the Publish refusal, the chase
+dates and the mail grouping, the ask age, the threshold setting, mark-all),
+`tests/test_zoho_booked_report.py` (through the command's `main()`), and the
+two re-pinned subjects in `tests/test_receipt_chasing_item_107.py`. Renders
+in `docs/lovable-chase-honesty-prompt.md`.

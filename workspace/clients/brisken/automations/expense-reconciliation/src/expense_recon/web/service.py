@@ -4267,6 +4267,16 @@ def build_view(
         # absent unless the reason is one of the two waiting codes.
         if rec["reason_code"] in WAITING_FOR_STATEMENT_CODES and _reason_cov:
             rec["waits_for_statements"] = list(_reason_cov["waits_for"])
+    # Front 1: the verdicts the month gate closes a charge on name the
+    # charge here too (the reviewer's already-posted click, the gray fill,
+    # the no-receipt-expected mark), each read by the gate's own predicate,
+    # with the rule-5 `reason_label` beside every code.
+    from ..unmatched_reasons import CHARGE_REASON_TEXT
+    from .month_readiness import (
+        charge_booked_recurring,
+        charge_no_receipt_expected,
+    )
+
     charge_reasons: dict[str, str] = {}
     for row in rows:
         if row["effective_bucket"] != "unmatched":
@@ -4275,9 +4285,14 @@ def build_view(
             row_type=row.get("row_type"),
             entry_status=row.get("entry_status"),
             candidates=row["candidates"],
+            booked=row.get("section") == "posted",
+            closed_recurring=charge_booked_recurring(row),
+            no_receipt_expected=charge_no_receipt_expected(row),
         )
+        row["reason_label"] = CHARGE_REASON_TEXT[row["reason_code"]]
     for tx_entry in unmatched_transactions:
         tx_entry["reason_code"] = charge_reasons[tx_entry["transaction_id"]]
+        tx_entry["reason_label"] = CHARGE_REASON_TEXT[tx_entry["reason_code"]]
 
     # Items 99 + 100: what still stands between this month and complete,
     # read off the rows and the unmatched list the page renders. The publish
@@ -4478,8 +4493,15 @@ def build_view(
         "n_missing_receipt_image": n_missing_receipt_image,
         # L1 — fill-color annotations from the statement workbook.
         "n_parse_notes": count_parse_issues(parse_errors)["notes"],
+        # Front 1: the booked PURCHASES, by either source of the verdict
+        # (`section == "posted"`: the yellow fill or the reviewer's
+        # already-posted click, the same flag `n_booked_no_receipt` and
+        # `turn` read). A yellow card payment is not a booked charge: July
+        # read 93 with three "Payment Thank You" lines inside it.
         "n_already_posted": sum(
-            1 for t in transactions if t.entry_status == "posted"
+            1 for r in rows
+            if r.get("section") == "posted"
+            and (r.get("row_type") or "purchase") == "purchase"
         ),
         "n_subscription": sum(
             1 for t in transactions if t.entry_status == "subscription"
@@ -4502,6 +4524,13 @@ def build_view(
     }
     summary["n_bills"] = len(view_bill_docs)
     summary["bills_by_ccy"] = bills_by_ccy(receipts, view_bill_docs)
+    # Front 1 step 2: the active cards with nothing loaded for this month,
+    # so "0 charges need a receipt" cannot read as "nothing owed" while a
+    # card is missing. Advisory, not a Publish gate.
+    from .month_readiness import cards_uncovered as _cards_uncovered
+
+    summary["cards_uncovered"] = _cards_uncovered(coverage)
+    summary["n_cards_uncovered"] = len(summary["cards_uncovered"])
     # Item 129: the last committed re-match and any owed one, off the
     # snapshot as stored, so the month page can say a re-match ran.
     visibility = rematch_visibility(run.snapshot)
@@ -17908,7 +17937,12 @@ def receipt_chase_groups(
     portal hints when the caller has them; without it the groups are
     identical minus those two display fields."""
     from ..cards import cards_from_setting
-    from .receipt_chase import chase_groups, holder_addresses, portal_hints
+    from .receipt_chase import (
+        chase_groups,
+        holder_addresses,
+        portal_hints,
+        request_overdue_days,
+    )
     from .month_readiness import charge_needs_receipt
 
     cards = cards_from_setting(
@@ -17937,6 +17971,9 @@ def receipt_chase_groups(
             (settings or {}).get("merchants"),
             {r["transaction_id"]: r.get("vendor") or "" for r in open_rows},
         ),
+        # Front 1 step 4: the asks' age is read against today (UTC).
+        today=datetime.now(timezone.utc).date(),
+        overdue_days=request_overdue_days(settings),
     )
 
 
@@ -18002,7 +18039,7 @@ def confirmable_pair(row: dict) -> bool:
     if not c.get("is_chosen"):
         return False
     if c.get("match_type") == MatchType.FX_REFERENCE.value:
-        # Item 221 / owner 2026-09-25 (item 76 revisited): a clean
+        # Item 222 / owner 2026-09-25 (item 76 revisited): a clean
         # cross-currency pair confirms itself too, now that its rate is a
         # central-bank one (items 82 / 167 postdate the item-76 ruling).
         if not fx_pair_confirmable(row, c):
@@ -19160,7 +19197,7 @@ def attach_refund_reversals(rows: list[dict]) -> None:
             row["reverses_transaction_id"] = hits[0].get("transaction_id")
 
 
-# Item 221 (front 5), owner decision 2026-09-25, item 76 revisited: the rate
+# Item 222 (front 5), owner decision 2026-09-25, item 76 revisited: the rate
 # sources a self-confirming cross-currency pair may ride (the day's reference
 # rate, else the ECB monthly average; never a rate read off the month's own
 # documents) and how close the converted receipt must land.

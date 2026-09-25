@@ -32,10 +32,14 @@ A receipt another month's charge has already claimed (`settled_by`) is in the
 neighbouring period by proof, not by its date.
 
 Charge side. The receipt vocabulary does not describe a charge (a card charge
-is never "not a card charge"), so charges carry their own four codes, from the
+is never "not a card charge"), so charges carry their own codes, from the
 row's own facts: the statement line is not a purchase; the receipt the matcher
-found is held by another charge (item 60's rule); the reviewer's workbook marks
-the row as already booked (yellow); otherwise no receipt was found.
+found is held by another charge (item 60's rule); the row is already booked
+(the workbook's yellow, or the reviewer's already-posted verdict); it is booked
+through Zoho recurring expenses (the gray fill); a reviewer ruled no receipt
+will exist; otherwise no receipt was found. The last three before "no receipt
+found" are the verdicts that close a charge for the month gate, so the list
+and the gate name the same charges as settled (front 1, 2026-09-25).
 """
 from __future__ import annotations
 
@@ -72,11 +76,17 @@ NOT_A_PURCHASE = "not_a_purchase"
 RECEIPT_HELD_BY_ANOTHER_CHARGE = "receipt_held_by_another_charge"
 ALREADY_BOOKED = "already_booked"
 NO_RECEIPT_FOUND = "no_receipt_found"
+# Front 1 (2026-09-25): the two verdicts `month_readiness` already closes a
+# charge on, which the list used to call "no receipt found".
+CLOSED_RECURRING = "closed_recurring"
+NO_RECEIPT_EXPECTED = "no_receipt_expected"
 CHARGE_REASON_CODES = (
     NOT_A_PURCHASE,
     RECEIPT_HELD_BY_ANOTHER_CHARGE,
     ALREADY_BOOKED,
     NO_RECEIPT_FOUND,
+    CLOSED_RECURRING,
+    NO_RECEIPT_EXPECTED,
 )
 
 # ── the screen's words (item 96) ────────────────────────────────────────
@@ -203,13 +213,47 @@ def receipt_reason_code(
 
 
 def charge_reason_code(
-    *, row_type: str | None, entry_status: str | None, candidates: list[dict]
+    *,
+    row_type: str | None,
+    entry_status: str | None,
+    candidates: list[dict],
+    booked: bool = False,
+    closed_recurring: bool = False,
+    no_receipt_expected: bool = False,
 ) -> str:
-    """The reason one unmatched charge has no receipt."""
+    """The reason one unmatched charge has no receipt.
+
+    Front 1 (2026-09-25). The list said `no_receipt_found` for every charge
+    a verdict closes except Criss's yellow fill, so July's 24 and August's 40
+    gray charges, which the month counts as closed, read as owed. The caller
+    passes the verdicts it already holds, read by the same predicates the
+    month gate reads: `booked` is the row's `section == "posted"` (yellow OR
+    the reviewer's already-posted verdict, which `entry_status` alone never
+    showed), `closed_recurring` is `month_readiness.charge_booked_recurring`
+    (the gray fill, never a derived mark), and `no_receipt_expected` is the
+    reviewer's item-107 mark."""
     if row_type and row_type != "purchase":
         return NOT_A_PURCHASE
     if candidates and all(c.get("held_by") for c in candidates):
         return RECEIPT_HELD_BY_ANOTHER_CHARGE
-    if entry_status == "posted":
+    if entry_status == "posted" or booked:
         return ALREADY_BOOKED
+    if closed_recurring:
+        return CLOSED_RECURRING
+    if no_receipt_expected:
+        return NO_RECEIPT_EXPECTED
     return NO_RECEIPT_FOUND
+
+
+# Rule 5 (`docs/api-contract.md`): the charge vocabulary grew, so every
+# element carrying a charge `reason_code` also carries `reason_label`, the
+# English sentence an SPA that does not know the code can print instead of
+# somebody else's label.
+CHARGE_REASON_TEXT = {
+    NOT_A_PURCHASE: "Not a purchase (a payment, fee or interest line); no receipt is needed.",
+    RECEIPT_HELD_BY_ANOTHER_CHARGE: "The receipt found for this charge is held by another charge.",
+    ALREADY_BOOKED: "Already booked in Zoho (yellow in the workbook, or marked by a reviewer); no receipt is needed.",
+    NO_RECEIPT_FOUND: "No receipt found for this charge yet.",
+    CLOSED_RECURRING: "Booked through a Zoho recurring expense (gray in the workbook); no receipt is needed.",
+    NO_RECEIPT_EXPECTED: "Marked by a reviewer: no receipt will exist for this charge.",
+}

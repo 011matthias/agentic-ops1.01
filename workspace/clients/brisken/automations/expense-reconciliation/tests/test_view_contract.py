@@ -226,6 +226,9 @@ RUN_CONTRACT = {
     # Item 57: same field as on the expense batch view; see above.
     "summary.month_health.suspects[]": "string",
     "summary.setup_advisories[]": "object",
+    # Front 1 step 2: the labels of the active cards with nothing loaded
+    # for the month; empty when every card has a statement.
+    "summary.cards_uncovered[]": "string",
     "unmatched_receipts[]": "object",
     "unmatched_receipts[].line_items[]": "object",
     "unmatched_transactions[]": "object",
@@ -1684,6 +1687,8 @@ UNMATCHED_RECEIPT_REASON_CODES_PIN = (
 UNMATCHED_CHARGE_REASON_CODES_PIN = (
     "not_a_purchase", "receipt_held_by_another_charge", "already_booked",
     "no_receipt_found",
+    # Front 1 (2026-09-25): the gray fill and the reviewer's mark.
+    "closed_recurring", "no_receipt_expected",
 )
 
 # `docs/api-contract.md` ("Re-match events") named ten of these when this pin

@@ -42,6 +42,11 @@ from decimal import Decimal
 RECEIPT_REQUESTS_KEY = "receipt_requests"
 RECEIPT_REQUESTS_DEFAULT: dict = {"enabled": False, "holders": {}}
 
+# Front 1 step 4: after how many days an ask with no receipt reads overdue.
+# `settings.receipt_requests.overdue_days` overrides it (1..365).
+REQUEST_OVERDUE_DAYS_DEFAULT = 14
+_OVERDUE_DAYS_MAX = 365
+
 # The two refusals `POST .../receipt-requests/send` can answer with. Both are
 # refusals in this build; the second exists so turning the flag on reports
 # the real remaining gate (no sender is wired) instead of silently seeming
@@ -113,7 +118,41 @@ def normalize_receipt_requests_setting(raw: object) -> dict:
                 )
             holders[name] = addr
     cleaned["holders"] = holders
+    if raw.get("overdue_days") is not None:
+        days = raw["overdue_days"]
+        if (
+            isinstance(days, bool) or not isinstance(days, int)
+            or not 1 <= days <= _OVERDUE_DAYS_MAX
+        ):
+            raise ValueError(
+                "receipt_requests.overdue_days must be a whole number of "
+                f"days from 1 to {_OVERDUE_DAYS_MAX}"
+            )
+        cleaned["overdue_days"] = days
     return cleaned
+
+
+def request_overdue_days(settings: dict | None) -> int:
+    """The overdue threshold as stored, the default when unset or malformed
+    (a hand-edited blob must never break the month page)."""
+    raw = (settings or {}).get(RECEIPT_REQUESTS_KEY) or {}
+    days = raw.get("overdue_days") if isinstance(raw, dict) else None
+    if isinstance(days, int) and not isinstance(days, bool) and 1 <= days <= _OVERDUE_DAYS_MAX:
+        return days
+    return REQUEST_OVERDUE_DAYS_DEFAULT
+
+
+def days_since(stamp: str | None, today) -> int | None:
+    """Whole days from an ISO date/datetime stamp to `today`, or None when
+    the stamp does not parse. A stamp in the future reads 0."""
+    from datetime import date as _date
+
+    text = str(stamp or "").strip()
+    try:
+        asked = _date.fromisoformat(text[:10])
+    except ValueError:
+        return None
+    return max(0, (today - asked).days)
 
 
 def requests_enabled(settings: dict | None) -> bool:
@@ -172,6 +211,8 @@ def chase_groups(
     amounts: dict[str, Decimal] | None = None,
     addresses: dict[str, str] | None = None,
     hints: dict[str, str] | None = None,
+    today=None,
+    overdue_days: int = REQUEST_OVERDUE_DAYS_DEFAULT,
 ) -> list[dict]:
     """The month's missing-receipt list, one group per card holder.
 
@@ -208,6 +249,8 @@ def chase_groups(
                 "cards": [],
                 "n_charges": 0,
                 "n_requested": 0,
+                # Front 1 step 4: asks older than the overdue threshold.
+                "n_overdue": 0,
                 "amounts_by_ccy": {},
                 "charges": [],
             }
@@ -222,6 +265,10 @@ def chase_groups(
         charge = {
             "transaction_id": tx_id,
             "date": row.get("date") or "",
+            # Front 1 step 3: the charge's OWN calendar month. A Chase cycle
+            # file cuts on the 4th, so August 2026's chase held 14 charges
+            # dated in July; the mail groups by this, not by the run label.
+            "charge_month": str(row.get("date") or "")[:7],
             "vendor": row.get("vendor") or "",
             "amount": row.get("amount") or "",
             "currency": row.get("currency") or "",
@@ -235,6 +282,14 @@ def chase_groups(
         if row.get("receipt_requested_at"):
             charge["receipt_requested_at"] = row["receipt_requested_at"]
             group["n_requested"] += 1
+            # Front 1 step 4: how long ago it was asked, and whether that is
+            # past the threshold. Read-time, so no stored state ages.
+            age = days_since(row["receipt_requested_at"], today) if today else None
+            if age is not None:
+                charge["days_since_requested"] = age
+                charge["overdue"] = age >= overdue_days
+                if charge["overdue"]:
+                    group["n_overdue"] += 1
         if row.get("requested_to"):
             charge["requested_to"] = row["requested_to"]
         group["charges"].append(charge)
@@ -252,6 +307,11 @@ def chase_groups(
         }
         group["charges"].sort(key=lambda c: (c["date"], c["vendor"], c["transaction_id"]))
         group["cards"].sort(key=lambda c: c["label"])
+        # Front 1 step 3: the span the listed charges actually cover, which
+        # is not the run's month when a cycle file straddles two.
+        dates = [c["date"] for c in group["charges"] if c["date"]]
+        if dates:
+            group["date_range"] = {"start": dates[0], "end": dates[-1]}
         out.append(group)
     # Biggest chase first, then by name: the holder with 36 open charges is
     # the one worth opening.
@@ -259,10 +319,47 @@ def chase_groups(
     return out
 
 
+_MONTHS_EN = (
+    "January", "February", "March", "April", "May", "June", "July",
+    "August", "September", "October", "November", "December",
+)
+_MONTHS_PT = (
+    "janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
+    "agosto", "setembro", "outubro", "novembro", "dezembro",
+)
+
+
+def _month_name(ym: str, *, en: bool) -> str:
+    """`2026-07` -> "July 2026" / "julho de 2026"; the raw text when it is
+    not a month (a charge with no date keeps an honest blank header)."""
+    try:
+        year, month = int(ym[:4]), int(ym[5:7])
+        name = (_MONTHS_EN if en else _MONTHS_PT)[month - 1]
+    except (ValueError, IndexError):
+        return ym or ("no date" if en else "sem data")
+    return f"{name} {year}" if en else f"{name} de {year}"
+
+
 def _lines(group: dict, *, en: bool) -> list[str]:
+    """The listed charges, under one header per charge month when they span
+    more than one (front 1 step 3), flat otherwise."""
     listed = group["charges"][:MAX_LISTED]
+    months = sorted({c.get("charge_month") or "" for c in group["charges"]})
+    by_month: dict[str, int] = {}
+    for c in group["charges"]:
+        key = c.get("charge_month") or ""
+        by_month[key] = by_month.get(key, 0) + 1
     out = []
+    current = None
     for c in listed:
+        month = c.get("charge_month") or ""
+        if len(months) > 1 and month != current:
+            if current is not None:
+                out.append("")
+            word = ("charge" if by_month[month] == 1 else "charges") if en else (
+                "lançamento" if by_month[month] == 1 else "lançamentos")
+            out.append(f"{_month_name(month, en=en)} ({by_month[month]} {word}):")
+            current = month
         parts = [c["date"], c["vendor"], f"{c['currency']} {c['amount']}".strip()]
         if c.get("card_label"):
             parts.append(f"({c['card_label']})")
@@ -290,12 +387,28 @@ def compose_request(
     carries `blocked: "no_address"` so the page can say which holder is
     unreachable rather than the send quietly skipping them."""
     n = group["n_charges"]
+    # Front 1 step 3: the subject and the opening line name the dates the
+    # charges carry, because the month's statement file can straddle two
+    # months (August 2026's listed 14 July charges as "in August 2026").
+    span = group.get("date_range") or {}
+    start, end = span.get("start") or "", span.get("end") or ""
+    if start and end and start != end:
+        dated, dated_pt = f"dated {start} to {end}", f"de {start} a {end}"
+    elif start:
+        dated, dated_pt = f"dated {start}", f"de {start}"
+    else:
+        dated = dated_pt = ""
     subject = f"{month_label}: {n} receipt{'s' if n != 1 else ''} still missing"
     subject_pt = f"{month_label}: {n} recibo{'s' if n != 1 else ''} ainda faltando"
+    if dated:
+        subject += f" ({'charge' if n == 1 else 'charges'} {dated})"
+        subject_pt += f" ({'lançamento' if n == 1 else 'lançamentos'} {dated_pt})"
     charge_word = "charges" if n != 1 else "charge"
+    have = "have" if n != 1 else "has"
     body = "\n".join([
-        f"{n} {charge_word} on your card in {month_label} have no receipt in "
-        "the expense tool yet:",
+        f"{n} {charge_word} on your card"
+        + (f", {dated}," if dated else f" in {month_label}")
+        + f" {have} no receipt in the expense tool yet:",
         "",
         *_lines(group, en=True),
         "",
@@ -306,8 +419,9 @@ def compose_request(
         intake_address,
     ])
     body_pt = "\n".join([
-        f"{n} lançamento{'s' if n != 1 else ''} do seu cartão em "
-        f"{month_label} ainda está sem recibo na ferramenta:",
+        f"{n} lançamento{'s' if n != 1 else ''} do seu cartão"
+        + (f", {dated_pt}," if dated_pt else f" em {month_label}")
+        + f" ainda {'estão' if n != 1 else 'está'} sem recibo na ferramenta:",
         "",
         *_lines(group, en=False),
         "",
