@@ -352,4 +352,8 @@ def test_two_card_pdfs_attached_through_the_spa_do_not_advise(
     # The two cycles overlap (07-10..07-12 inside 07-11..07-14), so only the
     # accounts tell the files apart.
     assert entries[1]["period_start"] <= entries[0]["period_end"]
-    assert [e["advisory"] for e in entries] == [None, None]
+    # No DOUBLING advisory. Item 204's month advisory may speak (these July
+    # cycles sit in an August batch), and says something else entirely.
+    assert [
+        (e.get("advisory_detail") or {}).get("code") for e in entries
+    ] in ([None, None], ["statement_month_differs"] * 2)

@@ -46,6 +46,15 @@ who owns 3281), so the deploy moves no row; the SPA half
 
 **2026-09-25: case 9 build 1 shipped (item 204 step 2).** An invoice that prints no card now takes the card its own payment receipt prints whenever the grid shows the two as one document, under the old guards (one card only, a "Not a duplicate" ruling lends nothing, an operator hint on the invoice wins). PR #1362. Expected on September's next read: the Anthropic 184.35 and two Lovable 50.00 invoices read 9693 / 3645, `n_needs_entity` 26 -> 23. Builds 2 to 5 run in their own sessions.
 
+**2026-09-25: case 9 build 5 (item 204 steps 1 and 5) shipped.** A receipt
+that names no card now says which cards' statements it is waiting for
+(`waits_for_statement`, read across every month) instead of asking for a
+company, carries a recurring-charge `card_suggestion` with its evidence
+(never applied), and one picked card can be applied to the same vendor's
+other card-less rows with an explicit click (`POST .../cards/by-vendor`). A
+statement upload names its majority month and advises when it is filed in
+another. SPA half `docs/lovable-case9-status-prompt.md` waits on the owner's
+paste. Builds 1 to 4 run in sibling sessions.
 **2026-09-25: July, August and September are on the Zoho accounts** (owner
 directive; backlog items 201 and 205, PR #1356, Fly `071b19d7`, snapshot
 `vs_V9ka1J80opbTj8gxvqQ59X5` taken before). Owner's ruling on Criss's 35 bucket

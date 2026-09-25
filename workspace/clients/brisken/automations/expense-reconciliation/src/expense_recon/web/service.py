@@ -46,6 +46,7 @@ from ..cli import (  # item 105
 )
 from ..coa_provision import apply_to_config as apply_coa_provisioning
 from ..coa_provision import GL_ENTITY_ORGS_KEY, entity_from_settings
+from .. import card_suggestion as _c9  # item 204, case 9 steps 1 and 5
 from ..correspondence import quarantine_correspondence
 from ..error_codes import Refusal, code_of, detail_of, fields_of
 from ..duplicates import (
@@ -3267,6 +3268,7 @@ def build_view(
     edited_at: str | None = None,
     field_overrides: dict[str, dict[str, str]] | None = None,
     settings: dict | None = None,
+    statement_evidence=None,
 ) -> dict:
     """Compose the render model: per-transaction rows with candidates and
     the reviewer's effective verdict, plus the unmatched-receipt list and
@@ -4126,6 +4128,11 @@ def build_view(
             loaded_cards=reason_cards,
             period=reason_period,
             settled_elsewhere="settled_by" in rec,
+            # Item 204 step 1: a no-card receipt whose date no loaded
+            # statement covers (any month) reads card_statement_not_loaded.
+            uncovered_cards=_c9.uncovered_for_receipt(
+                rec_by_id[rec["document_id"]], statement_evidence
+            ),
         )
     charge_reasons: dict[str, str] = {}
     for row in rows:
@@ -7253,6 +7260,7 @@ def _expense_review(
     suggested_private: bool = False,
     needs_cost_center: bool = False,
     settled_outside: bool = False,
+    waits_for_statements: list | tuple = (),
 ) -> dict:
     """Review-by-exception for one expense (receipt-spine). Missing core
     fields first (an expense cannot export cleanly without date / amount /
@@ -7350,6 +7358,28 @@ def _expense_review(
             "or assign or register the company card if there is one.",
             "suggested_private",
         )
+    if (
+        waits_for_statements
+        and entity is not None and not entity
+        and not private and not settled_outside
+    ):
+        # Item 204, case 9 step 5: a card-less row whose date some active
+        # card's loaded statements do not cover is waiting for them, not for
+        # a person. `waits_for_statements` (card_suggestion.waits_for_row)
+        # names those cards; when every card covers the date the list is
+        # empty and needs_entity below stands, because then a human has to
+        # look. Replaces needs_entity only: an entity set by hand ends it.
+        return {
+            **_review(
+                "check",
+                "No card on this receipt, and no loaded statement covers its "
+                "date for: " + ", ".join(waits_for_statements) + ". The "
+                "paying card shows once those statements are loaded; assign "
+                "it now if you already know it.",
+                "waits_for_statement",
+            ),
+            "waits_for_statements": list(waits_for_statements),
+        }
     if entity is not None and not entity and not private:
         if settled_outside:
             # Item 144. Same question, an answerable instruction. The
@@ -7560,6 +7590,7 @@ def build_expense_view(
     edited_at: str | None = None,
     month_batch=None,
     learning_db_path: "Path | None" = None,
+    statement_evidence=None,
 ) -> dict:
     """Compose the receipt-spine render model for an expense batch: one row
     per expense with the reviewer's edits applied, review-by-exception
@@ -7802,6 +7833,11 @@ def build_expense_view(
                 "date" in field_overrides.get(r.document_id, {})
                 or r.document_id.startswith("manual:")
             ),
+            # Item 204 step 5: the cards whose loaded statements (any month)
+            # do not cover this card-less row's date. [] without evidence.
+            waits_for_statements=_c9.waits_for_row(
+                r, res, statement_evidence, row_settled_outside
+            ),
         )
         posting = _row_posting_category(
             r, overrides, None, entity_orgs=gl_run_entity_orgs(run),
@@ -7969,6 +8005,17 @@ def build_expense_view(
             # Agent-directed text found in this receipt or its mail
             # (rule_untrusted_inbound): shown for a human, acted on by nothing.
             "untrusted_instructions": _row_untrusted(r, intake_provenance),
+            # Item 204 steps 1 and 5 (case 9): `waits_for_statements` and the
+            # recurring-charge `card_suggestion`, on an open card-less row
+            # only, both absent otherwise. The suggestion never sets `card`.
+            **_c9.case9_row_fields(
+                r, res,
+                str(_expense_vendor_view(
+                    r, orig_by_id.get(r.document_id),
+                    field_overrides.get(r.document_id, {}),
+                ).get("display") or ""),
+                statement_evidence, row_settled_outside,
+            ),
         })
         if roster is not None:
             # Trip batches only (the key is absent on company months).
@@ -11406,8 +11453,17 @@ def build_statement_entry(
     column_map: dict | None = None,
     card_currency: str = "",
     statement_id: str = "",
+    attached_month: str = "",
 ) -> dict:
     """One `statements[]` row: what this upload was and what it added.
+
+    `month_suggestion` (item 204, case 9 step 1): the month holding most of
+    this file's dated charges, in the receipt side's `period_suggestion`
+    shape, with `label_month` = `attached_month` (the month it is being
+    attached to, "YYYY-MM"; "" for a trip). Absent when the file dated
+    nothing or two months tie. `statement_advisory` says so when the two
+    differ, so a card-cycle PDF or a late export cannot land in the wrong
+    month silently.
 
     `statement_id` (note item T2, 2026-09-18) is the content-derived id of
     the stored file (`statement_content_id`). Parallel and ABSENT on every
@@ -11459,6 +11515,11 @@ def build_statement_entry(
         **({"card_currency": currency} if currency else {}),
         # What the bytes are (note item T2). Absent when not computed.
         **({"statement_id": statement_id} if statement_id else {}),
+        # Which month this file's charges belong to (item 204). Absent when
+        # there is no clear month.
+        **({"month_suggestion": _suggested} if (
+            _suggested := _c9.month_suggestion(transactions, attached_month)
+        ) else {}),
         # This file's own id-to-row map. Underscored and popped at commit
         # into `statement_anchors`, so it never reaches the SPA: it is a
         # per-row map the size of the statement, and nothing renders it.
@@ -11556,6 +11617,25 @@ def statement_advisory(prior: list[dict], entry: dict) -> str | None:
                     period_start=str(other["period_start"]),
                     period_end=str(other["period_end"]),
                 )
+    # Item 204, case 9 step 1: the file's charges mostly belong to another
+    # month than the one it is being attached to. Ranked last: a doubled
+    # month is the worse surprise. Nothing is moved or refused.
+    suggestion = entry.get("month_suggestion") or {}
+    month, label_month = suggestion.get("month"), suggestion.get("label_month")
+    if month and label_month and month != label_month:
+        from .intake_mail import _month_human
+
+        return Refusal(
+            f"{suggestion.get('n_in_month')} of this file's "
+            f"{suggestion.get('n_dates')} charges are dated {_month_human(month)}, "
+            f"but it was added to {_month_human(label_month)}. If it belongs "
+            f"to {_month_human(month)}, add it to that month instead.",
+            code="statement_month_differs",
+            month=str(month),
+            label_month=str(label_month),
+            n_in_month=int(suggestion.get("n_in_month") or 0),
+            n_dates=int(suggestion.get("n_dates") or 0),
+        )
     return None
 
 
@@ -13457,6 +13537,8 @@ def execute_statement_attach(
                 "account_card_currency", ""
             ),
             statement_id=statement_content_id(Path(run.work_dir) / stmt_name),
+            # Item 204: the month it is being attached to, for its advisory.
+            attached_month=_c9.attached_month(run),
         ),
         trigger="statement",
     )
@@ -13732,6 +13814,8 @@ def reread_statements(
                 # restore keeps the id the attach recorded, and an entry
                 # written before the id existed gains one here.
                 statement_id=statement_content_id(stmt_path),
+                # Item 204: the month it is being attached to.
+                attached_month=_c9.attached_month(run),
             )
         )
 
@@ -17228,3 +17312,33 @@ def cards_settled_elsewhere(run: RunRow, cards: dict) -> dict[str, str]:
     finally:
         store.close()
     return out
+
+
+def apply_card_by_vendor(
+    store: RunStore,
+    run_id: str,
+    expenses: list[dict],
+    vendor: str,
+    card_key: str,
+    now_iso: str,
+) -> list[str]:
+    """Item 204, case 9 step 5: "apply to the N other rows of this vendor".
+
+    Writes the same per-row override the row PUT (`field=card_key`) writes,
+    to every card-less, non-private, counting row of the display vendor
+    `vendor` in this month (`card_suggestion.card_by_vendor_targets`, read
+    off the RESOLVED rows in `expenses`), and returns the document ids it
+    changed. A row with a printed, picked, learned or statement card, a
+    private or suggested-private row, a row settled outside, and a decided
+    copy are left alone, so a second call changes nothing.
+
+    An explicit click only (D6, owner 2026-09-25: "keep criss's pick for the
+    specific expense"): nothing calls this except its route. The caller has
+    already run `prepare_row_card_fix`, so the card resolves on this batch.
+    """
+    changed = _c9.card_by_vendor_targets(expenses, vendor)
+    for document_id in changed:
+        store.set_expense_field_override(
+            run_id, document_id, "card_key", card_key, now_iso
+        )
+    return changed
