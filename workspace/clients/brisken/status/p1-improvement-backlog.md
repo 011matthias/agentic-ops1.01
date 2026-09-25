@@ -8284,6 +8284,23 @@ attribute at all. Coverage, not matching.
 
 ### Item 172 — card 3645 posts to another card's name (master data, owner's)
 
+**CHECK BUILT 2026-09-25 (no card edited; the value stays Dirk's).**
+`GET /api/settings` `cards_effective[].account_check`: `{status, detail,
+closest, account_id, company_org, chart_modified, chart_verified}`, status
+`ok` / `not_in_chart` / `wrong_type` / `inactive` / `no_account` /
+`no_chart`. The card's stored name is looked up in its company's chart (every
+org's chart when the card has no company) from the provisioned chart file,
+then held to item 184's standard by `zoho.accounts.resolve_paid_through`
+itself (present, active, not DO NOT USE, `credit_card`), through
+`category_vocabulary.card_account_check` since `web/` may not import
+`..zoho`. `closest` is the active card account whose name carries one of the
+card's four-digit groups (its stored name, its digits), else the nearest
+name. When `chart_coverage` (item 207) is not ok, a failing check says the
+chart may be what is stale. Tests `tests/test_card_account_check_item_172.py`
+(7, through the settings route); four wires proven RED (route wiring, the
+item-184 reason map, the digit hint, the stale-chart sentence). SPA half:
+`docs/lovable-card-account-check-prompt.md`.
+
 Found 2026-09-23 by the post-deploy consumer drive of item 169, which is what
 that drive is for: the twelve September OpenAI rows that newly resolved to
 card **3645** render "Paid through: **Credit Card - 2838**". The account is
@@ -10474,6 +10491,40 @@ the v237 module and green with the fix; nothing was stored, the row reverts on r
 2026-09-25, follow-up (Shipped row 131): the index cost ~28 s per request live (v239: May read 37 s against April's 9 s; the health check failed and the SPA's month page said "Failed to fetch"). A month's evidence is now reused per process while `RunStore.run_inputs_digest` (its rows in runs, decisions, duplicate rulings, overrides, edits) is unchanged, and re-derived after any write to it.
 2026-09-25, follow-up (Shipped row 132): the purchase's own card vetoes the account's. Once the index built live, July's decided copy `0044` (Lovable 200.00, 50622baec444) read `card-1176` via `account` while its twin `0043` is settled on `card-2838`; `decide` now returns None when the judged purchase already names a different card through another copy. It still never votes for itself.
 
+**D2 / D3 history loaded 2026-09-25 (owner yes on the per-month prediction; no
+code).** Read via Graph app-only: `Chase9693_Activity2024_Start.xlsx`
+(ADMINLLC9, 724 rows since 2024), `Chase1176_Activity_historicactivity_since202402.xlsx`
+(admin_consulting, 154) and `Chase2838_historic_Activity.xlsx`
+(admin_corp_services, 2,729), which holds the whole 2838 family including 3876
+and 0340; no file names 3876 or 0340, and `Nicolas Neumann Monthly Expenses.xlsx`
+is a 3876-only copy of the same rows. Every live charge was found in these
+exports, and the loaded 2838-family months (April CSV, Criss's July / August
+xlsx) match the export split by POST date exactly, so post date is the month
+key. The attach folds every row of a file (build 5 only advises) and nothing
+detaches a statement, so a calendar-month 9693 file on July to September would
+have put the Jul 3-Sep 4 rows the cycle PDFs already hold into two months.
+Loaded instead: 13 gap-fill workbooks holding only rows no month held, by post
+month, Criss's fills kept (yellow on the Amount cell = booked in Zoho, so the
+April-July rows arrive `posted`: matched, never journaled), under `card-9693` /
+`card-1176` / `card-2838` so her later exports dedupe against them. Rows: 9693
+Apr 28, May 30, Jun 19, Jul 6, Sep 15; 1176 Apr 3, May 4, Jun 9, Jul 2, Aug 8,
+Sep 4; 2838 family May 87, Jun 137; every file `n_new` = `n_rows`, no advisory.
+Readback (API, against baselines taken under builds 4 and 5, which deployed
+mid-load): settled pairings May 0 to 16 (+2 proposed), June 0 to 17 (+3),
+September 1 to 10, April / July / August +1 each; needs-company Apr 8 to 7, May
+2 to 1, Jun 4 to 2, Jul 15 to 14, Sep 23 to 17, Aug 1 to 2. The prediction hit
+52 of 54 pairs, plus 8 it missed (September OpenAI / Anthropic). One row changed
+company, as predicted: August's Lovable `H0LHY2WQ-0032` left a 3645 BASE44
+charge for the 1176 LOVABLE one (Consulting). The other movers come from the
+attach's full-month re-match under current code, not from the new rows: April
+SJCOROA (FX judgment p=0.40, to review), August E A LOCAÇÕES (D5 vendor guard,
+33%), May Lovable 200 copy 2 (#1388). Criss's OpenAI pick (Sep 18, 80.20, 3645)
+is untouched. Cold SPA drive: May lists the three files, 121 charges, 17
+paired. 9693's Jul 3-31 and Aug 5-31 rows stay in August / September (cycle
+PDFs), where build 3's flow-back covers them. Two attaches were cut by sibling
+deploys ("interrupted by a server restart"), left no `statements[]` entry and
+succeeded on retry. Weekly D2 loads: item 215.
+
 ### 205. July, August and September switched to the Zoho accounts (owner directive 2026-09-25) (APPLIED 2026-09-25: PR #1356, Fly `071b19d7`, all three months switched live)
 
 Owner, 2026-09-25: "i need july, august and september recategorized with this
@@ -10720,8 +10771,8 @@ PLACEHOLDER** (note "Placeholder set by the owner 2026-09-25; card owner not
 confirmed"), saved through Settings > Private cards. Change it there: edit the
 person, switch Active off, or remove the row. Effect, API-diffed over all 7
 months: only September's DB Fernverkehr row (`0024__`) moved, to private /
-`private_card_list` / Dirk Neumann. Open: Follow-up 2 (the strip's "Reimburse
-to" never pre-fills) and item 214 (a private receipt still waits on the strip).
+`private_card_list` / Dirk Neumann. The strip half is superseded by item 214's
+owner ruling (dropdown = cards only); Follow-up 2 was withdrawn unpasted.
 
 ### 209. A suggested duplicate stays bound together until someone releases it (owner 2026-09-25) (PROMPT REWRITTEN and design APPROVED on screenshots 2026-09-25, not pasted)
 
@@ -10872,23 +10923,82 @@ line: the next-longest reasons on the same page are `suggested_private` (233
 characters, 4 rows) and, in July, `date_outside_period` (191) and
 `needs_entity_settled_outside` (173).
 
-### 214. A private receipt still waits on the card strip (found 2026-09-25, listing 3281) (RECORDED, not built; owner call)
+### 214. The card strip asks only where the receipt carries no payment info, and its dropdown lists cards only (owner ruling 2026-09-25; found listing 3281) (RULED, not built)
 
-After 3281 was listed (item 208), September's DB Fernverkehr row reads
-private / `private_card_list` / Dirk Neumann, yet `card_review` still lists
-its hint under `unresolved_hints` and `n_unresolved_rows` stays 7, so the
-strip keeps offering "Assign to card..." (and "Private card of...") for a
-receipt whose payer is settled, in every month the card appears. That
-undercuts "confirmed once". The builder (`web/service.py`, the `card_review`
-function ~7130) groups every row with a hint and no company card and never
-reads `private`; row-confirmed private rows (July `0028__`, September
-`0046__`) sit there the same way, so the gap predates the list.
+**Found.** After 3281 was listed (item 208), September's DB Fernverkehr row
+reads private / `private_card_list` / Dirk Neumann, yet `card_review` still
+lists its hint under `unresolved_hints` (`n_unresolved_rows` 7), so the strip
+kept offering "Assign to card..." for a receipt whose payer is settled. The
+builder (`web/service.py`, the `card_review` function ~7130) groups every row
+with a hint and no company card and never reads `private`. Verified live for
+all three private rows: July `0028__` ("DEBIT MASTERCARD", row-confirmed),
+September `0024__` (3281, list) and `0046__` ("Kartenzahlung erhalten",
+row-confirmed).
 
-Fix shape (recommended): a row the resolution marks private leaves
-`unresolved_hints` and `n_unresolved_rows` (it is already counted in
-`n_private`); the strip header then counts only receipts that still need an
-answer. Alternative: keep the group but mark it settled with no Assign (SPA
-change). Owner call because it changes what Criss sees on the strip.
+**Owner ruling, 2026-09-25, verbatim:**
+- "yes it should show assign to card, if the payment info is not in the
+  receipt. dropdown should only consist of cards"
+- Private-list cards in the dropdown: "yes and expenses that are suggested a
+  private have only private cards in drop down unless user clicks that its not
+  private"
+- "New card..." in the dropdown: remove (the recommended option).
+- Then, unprompted: "private card registry".
+
+**What that means (our reading, confirm against the words above):**
+1. A receipt whose PRINTED number resolves, to a company card or to a card on
+   the private list, leaves the strip. A receipt with no payment info keeps
+   "Assign to card...", even when it is already private by hand (July `0028__`
+   and September `0046__` stay; September `0024__` leaves).
+2. The Assign dropdown holds cards only: the company cards plus the private
+   list's cards (e.g. "3281 · Dirk Neumann (private)"). "Private card of..."
+   and "New card..." go. New cards are defined in Settings (Cards / Private
+   cards). Picking a private card makes the group's rows private for that
+   card's person.
+3. On a group suggested private (`suggested_private`), the dropdown shows only
+   the private cards, until the reviewer says it is not private; then the
+   company cards show.
+4. "private card registry": read as the name of the private list, the
+   counterpart of the company card registry, and the source of the dropdown's
+   private cards (Settings tab label may follow). Unconfirmed.
+
+**Build shape (backend first, then one SPA prompt).** Backend: `card_review`
+drops a row the resolution marks private through a printed number
+(`private_source` `private_card_list`; decide `month` with the owner's rule 1),
+keeps no-number rows; the strip route accepts a private-card pick for a
+no-number hint (e.g. `{"hint", "private_card": "3281"}`, stored as the month's
+private hint with that card's person; `learn` has no digits to teach, so it
+stays month-only) and refuses a digits key the list does not hold; a
+"not private" dismissal for a suggested group (check what item 203 already
+offers before adding a route). SPA prompt: the dropdown's items from
+`cards` + `settings.private_cards`, both actions removed, the suggested-private
+filter with its "Not private" control. The published "Private card of..."
+option (Follow-up 1) stays harmless until then; `private_to` stays accepted
+so nothing already sent breaks.
+
+### 215. A statement attach keeps only the month's own charges (owner decision 2026-09-25, D2 going forward) (RECORDED, not built)
+
+Criss's SharePoint card files are lifetime sheets (9693 since 2024, 724 rows;
+1176, 154; the 2838 family, 2,729). `POST /api/expense-batches/{id}/statement`
+folds every row of the file into the month, and build 5's `month_suggestion`
+only advises, so the weekly D2 upload of one of these sheets would copy two
+years of charges into a single month. Asked by example, the owner chose "the
+app keeps only that month"; Criss keeps uploading herself (no automatic
+SharePoint pull).
+
+Build: at attach, keep the rows whose POST date falls in the month's calendar
+range (the rule the loaded 2838-family months already follow, measured
+2026-09-25), drop rows the month or a neighbour already holds on the same
+account, and say how many rows were left out and which months they belong to,
+on the reply and on the `statements[]` entry. Open for the build: a trip or a
+label naming no month (no range, keep today's fold); a file with no Post Date
+column (fall back to the transaction date); whether the re-read applies the
+filter to files attached before it (the 13 D3 files are already single-month).
+
+Note from the same load: an attach job killed by a server restart leaves its
+upload on disk. April's retry was stored as
+`Chase9693_2026-04_posted_0401-0430_from-SharePoint-2.xlsx`, so the first copy
+is still there. Nothing reads it (the re-read walks `statements[]`); the startup
+sweep could delete an upload no entry names.
 
 ## Shipped (loop history)
 
