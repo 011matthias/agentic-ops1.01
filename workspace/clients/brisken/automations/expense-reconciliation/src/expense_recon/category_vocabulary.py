@@ -41,6 +41,7 @@ here returns an account, and recognizing a code does not make it postable.
 from __future__ import annotations
 
 import json
+import re
 import os
 from datetime import datetime, timezone
 
@@ -54,6 +55,7 @@ from .matching.types import EXPENSE_CATEGORIES
 from .zoho import curated_leaves
 
 __all__ = [
+    "card_account_check",
     "chart_coverage",
     "gl_account_options",
     "gl_companies",
@@ -355,3 +357,146 @@ def chart_coverage(provisioning_path: str | None = None) -> dict | None:
     _COVERAGE_CACHE.clear()
     _COVERAGE_CACHE[key] = out
     return out
+
+
+# ── item 172: each card's paid-through account, checked ──────────────────
+
+CARD_ACCOUNT_OK = "ok"
+CARD_ACCOUNT_NOT_IN_CHART = "not_in_chart"
+CARD_ACCOUNT_WRONG_TYPE = "wrong_type"
+CARD_ACCOUNT_INACTIVE = "inactive"
+CARD_ACCOUNT_MISSING = "no_account"
+CARD_ACCOUNT_NO_CHART = "no_chart"
+
+_CHARTS_CACHE: dict[tuple, tuple] = {}
+_DIGIT_GROUP = re.compile(r"\d{4}")
+
+
+def _org_charts() -> tuple[dict, dict] | None:
+    """`({org_id: ChartOfAccounts}, meta)` from the chart file the
+    provisioning names, cached on its mtime and size like `chart_coverage`.
+    None when nothing is provisioned or the file cannot be read."""
+    from .ingest.chart_of_accounts import ChartOfAccounts
+
+    path = os.environ.get(PROVISION_ENV)
+    try:
+        prov = load_provisioning(path) if path else None
+    except Exception:  # noqa: BLE001 - presentation, never a reason to 500
+        prov = None
+    if not prov:
+        return None
+    chart_path = str(prov.get("chart_path") or "")
+    try:
+        st = os.stat(chart_path)
+        key = (chart_path, st.st_mtime_ns, st.st_size)
+        if key not in _CHARTS_CACHE:
+            with open(chart_path, encoding="utf-8") as f:
+                raw = json.load(f)
+            charts = {
+                str(org): ChartOfAccounts.from_api((body or {}).get("accounts") or [])
+                for org, body in raw.items() if isinstance(body, dict)
+            }
+            _CHARTS_CACHE.clear()
+            _CHARTS_CACHE[key] = (charts, {
+                "chart_path": chart_path,
+                "chart_modified": datetime.fromtimestamp(st.st_mtime, timezone.utc)
+                .isoformat(timespec="seconds"),
+            })
+        return _CHARTS_CACHE[key]
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def _closest_card_account(text: str, hints: set[str], coas: list) -> str:
+    """The card account a person most likely meant: one whose name carries a
+    four-digit group the card is known by (its stored name, its digits),
+    else the nearest name. Only active `credit_card` accounts, never one
+    marked DO NOT USE. "" when the chart has none."""
+    from rapidfuzz import fuzz
+
+    from .zoho.accounts import PAID_THROUGH_TYPES
+
+    names = sorted({
+        a.name for coa in coas for a in coa.accounts
+        if a.account_type.strip().lower() in PAID_THROUGH_TYPES
+        and a.is_active and not a.is_do_not_use
+    })
+    if not names:
+        return ""
+    by_digits = [n for n in names if hints & set(_DIGIT_GROUP.findall(n))]
+    if len(by_digits) == 1:
+        return by_digits[0]
+    pool = by_digits or names
+    return max(pool, key=lambda n: (fuzz.token_set_ratio(text.lower(), n.lower()), n))
+
+
+def card_account_check(
+    name: str | None, entity: str | None, settings: dict | None,
+    *, digits=(), chart_verified: bool | None = None,
+) -> dict:
+    """Is a card's paid-through account a real card account in its
+    company's chart (item 172)? `{status, company_org, account_id,
+    closest, detail, chart_modified, chart_verified}`.
+
+    Looked up by NAME in the chart file (a card stores the account's name),
+    then held to item 184's standard by `zoho.accounts.resolve_paid_through`
+    itself: present, active, not DO NOT USE, a `credit_card` account. A
+    card with no company is looked up in every org's chart. `closest` names
+    the account the card most likely meant. When the chart file is not
+    verified current (`chart_coverage` not ok), a failing check says the
+    chart may be what is stale, since an account added in Zoho after the
+    pull reads as absent here."""
+    from .zoho.accounts import (
+        REASON_DO_NOT_USE,
+        REASON_INACTIVE,
+        REASON_PAID_THROUGH_NOT_A_CARD,
+        ResolvedAccount,
+        resolve_paid_through,
+    )
+
+    loaded = _org_charts()
+    if loaded is None:
+        return {"status": CARD_ACCOUNT_NO_CHART, "company_org": "", "account_id": "",
+                "closest": "", "detail": "no chart file is provisioned on the server",
+                "chart_modified": "", "chart_verified": False}
+    charts, meta = loaded
+    if chart_verified is None:
+        coverage = chart_coverage() or {}
+        chart_verified = bool(coverage.get("ok"))
+    text = str(name or "").strip()
+    org_id = org_id_for_entity(entity, _current_entity_orgs(settings)) if entity else None
+    orgs = [org_id] if org_id in charts else list(charts)
+    coas = [charts[o] for o in orgs]
+    hints = set(_DIGIT_GROUP.findall(text)) | {
+        str(d) for d in digits if _DIGIT_GROUP.fullmatch(str(d))}
+    out = {"company_org": org_id or "", "account_id": "", "closest": "",
+           "chart_modified": meta["chart_modified"], "chart_verified": chart_verified}
+    status, detail = CARD_ACCOUNT_OK, ""
+    found = next(((o, c.by_name(text)) for o, c in zip(orgs, coas) if text and c.by_name(text)),
+                 None)
+    if not text:
+        status, detail = CARD_ACCOUNT_MISSING, "the card names no paid-through account"
+    elif found is None:
+        status = CARD_ACCOUNT_NOT_IN_CHART
+        detail = f"no account named {text!r} in this company's chart"
+        elsewhere = [o for o, c in charts.items() if o not in orgs and c.by_name(text)]
+        if elsewhere:
+            detail += f"; that name is an account of org {elsewhere[0]}"
+    else:
+        found_org, acct = found
+        res = resolve_paid_through(acct.account_id, charts[found_org], expected_name=text)
+        out["account_id"] = acct.account_id or ""
+        out["company_org"] = out["company_org"] or found_org
+        if not isinstance(res, ResolvedAccount):
+            detail = res.detail
+            status = {
+                REASON_INACTIVE: CARD_ACCOUNT_INACTIVE,
+                REASON_DO_NOT_USE: CARD_ACCOUNT_INACTIVE,
+                REASON_PAID_THROUGH_NOT_A_CARD: CARD_ACCOUNT_WRONG_TYPE,
+            }.get(res.reason, CARD_ACCOUNT_NOT_IN_CHART)
+    if status != CARD_ACCOUNT_OK:
+        out["closest"] = _closest_card_account(text, hints, coas)
+        if not chart_verified and status != CARD_ACCOUNT_MISSING:
+            detail += (f". The chart file ({meta['chart_modified'][:10]}) is not "
+                       "verified current, so it may be the chart that is stale")
+    return {"status": status, "detail": detail, **out}
