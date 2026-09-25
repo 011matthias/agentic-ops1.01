@@ -11277,7 +11277,7 @@ GitHub). Every pick from now on prints as hers. The journal's receiptless rows
 are off on every live month (`zoho.export_receiptless_learned` unset), so that
 surface changes nothing she downloads today.
 
-### 217. A duplicate shows its controls twice, and the tool keeps the invoice instead of the receipt (notes #89 + #90, owner 2026-09-25 03:45 / 03:47 UTC) (BACKEND BUILT 2026-09-25; SPA prompt `docs/lovable-duplicate-controls-once-prompt.md` not pasted)
+### 217. A duplicate shows its controls twice, and the tool keeps the invoice instead of the receipt (notes #89 + #90, owner 2026-09-25 03:45 / 03:47 UTC) (SHIPPED 2026-09-25: backend PR #1429, Fly `e47f2a8d`; SPA prompt `docs/lovable-duplicate-controls-once-prompt.md` PUBLISHED and driven the same morning)
 
 **Owner**, on September's Pressmaster FZCO unit (row `0078`, the invoice),
 right after item 209's bound units were published: *"now you have so many
