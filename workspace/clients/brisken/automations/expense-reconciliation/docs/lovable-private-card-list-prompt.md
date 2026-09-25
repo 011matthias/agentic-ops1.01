@@ -1,6 +1,6 @@
-# Lovable prompt: the private-card list (item 207), a personal card confirmed private once
+# Lovable prompt: the private-card list (item 208), a personal card confirmed private once
 
-> **NOT PASTED.** Backend shipped 2026-09-25 (item 207): `settings.private_cards`,
+> **NOT PASTED.** Backend shipped 2026-09-25 (item 208): `settings.private_cards`,
 > `expenses[].private_source`, and `private_to` on the unknown-card strip's
 > assignments. Until this prompt is pasted nobody can add an entry, so the
 > backend alone moves nothing.

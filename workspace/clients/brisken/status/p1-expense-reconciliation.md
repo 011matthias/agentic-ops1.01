@@ -10,7 +10,7 @@ updated: 2026-09-25
 # Brisken / Expense Reconciliation (p1)
 
 **2026-09-25: the private-card list, a personal card confirmed private once**
-(backlog item 207, owner direction 2026-09-24 fusing cases 2 + 4 of the
+(backlog item 208, owner direction 2026-09-24 fusing cases 2 + 4 of the
 card-attribution map). `settings["private_cards"]` is its own key, read live
 by every month; a printed number on it makes the row private, reimbursed to
 the listed person, on every surface a row Criss confirmed reaches (report,
@@ -22,6 +22,18 @@ single row's confirm. Two ways off a row: undo stores an opt-out, a card pick
 wins. The list starts EMPTY and the tool never seeds it (nobody here knows
 who owns 3281), so the deploy moves no row; the SPA half
 (`docs/lovable-private-card-list-prompt.md`) is what lets anyone add one.
+
+**2026-09-25: July, August and September are on the Zoho accounts** (owner
+directive; backlog items 201 and 205, PR #1356, Fly `071b19d7`, snapshot
+`vs_V9ka1J80opbTj8gxvqQ59X5` taken before). Owner's ruling on Criss's 35 bucket
+picks: ignore them; they are retired and kept in each month's snapshot
+(`gl_conversion`). The engine categorized 283 of 505 receipt lines and 155 of 174
+receiptless charges. The rest wait for Criss: a receipt with no company yet (81
+lines), or a vendor the model would not place on its own (126 lines, mostly AI
+subscriptions on Corporate Services, which need Dirk's account per item 181). A
+hand-picked account now exports under its name (item 201). New leads: item 206
+(a card fix does not re-run the engine) and item 207 (the live export gate
+blanks one postable account).
 
 **2026-09-25: case 9 ("no payment info") is planned, not built** (backlog
 item 204, PR #1346). Live: 34 receipts print nothing, 12 only a Brisken card

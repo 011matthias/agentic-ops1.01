@@ -10260,7 +10260,7 @@ reported no coverage anywhere; the valid read is `card_key` / `statements` /
 `period_start` / `period_end` / `n_transactions`, and a receipts-only month
 returns `[]` by design.
 
-### 205. July, August and September switched to the Zoho accounts (owner directive 2026-09-25) (BUILT 2026-09-25, same PR as item 201)
+### 205. July, August and September switched to the Zoho accounts (owner directive 2026-09-25) (APPLIED 2026-09-25: PR #1356, Fly `071b19d7`, all three months switched live)
 
 Owner, 2026-09-25: "i need july, august and september recategorized with this
 new zoho logic". The three months were created on 2026-09-07, before the GL
@@ -10282,6 +10282,34 @@ failure (an exhausted key) or a month that changed mid-run writes nothing.
 Tests: `tests/test_gl_conversion.py` (7, through the route, the job, the grid,
 the CSV and a receiptless charge); six wiring points regress-checked.
 
+**Applied live 2026-09-25** (Fly `071b19d7`, after snapshot
+`vs_V9ka1J80opbTj8gxvqQ59X5`), one month at a time through the route:
+
+| Month | Lines categorized | No company yet | Model unsure | Other refusal | Receiptless charges categorized | Bucket picks retired | Model cost |
+|---|---|---|---|---|---|---|---|
+| July | 154 / 261 | 45 | 62 | 0 | 44 / 57 | 20 | USD 0.025 |
+| August | 91 / 133 | 1 | 26 | 15 (`org_not_curated`, one Brisken GmbH receipt) | 86 / 92 | 9 | USD 0.032 |
+| September | 38 / 111 | 35 | 38 | 0 | 25 / 25 | 6 | USD 0.020 |
+
+Read back after the switch: all three report `category_vocabulary: "gl"`;
+every category is a leaf code; "a category with no account" went from
+16 / 12 / 12 to 0 / 0 / 0. The CSV exports name a real Zoho account on 37 / 34 /
+25 rows; the refused rows read `(uncategorized - assign)` for Criss to pick
+(item 201 makes a hand pick export under its name). Cold SPA drive (EN): every
+month's pickers show "name · code", none shows a bucket or a `gl.` key, a picker
+lists the company's 68 (Corporate) or 64 (Cloud) accounts, and the only
+non-GET was the login. The drive's "retired Zoho picker" probe flagged two
+August controls; both are the Paid through select, so the probe was too broad,
+not the page.
+
+Most "model unsure" rows are AI vendors on Corporate Services (Anthropic,
+OpenRouter, Lovable, Wispr, Rize) and grocery receipts. Corporate Services
+offers several plausible homes for an AI subscription (`CorpServ | IT
+Expenses`, `IT: Cloud Subscriptions-Others`, the COGS infrastructure
+accounts), so the model answers 0.5 and the engine refuses rather than guess.
+That is item 181: those merchants need an account from Dirk in the registry,
+after which the registry tier decides them without the model.
+
 ### 206. Assigning a card that gives a row its company does not re-run the engine (found 2026-09-25, code-traced)
 
 The owner's 2026-09-24 decision ("assigning the company must categorize it")
@@ -10300,7 +10328,22 @@ card hint, the company itself), compare the row's resolved company before and
 after, and re-run the engine for the resolved one when it changed. Route-level
 test through the card fix.
 
-### 207. The private-card list: a personal card is confirmed private once, not every month (owner direction 2026-09-24, cases 2 + 4 of the card-attribution map) (SHIPPED 2026-09-25)
+### 207. The live export gate blanks an account Dirk marked postable (found 2026-09-25 on the switched September)
+
+September's SendGrid receipt (Cloud Services, USD 89.95) is filed by a
+learned rule to `E700030-30` "COGS - Other Infra and IT Costs for Cloud
+Business". Dirk's curated list marks it postable for Cloud Services, and the
+engine's name for it is right, but the grid's `books_as` and the CSV both read
+`(account unmapped - assign)`: the export gate refused it. Run locally against
+the chart file in `context/zoho-books-coa.json` (Sep 24), the same gate passes
+it (`CoaVerdict.OK`, id `2031056000001432081`). So the chart file the live
+gate reads on the Fly volume most likely predates the item 182 refresh or
+holds another id for it. One row of 209 across the three exports. Not read on
+production (a volume read was refused earlier in the session); the next step
+is a read of the live chart file's entry for that code, then a refresh of the
+file if it is stale.
+
+### 208. The private-card list: a personal card is confirmed private once, not every month (owner direction 2026-09-24, cases 2 + 4 of the card-attribution map) (SHIPPED 2026-09-25)
 
 Owner, 2026-09-24, verbatim: *"fuze items 2 and 4 together, fix a) by setting
 up private card memory/registry and b) any credit card types or numbers that
@@ -10374,7 +10417,7 @@ the private-card list". Tests: `tests/test_private_card_list.py`.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
-| 123 | Item 207: the private-card list. `settings["private_cards"]` (`{last4: {person, note, active}}`, its own key, read live, never snapshotted, collision-refused from both sides), one decision order through `cards.classify_payment_evidence` (Brisken number or type, then a listed number = private, then case 6's evidence = suggested, then wait), `expenses[].private_source`, the strip's `private_to` (month-only, or remembered into the list), the undo opt-out and the card-pick exit; every consumer of `private` / `reimburse_to` reads the resolution | Owner direction 2026-09-24 (cases 2 + 4): a personal card that recurs had to be confirmed private by hand every month; now it is listed once, in Settings or from the strip, and every receipt printing it in any month is private with the person to reimburse | 2026-09-25; `tests/test_private_card_list.py` (54, route-level; case 6's golden rows pass through the one entry point unchanged); two wiring points proven RED under `tools/regress_check.py` (the resolver's list branch, the strip's `private_to`); zero live rows move (the list is empty) |
+| 123 | Item 208: the private-card list. `settings["private_cards"]` (`{last4: {person, note, active}}`, its own key, read live, never snapshotted, collision-refused from both sides), one decision order through `cards.classify_payment_evidence` (Brisken number or type, then a listed number = private, then case 6's evidence = suggested, then wait), `expenses[].private_source`, the strip's `private_to` (month-only, or remembered into the list), the undo opt-out and the card-pick exit; every consumer of `private` / `reimburse_to` reads the resolution | Owner direction 2026-09-24 (cases 2 + 4): a personal card that recurs had to be confirmed private by hand every month; now it is listed once, in Settings or from the strip, and every receipt printing it in any month is private with the person to reimburse | 2026-09-25; `tests/test_private_card_list.py` (54, route-level; case 6's golden rows pass through the one entry point unchanged); two wiring points proven RED under `tools/regress_check.py` (the resolver's list branch, the strip's `private_to`); zero live rows move (the list is empty) |
 | 122 | Items 196/197 leftovers from the 2026-09-24 LLM-key outage: an `ingested` intake-log row no longer presents the `error` of a failed first try, and a statement attach whose job fails before its commit removes the file it saved (`discard_unrecorded_upload`), never a file `statements[]` names | A surface showing `error` showed a 429 beside "Added" on the one recovered mail, and a dead attach kept its file's name, so the operator's retry was stored as `20260804-statements-9693--2.pdf` | 2026-09-25; `tests/test_attach_leftovers_196_197.py` (6: 3 red on origin/main, 3 controls: a held mail keeps its error, the archive keeps the record, a failure after the commit keeps the file); three wiring points proven RED under `tools/regress_check.py`; suite 3454 passed / 2 skipped |
 | 121 | Item 195: a statement PDF keeps its company through a re-read. A PDF entry records the account it was filed under (`statement_entry_account`); a re-read never lends a PDF `config.statement`'s account; a PDF filed under no account, or recorded before this, takes the registry entity every card it prints resolves to, blank on two companies or an unnamed card (`pdf_entity_from_printed_cards`), at the attach and the re-read alike. `statement_period_overlap` no longer calls two unrecorded accounts "the same account" (leftover 3 of items 196/197) | A PDF charge prints no `card_last4`, so item 59's match-time stamp never repairs it: its company is whatever the upload says. Both live August PDF entries recorded `account_id: ""` although the SPA sent a card key, so a re-read would have put the 1176 file's 3 charges and the 9693 file's 21 under the company "card", or under Corporate Services when the workbook was the last upload, and every pair on them would have left scope. Code-traced, never triggered live (nobody re-reads a month holding a PDF) | 2026-09-25; `tests/test_reread_pdf_entity_item_195.py` (9: 8 red on origin/main, 1 control green); four wiring points proven RED under `tools/regress_check.py` (the marker branch, the no-borrow fallback, the entry writer, the advisory guard); no live row moves on the deploy |
 | 120 | Item 200's side finding: `learned` leaves `service._CARD_OBSERVATION_SOURCES`, so the sign-off card learner no longer counts a remembered card as an observation of where a merchant's spend lands | A remembered card could confirm itself into `cards_seen` and write a learned `card_key` with no new evidence, against the 2026-09-24 ruling that only corrections may be memorized. The leak reaches months ingested after a correction (the card is stamped at ingest, item 173), not ones filled at read time (item 169) | PR TBD, 2026-09-25; `tests/test_remembered_card_read_time_item_169.py::test_signing_off_a_remembered_card_teaches_the_registry_nothing` (regress RED) |

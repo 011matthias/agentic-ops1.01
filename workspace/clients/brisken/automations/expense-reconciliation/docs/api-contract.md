@@ -1626,7 +1626,7 @@ silent at read time and 400 `card_alias_generic` on the next Settings save;
 live on 2026-09-24 the aliases are Corp, Cloud, Personal and Consulting, so
 none is.
 
-**The private-card list shipped the next day** (2026-09-25, item 207, next
+**The private-card list shipped the next day** (2026-09-25, item 208, next
 section): `cards.classify_payment_evidence` folds this rule in as step 4 of
 one decision order (a number on the list is private outright, step 3, and
 everything this section leaves unmatched waits), and
@@ -1636,7 +1636,7 @@ Read-time: every month moves on deploy with no re-match. Pinned in
 `tests/test_private_needs_evidence.py` (the classification table is the
 contract) and route-level through the batch payload and the cards route.
 
-## Whose money paid: the decision order, and the private-card list (added 2026-09-25, item 207)
+## Whose money paid: the decision order, and the private-card list (added 2026-09-25, item 208)
 
 Owner direction 2026-09-24, on cases 2 and 4 of the card-attribution map:
 "fuze items 2 and 4 together, fix a) by setting up private card
