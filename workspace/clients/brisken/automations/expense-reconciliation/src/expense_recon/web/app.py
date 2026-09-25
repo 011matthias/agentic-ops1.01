@@ -141,6 +141,7 @@ from .service import (
     compare_runs,
     batch_type,
     claim_trip_batch_slot,
+    clear_attach_pending,
     create_expense_batch,
     create_intake,
     delete_trip_entity,
@@ -150,6 +151,7 @@ from .service import (
     execute_statement_attach,
     find_trip_batch,
     has_statement,
+    mark_attach_pending,
     REMATCH_LOG_KEY,
     rematch_pending,
     is_trip_batch,
@@ -209,6 +211,7 @@ from .service import (  # item 163
 from .service import confirm_expense_category  # note #62
 from .service import private_opt_out_needed  # private-card list, 2026-09-24
 from .service import set_charge_category  # item 109
+from .service import sweep_interrupted_attaches  # item 215
 from .service import attach_expense_card_tabs, attach_run_card_tabs  # item 138
 from .service import TURN_DECIDE, confirm_matched_pairs  # item 101
 from .month_readiness import (  # items 99 + 100
@@ -1007,9 +1010,13 @@ def _run_attach_statement_job(
             # job's stage-free error-less row via the stage field. Both are
             # about a month that reconciled successfully and still needs a
             # human look, so they ride the same channel; `statement_advisory`
-            # is the append-specific one (PR 2b-2b-2).
+            # is the append-specific one (PR 2b-2b-2). Item 215's note (what
+            # the month left out of the file) rides the same channel, so the
+            # SPA already shows it, and the numbers ride `result`.
             warnings = [
-                result[k] for k in ("entity_mismatch", "statement_advisory")
+                result[k] for k in (
+                    "entity_mismatch", "statement_advisory", "month_filter_note",
+                )
                 if result.get(k)
             ]
             if warnings:
@@ -1017,12 +1024,30 @@ def _run_attach_statement_job(
                     job_id, f"warning: {'; '.join(warnings)}", _now_iso()
                 )
             store.set_job_status(
-                job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso()
+                job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso(),
+                result=(
+                    json.dumps({"month_filter": result["month_filter"]})
+                    if result.get("month_filter") else None
+                ),
             )
     except Exception as exc:  # noqa: BLE001 - surface any failure to the poller
         with RunStore(db_path) as store:
             store.set_job_status(
-                job_id, JOB_ERROR, error=str(exc), updated_at=_now_iso()
+                job_id, JOB_ERROR, error=str(exc), updated_at=_now_iso(),
+                # Item 215: a file the month kept nothing of says why in
+                # numbers too, not only in the sentence.
+                result=(
+                    json.dumps({
+                        "code": exc.code, **{
+                            k: exc.fields[k] for k in (
+                                "month", "n_file_rows", "outside_month",
+                                "already_held",
+                            ) if k in exc.fields
+                        },
+                    })
+                    if getattr(exc, "code", "") == "statement_outside_month"
+                    else None
+                ),
             )
             try:
                 # Leftover of item 196: a dead attach took its file's name
@@ -1030,6 +1055,14 @@ def _run_attach_statement_job(
                 discard_unrecorded_upload(store.get_run(run_id), stmt_name)
             except Exception:  # noqa: BLE001 - cleanup is best-effort
                 log.warning("could not remove the failed upload %s", stmt_name)
+    finally:
+        # The job ended on its own, so its upload is either recorded or
+        # already discarded; only a restart leaves the marker for boot.
+        try:
+            with RunStore(db_path) as store:
+                clear_attach_pending(store.get_run(run_id), job_id)
+        except Exception:  # noqa: BLE001 - cleanup is best-effort
+            log.warning("could not clear the attach marker %s", job_id)
 
 
 # Item 114: a drop's files are on the volume (/data/drops/<job>) before its
@@ -1263,6 +1296,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 _store.set_intake_status(
                     _intake_id, INTAKE_RECEIVED, updated_at=_now_iso()
                 )
+        # Item 215 note: the uploads of statement attaches a restart cut off.
+        try:
+            for _name in sweep_interrupted_attaches(_store):
+                log.info("removed the upload of an interrupted attach: %s", _name)
+        except Exception:  # noqa: BLE001 - a sweep never blocks startup
+            log.warning("could not sweep interrupted statement attaches")
     # Mail-intake companion sweep: an inbound archive whose ingest job the
     # sweep above just marked interrupted flips back to a replayable held
     # status, so a Fly stop mid-OCR never leaves mail stranded as pending.
@@ -5549,6 +5588,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         job_id = uuid.uuid4().hex[:12]
         with open_store() as store:
             store.create_job(job_id, None, _now_iso())
+        mark_attach_pending(run, job_id, stmt_name)
         background.add_task(
             _run_attach_statement_job, app.state.db_path, job_id, run_id,
             stmt_name, column_map, form, app.state.learning_db_path,

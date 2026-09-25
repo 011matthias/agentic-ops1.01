@@ -11760,8 +11760,18 @@ def build_statement_entry(
     card_currency: str = "",
     statement_id: str = "",
     attached_month: str = "",
+    month_filter: dict | None = None,
 ) -> dict:
     """One `statements[]` row: what this upload was and what it added.
+
+    `month_filter` (item 215) is what the attach kept of the file for its
+    month and what it left out (`keep_month_charges`). Parallel and ABSENT
+    on every entry attached before it, on a file that prints no post date,
+    and on a label naming no month; those files still fold whole. Where it
+    is present it replaces `month_suggestion`: every row the month kept is
+    the month's own, so there is nothing left to suggest, and a suggestion
+    read off transaction dates would contradict a filter that decided on
+    post dates.
 
     `month_suggestion` (item 204, case 9 step 1): the month holding most of
     this file's dated charges, in the receipt side's `period_suggestion`
@@ -11821,10 +11831,13 @@ def build_statement_entry(
         **({"card_currency": currency} if currency else {}),
         # What the bytes are (note item T2). Absent when not computed.
         **({"statement_id": statement_id} if statement_id else {}),
+        # What the month kept of the file and what it left out (item 215).
+        **({MONTH_FILTER_KEY: dict(month_filter)} if month_filter else {}),
         # Which month this file's charges belong to (item 204). Absent when
-        # there is no clear month.
+        # there is no clear month, and when the month filter decided.
         **({"month_suggestion": _suggested} if (
-            _suggested := _c9.month_suggestion(transactions, attached_month)
+            not month_filter
+            and (_suggested := _c9.month_suggestion(transactions, attached_month))
         ) else {}),
         # This file's own id-to-row map. Underscored and popped at commit
         # into `statement_anchors`, so it never reaches the SPA: it is a
@@ -11838,6 +11851,211 @@ def build_statement_entry(
         # no upload to name.
         "_origins": upload_origins(transactions),
     }
+
+
+# ── Item 215: an attach keeps only the month's own charges ──────────────
+# Owner decision 2026-09-25, asked by example: Criss uploads her lifetime
+# card sheets from SharePoint into a month herself (9693 since 2024, 724
+# rows; 1176, 154; the 2838 family, 2,729), and the month keeps only its own
+# charges and says how many it left out. Before this the attach folded every
+# row of the file, and item 204's `month_suggestion` only advised, so one
+# weekly upload would have copied two years of charges into one month.
+
+MONTH_FILTER_KEY = "month_filter"
+
+
+def month_calendar_range(run: RunRow) -> tuple[date, date] | None:
+    """First and last day of the calendar month a company month's label
+    names. None for a trip, or a label naming no month: there is no month to
+    keep, so those files still fold whole."""
+    if is_trip_batch(run):
+        return None
+    ym = month_from_label(run.label)
+    if ym is None:
+        return None
+    year, month = ym
+    nxt = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+    return date(year, month, 1), nxt - timedelta(days=1)
+
+
+def prints_post_dates(transactions: list) -> bool:
+    """Whether an upload is one the month filter applies to: a file that
+    prints post dates. Every lifetime sheet does (a Chase activity export),
+    and so do Criss's monthly workbooks, which it keeps whole because every
+    row posts in its month. A Chase cycle PDF prints none, and a cycle spans
+    two calendar months BY DESIGN (August's 9693 PDF runs Jul 3 to Aug 4);
+    cut by transaction date, its July rows would leave August and land
+    nowhere. Such a file folds whole, as before, and item 204's
+    `month_suggestion` still says when it mostly belongs to another month."""
+    return any(getattr(t, "posting_date", None) for t in transactions)
+
+
+def _charge_across_readings(tx, cards: dict) -> tuple:
+    """One charge's identity across two READINGS of it.
+
+    `transaction_id` cannot answer this: it includes the account id and the
+    vendor text, and a Chase cycle PDF (account `9693`, "MICROSOFT#G176901940
+    MICROSOFT.COM WA") and the SharePoint export (account `card-9693`,
+    "MICROSOFT#G176901940") print the same charge with both different. The
+    card is the coverage identity (the one the matcher's scoping and the card
+    panel use), so both readings land on `card-9693`; the transaction date,
+    amount and currency are what both files print alike."""
+    from ..ingest._common import canonical_amount
+
+    identity = _charge_card_identity(tx, cards)
+    return (
+        identity.key or f"account:{(tx.account_id or '').strip()}",
+        tx.transaction_date,
+        canonical_amount(tx.amount),
+        (tx.transaction_currency or "").strip().upper(),
+    )
+
+
+def neighbour_month_charges(store: RunStore, run: RunRow) -> list[tuple[str, list]]:
+    """`[("YYYY-MM", charges)]` for the company months either side of `run`
+    (the one definition of neighbour, `adjacent_months`), previous first. A
+    neighbour whose snapshot cannot be read lends nothing."""
+    ym = month_from_label(run.label)
+    if is_trip_batch(run) or ym is None:
+        return []
+    wanted = adjacent_months(ym)
+    found: list[tuple[tuple[int, int], str, list]] = []
+    for other in store.list_runs():
+        if other.run_id == run.run_id:
+            continue
+        if (other.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+            continue
+        if is_trip_batch(other) or not has_statement(other):
+            continue
+        oym = month_from_label(other.label)
+        if oym not in wanted:
+            continue
+        try:
+            charges = month_transactions(other)
+        except Exception:  # noqa: BLE001 - an unreadable neighbour holds nothing
+            continue
+        found.append((oym, str(other.run_id), charges))
+    found.sort(key=lambda f: (f[0], f[1]))
+    return [(f"{y:04d}-{m:02d}", charges) for (y, m), _rid, charges in found]
+
+
+def keep_month_charges(
+    transactions: list,
+    *,
+    month_range: tuple[date, date],
+    cards: dict,
+    held_here: list,
+    neighbours: list[tuple[str, list]],
+) -> tuple[list, dict]:
+    """`(kept, month_filter)`: the rows of one upload that are this month's
+    own, and the record of what was left out.
+
+    A row is the month's own when its POST date falls in the calendar month
+    (measured 2026-09-25: Criss's July and August workbooks and the April
+    CSV split by post date exactly, 112/112 and 111/111). A row whose post
+    date cell is empty falls back to its own transaction date. Only a file
+    that prints post dates is filtered at all (`prints_post_dates`).
+
+    An in-month row is still left out when the month (from another file) or
+    a neighbouring month already holds the same charge under a different
+    reading (`_charge_across_readings`): the September 9693 cycle PDF and a
+    SharePoint export both print the Sep 1-4 rows, and before this the
+    second reading folded in beside the first because their ids differ.
+    Counted as a multiset, so two identical coffees are two charges and a
+    neighbour holding one of them leaves the other in. A row the month holds
+    under THIS reading (same id) is not left out: it is the fold's ordinary
+    re-supply, which `n_new` already reports.
+
+    `month_filter` = {month, n_file_rows, n_kept, n_left_out, outside_month:
+    {YYYY-MM: n}, already_held: {YYYY-MM: n}}. `outside_month` is keyed by
+    the month a row belongs to, `already_held` by the month that holds it
+    (this month's own key when another of its files does).
+    """
+    lo, hi = month_range
+    month_key = f"{lo.year:04d}-{lo.month:02d}"
+    here_ids = {t.transaction_id for t in held_here}
+    holders: dict[tuple, list[str]] = {}
+    for t in held_here:
+        holders.setdefault(_charge_across_readings(t, cards), []).append(month_key)
+    for ym, charges in neighbours:
+        for t in charges:
+            holders.setdefault(_charge_across_readings(t, cards), []).append(ym)
+    # A row the month already holds under this very reading uses up its own
+    # copy first, so only a copy under ANOTHER reading can leave a row out.
+    for t in transactions:
+        if t.transaction_id in here_ids:
+            held = holders.get(_charge_across_readings(t, cards)) or []
+            if month_key in held:
+                held.remove(month_key)
+
+    kept: list = []
+    outside: dict[str, int] = {}
+    already: dict[str, int] = {}
+    for t in transactions:
+        when = t.posting_date or t.transaction_date
+        if when is None or not (lo <= when <= hi):
+            ym = f"{when.year:04d}-{when.month:02d}" if when else "undated"
+            outside[ym] = outside.get(ym, 0) + 1
+            continue
+        if t.transaction_id not in here_ids:
+            held = holders.get(_charge_across_readings(t, cards))
+            if held:
+                who = held.pop(0)
+                already[who] = already.get(who, 0) + 1
+                continue
+        kept.append(t)
+    n_left_out = sum(outside.values()) + sum(already.values())
+    return kept, {
+        "month": month_key,
+        "n_file_rows": len(transactions),
+        "n_kept": len(kept),
+        "n_left_out": n_left_out,
+        "outside_month": dict(sorted(outside.items())),
+        "already_held": dict(sorted(already.items())),
+    }
+
+
+def month_filter_note(month_filter: dict | None) -> str | None:
+    """One sentence for the attach reply when the month left rows out, or
+    None when it kept the whole file."""
+    from .intake_mail import _month_human
+
+    if not month_filter or not month_filter.get("n_left_out"):
+        return None
+    parts = []
+    outside = month_filter.get("outside_month") or {}
+    if outside:
+        n = sum(outside.values())
+        months = [m for m in outside if m != "undated"]
+        span = (
+            _month_human(months[0]) if len(months) == 1
+            else f"{_month_human(months[0])} to {_month_human(months[-1])}"
+        ) if months else "no month"
+        parts.append(f"{n} belong to other months ({span})")
+    for ym, n in (month_filter.get("already_held") or {}).items():
+        parts.append(f"{n} are already in {_month_human(ym)}")
+    return (
+        f"Kept {month_filter['n_kept']} of this file's "
+        f"{month_filter['n_file_rows']} charges for "
+        f"{_month_human(month_filter['month'])}: " + "; ".join(parts) + "."
+    )
+
+
+def statement_outside_month(month_filter: dict, file_name: str) -> RunInputError:
+    """The refusal for an upload of which the month keeps nothing: the month
+    stays exactly as it was, with no empty entry, the same as item 51's
+    unreadable file."""
+    return RunInputError(
+        f"None of the {month_filter['n_file_rows']} charges in {file_name} "
+        "belong to this month. "
+        + (month_filter_note(month_filter) or "").split(": ", 1)[-1],
+        code="statement_outside_month",
+        file=file_name,
+        month=month_filter["month"],
+        n_file_rows=month_filter["n_file_rows"],
+        outside_month=month_filter["outside_month"],
+        already_held=month_filter["already_held"],
+    )
 
 
 def _periods_overlap(a: dict, b: dict) -> bool:
@@ -13851,6 +14069,56 @@ def discard_unrecorded_upload(run: RunRow | None, stmt_name: str) -> bool:
     return True
 
 
+# Item 215 note: a restart kills an attach job's thread before its failure
+# handler can run `discard_unrecorded_upload`, so the upload stayed (April's
+# `Chase9693_2026-04_posted_0401-0430_from-SharePoint.xlsx`, whose retry was
+# stored as `-2`). The work dir cannot say which of its files are uploads
+# (`report.xlsx`, `zoho_journal.csv`, `reconciled.csv`, `expenses.csv` share
+# the suffixes), so each attach names its upload in a marker while it runs,
+# and the boot pass discards the upload of every marker a restart left.
+ATTACH_PENDING_DIR = ".attach-pending"
+
+
+def mark_attach_pending(run: RunRow, job_id: str, stmt_name: str) -> None:
+    folder = Path(run.work_dir) / ATTACH_PENDING_DIR
+    folder.mkdir(exist_ok=True)
+    (folder / f"{job_id}.json").write_text(
+        json.dumps({"file": stmt_name}), encoding="utf-8"
+    )
+
+
+def clear_attach_pending(run: RunRow | None, job_id: str) -> None:
+    if run is None:
+        return
+    try:
+        (Path(run.work_dir) / ATTACH_PENDING_DIR / f"{job_id}.json").unlink()
+    except OSError:
+        pass
+
+
+def sweep_interrupted_attaches(store: RunStore) -> list[str]:
+    """At boot: discard the upload of every attach a restart cut off, when
+    the month never recorded it, and drop the markers. Returns the files
+    removed. Nothing is running at boot, so every marker is orphaned."""
+    removed: list[str] = []
+    for run in store.list_runs():
+        folder = Path(run.work_dir) / ATTACH_PENDING_DIR
+        if not folder.is_dir():
+            continue
+        for marker in sorted(folder.glob("*.json")):
+            try:
+                name = str(json.loads(marker.read_text(encoding="utf-8"))["file"])
+                if discard_unrecorded_upload(run, name):
+                    removed.append(name)
+            except (OSError, ValueError, KeyError, TypeError):
+                pass
+            try:
+                marker.unlink()
+            except OSError:
+                pass
+    return removed
+
+
 def execute_statement_attach(
     store: RunStore,
     run: RunRow,
@@ -13915,9 +14183,23 @@ def execute_statement_attach(
             file=upload_name or stmt_name,
             sheet=(new_cfg.get("statement") or {}).get("sheet_name") or "",
         )
-    merged = merge_transactions(month_transactions(run), transactions)
+    existing = month_transactions(run)
+    # Item 215: a company month keeps only its own charges from the file.
+    month_filter = None
+    month_range = month_calendar_range(run)
+    if month_range is not None and prints_post_dates(transactions):
+        transactions, month_filter = keep_month_charges(
+            transactions,
+            month_range=month_range,
+            cards=_batch_cards(new_cfg),
+            held_here=existing,
+            neighbours=neighbour_month_charges(store, run),
+        )
+        if not transactions:
+            raise statement_outside_month(month_filter, upload_name or stmt_name)
+    merged = merge_transactions(existing, transactions)
 
-    return rematch_month(
+    result = rematch_month(
         store,
         run,
         transactions=merged.transactions,
@@ -13946,9 +14228,14 @@ def execute_statement_attach(
             statement_id=statement_content_id(Path(run.work_dir) / stmt_name),
             # Item 204: the month it is being attached to, for its advisory.
             attached_month=_c9.attached_month(run),
+            month_filter=month_filter,
         ),
         trigger="statement",
     )
+    if month_filter is not None:
+        result["month_filter"] = month_filter
+        result["month_filter_note"] = month_filter_note(month_filter)
+    return result
 
 
 def pdf_entity_from_printed_cards(transactions: list, settings: dict | None) -> str:
@@ -14122,6 +14409,12 @@ def reread_statements(
     rebuilt: list[dict] = []
     new_cfg: dict = cfg
     entity = ""
+    # Item 215: an entry attached under the month filter is re-read under it,
+    # against the files before it and today's neighbours, as its attach was.
+    # An entry without the key folds whole, as it did when it was attached
+    # (the 13 D3 gap-fill files are single-month already).
+    month_range = month_calendar_range(run)
+    neighbours: list[tuple[str, list]] | None = None
     for entry in entries:
         stored = str(entry.get("file") or "")
         stmt_path = work_dir / stored
@@ -14184,6 +14477,17 @@ def reread_statements(
             settings=settings,
             on_stage=on_stage,
         )
+        month_filter = None
+        if entry.get(MONTH_FILTER_KEY) and month_range is not None:
+            if neighbours is None:
+                neighbours = neighbour_month_charges(store, run)
+            txs, month_filter = keep_month_charges(
+                txs,
+                month_range=month_range,
+                cards=_batch_cards(new_cfg),
+                held_here=transactions,
+                neighbours=neighbours,
+            )
         if not txs and (entry.get("n_rows") or 0):
             # Item 51 through the other door, and worse here: a re-read
             # REPLACES the charge set, so a file that used to hold rows and
@@ -14223,6 +14527,7 @@ def reread_statements(
                 statement_id=statement_content_id(stmt_path),
                 # Item 204: the month it is being attached to.
                 attached_month=_c9.attached_month(run),
+                month_filter=month_filter,
             )
         )
 
