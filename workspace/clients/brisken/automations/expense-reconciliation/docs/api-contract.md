@@ -6839,7 +6839,7 @@ the vendor NAME (item 200, not built) it gave the wrong person 3 times in 21.
 | Part | Rule |
 |---|---|
 | Key | `invoice_number`, else the receipt's reference (`expenses[].reference`), matching `^[A-Z0-9]{8}[- ]?\d{4}$` with a prefix that is not all digits. A Stripe receipt number (`2642-9215-3921`) is never a key; a POS or grocery receipt has none |
-| Purchase | the prefix plus the counter, so an invoice and its receipt are ONE purchase, whichever month each landed in; a decided copy (`counts_in_total: false`) never counts |
+| Purchase | the prefix plus the counter, so an invoice and its receipt are ONE purchase, whichever month each landed in. A decided copy (`counts_in_total: false`) is never a purchase of its own, but what it prints is its purchase's evidence (the grid's twin inheritance applies first): live, the Stripe receipt that prints the card is the decided copy |
 | Counts | a printed Brisken card number (`card_source: hint`, digits of the card, not a hint word the batch assigned, not a two-digit ending), the settling charge (`settled_charge`), a reviewer's pick (`override`) |
 | Only contradicts | a two-digit ending (`card_ending`), a hint word assigned to a card |
 | Never evidence | `learned`, `merchant`, `account` itself, a confirmed private row, a row settled outside the card system |
@@ -6885,8 +6885,8 @@ teaches `cards_seen` or a learned `card_key`.
 carries an account key reaches the link, and then the store is read once for
 the whole request, however many months and surfaces it resolves. Outside a
 request (a CLI caller, a unit test calling the service directly) the link is
-silent. A batch whose evidence cannot be read is skipped; an index that cannot
-be built leaves the link silent, never the page failing.
+silent. A batch whose evidence cannot be read empties the whole index (partial
+evidence can hide a contradicting card); the link goes silent, never the page.
 
 Tests: `tests/test_account_card_c9.py` (16; 14 route-level through
 `GET /api/expense-batches/{id}`, the CSV, `/api/cards/status` and

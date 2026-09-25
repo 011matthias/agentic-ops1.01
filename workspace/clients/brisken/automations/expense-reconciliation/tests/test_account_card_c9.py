@@ -255,6 +255,28 @@ def test_two_copies_of_one_purchase_count_once(client, monkeypatch):
     _blank(_only(client, may))
 
 
+def test_a_card_printed_only_on_the_decided_copy_still_counts(client, monkeypatch):
+    """The live shape of v237's wrong card (2026-09-25): a Stripe invoice
+    prints no card, its receipt prints 3645 and is ruled the copy, so the
+    card sits only on the document that does not count. That purchase still
+    names 3645, which contradicts July's 3876, so May's invoice stays blank.
+    Reading only the kept copies lent May 3876."""
+    _july_on_3876(client, monkeypatch)
+    september = _month(
+        client, monkeypatch, "September 2026",
+        _ff("HQXED19R-0009", day="2026-09-10", reference="HQXED19R-0009"),
+        _ff("HQXED19R-0009", hint="Visa ...3645", day="2026-09-10",
+            reference="HQXED19R-0009"),
+    )
+    rows = _rows(client, september)
+    # Not vacuous: one copy is set aside, and the card is on a copy.
+    assert sorted(str(e.get("counts_in_total")) for e in rows) == ["False", "None"], rows
+    may = _month(client, monkeypatch, "May 2026",
+                 _ff("HQXED19R-0004", day="2026-05-12"))
+
+    _blank(_only(client, may))
+
+
 def test_two_digit_endings_never_count(client, monkeypatch):
     """"last two digits: 76" names card 3876 on the row (item 199) but is
     weaker than a number; it may not establish an account's card."""
@@ -326,6 +348,35 @@ class _Doc:
     def __init__(self, invoice, reference=None):
         self.invoice_number = invoice
         self.detected_reference = reference
+
+
+def test_an_unreadable_batch_empties_the_whole_index(monkeypatch):
+    """Evidence missing from one month can hide the card that contradicts
+    another's, so a partial index is never used: the link goes silent."""
+    from types import SimpleNamespace
+
+    from expense_recon import billing_account
+    from expense_recon.web.service import MODE_EXPENSE_GENERATION
+
+    runs = [SimpleNamespace(run_id=rid, label=label,
+                            config={"mode": MODE_EXPENSE_GENERATION})
+            for rid, label in (("jul", "July 2026"), ("sep", "September 2026"))]
+    store = SimpleNamespace(
+        list_runs=lambda: runs,
+        get_expense_field_overrides=lambda rid: {},
+        get_expense_edits=lambda rid: [],
+        get_decisions=lambda rid: {},
+        get_duplicate_resolutions=lambda rid: {},
+    )
+
+    def evidence(run, **_kw):
+        if run.run_id == "sep":
+            raise ValueError("unreadable snapshot")
+        return [("HQXED19R", "HQXED19R0007", "3876", True),
+                ("HQXED19R", "HQXED19R0008", "3876", True)]
+
+    monkeypatch.setattr(billing_account, "month_evidence", evidence)
+    assert billing_account.build_account_index(store) == {}
 
 
 def test_the_judged_purchase_is_left_out_of_its_own_evidence():

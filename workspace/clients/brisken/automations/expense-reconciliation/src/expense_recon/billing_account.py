@@ -162,17 +162,29 @@ def month_evidence(
 ) -> list[tuple[str, str, str, bool]]:
     """`[(account, purchase, card key, counts)]` for one batch.
 
-    The rows are the grid's own receipts with the reviewer's edits applied,
-    resolved by the card chain WITHOUT any memory (no remembered card, no
-    merchant map, no account index), with the charge that settles each one
-    and the month's settled-outside dispositions, exactly as the grid reads
-    them. A decided copy is left out, as every total leaves it out."""
+    The rows are the grid's own receipts with the reviewer's edits applied
+    and the grid's twin inheritance (`inherit_card_from_copies`), resolved
+    by the card chain WITHOUT any memory (no remembered card, no merchant
+    map, no account index), with the charge that settles each one and the
+    month's settled-outside dispositions, exactly as the grid reads them.
+
+    A decided copy is not a purchase of its own, but what it prints is the
+    purchase's evidence: live, a Stripe invoice is the kept document and
+    its receipt, the decided copy, is the one that prints the card
+    (September's `HMVWDWIL-0033` / `Receipt-2253-2007-8117`). So every copy
+    reports under the purchase of the document it repeats, and the purchase
+    is keyed by whichever member carries an account number. Dropping the
+    copies instead left only August's three 2838 picks for `HMVWDWIL` and
+    lent May's Lovable invoice a card the account's other cards contradict
+    (v237, 2026-09-25)."""
     from .web.service import (
         _batch_card_hints,
         apply_expense_edits,
         baseline_receipts,
         decided_copies,
+        duplicate_decisions,
         export_settled_cards,
+        inherit_card_from_copies,
         resolve_batch_row_cards,
         settled_outside_map,
     )
@@ -184,21 +196,39 @@ def month_evidence(
         baseline_receipts(run), field_overrides, edits,
         default_entity=default_entity,
     )
-    keyed = [(r, account_key(r)) for r in receipts]
-    if not any(k for _r, k in keyed):
+    if not any(account_key(r) for r in receipts):
         return []
+    hints_map = _batch_card_hints(run.config)
+    receipts = inherit_card_from_copies(
+        receipts, resolutions, hints_map,
+        duplicate_decisions(run, receipts, resolutions),
+    )
     copies = decided_copies(
         run, receipts, resolutions, charge_decisions=decisions,
     )
+    # document -> the document it repeats (itself when it is no copy), and
+    # each such group's account: the key any member carries, none when two
+    # members name different accounts.
+    root_of = {r.document_id: copies.get(r.document_id, r.document_id) for r in receipts}
+    group_key: dict[str, tuple[str, str] | None] = {}
+    for r in receipts:
+        key = account_key(r)
+        if key is None:
+            continue
+        root = root_of[r.document_id]
+        if root not in group_key:
+            group_key[root] = key
+        elif group_key[root] is not None and group_key[root] != key:
+            group_key[root] = None
     res_by_doc = resolve_batch_row_cards(
         receipts, run.config, field_overrides,
         settled_cards=export_settled_cards(run, decisions),
         settled_outside=settled_outside_map(run.snapshot or {}),
     )
-    hints_map = _batch_card_hints(run.config)
     out: list[tuple[str, str, str, bool]] = []
-    for r, key in keyed:
-        if key is None or r.document_id in copies:
+    for r in receipts:
+        key = group_key.get(root_of[r.document_id])
+        if key is None:
             continue
         evidence = row_evidence(res_by_doc.get(r.document_id) or {}, hints_map)
         if evidence is not None:
@@ -208,8 +238,12 @@ def month_evidence(
 
 def build_account_index(store: "RunStore") -> AccountIndex:
     """Every billing account's evidence across the store's expense batches,
-    months and trips alike, test fixtures left out. A batch whose snapshot
-    cannot be read is skipped: fewer months of evidence, never a failure."""
+    months and trips alike, test fixtures left out.
+
+    A batch whose evidence cannot be read empties the WHOLE index: evidence
+    missing from one month can hide the card that contradicts another
+    month's, and a partial index decides exactly where it should not (a
+    blank beats a wrong card, item 173). The link is silent until it reads."""
     from .web.service import MODE_EXPENSE_GENERATION
 
     index: AccountIndex = {}
@@ -226,10 +260,10 @@ def build_account_index(store: "RunStore") -> AccountIndex:
                 decisions=store.get_decisions(run.run_id),
                 resolutions=store.get_duplicate_resolutions(run.run_id),
             )
-        except Exception:  # noqa: BLE001 - one unreadable batch is not fatal
-            log.warning("billing-account evidence skipped for %s", run.run_id,
+        except Exception:  # noqa: BLE001 - the link goes silent, never the page
+            log.warning("billing-account index empty: %s unreadable", run.run_id,
                         exc_info=True)
-            continue
+            return {}
         for account, purchase, key, counts in rows:
             _add(index, account, purchase, key, counts)
     return index
