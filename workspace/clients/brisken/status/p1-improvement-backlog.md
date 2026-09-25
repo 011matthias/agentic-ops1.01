@@ -11943,6 +11943,47 @@ protocol), and the E A Locações pair is nominated for the first time; August
    the ladder, commits group membership + kept order, re-matches. Build and
    test it; run it on nothing.
 
+### 221. The posting account reads the merchant list as it is now (front 3 of the 2026-09-25 parallel round; map `.scratch/recon-matching-gaps-2026-09-25.md`)
+
+A receipt's merchant and its registry account were stamped at ingest and never
+re-read, so the owner's OpenAI and Anthropic accounts (item 219) reached no row
+already in July to September: 64 receipts and 52 charges resolved to a listed
+merchant but showed the raw spelling or the model's guess, while the scorer
+said the per-company map answers 33 rows and agrees with Criss on all 33.
+
+**Steps 1 to 5 SHIPPED** (PR number in the Shipped table). (1) The grid, the
+run payload and the reviewer files read the list live: `vendor.display` /
+`source` (`vendor.stamped` keeps the stored view), a parallel `merchant
+{name, match}`, and a merchant carrying an account for the row's company
+decides it as a rule (`posting_category.stamped` keeps what the row read); a
+person's pick wins; the matcher's pools are untouched. Predicted per row on
+the 16:49 UTC payloads before shipping: 21 receipts (all 21 then post), 46
+receiptless charges (display only), 5 matched charges; 24 of them join a
+Criss posting and all 24 agree, 48 have none yet, 0 disagree. (2) A
+bank-descriptor tier after exact and close spelling (lead word, plus the
+product word for Google / Microsoft / Amazon; only a country code, a short
+code or Chase's cut stub may go uncovered; a tie is no answer), `merchant.match
+"descriptor"`. (3) The close-spelling containment guard: 'Twilio Inc' no longer
+files as SendGrid, 'Google LLC' no longer as Google Ads; a bare platform alias
+is ignored. (4) The model may not land on E500010-10 unless the merchant is
+Zoho (`account_vendor_specific`). (5) A stored suggestion naming a parent or,
+on a non-Zoho row, E500010-10 reads as its refusal at view time.
+
+**Open, in order (the continuation carries the code pointers):**
+6. Line-sum check: `expenses[].line_sum_gap` and a review note when the lines
+   disagree with the total by more than 0.05 (12 / 11 / 12 receipts); mark the
+   export only where the receipt splits across accounts, since only then do
+   the wrong shares change what posts.
+7. Lovable's two list entries: report which entry each live row lands on
+   (12 "Lovable Labs Incorporated" receipts vs the rest) and put the merge to
+   the owner as a settings write; do not re-ask about Lovable's accounts.
+8. Measure step 2 on all 314 charge descriptors under the live list and the
+   write-plan list (every new hit listed), and steps 4-5 per row on the live
+   payloads after deploy (map: 57 rows on E500010-10, 76 + 28 on a parent).
+Owner decisions pending: item 115 (a Zoho-seeded rule deciding a receipt with
+readable lines), merging the Lovable entries, the write plan's uncontested
+rows.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
@@ -11951,6 +11992,9 @@ protocol), and the E A Locações pair is nominated for the first time; August
 | 142 | Item 222 steps 1-5 (front 5): the FX judge is handed the tool's rate, card verdict and merchant agreement (prompt v2, cache keyed on it, look-alike pairs with clean evidence skip the model); `review.cause` / `cause_detail`; booked charges not judged and out of `n_review`; PDF payoffs read `payment`; `reverses_transaction_id` | 13 live verdicts guessed their own rate (one tenfold off); every review row read one generic sentence; July counted 13 booked rows as in review; six payoffs read refund | 2026-09-25 |
 | 141 | Item 221 (front 1): charges with nothing behind them say what they are. Charge `reason_code` + `closed_recurring` / `no_receipt_expected`, `already_booked` reads the reviewer verdict, `reason_label` on every charge element; `n_already_posted` counts booked purchases only; `summary.n_cards_uncovered` / `cards_uncovered[]` and the Publish refusal sentence; `receipt_chase` `date_range` / `charge_month` and the mail grouped by charge month; ask age + `overdue_days` + per-holder mark-all; `python -m expense_recon.zoho.booked_report` (read-only, one-cent control) | July's 24 and August's 40 gray charges read "no receipt found" while the gate called them closed; 3 / 4 / 7 cards had nothing loaded behind "0 need a receipt"; 33 chased charges were filed under the wrong month; Zoho already held 11 + 11 open charges | PR #1468 |
 | 140 | Item 220 steps 1 + 2 (front 2): an unmatched receipt's reason reads the card before the date edge; `statement_not_loaded_for_date` + `unmatched_receipts[].waits_for_statements`; German cash/girocard words are not card payments; `summary.n_receipts_waiting_statement` / `receipts_waiting_cards` and a refusal that splits "wait for a statement" from "no charge on any loaded statement". | September told 40 receipts to look in the previous or next month while their statements simply were not loaded yet, and the sign-off refusal pointed Criss at the wrong fix. | PR #1466 (merge `88465d42`), deployed 2026-09-25; prediction held row for row (Jul 5 / Aug 0 / Sep 49; waiting 7 / 0 / 46); SPA prompt `lovable-receipt-waits-prompt.md` not pasted |
+
+| 141 | Item 221 steps 1-5 (front 3): the grid, the run payload and the reviewer files read the merchant list live (`vendor.display`/`source` + `vendor.stamped`, `merchant {name, match}`, a per-company account decides as a rule with `posting_category.stamped`); a bank-descriptor resolver tier; the close-spelling containment guard; the ZOHO ERP guard (`account_vendor_specific`); stored parent / ZOHO ERP suggestions read as refusals. | The owner's OpenAI and Anthropic accounts reached no row already in a month: 21 receipts (all then post), 46 receiptless charges and 5 matched charges move; the 24 that join a Criss posting all agree. | PR pending |
+| 140 | Item 220 steps 1 + 2 (front 2): an unmatched receipt's reason reads the card before the date edge; `statement_not_loaded_for_date` + `unmatched_receipts[].waits_for_statements`; German cash/girocard words are not card payments; `summary.n_receipts_waiting_statement` / `receipts_waiting_cards` and a refusal that splits "wait for a statement" from "no charge on any loaded statement". | September told 40 receipts to look in the previous or next month while their statements simply were not loaded yet, and the sign-off refusal pointed Criss at the wrong fix. | PR pending |
 | 139 | Item 216 Build 2 step 3: `summary.categories_by_origin` (`{person, rule, suggestion, none}`) on both payloads, read off each row's own `posting_category` / `suggested_category`; sums to `rows[]` (run) and `n_expenses` (grid). `n_charges_category_guessed` keeps its meaning (the guesses that block the month) | Item 216 read the blocker's 0 / 0 / 1 as "the tool reports no guesses" while 164 receiptless charges carried one; all 164 sit on booked, gray or receipt-owing charges, so the blocker was right and the who-answered count was missing. Run view 68 / 109 / 43 suggestions, grid 27 / 27 / 31 (03:05 backup). Tests: `tests/test_counts_by_origin_item_216_build2_step3.py` (2, route-level) + the contract partition test; five `regress_check` proofs bit | this PR |
 | 138 | Item 216 Build 2 step 2: the model suggests, a rule or a person decides. On a GL month the model's answer moves from `posting_category` to `suggested_category` on both views, reads `check` / `model_suggestion` (one-click confirmable, stored `inherited`), and every file prints `suggested: <account>`, which the poster and the journal check refuse. `is_suggestion_only` + `SUGGESTED_PREFIX` are the one predicate and the one cell; `_TRUSTED_SOURCE` / `_COARSE_SOURCE` retired for `answer_origin`; a person's pick reads EDITED in the export (it read LINE) | Owner ruling 2026-09-25. 85 model-only expenses no longer post as accounts (27 / 27 / 31), the 32 `ready` ones stop being ratified by "Confirm all Ready", and one Confirm restores a posting (measured on the 03:05 backup) | PR #1451 |
 | 137 | Item 216 Build 2 step 1: the model is offered leaf accounts only (`curated_leaves.llm_leaf_labels` drops every account with a postable account under it, read from the chart's parent names), and `_gl_model_result` refuses a parent the model names anyway (`model_picked_parent`); the merchant list, a remembered rule and a person may still pick one. | The model was handed 11 to 13 roll-ups per company and took one 58 times in 164 where Criss took one once in 152 (owner ruling 2026-09-25). The prefix test the sizing used got four accounts wrong per company (`E600010-10-20` is a leaf; `E600010-20` CRM travel and Corporate Services' `E100000` / `E500000` are parents). Tests: `tests/test_model_offered_leaves_item_216_build2.py` (4, two route-level: a receipt upload, and a GL month's charges with a merchant-list parent and Criss's parent pick kept); both wiring points bit under `regress_check`. | #1447 |

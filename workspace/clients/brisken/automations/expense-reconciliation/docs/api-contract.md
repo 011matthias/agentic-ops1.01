@@ -7627,3 +7627,18 @@ Tests: `tests/test_front3_identity_live.py` (route-level: grid, run payload,
 `expenses.csv`, a person's pick) and the type guard
 `test_live_merchant_fields_are_absent_or_well_formed` in
 `tests/test_view_contract.py`.
+
+Steps 2 to 5 (same day):
+
+- `merchant.match: "descriptor"`: the list matched a bank line through the
+  descriptor tier (the listed name's lead word, plus the product word on
+  Google / Microsoft / Amazon), after exact and close spelling found nothing.
+- New refusal code `account_vendor_specific` (review `reason_code:
+  "category_refused"`, `refusal: "account_vendor_specific"`): the model named
+  an account kept for one vendor's product (E500010-10, Cloud
+  Subscriptions-ZOHO ERP) on a row whose merchant is not that vendor. Given at
+  categorization, and at read time for a suggestion stored before the rule.
+- At read time a stored model suggestion naming a summary account with
+  postable accounts under it reads `refusal: "model_picked_parent"` instead
+  of a suggestion (`suggested_category` absent), until the row is
+  re-categorized. Rules and people are never re-read.
