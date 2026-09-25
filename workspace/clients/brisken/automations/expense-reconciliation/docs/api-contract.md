@@ -7368,3 +7368,30 @@ evidence decided); ABSENT otherwise, never null or `[]`.
 Tests: `tests/test_receipt_waits_item_220.py` (route-level run payload and
 publish refusal, the rule and the regex, negative cases included); pinned in
 `tests/test_view_contract.py`. Renders in `docs/lovable-receipt-waits-prompt.md`.
+## Three more duplicate rungs: `reference_digits`, `misread_digit`, `body_twin` (front 4, 2026-09-25)
+
+No new field. `duplicate_groups[].basis` gains three values, so a consumer
+that maps `basis` to a label must add them; every other key and its meaning
+is unchanged.
+
+| `basis` | Verdict | When |
+|---|---|---|
+| `reference_digits` | copy | Between rungs 3 and 4. Two members print one number inside different words: the longest digit run (at least 6 digits, at least 5 once leading zeros go, not the receipt's own date or total) of `reference`, `invoice_number` or `receipt_number` is shared, merchant identity agrees (`merchant_identity.identity_key`, one key the start or end of the other), total and currency agree, dates at most one day apart. A run carried by receipts of different totals is an account id and never counts. Never over two members that name different cards |
+| `misread_digit` | copy | As above, but the two runs have one length and differ in exactly one position, and the dates are the SAME day (July's Marinho 271025 / 271825) |
+| `body_twin` | copy | A rendered mail body (`NNNN__rendered-body.pdf`) beside the ONE document it repeats: same total and currency, dates at most a day apart, merchant identity agrees. The partner is either a single document or a set an earlier group already calls one document (an invoice and its receipt); a body beside two real purchases makes no group |
+
+New nominations are appended after every older key's groups, so no existing
+group's membership, `group_id` or saved ruling moves; a group whose members
+equal an existing group IS that group. A body group lists its partners first
+and the body last. The kept member: a copy a charge holds (item 217 rule 1),
+then a document over a rendered body, then a payment receipt over its
+invoice, then the first. A group with no stored kept copy (nominated after the
+month last re-matched) keeps the document another group already keeps.
+
+Live on the frozen 2026-09-25 payloads (per row, `copies_set_aside` grows
+by): July 5 rows at read time (five charge-named copies beside Criss's own
+slips, BRL 437.77) plus the E A Locações slip (BRL 340.00) at July's next
+re-match, because a charge holds its twin; August 1 (the Zoho Books 576.00
+mail body); September 4 (mail bodies: Zoho 50.00, Lovable 60.00, Anthropic
+100.00, Lovable 50.00). The three September OpenAI 80.12 invoices stay three.
+Tests: `tests/test_duplicate_front4_copies.py`.
