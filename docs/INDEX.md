@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-25 | Expense-Recon Front 1 Chase | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Expense-Recon%20Front%201%20Chase/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Expense-Recon Front 2 Receipts | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Expense-Recon%20Front%202%20Receipts/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken Recon Accuracy Score and Refused Re-run | client-dev | [→](docs/2026-09-25%20-%20Brisken%20Recon%20Accuracy%20Score%20and%20Refused%20Re-run/Checkpoint.md) |
 | 2026-09-25 | Brisken Recon Item 216 Build 2 | client-dev | [Mini-Checkpoint-6](docs/2026-09-25%20-%20Brisken%20Recon%20Item%20216%20Build%202/Mini-Checkpoint-6.md) |
