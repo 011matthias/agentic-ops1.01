@@ -1626,15 +1626,164 @@ silent at read time and 400 `card_alias_generic` on the next Settings save;
 live on 2026-09-24 the aliases are Corp, Cloud, Personal and Consulting, so
 none is.
 
-**When the private-card list ships** (a separate item, not merged on
-2026-09-24): its `cards.classify_payment_evidence` order folds this rule in
-(its step 4 becomes the full evidence list here, its step 7, "a phrase no
-rule recognises", becomes WAIT), and a number on that list is private
-outright rather than suggested.
+**The private-card list shipped the next day** (2026-09-25, item 208, next
+section): `cards.classify_payment_evidence` folds this rule in as step 4 of
+one decision order (a number on the list is private outright, step 3, and
+everything this section leaves unmatched waits), and
+`resolve_batch_row_cards` reaches both through that one entry point.
 
 Read-time: every month moves on deploy with no re-match. Pinned in
 `tests/test_private_needs_evidence.py` (the classification table is the
 contract) and route-level through the batch payload and the cards route.
+
+## Whose money paid: the decision order, and the private-card list (added 2026-09-25, item 208)
+
+Owner direction 2026-09-24, on cases 2 and 4 of the card-attribution map:
+"fuze items 2 and 4 together, fix a) by setting up private card
+memory/registry and b) any credit card types or numbers that dont belong to
+brisken will then be suggested as private expenses". Half (b) is case 6
+above. Half (a) is `settings["private_cards"]`: a card that is NOT
+Brisken's, known by its last four digits and the person it belongs to. A
+personal card that recurs (3281 on the DB Fernverkehr receipts) is listed
+once and every receipt printing it, in every month, is a private expense
+reimbursed to that person, with no per-row confirmation.
+
+**The decision order** (`service.resolve_batch_row_cards`, one place). The
+row's own decisions come first and outrank everything, exactly as before:
+a per-row card pick (`card_key`), a row Criss confirmed private (`private`
+`"1"` + `reimburse_to`), a settled-outside disposition, and the per-row
+opt-out below. Then the month's own hint assignments
+(`expense.card_hints` to a card, `expense.private_hints` to a person). Then
+`cards.classify_payment_evidence(hint, cards, private_cards, hints)`, one
+entry point for steps 1-4; first match wins:
+
+| Step | The hint | Result |
+|---|---|---|
+| 1 | a printed number (or an assigned hint) naming a Brisken card | that card (unchanged) |
+| 2 | a Brisken card type with no number ("VISA CREDIT") | no private label; the statement, the remembered card and the merchant card decide (case 5, unchanged) |
+| 3 | a printed number on the private-card list (NEW) | `private`, reimburse the listed person, `private_source: "private_card_list"` |
+| 4 | positive evidence of a non-Brisken card (case 6, unchanged) | `suggested_private` |
+| 5-7 | not a card, nothing printed, any phrase with no positive evidence | waits for the statement charge, vendor memory and Criss's assignment (unchanged) |
+
+A number always outranks a type word in the same hint: "DEBIT-MASTERCARD
+3281" is decided by 3281, so step 3 is read before step 4's `number`
+reason. A two-digit ending is never looked up on the list (an entry needs
+the full last 4, and the matcher's extraction reads 3+ digit runs only);
+one that two Brisken cards share (76 on 3876 and 1176) stays unguessed and
+is not private. For every row not on the list the change is a pure
+refactor: the live census over all seven months moved no row.
+
+**The list.** `GET /api/settings` carries `private_cards`, `{}` until
+somebody lists a card; `PUT /api/settings {"private_cards": {...}}` is a
+whole-key replace like `cards` and `merchants`. It is a SEPARATE key on
+purpose: every company-card consumer iterates `cards`, and the Cards
+editor's whole-map save would erase a field added there (`store.set_settings`
+merges top-level keys shallowly, so a `cards` save keeps the list; pinned).
+The tool never seeds it.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `private_cards.<last4>` | object | the key is the card's last four digits, a leading zero kept ("0340"); any 4+ digit run is accepted on write and normalized to its last four (`cards.private_card_digits`: "***3281" and "3281" are one entry) |
+| `.person` | string | required, trimmed: who is reimbursed. Free text, like `reimburse_to` (there is no person directory) |
+| `.note` | string | free text, `""` when absent |
+| `.active` | boolean | `false` switches the entry off without deleting it; an inactive entry decides nothing and the row falls back to case 6's suggestion |
+
+Refused with 400 and a `code` (`setting: "private_cards"`):
+`private_card_digits_short` (no 4+ digit run: a two-digit ending, a word),
+`private_card_person_required`, `private_card_duplicate` (two keys
+normalize to one number), `invalid_body`, and
+`private_card_is_company_card` when an ACTIVE company card in the composed
+registry carries the number. The reverse holds with the SAME code on
+`setting: "cards"`: a `cards` save (and the strip's card learning, and a
+`new_cards` entry) may not put a number the active list holds on a company
+card. A card is Brisken's or private, never both, which is the rule the
+per-row routes already enforce.
+
+**Read live.** The list is read from settings at view time
+(`private_cards=` on `resolve_batch_row_cards`, passed by the Expenses
+payload, the CSV, the month report, the cost-center roll-up, the run
+payload's readiness count and the neighbouring-month pools), never
+snapshotted into the batch (pinned: the batch config carries no copy). An
+entry reaches every existing month at once, with no refresh and no write to
+any month.
+
+**What a matching row reads**, on every surface exactly like a row Criss
+confirmed: `private: true`, `reimburse_to` the listed person,
+`person_source: "private"`, `suggested_private: false`,
+`can_mark_private: false`, `card: null`, no company required
+(`needs_entity` false, the `private` box), `posting_paid_through`
+`Private ({person})`; the CSV writes `(private expense)` and
+`Private ({person})`; the month report lists it under "Reimbursements owed"
+with the per-person sum; `n_private` counts it and `n_suggested_private`
+does not; the card strip keeps its `unresolved_hints` group (the card is
+known now, but it is still not a company card anyone assigned) with
+`suggested_private: false` on the group. Every consumer of `private` and
+`reimburse_to` reads the resolution: `service._private_reimbursements` now
+takes the card resolution rather than `field_overrides` (the month report,
+the CSV, `completeness_counts`' `private_docs` and the two pools that used
+to read the overrides directly moved with it). Nothing under `matching/`
+reads either field.
+
+| Field (NEW, parallel) | Type | Meaning |
+|---|---|---|
+| `expenses[].private_source` | string | who made the row private: `"row"` (Criss confirmed it on the row), `"month"` (the strip's "Private card of..." for this month, `expense.private_hints`), `"private_card_list"` (a listed number), `""` on a row that is not private. Closed literal, pinned in `tests/test_view_contract.py` against `cards.PRIVATE_SOURCES`; `bool(private_source) == private` on every row. The SPA adds "(from the private card list)" to the badge on the third value and calls the same undo route |
+
+**Two row exits** (both pinned):
+
+* **Undo.** `POST .../expenses/{id}/private {"private": false}` on a row the
+  list (or the month's assignment) made private stores an explicit
+  per-row opt-out, `private: "0"` in the field overrides, so the list no
+  longer applies to that row; a plain clear would be undone at the next
+  read. The row then reads what the printed number earns on its own (case
+  6's suggestion, `can_mark_private` true), and Criss can still confirm it
+  herself (source `"row"`). A row only she marked clears as before
+  (`private: null`), so the suggestion returns. The generic field PUT
+  accepts `private` `"0"` for the same opt-out.
+* **Company-card pick.** `PUT .../expenses/{id} {"field": "card_key"}` on a
+  list-derived (or month-derived) row is NOT refused with `private_card`:
+  the pick wins (`card_source: "override"`, `private: false`,
+  `private_source: ""`). The `private_card` refusal stays for a row Criss
+  confirmed herself (`private_source: "row"`).
+
+**Guard.** A printed number on the list never takes a card from the settled
+charge, the remembered card or the merchant card: the printed-number guard
+already blocks those for any printed number, and is pinned (a listed
+number beside a merchant that lends `corp-3645` stays private with
+`card: null`, while the same merchant's number-less receipt takes the card).
+The matcher's bake passes no list: a listed number names no Brisken card,
+so the card it would scope on is `null` either way.
+
+**Two ways onto the list, both explicit** (owner ruling 2026-09-24: only
+corrections are memorized; a per-row confirmation is a decision about that
+row and never writes the list):
+
+* Settings: the "Private cards" panel (`docs/lovable-private-card-list-prompt.md`).
+* The unknown-card strip: `POST /api/expense-batches/{id}/cards`
+  assignments accept `{"hint": ..., "private_to": "<person>"}` in place of
+  `"card"`. Exactly one of the two: both is `assignment_two_targets`,
+  neither is `assignment_incomplete`. The month record
+  `expense.private_hints[hint] = person` is written whatever `learn` says
+  (as `card_hints` is for a card; a hint reassigned to a card leaves it,
+  and vice versa). With `learn: true` (the existing "Remember for future
+  months" switch) the hint's last 4 are ALSO written to
+  `settings["private_cards"]` under the person (`note` kept if the entry
+  existed, `active: true`); learning refuses a hint with no 4+ digit run
+  (`private_card_needs_digits`: a generic word names no card, month-only
+  still applies) and a number an active company card carries
+  (`private_card_is_company_card`). The reply's `results[]` entry is
+  `{hint, private_to, n_rows, learned, digits}` (`digits` the four written,
+  `""` when not learned) beside the card entries' `{hint, card, n_rows,
+  learned}`; `learned_to_settings` is the request's `learn`.
+
+**Supersession.** The 2026-08-22 ruling "personal tenders are never
+learned" was about tender WORDS and stands (`learnable_hint_tokens` still
+refuses them); a card NUMBER on the list is an explicit owner-directed
+registry under the 2026-09-24 direction. Item 41's trigger was already
+superseded by case 6.
+
+Pinned route-level in `tests/test_private_card_list.py`; the golden rows
+of `tests/test_private_needs_evidence.py` pass through
+`classify_payment_evidence` with an empty list unchanged.
 
 ## Cost centers: which project or purpose the money belongs to (added 2026-09-10)
 

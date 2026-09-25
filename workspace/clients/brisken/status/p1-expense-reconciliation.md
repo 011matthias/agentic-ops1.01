@@ -10,7 +10,7 @@ updated: 2026-09-25
 # Brisken / Expense Reconciliation (p1)
 
 **2026-09-25: case 9 build 3 shipped, the card flows back** (item 204 step 3,
-Shipped row 124). A receipt a neighbour month's charge settled now shows that
+Shipped row 125). A receipt a neighbour month's charge settled now shows that
 charge's card, company and person (`card_source: "settled_charge"`) with
 `settled_by` naming the borrower, on the grid, CSV, month PDF and in the
 learner. 0 live rows move today: the two borrowed receipts (August OpenAI,
@@ -18,6 +18,20 @@ borrowed by September) already print 9693, and July's borrowed FENIX receipt
 is in review, so it has no claim. Open: under D1's calendar-month exports a
 receipt dated the day before its charge's 1st-of-month date falls outside the
 borrower's window and is never borrowed.
+
+**2026-09-25: the private-card list, a personal card confirmed private once**
+(backlog item 208, owner direction 2026-09-24 fusing cases 2 + 4 of the
+card-attribution map). `settings["private_cards"]` is its own key, read live
+by every month; a printed number on it makes the row private, reimbursed to
+the listed person, on every surface a row Criss confirmed reaches (report,
+CSV, counts, boxes), through ONE decision order (`cards.classify_payment_evidence`:
+Brisken number or type, listed number, case 6's evidence, wait) and a new
+`expenses[].private_source`. Two ways on: the Settings panel and the strip's
+"Private card of..." (month-only, or remembered with the switch); never a
+single row's confirm. Two ways off a row: undo stores an opt-out, a card pick
+wins. The list starts EMPTY and the tool never seeds it (nobody here knows
+who owns 3281), so the deploy moves no row; the SPA half
+(`docs/lovable-private-card-list-prompt.md`) is what lets anyone add one.
 
 **2026-09-25: case 9 build 1 shipped (item 204 step 2).** An invoice that prints no card now takes the card its own payment receipt prints whenever the grid shows the two as one document, under the old guards (one card only, a "Not a duplicate" ruling lends nothing, an operator hint on the invoice wins). PR #1362. Expected on September's next read: the Anthropic 184.35 and two Lovable 50.00 invoices read 9693 / 3645, `n_needs_entity` 26 -> 23. Builds 2 to 5 run in their own sessions.
 
