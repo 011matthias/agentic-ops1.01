@@ -11390,6 +11390,35 @@ Nine older tests re-pinned from "the model's answer posts" to the suggestion.
 What changes live: nothing is written; each month's views and files read the
 new way on the first request after deploy.
 
+**Build 2 step 3, built 2026-09-25 (Shipped row 139): the counts say who
+answered.** Cause: the payloads had one category count,
+`n_charges_category_guessed`, and it answers whether a guess still BLOCKS the
+month (items 99 + 100); nothing answered who answered. Its 0 / 0 / 1 is right
+under the 2026-09-17 rulings: of the 164 receiptless guesses on the 03:05
+backup, July's 45 sit on charges Criss already booked (25 yellow) or booked
+through recurring (20 gray), and the 76 open ones in August and September are
+counted once, under `n_charges_need_receipt` (the 77th is September's fee
+line, the 1). The symptom patch, widening the blocker to every guess, was not
+built: July's pill would have read "45 categories are still the tool's guess"
+on booked charges, against the gray ruling, and August and September would
+have listed 76 charges twice in the pill. Structure: `summary.categories_by_origin
+= {person, rule, suggestion, none}` on both payloads, read off each row's own
+`posting_category` / `suggested_category` (`service.row_answer_origin`, built
+from `answer_origin` / `is_suggestion_only`), a row counted once under its
+least decided answer; the four sum to `rows[]` on the run view and to
+`n_expenses` on the grid (a decided copy and a bill are in no split, as in no
+box). The blocker keeps its meaning and its docstring now says so. Measured
+after on the backup, both payloads equal the rows on every month: run view
+0 / 11 / 68 / 41, 0 / 7 / 109 / 27, 0 / 1 / 43 / 7 (person / rule /
+suggestion / none, July / August / September); grid 0 / 9 / 27 / 34,
+0 / 4 / 27 / 19, 0 / 1 / 31 / 36; blocker and `month_complete` unchanged.
+Tests: `tests/test_counts_by_origin_item_216_build2_step3.py` (2, route-level:
+upload with a decided copy + a move to Bills + Confirm on the grid; a
+statement with an open, a ruled, a gray and a yellow charge + the charge
+category PUT, whose reply carries the split) and the contract partition test;
+five wiring points bite under `regress_check`. SPA half:
+`docs/lovable-categories-by-origin-prompt.md`, not pasted (additive).
+
 ### 217. A duplicate shows its controls twice, and the tool keeps the invoice instead of the receipt (notes #89 + #90, owner 2026-09-25 03:45 / 03:47 UTC) (SHIPPED 2026-09-25: backend PR #1429, Fly `e47f2a8d`; SPA prompt `docs/lovable-duplicate-controls-once-prompt.md` PUBLISHED and driven the same morning)
 
 **Owner**, on September's Pressmaster FZCO unit (row `0078`, the invoice),
@@ -11595,6 +11624,7 @@ once, as a copy.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 139 | Item 216 Build 2 step 3: `summary.categories_by_origin` (`{person, rule, suggestion, none}`) on both payloads, read off each row's own `posting_category` / `suggested_category`; sums to `rows[]` (run) and `n_expenses` (grid). `n_charges_category_guessed` keeps its meaning (the guesses that block the month) | Item 216 read the blocker's 0 / 0 / 1 as "the tool reports no guesses" while 164 receiptless charges carried one; all 164 sit on booked, gray or receipt-owing charges, so the blocker was right and the who-answered count was missing. Run view 68 / 109 / 43 suggestions, grid 27 / 27 / 31 (03:05 backup). Tests: `tests/test_counts_by_origin_item_216_build2_step3.py` (2, route-level) + the contract partition test; five `regress_check` proofs bit | this PR |
 | 138 | Item 216 Build 2 step 2: the model suggests, a rule or a person decides. On a GL month the model's answer moves from `posting_category` to `suggested_category` on both views, reads `check` / `model_suggestion` (one-click confirmable, stored `inherited`), and every file prints `suggested: <account>`, which the poster and the journal check refuse. `is_suggestion_only` + `SUGGESTED_PREFIX` are the one predicate and the one cell; `_TRUSTED_SOURCE` / `_COARSE_SOURCE` retired for `answer_origin`; a person's pick reads EDITED in the export (it read LINE) | Owner ruling 2026-09-25. 85 model-only expenses no longer post as accounts (27 / 27 / 31), the 32 `ready` ones stop being ratified by "Confirm all Ready", and one Confirm restores a posting (measured on the 03:05 backup) | PR #1451 |
 | 137 | Item 216 Build 2 step 1: the model is offered leaf accounts only (`curated_leaves.llm_leaf_labels` drops every account with a postable account under it, read from the chart's parent names), and `_gl_model_result` refuses a parent the model names anyway (`model_picked_parent`); the merchant list, a remembered rule and a person may still pick one. | The model was handed 11 to 13 roll-ups per company and took one 58 times in 164 where Criss took one once in 152 (owner ruling 2026-09-25). The prefix test the sizing used got four accounts wrong per company (`E600010-10-20` is a leaf; `E600010-20` CRM travel and Corporate Services' `E100000` / `E500000` are parents). Tests: `tests/test_model_offered_leaves_item_216_build2.py` (4, two route-level: a receipt upload, and a GL month's charges with a merchant-list parent and Criss's parent pick kept); both wiring points bit under `regress_check`. | #1447 |
 | 136 | Item 216 cause 1: one mapping of who answered, `answer_origin` (person / rule / suggestion), read by the statement sheet, the Zoho journal's receiptless rows, the row review and the report colour, and served as `origin` on `charge_category` / `posting_category`. | Criss's own account on a charge printed in her statement sheet as `<account> (confirm)`, the tool asking her to confirm her own decision, because each surface derived trust from the raw source on its own. The premise "no correction ever landed" was wrong: 35 of her picks existed until the GL conversion retired them by ruling. Tests: `tests/test_answer_origin_item_216_cause1.py` (18, route-level through the charge route, the sheet download, `zoho.csv` and the run view); three `regress_check` proofs bit. | #1437 |

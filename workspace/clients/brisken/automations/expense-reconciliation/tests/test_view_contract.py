@@ -1375,6 +1375,44 @@ def test_every_box_count_equals_the_rows_carrying_its_box(payloads):
     assert {"categorized", "uncategorized"} <= seen, seen
 
 
+def test_categories_by_origin_partitions_the_rows_each_payload_counts(payloads):
+    """Item 216 Build 2 step 3. `summary.categories_by_origin` is on both
+    payloads with exactly the keys person / rule / suggestion / none, each an
+    int, and each equals the rows whose own category fields say so (a row
+    carrying `suggested_category` is a suggestion; otherwise its
+    `posting_category.origin`; otherwise none). The four sum to `rows[]` on
+    the run view and to `n_expenses` on the grid, where a decided copy and a
+    bill (`counts_in_total: false`) are in no split, as in no box. Route-level
+    behaviour: `tests/test_counts_by_origin_item_216_build2_step3.py`."""
+    keys = {"person", "rule", "suggestion", "none"}
+
+    def origin(row):
+        if row.get("suggested_category"):
+            return "suggestion"
+        return (row.get("posting_category") or {}).get("origin") or "none"
+
+    seen: set[str] = set()
+    for kind, list_key in (("run", "rows"), ("expense_batch", "expenses")):
+        for view in payloads[kind]:
+            split = view["summary"]["categories_by_origin"]
+            assert set(split) == keys, split
+            assert all(isinstance(v, int) for v in split.values()), split
+            counted = [
+                r for r in view[list_key] if r.get("counts_in_total") is not False
+            ]
+            for key in keys:
+                assert split[key] == sum(1 for r in counted if origin(r) == key), (
+                    kind, key, split,
+                )
+            total = (
+                len(view["rows"]) if kind == "run" else view["summary"]["n_expenses"]
+            )
+            assert sum(split.values()) == total, (kind, split, total)
+            seen.update(k for k, v in split.items() if v)
+    # Non-vacuity: the fixtures carry a person's pick and an unanswered row.
+    assert {"person", "none"} <= seen, seen
+
+
 def test_unmatched_reason_code_is_on_every_unmatched_item_and_nowhere_else(payloads):
     """Items 83 + 75. `reason_code` is a string from a closed set on EVERY
     element of `unmatched_receipts[]`, `copies_set_aside[]` (always
