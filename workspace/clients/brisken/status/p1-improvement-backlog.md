@@ -10650,6 +10650,58 @@ item 201 gave `apply_overrides`). That changes export verdicts on live months,
 most visibly by gating rows that today pass unchecked. **Owner, 2026-09-25:
 record only, decide later.** Not built.
 
+### 211. A month-end receipt paid on the 1st is never borrowed once statements are calendar-month exports (found 2026-09-25, building item 204 step 3)
+
+A neighbour month lends a receipt only when the receipt's printed date falls
+inside the borrowing month's statement period (`adjacent_pool_for_month`), and
+that period is the min..max of the borrowing month's OWN charge dates
+(`statement_period_for_month`). The label month widened by
+`ADJACENT_FALLBACK_DAYS` (3) applies only to a month with no statement.
+
+Chase card-cycle cuts made this work: August's cycle opened on 07-31, so
+July's Google receipt printed 07-31 sat inside August's period and paired with
+the 08-01 charge. Under owner decision D1 the 9693 and 1176 cards move to
+calendar-month activity exports. August's period then starts 08-01, the 07-31
+receipt is outside it, and July's own statement never holds the 08-01 charge.
+The receipt is paired nowhere, and item 204 step 3 (the card flows back,
+Shipped row 126) cannot reach it, because there is no claim to follow.
+
+Affected shape: a receipt printed the day BEFORE its charge's transaction date
+across a month boundary, typically a subscription invoiced on the last day and
+charged on the 1st. A receipt dated the same day as its charge lands in the
+charge's own month and is unaffected. Live count: TBD, because no
+calendar-month statement is loaded yet. Measure it on the first one.
+
+Fix shape: pad the borrow window by a few days on each side (for example, the
+charge span widened by `ADJACENT_FALLBACK_DAYS`, or its union with the label
+month's fallback). Trade-off: the window was kept narrow on purpose (item 61),
+so every day added offers the matcher more neighbour receipts and more chances
+of a wrong pairing. **Needs an owner decision:** widen the window, or accept
+that such a receipt stays unpaired and is matched by hand. Not built.
+
+### 212. A receipt settled by a neighbour month converts at the reference rate, not at the charge's amount (found 2026-09-25, building item 204 step 3)
+
+Item 204 step 3 made the card, company and person of a receipt follow the
+claim a neighbour month holds on it. The money did not follow.
+`settled_charge_amounts` / `export_settled_amounts` (item 98) read only the
+month's own settled charges and skip borrowed receipts. They feed the Zoho CSV
+`Exchange Rate` column (`single_currency_for_export`) and the month report's
+conversion (`build_expense_report`). So a foreign-currency receipt settled by
+next month's charge converts at the reference rate (ECB month or OpenTickers
+day), not at the amount the card was actually charged, while the same row
+already names that charge's card. `settled_charge_amounts`' own docstring
+warns about exactly this split: two derivations of "which charge settled this
+receipt".
+
+Affects only a receipt NOT in the base currency (USD). Live today: 0 rows.
+The only two receipts another month settled (August's OpenAI 80.12 and 80.04,
+settled by September) are USD.
+
+Fix shape: have `settled_charge_amounts` read the same claim through the
+reader item 204 step 3 added (`cards_settled_elsewhere` in `web/service.py`,
+extended to return the charge's amount and currency), so card and conversion
+describe the same charge. Small and self-contained. Not built.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
