@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-25 | Brisken Recon Case 9 Checks And Item 212 | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20Case%209%20Checks%20And%20Item%20212/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Expense-Recon CPU Throttle Outage and Guarded Deploy | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Expense-Recon%20CPU%20Throttle%20Outage%20and%20Guarded%20Deploy/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Expense-Recon Item 215 Attach Month Guard | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Expense-Recon%20Item%20215%20Attach%20Month%20Guard/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken Recon Card Strip Cards Only | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20Card%20Strip%20Cards%20Only/Mini-Checkpoint-1.md) |
