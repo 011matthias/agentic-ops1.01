@@ -203,6 +203,123 @@ def test_the_hosted_attach_hands_the_judge_the_tools_evidence(tmp_path, monkeypa
     assert "What the tool already established" in mock.last_fx_prompt
 
 
+# ── step 2: review.cause names why a pair still needs a click ──────────
+
+
+def _hosted_month(tmp_path, monkeypatch, verdict):
+    """The rematch fixture (a EUR receipt against USD STAPLES 42.50) with the
+    model answering `verdict`; returns the served run view."""
+    from fastapi.testclient import TestClient
+
+    import tests.test_rematch_judgment_cache as rj
+    from expense_recon.web.app import create_app
+
+    monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    mock = MockLLMClient(
+        extraction_responses=[rj._eur_receipt()], fx_responses=[verdict] * 8
+    )
+    rj._wire(monkeypatch, mock)
+    with TestClient(create_app(tmp_path)) as client:
+        client._data_root = tmp_path
+        batch_id = rj._create_batch(client)
+        rj._attach(client, batch_id)
+        view = client.get(f"/api/runs/{batch_id}")
+        assert view.status_code == 200, view.text
+        return view.json()
+
+
+def _staples(view):
+    return next(r for r in view["rows"] if "STAPLES" in r["vendor"])
+
+
+def test_the_run_view_names_the_models_doubt(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    view = _hosted_month(tmp_path, monkeypatch, _verdict(0.4))
+    row = _staples(view)
+    assert row["effective_bucket"] == "review"
+    review = row["review"]
+    # The SPA's key is unchanged; the cause is the parallel field.
+    assert review["reason_code"] == "uncertain_match"
+    assert review["cause"] == "model_doubts"
+    assert review["cause_detail"]["model_p"] == 0.4
+    assert review["cause_detail"]["model_reasoning"] == "model text"
+    assert review["cause_detail"]["document_id"] == row["candidates"][0]["document_id"]
+
+
+def test_a_judged_pair_with_no_look_alike_reads_as_an_fx_question(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    view = _hosted_month(tmp_path, monkeypatch, _verdict(0.91))
+    review = _staples(view)["review"]
+    assert review["cause"] == "fx_review_zone"
+    assert review["cause_detail"]["model_p"] == 0.91
+
+
+def test_rows_without_a_cause_carry_no_cause_key(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    view = _hosted_month(tmp_path, monkeypatch, _verdict(0.4))
+    for row in view["rows"]:
+        if "STAPLES" in row["vendor"]:
+            continue
+        assert "cause" not in row["review"], row["vendor"]
+        assert "cause_detail" not in row["review"]
+
+
+def _row(bucket, cands, state="check", status="pending", entry=None, tx="t1"):
+    return {
+        "transaction_id": tx, "vendor": "V", "amount": "10.00", "currency": "USD",
+        "date": "2026-08-01", "effective_bucket": bucket, "status": status,
+        "entry_status": entry, "review": {"state": state, "reason_code": "x"},
+        "candidates": cands,
+    }
+
+
+def _cand(doc, mt="fx_judgment", **kw):
+    base = {"document_id": doc, "match_type": mt, "requires_review": True,
+            "reason": "", "fx": {}, "receipt": {"total": "9.50", "vendor": "R",
+            "currency": "USD", "date": "2026-07-30"}}
+    base.update(kw)
+    return base
+
+
+@pytest.mark.parametrize("cand,cause", [
+    (_cand("d", review_code="no_card_vendor_disagrees", vendor_pct=33), "merchant_disagrees"),
+    (_cand("d", review_code="no_card_rival_on_other_card",
+           reason="Review: the receipt names no card and a charge on another card also fits (X 1.00 USD on 2838)."),
+     "no_card_rival"),
+    (_cand("d", fx={"reference_gap_band": "review", "reference_gap_pct": 2.4}), "fx_review_zone"),
+    (_cand("d", review_code="uniqueness_rival",
+           reason="Demoted to judgment: this rate-derived pairing is not conclusive (another charge or receipt agrees just as cleanly: charge POSTO 9.80 USD on 2026-07-19)."),
+     "rival_agrees"),
+])
+def test_each_cause_comes_from_its_own_evidence(cand, cause):
+    from expense_recon.web.service import attach_review_causes
+
+    rows = [_row("review", [cand])]
+    attach_review_causes(rows)
+    assert rows[0]["review"]["cause"] == cause
+    if cause == "rival_agrees":
+        assert rows[0]["review"]["cause_detail"]["rival"] == "charge POSTO 9.80 USD on 2026-07-19"
+
+
+def test_a_pending_probable_pair_in_reconciled_says_why():
+    from expense_recon.web.service import attach_review_causes
+
+    rows = [
+        _row("reconciled", [_cand("d", mt="probable", is_chosen=True, date_gap_days=3)], state="ready"),
+        _row("reconciled", [_cand("e", mt="exact", is_chosen=True)], state="ready", tx="t2"),
+        _row("reconciled", [_cand("f", mt="probable", is_chosen=True)], status="confirmed", tx="t3"),
+        _row("review", [_cand("g")], state="none", entry="posted", tx="t4"),
+    ]
+    attach_review_causes(rows)
+    assert rows[0]["review"]["cause"] == "probable_date_gap"
+    assert rows[0]["review"]["cause_detail"] == {
+        "document_id": "d", "date_gap_days": 3, "amount_diff": "+0.50",
+    }
+    for r in rows[1:]:
+        assert "cause" not in r["review"]
+
+
 # ── the cache key carries the prompt version (through the re-match) ────
 
 

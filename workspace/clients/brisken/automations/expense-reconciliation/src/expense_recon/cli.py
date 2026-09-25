@@ -436,8 +436,14 @@ def _apply_judgment(
             vendor_score=m.vendor_score,
             card_score=m.card_score,
             # Front 5: why the matcher sent the pair here survives the
-            # verdict, so the month page can say it.
+            # verdict, so the month page can say it: the code, and for a
+            # look-alike the sentence naming the rival ahead of the verdict
+            # (the shape the at-floor rejection below already has).
             review_code=m.review_code,
+            reason=(
+                m.reason.rstrip(".") + ". " + verdict.reason
+                if m.review_code == UNIQUENESS_RIVAL_REVIEW else verdict.reason
+            ),
         )
         # Only a REAL model verdict can be suppressed; the no-client stub
         # (confidence 0.5) always stays, so no-LLM runs are unaffected.
@@ -450,7 +456,7 @@ def _apply_judgment(
                 judged.append(replace(full, reason=(
                     m.reason.rstrip(".")
                     + ". Kept for review although the model disagrees: "
-                    + full.reason
+                    + verdict.reason
                 )))
                 continue
             suppressed.append(full)
