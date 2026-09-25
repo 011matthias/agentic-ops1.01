@@ -325,8 +325,15 @@ def _apply_vision_receipts(
 def _apply_judgment(
     outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None,
     *, suggest_floor: float = 0.0, cfg: MatchingConfig | None = None,
+    skip_tx_ids: "frozenset[str] | set[str]" = frozenset(),
 ) -> None:
     """Replace each judgment_required entry with the judgment verdict.
+
+    Front 5 (2026-09-25): a charge already booked (the workbook's yellow
+    `entry_status` "posted", or a reviewer's already-posted verdict named in
+    `skip_tx_ids`) is not judged. Live July 2026 paid for 13 verdicts on
+    charges the page treats as nothing to do; the pair stays as the matcher
+    built it, on the row for the audit.
 
     With an `LLMClient`, every FX case gets a real model judgment
     (D1b); without one, `judge_fx_match` returns the stub Match and the
@@ -400,6 +407,9 @@ def _apply_judgment(
         # no-card pair whose merchant words disagree) is kept as built: its
         # review code, its reason, its place as the charge's top candidate.
         if m.match_type is not MatchType.FX_JUDGMENT:
+            judged.append(m)
+            continue
+        if _is_booked(tx, skip_tx_ids):
             judged.append(m)
             continue
         # Front 5 (2026-09-25): a pair the uniqueness gate demoted although
@@ -495,8 +505,17 @@ def _apply_judgment(
                 claimed_rec.add(m.document_id)
 
 
+def _is_booked(tx, skip_tx_ids) -> bool:
+    """Front 5: a charge already booked is not judged (see `_apply_judgment`)."""
+    return (
+        getattr(tx, "entry_status", None) == "posted"
+        or tx.transaction_id in skip_tx_ids
+    )
+
+
 def _apply_ambiguous_judgment(
-    outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None
+    outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None,
+    *, skip_tx_ids: "frozenset[str] | set[str]" = frozenset(),
 ) -> None:
     """Ask the LLM to break each ambiguous tie (D-series, judge_ambiguous).
 
@@ -515,7 +534,10 @@ def _apply_ambiguous_judgment(
     rebuilt: list[Match] = []
     for tx_id, group in groups.items():
         tx = tx_by_id.get(tx_id)
-        pick = judge_ambiguous(tx, group, rec_by_id, client=client) if tx else None
+        pick = (
+            judge_ambiguous(tx, group, rec_by_id, client=client)
+            if tx and not _is_booked(tx, skip_tx_ids) else None
+        )
         if pick is None:
             rebuilt.extend(group)
             continue
@@ -551,6 +573,8 @@ def _apply_unmatched_judgment(
     client: LLMClient | None,
     match_cfg: MatchingConfig,
     cfg: dict,
+    *,
+    skip_tx_ids: "frozenset[str] | set[str]" = frozenset(),
 ) -> None:
     """Optional second-chance LLM pass over the leftovers (WS3).
 
@@ -591,7 +615,7 @@ def _apply_unmatched_judgment(
         if calls_used >= max_calls:
             break
         tx = tx_by_id.get(tx_id)
-        if tx is None:
+        if tx is None or _is_booked(tx, skip_tx_ids):
             continue
         available = [
             rec_by_id[doc]

@@ -12628,12 +12628,19 @@ def charge_states(
             bucket, held_doc = "refund", None
         else:
             bucket, held_doc = "unmatched", None
+        is_posted = tx.entry_status == "posted" or status == STATUS_ALREADY_POSTED
+        # Front 5 (2026-09-25): a booked charge is not a review question.
+        # Live July 2026 counted 13 yellow rows in `n_review` while the page
+        # showed each with nothing to do; the held pair was never confirmed,
+        # so the row counts where a booked row with no receipt counts
+        # (`unmatched`, item 102's booked-no-receipt). Its candidates stay on
+        # the row for the audit.
+        if is_posted and bucket == "review":
+            bucket = "unmatched"
         states[tx_id] = {
             "bucket": bucket,
             "held_doc": held_doc,
-            "is_posted": (
-                tx.entry_status == "posted" or status == STATUS_ALREADY_POSTED
-            ),
+            "is_posted": is_posted,
         }
     return states
 
@@ -15630,15 +15637,24 @@ def rematch_month(
     rec_by_id = {r.document_id: r for r in receipts}
     for _br in borrowed:
         rec_by_id.setdefault(_br.document_id, _br)
+    # Front 5: a charge the reviewer marked already posted is not judged
+    # (the workbook's yellow fill is read off the charge itself).
+    booked_ids = {
+        tx_id for tx_id, d in store.get_decisions(run.run_id).items()
+        if d.status == STATUS_ALREADY_POSTED
+    }
     _apply_judgment(
         outcome, tx_by_id, rec_by_id, llm_client,
         suggest_floor=(match_cfg or MatchingConfig()).fx_judgment_suggest_floor,
         cfg=match_cfg or MatchingConfig(),  # item 131: the band a rejection keeps
+        skip_tx_ids=booked_ids,
     )
-    _apply_ambiguous_judgment(outcome, tx_by_id, rec_by_id, llm_client)
+    _apply_ambiguous_judgment(
+        outcome, tx_by_id, rec_by_id, llm_client, skip_tx_ids=booked_ids,
+    )
     _apply_unmatched_judgment(
         outcome, transactions, match_input, llm_client,
-        match_cfg or MatchingConfig(), cfg,
+        match_cfg or MatchingConfig(), cfg, skip_tx_ids=booked_ids,
     )
     # Excluded receipts still belong to this month's pool and its totals;
     # they are unmatched HERE because they are settled elsewhere.

@@ -320,6 +320,79 @@ def test_a_pending_probable_pair_in_reconciled_says_why():
         assert "cause" not in r["review"]
 
 
+# ── step 3: a booked charge is not judged and is not "in review" ───────
+
+
+def test_a_yellow_charge_is_not_judged():
+    charges = [
+        _charge("s1", date(2026, 7, 18), "10.23", "SUPERMEC SAO JOSE"),
+        _charge("s2", date(2026, 7, 19), "10.25", "SUPERMEC SAO JOSE"),
+    ]
+    charges = [
+        Transaction(**{**c.__dict__, "entry_status": "posted"}) for c in charges
+    ]
+    receipts = [_receipt("m1", date(2026, 7, 18), "8.80", "Marinho Supermercado Ltda")]
+    mock = MockLLMClient(fx_responses=[_verdict(0.4)] * 8)
+    out = _judge(charges, receipts, mock)
+    assert _fx_calls(mock) == 0
+    # The pair is kept for the audit, as the matcher built it.
+    assert any(m.document_id == "m1" for m in out.judgment_required)
+
+
+def test_an_already_posted_charge_leaves_review_and_is_not_re_judged(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    import tests.test_rematch_judgment_cache as rj
+    from expense_recon.web.app import create_app
+
+    monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    mock = MockLLMClient(
+        extraction_responses=[rj._eur_receipt()], fx_responses=[_verdict(0.4)] * 8
+    )
+    rj._wire(monkeypatch, mock)
+    with TestClient(create_app(tmp_path)) as client:
+        client._data_root = tmp_path
+        batch_id = rj._create_batch(client)
+        rj._attach(client, batch_id)
+        before = client.get(f"/api/runs/{batch_id}").json()
+        row = _staples(before)
+        assert row["effective_bucket"] == "review"
+        n_review_before = before["summary"]["n_review"]
+        resp = client.post(
+            f"/api/runs/{batch_id}/decisions",
+            json={"transaction_id": row["transaction_id"], "status": "already_posted"},
+        )
+        assert resp.status_code == 200, resp.text
+        # A new prompt version forces a cache miss: only the skip keeps the
+        # model from being asked again.
+        monkeypatch.setattr("expense_recon.llm.client.FX_JUDGMENT_PROMPT_VERSION", "x9")
+        calls = rj._fx_calls(mock)
+        rj._rematch(client, batch_id)
+        assert rj._fx_calls(mock) == calls, "an already-posted charge was re-judged"
+        after = client.get(f"/api/runs/{batch_id}").json()
+    row = _staples(after)
+    assert row["effective_bucket"] != "review"
+    assert after["summary"]["n_review"] == n_review_before - 1
+    assert row["candidates"], "the candidates stay on the row for the audit"
+    assert "cause" not in row["review"]
+
+
+def test_charge_states_moves_a_booked_review_row_out_of_review():
+    from expense_recon.matching.types import Match, MatchOutcome
+    from expense_recon.web.service import charge_states
+
+    tx = Transaction(**{**_charge("p1", date(2026, 7, 1), "9.80", "X").__dict__,
+                        "entry_status": "posted"})
+    live = _charge("p2", date(2026, 7, 1), "9.80", "X")
+    m = lambda t: Match(t, "d-" + t, MatchType.FX_JUDGMENT, 0.4, "r", True)  # noqa: E731
+    eff = MatchOutcome(judgment_required=[m("p1"), m("p2")])
+    states = charge_states([tx, live], eff, {})
+    assert states["p1"]["bucket"] == "unmatched" and states["p1"]["is_posted"]
+    assert states["p2"]["bucket"] == "review"
+
+
 # ── the cache key carries the prompt version (through the re-match) ────
 
 
