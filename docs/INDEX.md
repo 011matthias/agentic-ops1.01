@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-25 | Brisken P1 Private Card List | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20P1%20Private%20Card%20List/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken P1 Item 195 And Attach Leftovers | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20P1%20Item%20195%20And%20Attach%20Leftovers/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken Recon Private Card List Gate | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20Private%20Card%20List%20Gate/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken P1 Learner Remembered Card | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20P1%20Learner%20Remembered%20Card/Mini-Checkpoint-1.md) |
