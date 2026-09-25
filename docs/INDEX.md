@@ -12,6 +12,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-09-25 | Brisken Recon Review Lines Item 213 | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20Review%20Lines%20Item%20213/Mini-Checkpoint-1.md) |
+| 2026-09-25 | Brisken Recon Duplicates Bound Together | client-dev | [→](docs/2026-09-25%20-%20Brisken%20Recon%20Duplicates%20Bound%20Together/Checkpoint.md) |
 | 2026-09-25 | Brisken Recon Copy Suggestion And Account Index Speed | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20Copy%20Suggestion%20And%20Account%20Index%20Speed/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken P1 Publish Checklist And Card Check | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20P1%20Publish%20Checklist%20And%20Card%20Check/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken Recon Prompt Re-Audit | client-dev | [Mini-Checkpoint-2](docs/2026-09-25%20-%20Brisken%20Recon%20Prompt%20Re-Audit/Mini-Checkpoint-2.md) |
