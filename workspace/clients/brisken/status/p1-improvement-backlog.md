@@ -9065,7 +9065,12 @@ no declined store; Publish with nothing ticked still publishes).**
   lesson ticked now that no earlier save kept (offered again, ticked later).
 - OpenAI, Anthropic and Lovable: their `registry:` lesson reads
   `owner_gated: true`, is never ticked and is refused if sent
-  (`refused_owner_gated`). Their memory rows stay ordinary lessons.
+  (`refused_owner_gated`). Their memory rows stay ordinary lessons. The
+  whole merchant-list write is refused, so the M2 / item-171 card learner
+  no longer records `cards_seen` for them either (it only ever updated an
+  existing entry, and live none of the three exists).
+  `test_settled_charge_learner_item_171.py` used them as fixture vendors and
+  now uses ungated ones in the same shape.
 - Step 4, item 180's map: on a GL month a kept account correction (her leaf
   code, postable in the company the row SHOWS) writes
   `merchants[].accounts[<account_companies label>]`, code only, never the
