@@ -11327,8 +11327,11 @@ rows), Zoho (`ZOHO* ZOHO-ONE`, `ZOHO_BOOKS`), AT&T (`AT&amp;T MOBILITY EPAY`,
 Rize Labs, OpenRouter, Railway, Vercel and Pressmaster, which take the 55's
 reach from 35 to 47.
 
-**Build 2 step 1, built 2026-09-25 (Shipped row 137): the model is offered
-leaves only.** Owner ruling 2026-09-25: a model pick may not land on a parent
+**Build 2 step 1, built and deployed 2026-09-25 (Shipped row 137, PR #1447,
+Fly `2820e33c`): the model is offered leaves only.** Live read after deploy:
+the person's picker still lists the parents (Corporate Services 68 accounts),
+September's grid and the published SPA render all 87 rows (cold drive, replayed
+payload, 0 writes). Owner ruling 2026-09-25: a model pick may not land on a parent
 with postable children; a person or a rule may. Parents are read from the
 chart's parent names, not the code prefix: Cloud Services and Consulting 11,
 Corporate Services 13 (its two roots `E100000` / `E500000` included), so the
