@@ -11388,7 +11388,23 @@ choice); four older tests re-pinned to the receipt-kept contract
 regress (held into the re-match, the pool's choice, the view's read, the
 persist, the no-statement read).
 
-### 218. Invoices paid by bank transfer wait in the card queue for a statement that will never cover them (item 216 cause 4, Build 4; owner decisions 2026-09-25)
+### 218. Invoices paid by bank transfer wait in the card queue for a statement that will never cover them (item 216 cause 4, Build 4; owner decisions 2026-09-25) (SHIPPED 2026-09-25, PR #1444, Fly deployed `a8a6809b`; SPA prompt `docs/lovable-bills-path-prompt.md` not pasted)
+
+**Live 2026-09-25 08:40 UTC (one read of each month, 15 s apart, no write).**
+Every predicted number held. July: `n_expenses` 71 to 70, BRL
+`totals_by_ccy` 30,425.80 to 3,222.46, `n_bills` 1 (BRL 27,203.34),
+`n_uncategorized` 38 to 37, `n_needs_entity` 14 to 13,
+`n_needs_company_or_person` 15 to 14, `n_review` 57 to 56, no other summary
+key moved; Tricarico reads `payment_path: bill`, source `settled_outside`;
+0004 and 0008 carry `bill_suggestion` (their bank-account and IBAN lines).
+The Matching payload reads `n_bills` 1, `n_receipts_need_charge` 14,
+`n_settled_outside` 1. August and September gained the two keys and nothing
+else. `GET /runs/50622baec444/bills.csv` lists Tricarico with the company
+blank. Cold drive of the published SPA (in through the access-code gate,
+July's payloads replayed from disk, 0 non-GET besides the login): the page
+reads EXPENSES 70, NEEDS CATEGORY 37, BRL 3,222.46, and 30,425.80 nowhere.
+Until the prompt is pasted the page lowers the BRL total with no line saying
+why, and Tricarico still lists among the card rows.
 
 **In plain words.** The tool assumes every receipt was paid by a company card
 and waits for that card's statement. Four July invoices were paid, or are
