@@ -8897,6 +8897,22 @@ client that fails if called); nine wiring points proven RED under
 `tools/regress_check.py`. The suggested accounts per vendor and company went
 to the owner for Dirk; none are written to live settings.
 
+**Follow-up the same day (PR after #1377), found by reading the live list.**
+`needs_account` first keyed on the grid's `vendor.source == "registry"`,
+which is stamped at ingest, so it missed every row whose receipt predates its
+merchant, and it listed merchants that already book through a single
+`zoho_account` (the food merchants on `E100010-31`). It now resolves each
+row's vendor as the engine does and counts a company as covered when the map,
+the single account or the category names a leaf postable there. **Open lead,
+not fixed:** "Anthropic, PBC", the spelling on 29 of the 34 live Anthropic rows
+(July to September), does NOT resolve to the registry's "Anthropic": `pbc`
+(Public Benefit Corporation) is not in `vendor_names._LEGAL_SUFFIXES`, so it
+counts as a distinctive word and the fuzzy score falls to 75 of the 88
+needed. An Anthropic account per company would therefore reach only the rows
+spelled plainly, until either `pbc` joins the legal suffixes (a matcher-wide
+change; measure it against the six bundles first) or the merchant gains the
+alias "Anthropic, PBC" in Settings.
+
 **Owner:** *"This should not be applied automatically to new months because
 some merchants can have more than one GL account. Manual editing by the user
 should adjust the merchant's registry. Per entity expense account relevant
