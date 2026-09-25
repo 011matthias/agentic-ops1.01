@@ -59,6 +59,7 @@ __all__ = [
     "gl_companies",
     "gl_leaf_account_name",
     "gl_leaf_status",
+    "gl_postable_ref",
     "gl_revision",
     "is_recognized",
     "recognize",
@@ -227,6 +228,19 @@ def gl_companies(
         best = [lbl for lbl in labels if lbl in preferred] or labels
         out.append({"label": best[0], "org_id": org_id, "labels": labels})
     return sorted(out, key=lambda r: r["label"].lower())
+
+
+def gl_postable_ref(ref: str | None, org_id: str | None) -> str | None:
+    """The leaf CODE a reference names in this org, when it is postable
+    there, else None. Resolves a code, a `"CODE name"` label or this org's
+    own account name exactly as the engine's registry tier does
+    (`curated_leaves.code_of`, org-scoped), so a caller in `web/` can ask
+    "would this booking resolve" without importing the chart."""
+    try:
+        code = curated_leaves.code_of(ref, org_id)
+        return code if code and curated_leaves.is_postable(org_id, code) else None
+    except curated_leaves.CuratedLeavesError:
+        return None
 
 
 def gl_leaf_status(code: str | None, org_id: str | None) -> dict:

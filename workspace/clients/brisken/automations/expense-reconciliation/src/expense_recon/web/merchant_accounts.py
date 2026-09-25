@@ -25,7 +25,7 @@ import time
 from typing import Callable, Iterable
 
 from ..categorize_charges import build_charge_pseudo_receipt
-from ..category_vocabulary import gl_companies, gl_leaf_status
+from ..category_vocabulary import gl_companies, gl_leaf_status, gl_postable_ref
 from ..coa_provision import GL_ENTITY_ORGS_KEY, org_id_for_entity
 from ..merchant_registry import MerchantRegistry, company_account
 from .serialize import snapshot_from_dict
@@ -81,6 +81,21 @@ def merchant_accounts_view(
     return out
 
 
+def _covered(entry: dict, org_id: str, entity_orgs: dict[str, str]) -> bool:
+    """Does the registry already give this merchant an account in this
+    company? Its per-company map, or else its single `zoho_account` or its
+    default category naming a leaf this company can post to: the same refs
+    the engine's registry tier tries, in the same org-scoped resolution.
+    Live, the Brazilian food merchants carry `E100010-31 - Travel Expense |
+    Food` and book through it; listing them would bury the real gaps."""
+    if company_account(entry.get("accounts") or {}, org_id, entity_orgs):
+        return True
+    return any(
+        gl_postable_ref(ref, org_id)
+        for ref in (entry.get("zoho_account"), entry.get("category"))
+    )
+
+
 def needs_account(
     settings: dict | None, bookings: Iterable[dict], companies: list[dict],
 ) -> list[dict]:
@@ -100,7 +115,7 @@ def needs_account(
         org_id = org_id_for_entity(b.get("company"), entity_orgs)
         if not org_id:
             continue
-        if company_account(entry.get("accounts") or {}, org_id, entity_orgs):
+        if _covered(entry, org_id, entity_orgs):
             continue
         key = (b["merchant"], org_id)
         row = agg.setdefault(key, {
@@ -125,10 +140,20 @@ def _run_bookings(run, view: dict, registry: MerchantRegistry) -> list[dict]:
     resolves them (the charge's own company, the bank's description)."""
     out: list[dict] = []
     for e in view.get("expenses") or []:
+        # Resolved from the row's own vendor, as the engine resolves it,
+        # never from `vendor.source`: that flag is stamped at ingest, so a
+        # receipt that arrived before its merchant was added reads
+        # "extraction" for good (live: 29 of 34 Anthropic rows, July to
+        # September 2026).
         vendor = e.get("vendor")
-        if isinstance(vendor, dict) and vendor.get("source") == "registry":
+        if isinstance(vendor, dict):
+            display, raw = vendor.get("display"), vendor.get("raw")
+        else:
+            display, raw = vendor, None
+        m = registry.resolve(display or None, raw or None)
+        if m is not None:
             out.append({
-                "merchant": vendor.get("display") or "",
+                "merchant": m.canonical_name,
                 "company": e.get("legal_entity_id") or "",
                 "month": run.label,
                 "kind": "receipt",
