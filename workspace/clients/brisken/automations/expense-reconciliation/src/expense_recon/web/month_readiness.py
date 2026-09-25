@@ -200,6 +200,31 @@ def completeness_counts(
     }
 
 
+def receipts_waiting_statement(
+    receipts_without_charge: list[dict],
+    *,
+    waiting_codes=frozenset(),
+    private_docs=frozenset(),
+    copy_docs=frozenset(),
+) -> tuple[int, list[str]]:
+    """Item 220: of the receipts `n_receipts_need_charge` counts, how many
+    are only waiting for a statement (their `reason_code` is one of
+    `waiting_codes`), and the cards they wait on (sorted labels, from each
+    row's `waits_for_statements`). A SUBSET, so `n_receipts_need_charge`
+    keeps its one question: September 2026's refusal read "49 receipts have
+    no charge" while 38 of them were dated after the last loaded charge."""
+    n = 0
+    cards: set[str] = set()
+    for r in receipts_without_charge:
+        if r.get("reason_code") not in waiting_codes:
+            continue
+        if not receipt_needs_charge(r, private_docs=private_docs, copy_docs=copy_docs):
+            continue
+        n += 1
+        cards.update(r.get("waits_for_statements") or ())
+    return n, sorted(cards)
+
+
 def is_month_complete(*, ready_to_post: bool, counts: dict) -> bool:
     return bool(ready_to_post) and not any(
         counts[k] for k in (
@@ -228,10 +253,30 @@ def not_complete_detail(summary: dict) -> str:
             "charge still needs a receipt", "charges still need a receipt",
         ))
     if summary.get("n_receipts_need_charge"):
-        parts.append(_plural(
+        # Item 220: name the receipts that only wait for a statement apart
+        # from the ones no loaded statement settles, so the sentence points
+        # at the right fix (upload the statement vs. look for the charge).
+        waiting = min(
+            summary.get("n_receipts_waiting_statement") or 0,
             summary["n_receipts_need_charge"],
-            "receipt has no charge", "receipts have no charge",
-        ))
+        )
+        rest = summary["n_receipts_need_charge"] - waiting
+        if waiting:
+            cards = summary.get("receipts_waiting_cards") or []
+            on = f" (cards {', '.join(cards)})" if cards else ""
+            parts.append(_plural(
+                waiting,
+                f"receipt waits for a statement{on}",
+                f"receipts wait for a statement{on}",
+            ))
+        if rest:
+            parts.append(_plural(
+                rest,
+                "receipt has no charge on any loaded statement",
+                "receipts have no charge on any loaded statement",
+            ) if waiting else _plural(
+                rest, "receipt has no charge", "receipts have no charge",
+            ))
     if summary.get("n_charges_category_guessed"):
         parts.append(_plural(
             summary["n_charges_category_guessed"],
@@ -255,6 +300,7 @@ READINESS_KEYS = (
     "n_charges_closed_recurring",
     "n_charges_receipt_requested",
     "n_charges_no_receipt_expected",
+    "n_receipts_waiting_statement",
 )
 
 

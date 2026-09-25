@@ -7317,3 +7317,54 @@ both payloads, the PUT, the settled-outside route, the three CSVs and both
 PDFs, plus a no-signal month rendered with the path unwired to prove every
 old key unchanged) and `tests/test_payment_path_218.py` (the rules, negative
 cases as the contract). Renders in `docs/lovable-bills-path-prompt.md`.
+
+## Receipts that wait for a statement (item 220, front 2)
+
+`GET /api/runs/{id}` only. Parallel fields; nothing existing is retyped.
+
+### `unmatched_receipts[].reason_code`
+
+One new value, `statement_not_loaded_for_date`: the receipt's card has
+statements loaded, but none reaches the receipt's date. The rule now reads
+the CARD before the date edge whenever the estate's statement evidence is
+available (`card_suggestion.reason_coverage`):
+
+- the card the card chain resolved for the row (printed, picked, assigned,
+  remembered, lent by a settled charge) decides; with no card, every active
+  card does (the set `expenses[].waits_for_statements` reads);
+- every card it waits on has no statement loaded in any month:
+  `card_statement_not_loaded`; otherwise, when some card's statements stop
+  short of the date: `statement_not_loaded_for_date`;
+- the date is covered: a resolved card with no charge on this page reads
+  `charge_in_neighbouring_period` (another month's statement holds its
+  date); else the two-day edge of the month span reads
+  `charge_in_neighbouring_period`, and anything inside it
+  `no_charge_on_any_loaded_statement`.
+
+Without evidence, or when the receipt printed digits no registry card names
+(August's Google invoices print account numbers), the pre-220 date-first
+order applies unchanged. `not_a_card_charge` gained the German till words
+`Bar` / `Barzahlung` / `Bargeld`, `girocard` fused to its mode
+(`girocardOLV`) and `Kartenzahlung erhalten`, all word-bounded.
+
+### `unmatched_receipts[].waits_for_statements`
+
+`string[]` of card labels the receipt waits on. Present only with reason
+`card_statement_not_loaded` or `statement_not_loaded_for_date` (when the
+evidence decided); ABSENT otherwise, never null or `[]`.
+
+### Summary
+
+- `summary.n_receipts_waiting_statement`: number, always present. The subset
+  of `n_receipts_need_charge` whose reason is one of the two waiting codes.
+  `n_receipts_need_charge` keeps its one question.
+- `summary.receipts_waiting_cards`: `string[]`, the union of those rows'
+  `waits_for_statements`, sorted. ABSENT when the count is 0.
+- The publish refusal (`month_not_complete`) carries
+  `readiness.n_receipts_waiting_statement`, and its sentence splits the
+  receipts: "N receipts wait for a statement (cards ...); M receipts have no
+  charge on any loaded statement". With nothing waiting it reads as before.
+
+Tests: `tests/test_receipt_waits_item_220.py` (route-level run payload and
+publish refusal, the rule and the regex, negative cases included); pinned in
+`tests/test_view_contract.py`. Renders in `docs/lovable-receipt-waits-prompt.md`.

@@ -320,6 +320,44 @@ def uncovered_for_receipt(receipt, source) -> list[str]:
     return evidence.waits_for(receipt.detected_date)
 
 
+def reason_coverage(receipt, source, card_key: str | None = None) -> dict | None:
+    """What the loaded statements say about one unmatched receipt's date,
+    for `unmatched_reasons.receipt_reason_code` (item 220). None when there
+    is no evidence, or when the receipt printed card digits that the card
+    chain could not resolve to a registry card (the reason then keeps its
+    date-first order: August's two Google invoices print account numbers,
+    not cards).
+
+    `card_key` is the card the chain resolved for the row (printed, picked,
+    assigned, remembered or lent by a settled charge). With one, only THAT
+    card's statements decide; without one, every active card's do, the same
+    set `waits_for_statements` reads on the Expenses tab.
+
+    {"cards": [registry keys asked], "waits_for": [labels of those whose
+    statements do not cover the date], "never_loaded": [the subset of
+    `waits_for` with no statement loaded in any month]}."""
+    if source is None:
+        return None
+    if not card_key and _card_keys(receipt.payment_mode or ""):
+        return None
+    evidence = source.get()
+    if evidence is None:
+        return None
+    day = receipt.detected_date
+    if card_key:
+        cards = [card_key]
+        labels = {card_key: evidence.active.get(card_key, card_key)}
+    else:
+        cards = sorted(evidence.active)
+        labels = dict(evidence.active)
+    waits = [] if day is None else [k for k in cards if not evidence.covers(k, day)]
+    return {
+        "cards": cards,
+        "waits_for": sorted(labels[k] for k in waits),
+        "never_loaded": sorted(labels[k] for k in waits if not evidence.periods.get(k)),
+    }
+
+
 def attached_month(run) -> str:
     """"YYYY-MM" of a company month's label, "" for a trip or a label that
     names no month."""
