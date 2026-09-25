@@ -61,18 +61,110 @@ class LearnedRecall:
         return any(r.validated_at for r in self.rows)
 
 
-class MerchantCategoryLookup:
-    """An in-memory (legal_entity_id, vendor_norm) -> MerchantCategory map.
-    Empty by construction when there is nothing learned, so an absent or
-    fresh store leaves Sort behaving exactly as before."""
+def _person_row(r: MerchantCategory) -> bool:
+    """`LearnedRecall.taught_by_person` for one row."""
+    return not (r.source_run or "").startswith(ZOHO_SEED_PREFIX) or bool(r.validated_at)
 
-    def __init__(self, rows: list[MerchantCategory] | None = None):
+
+@dataclass(frozen=True)
+class IdentityFold:
+    """One (company, merchant) whose stored rules sit under two or more
+    spellings (item 216 cause 3). `decided` is False when they disagree: then
+    no spelling speaks for the merchant and each keeps answering only for its
+    own exact spelling, as before."""
+
+    legal_entity_id: str
+    key: str
+    vendor_norms: tuple[str, ...]
+    decided: bool
+    category: str | None = None
+    zoho_account: str | None = None
+
+
+def fold_rows(
+    rows: list[MerchantCategory],
+) -> tuple[tuple[MerchantCategory, ...] | None, bool]:
+    """The rows that speak for one merchant in one company, or None when they
+    disagree. Rules a person stands behind outrank rules seeded from Zoho
+    history (the recall's own `taught_by_person` order); within the deciding
+    tier every row must name the same category and account."""
+    person = [r for r in rows if _person_row(r)]
+    deciding = person or rows
+    values = {(r.category, r.zoho_account) for r in deciding}
+    if len(values) != 1:
+        return None, False
+    return tuple(sorted(deciding, key=lambda r: r.vendor_norm)), True
+
+
+class MerchantCategoryLookup:
+    """An in-memory (legal_entity_id, merchant) -> MerchantCategory map.
+    Empty by construction when there is nothing learned, so an absent or
+    fresh store leaves Sort behaving exactly as before.
+
+    Item 216 cause 3: recall keys on the merchant IDENTITY
+    (`merchant_identity.MerchantIdentityResolver.key`), not on the raw
+    spelling, so a rule stored under `anthropic` answers a receipt reading
+    `Anthropic, PBC (@anthropic)`, and rules stored under several spellings of
+    one merchant fold into one. The fold happens here, at read time, rather
+    than by rewriting the store: nothing on disk changes, the Memory page and
+    the undo journal keep their keys, and a disagreement is simply not
+    folded (`folds` reports it) so each spelling keeps answering for itself
+    exactly as before. Pass `identity` built on the registry so the
+    registry's aliases join the fold; without one the name-only identity
+    applies."""
+
+    def __init__(
+        self, rows: list[MerchantCategory] | None = None, *, identity=None,
+    ):
+        from ..merchant_identity import MerchantIdentityResolver
+
+        self._rows: list[MerchantCategory] = list(rows or [])
+        self.identity = identity or MerchantIdentityResolver()
         self._by_key: dict[tuple[str, str], MerchantCategory] = {
-            (r.legal_entity_id, r.vendor_norm): r for r in (rows or [])
+            (r.legal_entity_id, r.vendor_norm): r for r in self._rows
         }
         self._by_vendor: dict[str, list[MerchantCategory]] = {}
         for r in self._by_key.values():
             self._by_vendor.setdefault(r.vendor_norm, []).append(r)
+        grouped: dict[tuple[str, str], list[MerchantCategory]] = {}
+        for r in self._by_key.values():
+            ikey = self.identity.key(r.vendor_norm) or r.vendor_norm
+            grouped.setdefault((r.legal_entity_id, ikey), []).append(r)
+        # (entity, identity key) -> the rows that speak for it; absent when
+        # its spellings disagree.
+        self._by_ident: dict[tuple[str, str], tuple[MerchantCategory, ...]] = {}
+        self._ident_vendor: dict[str, list[tuple[MerchantCategory, ...]]] = {}
+        self.folds: list[IdentityFold] = []
+        for (entity, ikey), group in sorted(grouped.items()):
+            speaking, decided = fold_rows(group)
+            if len(group) > 1:
+                first = speaking[0] if speaking else None
+                self.folds.append(IdentityFold(
+                    entity, ikey, tuple(sorted(r.vendor_norm for r in group)),
+                    decided,
+                    first.category if first else None,
+                    first.zoho_account if first else None,
+                ))
+            if speaking:
+                self._by_ident[(entity, ikey)] = speaking
+                self._ident_vendor.setdefault(ikey, []).append(speaking)
+
+    def with_identity(self, identity) -> "MerchantCategoryLookup":
+        """The same rules folded by another resolver (one carrying the
+        registry, so its aliases join the fold)."""
+        return MerchantCategoryLookup(self._rows, identity=identity)
+
+    def _speaking(
+        self, entity: str, vendor: str, vnorm: str, ikey: str,
+    ) -> tuple[MerchantCategory, ...] | None:
+        """The rows answering for (entity, merchant): the folded identity,
+        else, when the merchant's spellings disagree, the exact spelling's own
+        row as before item 216."""
+        hit = self._by_ident.get((entity, ikey))
+        if hit is not None:
+            return hit
+        exact = self._by_key.get((entity, vnorm))
+        return (exact,) if exact is not None else None
 
     def get(self, legal_entity_id: str, vendor: str | None) -> MerchantCategory | None:
         if not vendor:
@@ -100,21 +192,25 @@ class MerchantCategoryLookup:
         vnorm = normalize_vendor(vendor)
         if not vnorm:
             return None
+        ikey = self.identity.key(vendor) or vnorm
         entity = (legal_entity_id or "").strip()
-        hit = self._by_key.get((entity, vnorm))
-        if hit is not None and hit.category:
+        hit = self._speaking(entity, vendor, vnorm, ikey)
+        if hit is not None and hit[0].category:
             return LearnedRecall(
-                hit.category, hit.zoho_account, (hit,), RECALL_COMPANY
+                hit[0].category, hit[0].zoho_account, hit, RECALL_COMPANY
             )
         if entity:
-            no_company = self._by_key.get(("", vnorm))
-            if no_company is not None and no_company.category:
+            no_company = self._speaking("", vendor, vnorm, ikey)
+            if no_company is not None and no_company[0].category:
                 return LearnedRecall(
-                    no_company.category, no_company.zoho_account,
-                    (no_company,), RECALL_NO_COMPANY,
+                    no_company[0].category, no_company[0].zoho_account,
+                    no_company, RECALL_NO_COMPANY,
                 )
             return None
-        rows = [r for r in self._by_vendor.get(vnorm, []) if r.category]
+        groups = self._ident_vendor.get(ikey)
+        if groups is None:
+            groups = [(r,) for r in self._by_vendor.get(vnorm, [])]
+        rows = [r for g in groups for r in g if g[0].category]
         if not rows or len({r.category for r in rows}) != 1:
             return None
         accounts = {r.zoho_account for r in rows}
