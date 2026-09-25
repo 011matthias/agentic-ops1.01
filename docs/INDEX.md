@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-25 | Brisken Recon Prompt Re-Audit | client-dev | [Mini-Checkpoint-2](docs/2026-09-25%20-%20Brisken%20Recon%20Prompt%20Re-Audit/Mini-Checkpoint-2.md) |
 | 2026-09-25 | Expense-Recon D3 Card History Load | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Expense-Recon%20D3%20Card%20History%20Load/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Expense-Recon Case 9 Build 4 | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Expense-Recon%20Case%209%20Build%204/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken Recon Prompt Re-Audit | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20Prompt%20Re-Audit/Mini-Checkpoint-1.md) |

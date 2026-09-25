@@ -853,6 +853,15 @@ note #87 (01:12 UTC, September) is backlog item 213: the item-204
 `waits_for_statement` reason names all nine cards on 19 rows. Recorded, not
 built; the unpasted `lovable-case9-status-prompt.md` repeats it via `{cards}`.
 
+**2026-09-25 night: first private card listed; the strip gets redesigned
+(PRs #1398, #1403).** Owner order: 3281 -> Dirk Neumann as a PLACEHOLDER,
+saved through Settings > Private cards (only September's DB Fernverkehr row
+moved). Follow-up 1 is live. Owner ruled item 214: the card strip asks only
+where the receipt carries no payment info, and its dropdown lists cards only
+(company + private list, no "Private card of..." / "New card..."). Follow-up
+2 withdrawn unpasted. `lovable-case9-status-prompt.md` is HELD by the owner
+until item 213 amends it.
+
 ## Elements (index)
 
 State at a glance only. Live slice-level status, next actions, and detail are in
