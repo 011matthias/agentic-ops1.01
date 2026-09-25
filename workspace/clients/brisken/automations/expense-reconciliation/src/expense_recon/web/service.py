@@ -8081,7 +8081,8 @@ def build_expense_view(
             "untrusted_instructions": _row_untrusted(r, intake_provenance),
             # Item 204 steps 1 and 5 (case 9): `waits_for_statements` and the
             # recurring-charge `card_suggestion`, on an open card-less row
-            # only, both absent otherwise. The suggestion never sets `card`.
+            # only, both absent otherwise. The suggestion never sets `card`,
+            # and a decided copy gets none (its original carries it).
             **_c9.case9_row_fields(
                 r, res,
                 str(_expense_vendor_view(
@@ -8089,6 +8090,7 @@ def build_expense_view(
                     field_overrides.get(r.document_id, {}),
                 ).get("display") or ""),
                 statement_evidence, row_settled_outside,
+                copy=r.document_id in grid_copies,
             ),
         })
         if roster is not None:
