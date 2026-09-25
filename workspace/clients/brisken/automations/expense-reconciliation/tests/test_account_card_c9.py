@@ -362,7 +362,10 @@ def test_an_unreadable_batch_empties_the_whole_index(monkeypatch):
                             config={"mode": MODE_EXPENSE_GENERATION})
             for rid, label in (("jul", "July 2026"), ("sep", "September 2026"))]
     store = SimpleNamespace(
+        db_path="unreadable-batch-fake",
         list_runs=lambda: runs,
+        get_run=lambda rid: next(r for r in runs if r.run_id == rid),
+        run_inputs_digest=lambda rid: rid,
         get_expense_field_overrides=lambda rid: {},
         get_expense_edits=lambda rid: [],
         get_decisions=lambda rid: {},
@@ -377,6 +380,37 @@ def test_an_unreadable_batch_empties_the_whole_index(monkeypatch):
 
     monkeypatch.setattr(billing_account, "month_evidence", evidence)
     assert billing_account.build_account_index(store) == {}
+
+
+def test_a_month_is_re_derived_only_after_its_own_rows_change(client, monkeypatch):
+    """Live 2026-09-25 every request re-derived every month (~28 s a page).
+    A month's evidence is reused while its rows are unchanged, and a write
+    to that month (here a pick) re-derives it, and only it, so the answer
+    still follows the data: two cards in the evidence blank May's row."""
+    from expense_recon import billing_account
+
+    july = _july_on_3876(client, monkeypatch)
+    may = _month(client, monkeypatch, "May 2026",
+                 _ff("HQXED19R-0004", day="2026-05-12"))
+    derived: list[str] = []
+    real = billing_account.month_evidence
+
+    def counting(run, **kw):
+        derived.append(run.run_id)
+        return real(run, **kw)
+
+    monkeypatch.setattr(billing_account, "month_evidence", counting)
+    assert _only(client, may)["card"]["key"] == "3876"
+    assert _only(client, may)["card_source"] == "account"
+    derived.clear()
+
+    assert _only(client, may)["card"]["key"] == "3876"
+    assert derived == [], "nothing changed, so nothing is re-derived"
+
+    first = next(e for e in _rows(client, july) if e["total"] == "18.00")
+    _pick(client, july, first["document_id"], "card-9693")
+    _blank(_only(client, may))
+    assert set(derived) == {july}, derived
 
 
 def test_the_judged_purchase_is_left_out_of_its_own_evidence():

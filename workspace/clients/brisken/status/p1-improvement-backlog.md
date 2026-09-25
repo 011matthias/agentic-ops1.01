@@ -10471,6 +10471,7 @@ remained. The collector now inherits like the grid, folds a copy's evidence into
 the purchase it repeats, and empties the whole index when any batch cannot be
 read. Test `test_a_card_printed_only_on_the_decided_copy_still_counts` is red on
 the v237 module and green with the fix; nothing was stored, the row reverts on read.
+2026-09-25, follow-up (Shipped row 131): the index cost ~28 s per request live (v239: May read 37 s against April's 9 s; the health check failed and the SPA's month page said "Failed to fetch"). A month's evidence is now reused per process while `RunStore.run_inputs_digest` (its rows in runs, decisions, duplicate rulings, overrides, edits) is unchanged, and re-derived after any write to it.
 
 ### 205. July, August and September switched to the Zoho accounts (owner directive 2026-09-25) (APPLIED 2026-09-25: PR #1356, Fly `071b19d7`, all three months switched live)
 
@@ -10712,6 +10713,15 @@ pasted nobody can add an entry, so the backend alone moves nothing.
 Contract: `docs/api-contract.md`, "Whose money paid: the decision order, and
 the private-card list". Tests: `tests/test_private_card_list.py`.
 
+**Live 2026-09-25 late:** Follow-up 1 published and driven (the strip offers
+"Private card of..."). First entry, owner order: **3281 -> Dirk Neumann, a
+PLACEHOLDER** (note "Placeholder set by the owner 2026-09-25; card owner not
+confirmed"), saved through Settings > Private cards. Change it there: edit the
+person, switch Active off, or remove the row. Effect, API-diffed over all 7
+months: only September's DB Fernverkehr row (`0024__`) moved, to private /
+`private_card_list` / Dirk Neumann. Open: Follow-up 2 (the strip's "Reimburse
+to" never pre-fills) and item 214 (a private receipt still waits on the strip).
+
 ### 209. A suggested duplicate stays bound together until someone releases it (owner 2026-09-25) (PROMPT REWRITTEN and design APPROVED on screenshots 2026-09-25, not pasted)
 
 **Owner:** *"add a duplicate filter inside each month so the user can see all
@@ -10861,10 +10871,29 @@ line: the next-longest reasons on the same page are `suggested_private` (233
 characters, 4 rows) and, in July, `date_outside_period` (191) and
 `needs_entity_settled_outside` (173).
 
+### 214. A private receipt still waits on the card strip (found 2026-09-25, listing 3281) (RECORDED, not built; owner call)
+
+After 3281 was listed (item 208), September's DB Fernverkehr row reads
+private / `private_card_list` / Dirk Neumann, yet `card_review` still lists
+its hint under `unresolved_hints` and `n_unresolved_rows` stays 7, so the
+strip keeps offering "Assign to card..." (and "Private card of...") for a
+receipt whose payer is settled, in every month the card appears. That
+undercuts "confirmed once". The builder (`web/service.py`, the `card_review`
+function ~7130) groups every row with a hint and no company card and never
+reads `private`; row-confirmed private rows (July `0028__`, September
+`0046__`) sit there the same way, so the gap predates the list.
+
+Fix shape (recommended): a row the resolution marks private leaves
+`unresolved_hints` and `n_unresolved_rows` (it is already counted in
+`n_private`); the strip header then counts only receipts that still need an
+answer. Alternative: keep the group but mark it settled with no Assign (SPA
+change). Owner call because it changes what Criss sees on the strip.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 131 | Item 204 step 4 follow-up: the billing-account index re-derives a month only when that month's own rows change. `billing_account._month_rows` keeps (digest, evidence) per (db, run) and reuses it while `RunStore.run_inputs_digest` matches, caching only when the digest is the same before and after the read. | Live on v239 every page showing an account-keyed row re-derived all seven months (~28 s): May read 37 s, April 9 s, the health check failed under two concurrent pages and the SPA's May page read "Failed to fetch". | #1397 |
 | 130 | Item 204 build 5 follow-up: a decided copy (`counts_in_total: false`) is never offered a `card_suggestion`; `build_expense_view` passes `copy=r.document_id in grid_copies` into `case9_row_fields`, and the copy keeps `waits_for_statements` (no count moves). | 2 of the 6 live suggestions sat on copies (May Lovable 200.00 -> 3645, July Lovable 200.00 -> card-2838), where a click writes an override on a row that counts for nothing; the original already carries the same suggestion. | #1388 |
 | 129 | Item 204 step 4 (case 9, build 4 of 5; owner D4): a receipt that prints no card takes the card its Stripe billing account (`WWT1PNYP-0016` -> `WWT1PNYP`) was paid with on at least two other purchases and on no other card, `card_source: "account"`, company and person riding it. New `billing_account.py`; one link in `resolve_batch_row_cards` between the settled charge and the remembered card; a lazy per-request index (one app middleware) passed by the grid, CSV, month PDF, card tabs, cost-center roll-up, refresh preview and so `/api/cards/status`; never the matcher or the sign-off learner. Lovable prompt `lovable-account-card-prompt.md` pending | Keyed on the vendor name the same memory gave the wrong person 3 times in 21; keyed on the account it scored 34 right, 0 wrong. Ten live May, June and September rows stop asking Criss for a company and a person; the multi-card accounts (Lovable, Dirk's Anthropic) and OpenAI's single pick (D6) stay blank on purpose | PR (this) |
 | 128 | Items 180/181: a merchant's GL account per company. `merchants[].accounts` `{company: leaf code}` decides first on a GL month (matched on the company's org), refuses a code the company cannot post to, works for a merchant with no default category and for receiptless charges; a save omitting the key keeps it; `GET /api/settings` names each code per company and lists `needs_account`; `POST /api/runs/{id}/recategorize-refused` (typed confirm) re-runs a GL month's refused rows | The 126 "model unsure" lines on July to September are mostly AI vendors on Corporate Services, where several accounts fit and the registry had no per-company answer to give | 2026-09-25; `tests/test_merchant_accounts_item_180.py` (10, route-level, a client that fails if the model is asked); nine wiring points proven RED under `tools/regress_check.py`; SPA prompt `docs/lovable-merchant-accounts-per-company-prompt.md` not pasted |
