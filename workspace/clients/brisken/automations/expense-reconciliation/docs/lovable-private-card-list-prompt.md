@@ -1,9 +1,10 @@
 # Lovable prompt: the private-card list (item 208), a personal card confirmed private once
 
-> **NOT PASTED.** Backend shipped 2026-09-25 (item 208): `settings.private_cards`,
+> **APPLIED 2026-09-25, with Follow-up 1; Follow-up 2 (the strip pre-fill)
+> NOT pasted.** Backend shipped 2026-09-25 (item 208): `settings.private_cards`,
 > `expenses[].private_source`, and `private_to` on the unknown-card strip's
-> assignments. Until this prompt is pasted nobody can add an entry, so the
-> backend alone moves nothing.
+> assignments. First live entry the same day: 3281 -> Dirk Neumann, a
+> placeholder the owner set through the Settings tab.
 >
 > Written against the published bundle of 2026-09-25 (43 files, transitive
 > crawl; `assets/chunk-expenses._batchId-C1cysI_S.js`,
@@ -156,4 +157,33 @@ Pass `{ allowPrivate: true }` from the "Cards by number" section only. The other
 1. September 2026, open the strip (Review), the "Card ending 3281" group: the Assign select ends with "Private card of..." after "New card...". Choosing it shows the "Reimburse to" input. Do not press Assign.
 2. The groups under "No card number on the receipt" still have no such option.
 3. PT: "Cartão particular de..." in the same place.
+````
+
+## Follow-up 2 (2026-09-25, after Follow-up 1 was published): the "Reimburse to" input never pre-fills
+
+Follow-up 1 is live and driven: the "Card ending 3281" group's Assign select
+ended with "Private card of..." and choosing it showed the input. The input
+was EMPTY although the API gives that group `documents: ["0024__..."]` and
+row `0024__` `reimburse_to_prefill: "Dirk Neumann"`. Cause, in the SPA source
+(`src/components/ExpensesReviewGrid.tsx`, commit `1c18504`): the page renders
+`<CardReviewStrip batchId={batchId} review={data.card_review} />` without
+`expenses`, so `prefillFor` searches the prop's default `[]`.
+
+Paste into Lovable:
+
+````markdown
+The app calls the FastAPI backend at `https://api.expenses.brisken.com`. No backend change; one prop is missing on the expenses page.
+
+## What is wrong
+
+`CardReviewStrip` pre-fills the "Reimburse to" input (shown when "Private card of..." is chosen) from `expenses[].reimburse_to_prefill`, looking up each row of the group by `document_id`. The page renders it as `<CardReviewStrip batchId={batchId} review={data.card_review} />`, without `expenses`, so the lookup runs over the default empty list and the input is always blank, even where the backend sent a name.
+
+## The fix
+
+Pass the batch's rows: `<CardReviewStrip batchId={batchId} review={data.card_review} expenses={data.expenses ?? []} />`. Change nothing else.
+
+## Checks
+
+1. On a month whose strip has a numbered group with a sender, choose "Private card of..." on that group: the "Reimburse to" input shows the sender's name (`reimburse_to_prefill`), and it can still be edited. Do not press Assign.
+2. A group whose rows carry no sender still shows an empty input.
 ````
