@@ -28,16 +28,20 @@ constants are part of the output, so two runs are comparable.
 
 Usage (from the repo root):
   uv run tools/recon-categorization-score.py --payload-dir DIR [--zoho F]
-  uv run tools/recon-categorization-score.py --fetch --payload-dir DIR \\
+  uv run tools/recon-categorization-score.py --fetch --pull-zoho --payload-dir DIR \\
       --batch 50622baec444 --batch 074a7b8905d7 --batch 51a22ad72864
 
 `--fetch` reads the live app once per endpoint, 15 s apart, and stops when
 one read takes over 45 s (the backend is one Fly machine Criss works on).
 The operator code comes from `EXPENSE_RECON_OPERATOR_CODE` or the gitignored
 brisken `context/.env`; it and the session token are never printed or
-written. `--module` points at the expense-recon `src/` whose chart
-(`curated_leaves`) and registry (`MerchantRegistry`) the score reuses.
-Exit 0 on a score, 2 when inputs are missing or a fetch is braked.
+written. `--pull-zoho` reads Criss's postings fresh from Zoho Books (list
+expenses only, the Books refresh token from the same `.env`) for the
+companies in settings, over the GL months plus a week each side, and writes
+`zoho-expenses.json` into the payload dir (or `--zoho`), which the score then
+uses. `--module` points at the expense-recon `src/` whose chart
+(`curated_leaves`), registry (`MerchantRegistry`) and Zoho client the score
+reuses. Exit 0 on a score, 2 when inputs are missing or a fetch is braked.
 """
 from __future__ import annotations
 
@@ -51,7 +55,7 @@ import time
 import urllib.error
 import urllib.request
 from collections import Counter, defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -74,6 +78,18 @@ SOURCES = ("REGISTRY", "LEARNED", "LINE", "VENDOR")
 # curated_leaves.NOT_COVERED): the fix is the company, not the account, so these
 # receipts count as intake, beside the ones a review verdict stopped earlier.
 COMPANY_REFUSALS = ("entity_missing", "org_not_curated")
+# Who answered, `answer_origin()` in the module's `matching/types.py`. Since
+# item 216 Build 2 step 2 a GL month's model answer sits in
+# `suggested_category`, not `posting_category`; it is still the tool's answer.
+ORIGINS = ("person", "rule", "suggestion")
+# The tool first showed Zoho accounts when July to September were converted,
+# 2026-09-24 23:17-23:23 UTC. A posting Criss created and last changed before
+# then cannot have copied the tool's account; one touched later may have.
+GL_SWITCH_UTC = datetime(2026, 9, 24, 23, 17, tzinfo=timezone.utc)
+TIMINGS = ("independent", "after_tool", "unknown")
+PULL_MARGIN_DAYS = 7
+BOOKS_ENV = ("ZOHO_CLIENT_ID", "ZOHO_CLIENT_SECRET", "ZOHO_BOOKS_REFRESH_TOKEN")
+ZOHO_OUT = "zoho-expenses.json"
 
 FETCH_GAP_S = 15.0
 FETCH_BRAKE_S = 45.0
@@ -144,6 +160,14 @@ def month_key(label: str | None) -> str | None:
     """`July 2026` -> `2026-07`; None when the label is not a calendar month."""
     try:
         return datetime.strptime(str(label).strip(), "%B %Y").strftime("%Y-%m")
+    except ValueError:
+        return None
+
+
+def zoho_time(x) -> datetime | None:
+    """Zoho's `2026-09-08T09:41:34-0500` as an aware datetime; None when absent."""
+    try:
+        return datetime.strptime(str(x), "%Y-%m-%dT%H:%M:%S%z") if x else None
     except ValueError:
         return None
 
@@ -292,7 +316,8 @@ def charge_baseline(month: dict) -> dict:
 # ---- truth and the join ---------------------------------------------------------------
 
 def tool_rows(months: list[dict], label_of: dict) -> list[dict]:
-    """Every charge row on a GL month except refunds, in month order."""
+    """Every charge row on a GL month except refunds, in month order. The
+    answer is what a person or a rule decided, else the model's suggestion."""
     out = []
     for m in months:
         if m["vocab"] != "gl":
@@ -300,7 +325,7 @@ def tool_rows(months: list[dict], label_of: dict) -> list[dict]:
         for r in m["run"].get("rows") or []:
             if r.get("effective_bucket") == "refund":
                 continue
-            pc = r.get("posting_category") or {}
+            pc = r.get("posting_category") or r.get("suggested_category") or {}
             rv = r.get("review") or {}
             entity = r.get("legal_entity_id") or ""
             out.append({
@@ -310,7 +335,8 @@ def tool_rows(months: list[dict], label_of: dict) -> list[dict]:
                 "currency": r.get("currency"), "vendor": r.get("vendor") or "",
                 "bucket": r.get("effective_bucket"), "entry_status": r.get("entry_status"),
                 "code": pc.get("category"), "raw_source": pc.get("source"),
-                "source": answer_source(pc.get("source")), "refusal": rv.get("refusal"),
+                "source": answer_source(pc.get("source")), "origin": pc.get("origin"),
+                "refusal": rv.get("refusal"),
             })
     return out
 
@@ -334,8 +360,20 @@ def truth_rows(zoho: dict, org_of: dict, months: set[str], cl) -> list[dict]:
                 "currency": e.get("currency_code"), "desc": e.get("description") or "",
                 "vendor": e.get("vendor_name") or "", "account": account, "code": code,
                 "postable": cl.is_postable(str(org), code) if code else None,
+                "created": zoho_time(e.get("created_time")),
+                "modified": zoho_time(e.get("last_modified_time")),
             })
     return out
+
+
+def timing(truth_row: dict) -> str:
+    """`independent` when Criss created and last changed the posting before
+    GL_SWITCH_UTC, `after_tool` when either happened later, `unknown` when
+    the pull carries neither time."""
+    stamps = [s for s in (truth_row.get("created"), truth_row.get("modified")) if s]
+    if not stamps:
+        return "unknown"
+    return "after_tool" if max(stamps) >= GL_SWITCH_UTC else "independent"
 
 
 def loose_rule(dd: int, overlap: int) -> bool:
@@ -346,19 +384,23 @@ def strict_rule(dd: int, overlap: int) -> bool:
     return (dd <= STRICT_WINDOW_DAYS and overlap >= 1) or dd == 0
 
 
-def join(rows: list[dict], truth: list[dict], rule) -> list[tuple[int, int, int, int]]:
-    """One-to-one pairs `(row, truth, day_diff, overlap)`: same company, amount
-    to the cent, dates within JOIN_WINDOW_DAYS and `rule`; nearest date first,
-    then most shared descriptor tokens, then input order."""
+def join(rows: list[dict], truth: list[dict], rule, *,
+         same_company: bool = True) -> list[tuple[int, int, int, int]]:
+    """One-to-one pairs `(row, truth, day_diff, overlap)`: same company (or,
+    with `same_company=False`, a DIFFERENT company), amount to the cent, dates
+    within JOIN_WINDOW_DAYS and `rule`; nearest date first, then most shared
+    descriptor tokens, then input order."""
     by_key = defaultdict(list)
     for j, t in enumerate(truth):
-        by_key[(t["company"], t["total"])].append(j)
+        by_key[(t["company"] if same_company else None, t["total"])].append(j)
     cands = []
     for i, r in enumerate(rows):
         if r["amount"] is None or r["date"] is None:
             continue
-        for j in by_key.get((r["company"], r["amount"]), ()):
+        for j in by_key.get((r["company"] if same_company else None, r["amount"]), ()):
             t = truth[j]
+            if not same_company and t["company"] == r["company"]:
+                continue
             dd = abs((t["date"] - r["date"]).days)
             if dd > JOIN_WINDOW_DAYS:
                 continue
@@ -413,6 +455,48 @@ def _source_table(joined: list[dict]) -> dict:
     return table
 
 
+def _origin_table(joined: list[dict]) -> dict:
+    """right / answered per origin (person, rule, suggestion; `unlabelled`
+    for an answer that carries none)."""
+    table = {}
+    for x in joined:
+        if not x["answered"]:
+            continue
+        cell = table.setdefault(x["origin"] or "unlabelled", {"answered": 0, "right": 0})
+        cell["answered"] += 1
+        cell["right"] += x["verdict"] == "agree"
+    return {k: table[k] for k in [*ORIGINS, "unlabelled"] if k in table}
+
+
+def _timing_table(joined: list[dict]) -> dict:
+    out = {}
+    for key in TIMINGS:
+        sub = [x for x in joined if x["timing"] == key]
+        if sub:
+            answered = [x for x in sub if x["answered"]]
+            out[key] = {"joined": len(sub), "answered": len(answered),
+                        "right": sum(1 for x in answered if x["verdict"] == "agree"),
+                        "by_origin": _origin_table(sub)}
+    return out
+
+
+def cross_company(rows: list[dict], truth: list[dict], pairs) -> list[dict]:
+    """Charges the join left unpaired whose amount and date meet an unpaired
+    posting in ANOTHER company: Criss booked the charge where the tool did not
+    put it, so its account cannot be compared."""
+    taken_r, taken_t = {p[0] for p in pairs}, {p[1] for p in pairs}
+    free_r = [i for i in range(len(rows)) if i not in taken_r]
+    free_t = [j for j in range(len(truth)) if j not in taken_t]
+    sub_rows, sub_truth = [rows[i] for i in free_r], [truth[j] for j in free_t]
+    out = []
+    for i, j, dd, _ov in join(sub_rows, sub_truth, loose_rule, same_company=False):
+        r, t = sub_rows[i], sub_truth[j]
+        out.append({"month": r["month"], "tx": r["tx"], "vendor": r["vendor"], "date": str(r["date"]),
+                    "amount": str(r["amount"]), "tool_company": r["company"],
+                    "zoho_company": t["company"], "zoho_account": t["account"], "day_diff": dd})
+    return out
+
+
 def _amounts(joined: list[dict]) -> dict:
     out = {}
     for ccy in sorted({x["currency"] or "?" for x in joined}):
@@ -440,9 +524,11 @@ def score_join(rows: list[dict], truth: list[dict], pairs, cl) -> dict:
             "amount": r["amount"], "currency": r["currency"], "entry_status": r["entry_status"],
             "open": r["entry_status"] not in CLOSED_ENTRY_STATUSES, "bucket": r["bucket"],
             "code": r["code"], "source": r["source"], "raw_source": r["raw_source"],
+            "origin": r.get("origin"),
             "kind": answer_kind(r["code"], cl) if v in ("agree", "disagree") else None,
             "truth_code": t["code"], "truth_account": t["account"], "verdict": v,
             "answered": v in ("agree", "disagree"), "day_diff": dd, "overlap": overlap,
+            "timing": timing(t),
         })
     answered = [x for x in joined if x["answered"]]
     open_rows = [x for x in joined if x["open"]]
@@ -453,6 +539,8 @@ def score_join(rows: list[dict], truth: list[dict], pairs, cl) -> dict:
         "verdicts": dict(Counter(x["verdict"] for x in joined)),
         "right": sum(1 for x in answered if x["verdict"] == "agree"), "answered": len(answered),
         "by_source": _source_table(joined),
+        "by_origin": _origin_table(joined),
+        "by_timing": _timing_table(joined),
         "by_month": {m: dict(Counter(x["verdict"] for x in joined if x["month"] == m))
                      for m in dict.fromkeys(x["month"] for x in joined)},
         "by_company": dict(Counter(x["company"] for x in joined)),
@@ -579,7 +667,13 @@ def build_report(payload_dir: Path, zoho_path: Path, *, truth_months: list[str] 
             "tokens": f"lowercase alphanumeric runs, length >= {TOKEN_MIN_LEN}, minus {sorted(TOKEN_STOP)}",
             "right": "the tool's code equals the code of the account Criss posted to (curated_leaves.code_of)",
             "answered": "the row carries an account and no refusal; a non-code answer counts as answered, not right",
-            "source": "posting_category.source; REVIEW parts dropped, two tiers on one row = MIXED",
+            "source": "posting_category.source, else suggested_category.source (the model's answer on a GL "
+                      "month); REVIEW parts dropped, two tiers on one row = MIXED",
+            "origin": "the answer's `origin`: person, rule or suggestion (answer_origin in matching/types.py)",
+            "timing": f"independent = Criss created and last changed the posting before {GL_SWITCH_UTC.isoformat()} "
+                      "(when the tool first showed Zoho accounts); after_tool = either later; unknown = no times",
+            "other_company": "a charge the join left unpaired that pairs (loose rule) with an unpaired posting "
+                             "in a different company",
             "open_row": f"entry_status not in {list(CLOSED_ENTRY_STATUSES)}",
             "receipt_rule": "a receipt is categorized when every line carries a category; copies (boxes == []) excluded",
             "receipt_groups": "engine refused = review.refusal other than "
@@ -595,6 +689,7 @@ def build_report(payload_dir: Path, zoho_path: Path, *, truth_months: list[str] 
             "strict": score_join(rows, truth, strict_pairs, cl),
         },
         "account_map": map_lever(settings, rows, truth, loose_pairs, org_of, module_src),
+        "other_company": cross_company(rows, truth, loose_pairs),
     }
 
 
@@ -657,7 +752,34 @@ def render_markdown(rep: dict) -> str:
             f"{strict['verdicts'].get('no_answer', 0)} |",
             "", f"Joined by company (loose): {', '.join(f'{k} {n}' for k, n in loose['by_company'].items())}. "
             f"Postings not joined: {loose['unjoined_truth']} (booked after the pull, or no matching charge).",
-            "", "## Open rows (still to be booked when the tool ran)", ""]
+            "", "## Who answered, and whether Criss could have seen it (loose join)", "",
+            f"Independent = posting created and last changed before {GL_SWITCH_UTC:%Y-%m-%d %H:%M} UTC, "
+            "when the tool first showed Zoho accounts; after = either later, so Criss may have followed the tool.",
+            "", "| Origin | All postings | Independent | After the switch |", "|---|---|---|---|"]
+    by_t = loose["by_timing"]
+    origins = [o for o in [*ORIGINS, "unlabelled"] if o in loose["by_origin"]]
+    for o in origins:
+        cells = [loose["by_origin"].get(o)] + [by_t.get(k, {}).get("by_origin", {}).get(o)
+                                                for k in ("independent", "after_tool")]
+        out.append(f"| {o} | " + " | ".join(ratio(c["right"], c["answered"]) if c else "0/0" for c in cells) + " |")
+    tot = [loose] + [by_t.get(k) for k in ("independent", "after_tool")]
+    out.append("| **All answered** | " + " | ".join(
+        f"**{ratio(c['right'], c['answered'])}**" if c else "0/0" for c in tot) + " |")
+    if "unknown" in by_t:
+        out.append(f"\n{by_t['unknown']['joined']} joined postings carry no created or modified time.")
+    cross = rep.get("other_company") or []
+    out += ["", "## Booked in another company", ""]
+    if not cross:
+        out.append("None: every charge the join left unpaired also has no posting in another company.")
+    else:
+        pairs = Counter(f"{c['tool_company']} -> {c['zoho_company']}" for c in cross)
+        out.append(f"{len(cross)} charges pair only with a posting in a different company "
+                   f"(tool -> Zoho): {', '.join(f'{k} {n}' for k, n in pairs.most_common())}.")
+        out += ["", "| Month | Date | Amount | Vendor | Tool company | Zoho company | Zoho account |",
+                "|---|---|---|---|---|---|---|"]
+        out += [f"| {c['month']} | {c['date']} | {c['amount']} | {c['vendor']} | {c['tool_company']} | "
+                f"{c['zoho_company']} | {c['zoho_account']} |" for c in cross]
+    out += ["", "## Open rows (still to be booked when the tool ran)", ""]
     for name, s in (("Loose", loose), ("Strict", strict)):
         o = s["open_rows"]
         out.append(f"- {name}: right on {o['right']} of {o['answered']} answered, "
@@ -764,6 +886,71 @@ def fetch(out_dir: Path, base_url: str, batch_ids: list[str], code: str, *,
     return written
 
 
+# ---- pull Criss's postings from Zoho Books --------------------------------------------------
+
+def books_credentials(env_file: Path | None) -> dict:
+    """The Books OAuth values from the environment, else the gitignored brisken
+    `context/.env`. Returned in memory only; never printed or written."""
+    found = {k: os.environ.get(k, "").strip() for k in (*BOOKS_ENV, "ZOHO_DC")}
+    path = env_file or context_path(CONTEXT_REL / ".env")
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            key, sep, value = line.partition("=")
+            if sep and key.strip() in found and not found[key.strip()]:
+                found[key.strip()] = value.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    missing = [k for k in BOOKS_ENV if not found[k]]
+    if missing:
+        raise InputError(f"Zoho Books credentials missing ({', '.join(missing)}) in the environment and {path}")
+    return found
+
+
+def pull_window(months: list[dict]) -> tuple[str, str]:
+    """The GL months' calendar span, widened by PULL_MARGIN_DAYS each side."""
+    keys = sorted(m["month"] for m in months if m["vocab"] == "gl" and m["month"])
+    if not keys:
+        raise InputError("no GL month with a calendar label to pull postings for")
+    first = date.fromisoformat(keys[0] + "-01")
+    y, mo = map(int, keys[-1].split("-"))
+    after = date(y + (mo == 12), mo % 12 + 1, 1)
+    return (str(first - timedelta(days=PULL_MARGIN_DAYS)),
+            str(after - timedelta(days=1) + timedelta(days=PULL_MARGIN_DAYS)))
+
+
+def _books_client(creds: dict, org_id: str, module_src: Path | None):
+    curated_leaves(module_src)  # puts the module on sys.path
+    from expense_recon.zoho.client import ZohoClient, ZohoConfig
+
+    dc = creds.get("ZOHO_DC") or "com"
+    return ZohoClient(ZohoConfig.from_env({
+        "ZOHO_CLIENT_ID": creds["ZOHO_CLIENT_ID"], "ZOHO_CLIENT_SECRET": creds["ZOHO_CLIENT_SECRET"],
+        "ZOHO_REFRESH_TOKEN": creds["ZOHO_BOOKS_REFRESH_TOKEN"], "ZOHO_ORG_ID": org_id,
+        "ZOHO_API_DOMAIN": f"https://www.zohoapis.{dc}", "ZOHO_ACCOUNTS_DOMAIN": f"https://accounts.zoho.{dc}",
+    }))
+
+
+def pull_zoho(out_path: Path, org_ids: list[str], date_start: str, date_end: str, *,
+              client_for, log=print) -> dict:
+    """Read every expense of each org dated date_start..date_end (inclusive)
+    through the module's read-only `list_expenses` and write them in the
+    `zoho-books-24mo.json` shape. Zoho's default list already applies
+    Status.All (2,359 of 2,359 Corporate Services expenses either way,
+    probed 2026-09-25)."""
+    pulled = {"pulled_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+              "date_from": date_start, "date_to": date_end, "orgs": {}}
+    for org in org_ids:
+        try:
+            expenses = client_for(org).list_expenses(date_start=date_start, date_end=date_end)
+        except RuntimeError as exc:  # the module's ZohoAuthError / ZohoAPIError
+            raise InputError(f"Zoho pull failed for org {org}: {exc}") from exc
+        pulled["orgs"][org] = {"expenses": expenses}
+        log(f"  org {org}: {len(expenses)} expenses {date_start}..{date_end}")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(pulled, ensure_ascii=False, indent=1), encoding="utf-8")
+    return pulled
+
+
 # ---- CLI --------------------------------------------------------------------------------------
 
 def main(argv: list[str] | None = None) -> int:
@@ -774,6 +961,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--truth-months", default=None, help="YYYY-MM,... (default: the GL months' calendar months)")
     ap.add_argument("--out", type=Path, default=None, help="where the .json/.md go (default: the payload dir)")
     ap.add_argument("--fetch", action="store_true", help="read the live app into --payload-dir first")
+    ap.add_argument("--pull-zoho", action="store_true",
+                    help=f"read Criss's postings fresh from Zoho Books into --zoho (default: payload dir/{ZOHO_OUT})")
     ap.add_argument("--batch", action="append", default=[], help="month id to fetch (repeatable)")
     ap.add_argument("--base-url", default=os.environ.get("EXPENSE_RECON_BASE_URL", DEFAULT_BASE_URL))
     ap.add_argument("--env-file", type=Path, default=None)
@@ -784,9 +973,18 @@ def main(argv: list[str] | None = None) -> int:
         if args.fetch:
             print(f"fetching {len(args.batch)} month(s) from {args.base_url}, {FETCH_GAP_S:.0f} s apart")
             fetch(args.payload_dir, args.base_url, args.batch, operator_code(args.env_file))
+        zoho_path = args.zoho or context_path(ZOHO_REL)
+        if args.pull_zoho:
+            zoho_path = args.zoho or args.payload_dir / ZOHO_OUT
+            data = load_payloads(args.payload_dir)
+            _label_of, org_of = companies(data["settings"])
+            start, end = pull_window(data["months"])
+            creds = books_credentials(args.env_file)
+            print(f"pulling Zoho Books expenses {start}..{end} into {zoho_path}")
+            pull_zoho(zoho_path, sorted(set(org_of.values())), start, end,
+                      client_for=lambda org: _books_client(creds, org, args.module))
         months = [m.strip() for m in args.truth_months.split(",")] if args.truth_months else None
-        rep = build_report(args.payload_dir, args.zoho or context_path(ZOHO_REL),
-                           truth_months=months, module_src=args.module)
+        rep = build_report(args.payload_dir, zoho_path, truth_months=months, module_src=args.module)
     except (InputError, Braked) as exc:
         print(f"recon-categorization-score: {exc}", file=sys.stderr)
         return 2
