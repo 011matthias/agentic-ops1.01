@@ -92,39 +92,34 @@ curl -s -A "$UA" "$API/healthz" | python -m json.tool
 
 ## Deploy
 
-`docs/if-it-is-down.md` section 6 has the emergency version and the two
-warnings that matter (deploy only from a clean detached `origin/main`
-worktree, because the deploy ships the `fly.toml` it is pointed at). This
-is the same command with the build stamp, which is what makes the deploy
-verifiable afterwards:
+Deploy through `deploy.py` in this module, from a tree that IS `origin/main`:
 
 ```bash
 git -C <repo> fetch origin
-git -C <repo> worktree add --detach <new-dir> origin/main
-M=<new-dir>/workspace/clients/brisken/automations/expense-reconciliation
-
-# Refuse to deploy a dirty tree: the commit you stamp would not describe
-# what you ship. (Verified: fires on a dirty module, silent on a clean one.)
-git -C "$M" diff --quiet HEAD -- . || { echo "dirty tree, stop"; exit 1; }
-
-COMMIT=$(git -C "$M" rev-parse HEAD)
-MSYS_NO_PATHCONV=1 flyctl deploy "$M" --config "$M/fly.toml" \
-  -a brisken-expense-recon --remote-only \
-  --build-arg GIT_COMMIT="$COMMIT"
+git -C <repo> worktree add --detach <tree> origin/main
+#   (or refresh an existing one: git -C <tree> checkout --detach origin/main)
+uv run <tree>/workspace/clients/brisken/automations/expense-reconciliation/deploy.py
+#   --dry-run       every check, print the flyctl command, ship nothing
+#   --image <ref>   roll back to an image, keeping today's fly.toml
 ```
 
-**Then prove it is the thing you shipped**, which is the whole point of
-the stamp:
+`flyctl deploy` ships the `fly.toml` of whatever tree it is pointed at, so a
+tree cut before the latest merge undoes merged code and the machine size
+alike. The script refuses, before anything ships, when the fetch fails, the
+module is dirty, the module differs from `origin/main`, or the live machine
+is bigger than `fly.toml`'s `[[vm]]` (someone resized without syncing the
+file). It stamps `GIT_COMMIT`, then checks that `/healthz` reports that
+commit and the machine carries `fly.toml`'s size. A direct `flyctl deploy`
+of this app is denied by `recon-accuracy-deploy-gate.py`; a tree with no
+`deploy.py` predates the rule and needs refreshing, not a workaround.
 
-```bash
-curl -s -A "$UA" "$API/healthz" | python -m json.tool | grep -E 'commit|image'
-# `commit` must equal $COMMIT.
-```
+Why it exists: on 2026-09-25 the machine was resized to shared-cpu-4x after
+its single shared vCPU was throttled to a 6.25% baseline and the app stopped
+answering (#1395), while several sessions were deploying from trees whose
+`fly.toml` still said `cpus = 1`.
 
-A good result is your commit. A **blank** `commit` means the deploy ran
-without `--build-arg`; the app is fine, but it can no longer tell you what
-it is, so redeploy with the flag. A **different** commit means someone
-else deployed after you.
+A **different** commit on `/healthz` afterwards means someone else deployed
+after you.
 
 Do not stop at `/healthz`. Open expenses.brisken.com, log in, open one
 month: the API answering and the screen working are different claims.

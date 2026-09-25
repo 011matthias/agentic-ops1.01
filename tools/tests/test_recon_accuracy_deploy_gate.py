@@ -73,51 +73,102 @@ def test_echo_mentioning_deploy_is_silent(tmp_path):
     assert _silent(run('echo "flyctl deploy -a brisken-expense-recon"', tmp_path))
 
 
-# --- fires: the seam's exit code decides ----------------------------------
+# --- job A: a direct deploy of the recon app is denied ---------------------
 
-def test_recon_deploy_with_check_passing_allows_silently(tmp_path):
-    assert _silent(run(RECON_DEPLOY, tmp_path, exit_code=0))
+def test_direct_recon_deploy_is_denied_without_consulting_the_check(tmp_path):
+    # exit_code=0 would allow if the check were consulted; deny must not be.
+    p = run(RECON_DEPLOY, tmp_path, exit_code=0)
+    assert permission_decision(p.stdout) == "deny"
+    assert "deploy.py" in p.stdout and "origin/main" in p.stdout
+    assert MARK not in p.stdout
 
 
-def test_recon_deploy_with_drop_asks_with_output(tmp_path):
-    p = run(RECON_DEPLOY, tmp_path, exit_code=1)
+def test_documented_stamped_deploy_is_denied(tmp_path):
+    # The operating.md recipe before 2026-09-25: stamped, and still stale-able.
+    cmd = ('M=C:/r/workspace/clients/brisken/automations/expense-reconciliation; '
+           'MSYS_NO_PATHCONV=1 flyctl deploy "$M" --config "$M/fly.toml" '
+           '-a brisken-expense-recon --remote-only --build-arg GIT_COMMIT=abc')
+    assert permission_decision(run(cmd, tmp_path).stdout) == "deny"
+
+
+def test_image_rollback_by_hand_is_denied(tmp_path):
+    cmd = "flyctl deploy -a brisken-expense-recon -i registry.fly.io/brisken-expense-recon:x"
+    assert permission_decision(run(cmd, tmp_path).stdout) == "deny"
+
+
+def test_bare_deploy_from_the_module_dir_is_denied(tmp_path):
+    cwd = str(tmp_path / "workspace" / "clients" / "brisken" / "automations"
+              / "expense-reconciliation")
+    p = run("flyctl deploy", tmp_path, exit_code=0, cwd=cwd)
+    assert permission_decision(p.stdout) == "deny"
+
+
+def test_bare_deploy_naming_the_module_is_denied(tmp_path):
+    cmd = ("( cd workspace/clients/brisken/automations/expense-reconciliation "
+           "&& flyctl deploy )")
+    assert permission_decision(run(cmd, tmp_path, exit_code=0).stdout) == "deny"
+
+
+def test_powershell_call_operator_spelling_is_denied(tmp_path):
+    p = run("& flyctl.exe deploy . -a brisken-expense-recon", tmp_path, exit_code=0)
+    assert permission_decision(p.stdout) == "deny"
+
+
+# --- job B: a deploy.py run is scored; the seam's exit code decides --------
+
+SCRIPT = ("uv run C:/r/workspace/clients/brisken/automations/"
+          "expense-reconciliation/deploy.py")
+
+
+def test_script_deploy_with_check_passing_allows_silently(tmp_path):
+    assert _silent(run(SCRIPT, tmp_path, exit_code=0))
+
+
+def test_script_deploy_with_drop_asks_with_output(tmp_path):
+    p = run(SCRIPT, tmp_path, exit_code=1)
     assert permission_decision(p.stdout) == "ask"
     assert MARK in p.stdout
     assert "BELOW ITS BASELINE" in p.stdout
 
 
-def test_recon_deploy_unmeasurable_asks(tmp_path):
-    p = run(RECON_DEPLOY, tmp_path, exit_code=2)
+def test_script_deploy_unmeasurable_asks(tmp_path):
+    p = run(SCRIPT, tmp_path, exit_code=2)
     assert permission_decision(p.stdout) == "ask"
     assert "COULD NOT BE MEASURED" in p.stdout
     assert MARK in p.stdout
 
 
-def test_bare_deploy_from_the_module_dir_fires(tmp_path):
-    cwd = str(tmp_path / "workspace" / "clients" / "brisken" / "automations"
-              / "expense-reconciliation")
-    p = run("flyctl deploy", tmp_path, exit_code=1, cwd=cwd)
-    assert permission_decision(p.stdout) == "ask"
+def test_script_via_variable_and_env_prefix_is_scored(tmp_path):
+    cmd = ('M="C:/r/workspace/clients/brisken/automations/expense-reconciliation"; '
+           'MSYS_NO_PATHCONV=1 uv run "$M/deploy.py"')
+    assert permission_decision(run(cmd, tmp_path, exit_code=1).stdout) == "ask"
 
 
-def test_bare_deploy_naming_the_module_fires(tmp_path):
-    cmd = ("( cd workspace/clients/brisken/automations/expense-reconciliation "
-           "&& flyctl deploy )")
-    p = run(cmd, tmp_path, exit_code=1)
-    assert permission_decision(p.stdout) == "ask"
+def test_powershell_script_spelling_is_scored(tmp_path):
+    cmd = ('& uv run "C:\\r\\workspace\\clients\\brisken\\automations\\'
+           'expense-reconciliation\\deploy.py"')
+    assert permission_decision(run(cmd, tmp_path, exit_code=1).stdout) == "ask"
 
 
-# --- Windows / PowerShell spelling is normalized ---------------------------
-
-def test_powershell_call_operator_spelling_is_seen(tmp_path):
-    p = run("& flyctl.exe deploy . -a brisken-expense-recon", tmp_path, exit_code=1)
-    assert permission_decision(p.stdout) == "ask"
-    assert MARK in p.stdout
+def test_script_dry_run_and_image_rollback_are_not_scored(tmp_path):
+    assert _silent(run(SCRIPT + " --dry-run", tmp_path, exit_code=1))
+    assert _silent(run(SCRIPT + " --image registry.fly.io/x:1", tmp_path, exit_code=1))
 
 
-def test_powershell_spelling_passes_when_check_passes(tmp_path):
-    assert _silent(run("& flyctl.exe deploy . -a brisken-expense-recon",
-                       tmp_path, exit_code=0))
+def test_script_mentioned_not_run_is_silent(tmp_path):
+    for cmd in (
+        "git add workspace/clients/brisken/automations/expense-reconciliation/deploy.py",
+        "cat workspace/clients/brisken/automations/expense-reconciliation/deploy.py",
+        'git commit -m "add expense-reconciliation/deploy.py"',
+        "uv run pytest workspace/clients/brisken/automations/"
+        "expense-reconciliation/tests/test_deploy_script.py",
+    ):
+        assert _silent(run(cmd, tmp_path, exit_code=1)), cmd
+
+
+def test_another_projects_deploy_script_is_silent(tmp_path):
+    assert _silent(run("uv run tools/local-web-deploy.py", tmp_path, exit_code=1))
+    assert _silent(run("python C:/other/app/deploy.py", tmp_path, exit_code=1))
 
 
 # --- fail-open --------------------------------------------------------------
@@ -125,7 +176,7 @@ def test_powershell_spelling_passes_when_check_passes(tmp_path):
 def test_unparseable_seam_fails_open(tmp_path):
     # A seam that cannot start is reported as unmeasurable (ask), never a crash.
     p = run_hook(
-        HOOK, {"tool_input": {"command": RECON_DEPLOY}}, cwd=tmp_path,
+        HOOK, {"tool_input": {"command": SCRIPT}}, cwd=tmp_path,
         env={"RECON_ACCURACY_GATE_CMD": json.dumps(["no-such-program-4242"])},
     )
     assert p.returncode == 0

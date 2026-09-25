@@ -1,6 +1,21 @@
 #!/usr/bin/env python3
-"""PreToolUse(Bash|PowerShell): score the real labelled months before a
-`flyctl deploy` of brisken-expense-recon.
+"""PreToolUse(Bash|PowerShell): the deploy gate for brisken-expense-recon.
+
+Two jobs:
+
+A. DENY a direct `flyctl deploy` of the app (2026-09-25). `flyctl deploy`
+   ships the fly.toml of whatever tree it is pointed at, so a worktree cut
+   before the latest merge silently undoes merged code AND platform settings.
+   That day the machine was resized to shared-cpu-4x after a CPU-throttle
+   outage (#1395) while several sessions deployed from older trees, any of
+   which would have shrunk it back to the one-vCPU size that went down. The
+   sanctioned path is the module's `deploy.py`, which refuses a stale or
+   dirty tree and a fly.toml smaller than the live machine, stamps
+   GIT_COMMIT and verifies the result. A tree old enough to be dangerous has
+   no deploy.py, so it has no path to a deploy at all.
+
+B. Score the real labelled months before a `deploy.py` run (below), which is
+   what this gate did for direct deploys until A replaced them.
 
 WHY THIS EXISTS
 ---------------
@@ -14,17 +29,20 @@ of the deploy.
 
 WHAT IT DOES
 ------------
-1. Fires only when the normalized command RUNS `fly deploy` / `flyctl deploy`
-   (PowerShell spellings via _shell.normalize_command). Text a command merely
-   WRITES is not a deploy: a `git commit -m` message, a heredoc a
-   message-writing command consumes, and the arguments of mention-only
-   programs (echo, grep, cat, ...) are stripped or skipped first, the same
-   distinction deploy-consumer-gate.py draws.
-2. ... AND the app is brisken-expense-recon: `-a` / `--app brisken-expense-recon`,
-   or no app flag while the command or the tool's cwd mentions
-   `expense-reconciliation` (the module dir whose fly.toml names the app).
+1. Looks only at what the normalized command RUNS (PowerShell spellings via
+   _shell.normalize_command). Text a command merely WRITES is not a deploy:
+   a `git commit -m` message, a heredoc a message-writing command consumes,
+   and the arguments of mention-only programs (echo, grep, cat, ...) are
+   stripped or skipped first, the same distinction deploy-consumer-gate.py
+   draws.
+2. A `fly deploy` / `flyctl deploy` of brisken-expense-recon (`-a` / `--app
+   brisken-expense-recon`, or no app flag while the command or the tool's cwd
+   mentions `expense-reconciliation`, the module whose fly.toml names the
+   app) -> permissionDecision="deny" with the deploy.py command (job A).
    A deploy of any other app is silent.
-3. Runs `uv run tools/recon_accuracy_check.py real --markdown` from the repo
+3. A run of the module's deploy.py (not `--dry-run`, not an `--image`
+   rollback, which ships no new matcher) -> job B:
+   runs `uv run tools/recon_accuracy_check.py real --markdown` from the repo
    this hook lives in, with a 100 s budget (the wired timeout is 120 s).
 4. exit 0            -> allow, print nothing.
    exit 1            -> permissionDecision="ask" with the tool's output as the
@@ -67,6 +85,17 @@ MODULE_HINT = "expense-reconciliation"
 BUDGET = 100  # seconds; under the 120 s wired timeout so a stall still answers
 
 FLY_DEPLOY = re.compile(r"\bfly(?:ctl)?\s+deploy\b", re.IGNORECASE)
+# The sanctioned path: the module's deploy.py as a path argument.
+DEPLOY_SCRIPT = re.compile(r"(?:^|[\s\"'/\\])deploy\.py(?=[\"'\s]|$)", re.IGNORECASE)
+SCRIPT_RUNNERS = frozenset({"uv", "python", "python3", "py"})
+ENV_ASSIGN = re.compile(r"^\w+=\S*$")
+SANCTIONED = (
+    "git -C <repo> fetch origin\n"
+    "git -C <repo> worktree add --detach <tree> origin/main   "
+    "(or refresh one: git -C <tree> checkout --detach origin/main)\n"
+    "uv run <tree>/workspace/clients/brisken/automations/"
+    "expense-reconciliation/deploy.py   [--dry-run | --image <ref>]"
+)
 APP_FLAG = re.compile(
     r"(?:^|\s)(?:-a|--app)(?:\s+|=)[\"']?([\w.-]+)", re.IGNORECASE
 )
@@ -122,6 +151,28 @@ def deploy_segments(view: str) -> list[str]:
     return out
 
 
+def _program(seg: str) -> str:
+    """The program a segment runs, past `VAR=value` prefixes and PowerShell's
+    `&` call operator (which _shell keeps before a bare program name)."""
+    for tok in seg.split():
+        if tok != "&" and not ENV_ASSIGN.match(tok):
+            return tok.strip("\"'").replace("\\", "/").rsplit("/", 1)[-1].lower()
+    return ""
+
+
+def script_segments(view: str) -> list[str]:
+    """The command segments that RUN deploy.py (not ones that mention it)."""
+    out: list[str] = []
+    for seg in SEGMENT_SPLIT.split(view):
+        seg = seg.strip().lstrip("({ \t").strip()
+        if not seg or not DEPLOY_SCRIPT.search(seg):
+            continue
+        prog = _program(seg)
+        if prog in SCRIPT_RUNNERS or prog.endswith("deploy.py"):
+            out.append(seg)
+    return out
+
+
 def targets_recon(segments: list[str], original: str, cwd: str | None) -> bool:
     """Is one of the deploy segments a deploy of brisken-expense-recon?"""
     hay = (original + " " + (cwd or "")).replace("\\", "/").lower()
@@ -170,16 +221,47 @@ def ask(reason: str) -> None:
     }))
 
 
+def deny(reason: str) -> None:
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": reason,
+        }
+    }))
+
+
 def decide(payload: dict) -> None:
     cmd = ((payload.get("tool_input") or {}).get("command")) or ""
     if not cmd:
         return
     view = strip_authored_prose(normalize_command(cmd))
     segments = deploy_segments(view)
-    if not segments:
+    if segments:
+        if not targets_recon(segments, cmd, payload.get("cwd")):
+            log("allow: fly deploy of another app")
+            return
+        log("DENY: direct flyctl deploy of the recon app")
+        deny(
+            f"DIRECT `flyctl deploy` OF {APP} IS BLOCKED. flyctl ships the "
+            "fly.toml of whatever tree it is pointed at, so a tree cut before "
+            "the latest merge undoes merged code and the machine size (on "
+            "2026-09-25 that would have shrunk the machine back to the "
+            "one-vCPU size whose CPU throttling took the app down). Deploy "
+            "through the module's deploy.py from a tree that IS origin/main:\n\n"
+            f"{SANCTIONED}\n\n"
+            "It refuses a stale or dirty tree and a fly.toml smaller than the "
+            "live machine, stamps GIT_COMMIT, then verifies /healthz and the "
+            "machine size. If your tree has no deploy.py it predates this "
+            "rule: refresh it, do not work around it."
+        )
         return
-    if not targets_recon(segments, cmd, payload.get("cwd")):
-        log("allow: fly deploy of another app")
+
+    scripts = script_segments(view)
+    if not scripts or not targets_recon(scripts, cmd, payload.get("cwd")):
+        return
+    if all(re.search(r"--dry-run|--image\b", s) for s in scripts):
+        log("allow: deploy.py dry run / image rollback")
         return
 
     code, output = run_check()
