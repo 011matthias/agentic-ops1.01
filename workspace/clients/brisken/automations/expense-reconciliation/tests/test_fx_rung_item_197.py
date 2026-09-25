@@ -38,7 +38,11 @@ def _receipt(doc, day, total):
     return Receipt(
         document_id=doc,
         legal_entity_id="corpserv",
-        detected_vendor="Anthropic",
+        # The name the live Anthropic invoices extract to (52% against
+        # "ANTHROPIC* CLAUDE SUB"). Plain "Anthropic" scores 38%, and item 204
+        # step 6 would hold these no-card pairs in review, which is not what
+        # this test is about.
+        detected_vendor="Anthropic, PBC",
         detected_date=day,
         detected_total=Decimal(total),
         detected_currency="EUR",
