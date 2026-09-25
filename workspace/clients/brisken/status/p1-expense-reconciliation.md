@@ -10,7 +10,7 @@ updated: 2026-09-25
 # Brisken / Expense Reconciliation (p1)
 
 **2026-09-25: case 9 build 3 shipped, the card flows back** (item 204 step 3,
-Shipped row 125). A receipt a neighbour month's charge settled now shows that
+Shipped row 126). A receipt a neighbour month's charge settled now shows that
 charge's card, company and person (`card_source: "settled_charge"`) with
 `settled_by` naming the borrower, on the grid, CSV, month PDF and in the
 learner. 0 live rows move today: the two borrowed receipts (August OpenAI,
@@ -18,6 +18,17 @@ borrowed by September) already print 9693, and July's borrowed FENIX receipt
 is in review, so it has no claim. Open: under D1's calendar-month exports a
 receipt dated the day before its charge's 1st-of-month date falls outside the
 borrower's window and is never borrowed.
+
+**2026-09-25: case 9 build 2 (step 6, owner D5) shipped: a receipt with no
+card evidence is not booked to a charge whose merchant words disagree.** The
+pair keeps its place as the charge's top candidate but waits in review
+(`review_code` `no_card_vendor_disagrees`) and lends no card. The LLM FX
+judge now leaves non-FX review pairs untouched (owner ruling in session).
+Measured on live July and August: August's Lovable invoice on BASE44 50.00
+(the one wrong booking) goes to review, and so do three pairs the labels
+call excluded or leave unlabelled; clean right bookings and the six bundles
+(70/95) are unchanged. Rows move at each month's next natural re-match. The
+Lovable prompt (`docs/lovable-no-card-vendor-guard-prompt.md`) is not pasted.
 
 **2026-09-25: the private-card list, a personal card confirmed private once**
 (backlog item 208, owner direction 2026-09-24 fusing cases 2 + 4 of the

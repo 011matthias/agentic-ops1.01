@@ -67,13 +67,14 @@ def _xlsx(rows) -> bytes:
     return buf.getvalue()
 
 
-def _month(client, monkeypatch, charges) -> str:
+def _month(client, monkeypatch, charges, payment_hint=None) -> str:
     """An "Anthropic, PBC" USD 100.00 receipt of 2026-08-21, categorized by the
     merchant book (so its category verdict is `ready` and only the pairing is
     in question), against the given charges."""
     mock = MockLLMClient(extraction_responses=[ExtractedReceipt(
         date="2026-08-21", total="100.00", currency="USD", vendor="Anthropic, PBC",
         reference="", line_items=(), confidence=0.9, notes="",
+        payment_hint=payment_hint,
     )])
     monkeypatch.setattr("expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
     resp = client.put("/api/settings", json={
@@ -125,7 +126,12 @@ def _row(view, vendor) -> dict:
 def test_no_bulk_confirm_books_another_merchants_same_amount_charge(
     client, monkeypatch, route, day
 ):
-    batch = _month(client, monkeypatch, [(day, "BASE44", "Sale", -100.00)])
+    # The receipt prints its card: since item 204 step 6 (owner D5) a
+    # receipt with NO card evidence on another merchant's charge is not
+    # booked at all (it waits in review), so the bulk routes are tested on
+    # the pair that still reaches reconciled.
+    batch = _month(client, monkeypatch, [(day, "BASE44", "Sale", -100.00)],
+                   payment_hint="Visa ...2838")
     row = _row(_view(client, batch), "BASE44")
     (cand,) = row["candidates"]
     # The pairing the button would have booked: the receipt's category is
@@ -198,14 +204,17 @@ def test_a_same_day_other_merchant_yields_to_the_right_merchant_days_later(clien
 
 
 def test_with_no_agreeing_rival_the_other_merchants_exact_pair_is_unchanged(client, monkeypatch):
-    """No rival, no change: the pair keeps EXACT at 0.99 and its reason, and
-    item 76 keeps it on the reviewer's turn (the bulk-confirm half)."""
+    """No rival, no change from rule (b): the pair keeps EXACT at 0.99 and no
+    "merchants differ", and item 76 keeps it on the reviewer's turn. The
+    receipt names no card, so item 204 step 6 (owner D5) holds it in review
+    instead of reconciled, still the charge's only candidate."""
     batch = _month(client, monkeypatch, [(datetime(2026, 8, 21), "BASE44", "Sale", -100.00)])
     row = _row(_view(client, batch), "BASE44")
     (cand,) = row["candidates"]
-    assert row["effective_bucket"] == "reconciled"
+    assert row["effective_bucket"] == "review"
     assert cand["match_type"] == "exact" and cand["confidence"] == 0.99
     assert "merchants differ" not in cand["reason"], cand["reason"]
+    assert cand["review_code"] == "no_card_vendor_disagrees"
     assert row["turn"] == "decide"
 
 
@@ -239,7 +248,13 @@ def _rec(i, vendor, day):
 
 
 def _pairs(outcome):
-    return {(m.transaction_id, m.document_id): m for m in outcome.matches}
+    # Assigned pairs, booked or held for review: since item 204 step 6 a
+    # no-card pair whose merchant disagrees (BASE44 with an Anthropic
+    # receipt) keeps its assignment in `judgment_required`.
+    return {
+        (m.transaction_id, m.document_id): m
+        for m in (*outcome.matches, *outcome.judgment_required)
+    }
 
 
 def test_a_rival_with_a_better_receipt_of_its_own_does_not_demote():
@@ -255,6 +270,8 @@ def test_a_rival_with_a_better_receipt_of_its_own_does_not_demote():
     assert set(pairs) == {("t1", "R1"), ("t2", "R2")}, set(pairs)
     assert pairs[("t1", "R1")].confidence == 0.99
     assert "merchants differ" not in pairs[("t1", "R1")].reason
+    # held for review by item 204 step 6, not by rule (b)
+    assert pairs[("t1", "R1")].review_code == "no_card_vendor_disagrees"
 
 
 def test_a_spoken_for_rival_never_strands_the_receipt():
