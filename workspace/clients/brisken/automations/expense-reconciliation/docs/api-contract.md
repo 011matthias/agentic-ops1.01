@@ -7370,6 +7370,12 @@ more than one. Advisory: no bucket, count or decision reads it.
   USD at the tool's rate 0.195341, -0.80% from the charge"), not the model's
   estimate; it re-judges at each month's next natural re-match (the cache key
   carries the prompt version).
+- Self-confirm and "Confirm all matched" (`confirmable_pair`, owner
+  2026-09-25, item 76 revisited): an `fx_reference` pair on
+  `reference_rate_source` `opentickers_day` or `ecb_month`, within 1%
+  (`reference_gap_pct`), card agreeing or unknown (`card_pct` 100 / 50, no
+  `cards_differ`), vendor 75+ and not review-flagged now confirms like an
+  exact pair; `summary.n_confirm_matched` counts it.
 
 Tests: `tests/test_front5_clicks.py` (route-level), pinned in
 `tests/test_view_contract.py`. Renders in `docs/lovable-review-cause-prompt.md`.
