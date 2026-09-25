@@ -8866,7 +8866,36 @@ table nobody has ruled on.
 direction closing item 170 landed 53 minutes after the note. Do not start it
 on the strength of the note alone.
 
-### 180. One merchant holds one GL account, and it is applied forward (note #84, owner 2026-09-23)
+### 180. One merchant holds one GL account, and it is applied forward (note #84, owner 2026-09-23) (BACKEND SHIPPED 2026-09-25 with item 181; SPA prompt `docs/lovable-merchant-accounts-per-company-prompt.md` not pasted)
+
+**Shipped 2026-09-25 (owner order: implement).** A merchant entry carries an
+optional `accounts: {company: leaf code}` map, codes only. On a GL month the
+receipt's own company's entry decides first in `categorize._registry_gl`
+(matched on the company's Zoho org, so "Cloud Services" and "Brisken Cloud
+Services, LLC" are one key), ahead of the learned company rule, the single
+`zoho_account` and the default category; a code the company cannot post to
+refuses with its reason and never reaches the model; a merchant with no
+default category still books by its map; receiptless charges take the same
+path through `categorize_charges`; bucket months never read it. That answers
+parts 1 and 3 of the note (two accounts, per company). Part 2, "not applied
+automatically to new months", is answered by the map being what a person set
+per company rather than a single value carried everywhere; nothing is learned
+into it until item 183's Publish checklist keeps a correction.
+
+The published Settings editor carries unknown merchant keys through a save
+(`Vi()` collects them into `extra`, `Hi()` spreads them back; read off the
+live bundle 2026-09-25), and the backend additionally keeps a stored map when
+a save omits the key (only `{}` / null clears), so the wholesale save (item
+177) cannot wipe it. `GET /api/settings` gains `account_companies`,
+`merchant_accounts` (each code with each company's name for it) and
+`needs_account` (registry merchants booked to a company on a GL month with no
+account for it). `POST /api/runs/{id}/recategorize-refused` (typed confirm,
+job) re-runs the engine on a GL month's refused rows only; it is how accounts
+set later reach July to September, and it runs only on an owner order.
+Tests `tests/test_merchant_accounts_item_180.py` (10, route-level, a model
+client that fails if called); nine wiring points proven RED under
+`tools/regress_check.py`. The suggested accounts per vendor and company went
+to the owner for Dirk; none are written to live settings.
 
 **Owner:** *"This should not be applied automatically to new months because
 some merchants can have more than one GL account. Manual editing by the user
@@ -8898,7 +8927,7 @@ category work to move.
 
 **FILED AS RECORD, NOT QUEUED**, same reason as 179.
 
-### 181. Every cloud vendor in the registry has no account at all (note #85, owner 2026-09-23)
+### 181. Every cloud vendor in the registry has no account at all (note #85, owner 2026-09-23) (the per-company slot SHIPPED 2026-09-25 with item 180; the accounts themselves are Dirk's, suggestions handed to the owner)
 
 **Owner:** *"dont forget the accounts criss would match for cloud expenses"*
 
@@ -10575,6 +10604,7 @@ SPA-only: `docs/lovable-duplicate-groups-prompt.md`, NOT pasted.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 128 | Items 180/181: a merchant's GL account per company. `merchants[].accounts` `{company: leaf code}` decides first on a GL month (matched on the company's org), refuses a code the company cannot post to, works for a merchant with no default category and for receiptless charges; a save omitting the key keeps it; `GET /api/settings` names each code per company and lists `needs_account`; `POST /api/runs/{id}/recategorize-refused` (typed confirm) re-runs a GL month's refused rows | The 126 "model unsure" lines on July to September are mostly AI vendors on Corporate Services, where several accounts fit and the registry had no per-company answer to give | 2026-09-25; `tests/test_merchant_accounts_item_180.py` (10, route-level, a client that fails if the model is asked); nine wiring points proven RED under `tools/regress_check.py`; SPA prompt `docs/lovable-merchant-accounts-per-company-prompt.md` not pasted |
 | 127 | Item 204 build 5 (case 9 steps 1 and 5): `expenses[].waits_for_statements` + review `waits_for_statement` in `needs_entity`'s place (coverage by date across every month, one printed card covering its `parent` family), `unmatched_receipts[].reason_code` `card_statement_not_loaded` for the same no-card receipt, `card_suggestion` (lever E, never applied), `POST /api/expense-batches/{id}/cards/by-vendor` (+ `dry_run`), `statements[].month_suggestion` + advisory `statement_month_differs` | Every card-less receipt asked Criss for a company while the statement that would name its card was simply not loaded yet; the row now says which statements it waits for, one pick reaches the vendor's other rows only on her click, and a cycle PDF filed in the wrong month is named | 2026-09-25; `tests/test_case9_status_c9.py` (11, route-level) + contract pins; six wiring points proven RED under `tools/regress_check.py`; suite 3482 passed / 2 skipped before the merge (6 failures fixed: 3 older tests widened, 2 contract pins, 1 wall-clock test under load); live counts in the PR |
 | 126 | Item 204 build 3 (case 9 step 3): the card flows back to a receipt a neighbour month's statement settled. `settled_charge_cards` also reads the claim another month holds (`cards_settled_elsewhere`, re-checked against the holder's effective verdict, card resolved through `_charge_card_identity` in the receipt's own batch registry), so the row reads `card_source: "settled_charge"` with its company and person, and `settled_by` names the borrower | Charges post a day or three after the purchase, so a month-end receipt is settled by the next statement while its own month showed only `settled_by`: no card, company or person. Grid, CSV, month PDF and the learner read the one map. Live: 0 rows move today (the 2 borrowed receipts already print 9693; July's borrowed FENIX receipt sits in review) | PR #1364 |
 | 125 | Item 204 step 6 (case-9 build 2, owner D5): a receipt with no card evidence whose chosen charge's merchant words disagree (`_vendor_score` < 0.5) keeps its assignment but goes to review with `review_code` `no_card_vendor_disagrees` (knob `no_card_vendor_guard`); the FX judgment layer now judges FX pairs only, so it no longer rewrites or unbinds such a pair (owner ruling in session) | A no-card receipt booked to another merchant's same-amount charge took that charge's card, company and person silently: live August's Lovable invoice on BASE44 50.00 (3645). Measured: wrong bookings 1 to 0, clean right 26 / 6 unchanged, bundles 70/95 unchanged; five live rows (April, July x2, August x2) move to review at their next natural re-match | PR #1367 |

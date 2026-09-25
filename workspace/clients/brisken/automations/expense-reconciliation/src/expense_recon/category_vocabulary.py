@@ -53,7 +53,9 @@ from .zoho import curated_leaves
 
 __all__ = [
     "gl_account_options",
+    "gl_companies",
     "gl_leaf_account_name",
+    "gl_leaf_status",
     "gl_revision",
     "is_recognized",
     "recognize",
@@ -188,6 +190,59 @@ def gl_account_options(
             # not take down a render. It surfaces at the posting path.
             return {}
     return out
+
+
+def gl_companies(
+    settings: dict | None, entity_orgs: dict[str, str] | None = None,
+) -> list[dict]:
+    """One row per company the curated chart covers (items 180/181):
+    ``{label, org_id, labels}``.
+
+    The app holds two spellings of every company, the provisioning file's
+    ("Corporate Services", what receipts carry) and the settings registry's
+    ("Brisken Corp Services, LLC"), and both name one org. A per-company
+    picker built from `gl_account_options` keys would show each company
+    twice. `label` is the provisioning spelling when there is one, else the
+    alphabetically first; `labels` lists every spelling of that org."""
+    if entity_orgs is None:
+        entity_orgs = _current_entity_orgs(settings)
+    try:
+        prov_path = os.environ.get(PROVISION_ENV)
+        provisioning = load_provisioning(prov_path) if prov_path else None
+    except Exception:  # noqa: BLE001 - presentation, never a reason to 500
+        provisioning = None
+    preferred = set(entity_org_ids(None, provisioning))
+    by_org: dict[str, list[str]] = {}
+    for label, org in (entity_orgs or {}).items():
+        name, org_id = str(label or "").strip(), str(org or "").strip()
+        if not name or not curated_leaves.covers_org(org_id):
+            continue
+        by_org.setdefault(org_id, []).append(name)
+    out = []
+    for org_id, labels in by_org.items():
+        labels = sorted(set(labels))
+        best = [lbl for lbl in labels if lbl in preferred] or labels
+        out.append({"label": best[0], "org_id": org_id, "labels": labels})
+    return sorted(out, key=lambda r: r["label"].lower())
+
+
+def gl_leaf_status(code: str | None, org_id: str | None) -> dict:
+    """What one curated leaf CODE is in one org (items 180-181, 172):
+    ``{code, name, postable, reason}``. `name` is this org's own wording (""
+    when the org has no such account); `reason` is "" when postable, else
+    the refusal code the engine would give (`curated_leaves.refusal_reason`).
+    Never raises on a malformed asset: a settings render must not 500."""
+    try:
+        b = curated_leaves.binding(code, org_id)
+        return {
+            "code": code or "",
+            "name": b.name if b is not None else "",
+            "postable": curated_leaves.is_postable(org_id, code),
+            "reason": curated_leaves.refusal_reason(org_id, code),
+        }
+    except curated_leaves.CuratedLeavesError:
+        return {"code": code or "", "name": "", "postable": False,
+                "reason": "chart_unreadable"}
 
 
 def gl_leaf_account_name(

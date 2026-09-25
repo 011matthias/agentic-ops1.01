@@ -9,6 +9,8 @@ updated: 2026-09-25
 
 # Brisken / Expense Reconciliation (p1)
 
+**2026-09-25: a merchant can hold one Zoho account per company (backlog items 180/181).** On a Zoho-account month, a receipt or card charge from that merchant books to its company's account with no AI call; Settings lists which merchants still need one (`needs_account`). No live merchant has an account yet: the per-vendor suggestions are with the owner for Dirk. July to September pick them up only through the new refused-rows re-run, on an owner order. The Settings screen half is a Lovable prompt, not pasted.
+
 **2026-09-25: case 9 build 3 shipped, the card flows back** (item 204 step 3,
 Shipped row 126). A receipt a neighbour month's charge settled now shows that
 charge's card, company and person (`card_source: "settled_charge"`) with
