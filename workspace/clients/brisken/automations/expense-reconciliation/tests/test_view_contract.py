@@ -234,6 +234,12 @@ RUN_CONTRACT = {
     # objects `unmatched_receipts[]` carries.
     "copies_set_aside[]": "object",
     "copies_set_aside[].line_items[]": "object",
+    # Item 220: the card labels an unmatched receipt waits on (only with
+    # reason `card_statement_not_loaded` / `statement_not_loaded_for_date`),
+    # and the union of them the completeness sentence names. Both absent
+    # when empty; typed by `test_receipt_waits_item_220.py`.
+    "unmatched_receipts[].waits_for_statements[]": "string",
+    "summary.receipts_waiting_cards[]": "string",
 }
 
 # Paths the fixtures MUST actually populate. Everything the SPA renders as
@@ -1672,6 +1678,8 @@ REVIEW_REASON_CODES_PIN = {
 UNMATCHED_RECEIPT_REASON_CODES_PIN = (
     "duplicate_copy", "card_statement_not_loaded", "not_a_card_charge",
     "charge_in_neighbouring_period", "no_charge_on_any_loaded_statement",
+    # Item 220: a card whose loaded statements stop short of the date.
+    "statement_not_loaded_for_date",
 )
 UNMATCHED_CHARGE_REASON_CODES_PIN = (
     "not_a_purchase", "receipt_held_by_another_charge", "already_booked",

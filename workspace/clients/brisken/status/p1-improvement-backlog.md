@@ -11720,10 +11720,56 @@ card the same way; whether `<= 1` should be `== 1` is item 173's call to
 reopen, and it would stop remembered cards lending on the 28 seeded
 merchants that carry no observations, so it needs a measurement first.
 
+### 220. Receipts with nothing to land on say what they wait for (front 2 of the 2026-09-25 parallel round; map `.scratch/recon-matching-gaps-2026-09-25.md`)
+
+On 2026-09-25 September showed 51 unmatched receipts: 44 read "the charge is
+likely in the previous or next month" and 38 of them were only dated after
+the last loaded charge (09-14), while the Expenses tab said "waiting for the
+statement" for the same rows and the publish refusal said "49 receipts have
+no charge". Cause: `unmatched_reasons.receipt_reason_code` tested the date
+edge of ONE all-card span before the card, and the completeness sentence
+ignored reason codes.
+
+**Steps 1 + 2 SHIPPED** (PR number in the Shipped table). The reason reads
+the card the chain resolved (or every active card) against the estate's
+loaded statements BEFORE the edge; new code `statement_not_loaded_for_date`
+with `unmatched_receipts[].waits_for_statements`; German till words (`Bar`,
+`girocardOLV`, `Kartenzahlung erhalten`) read `not_a_card_charge`;
+`summary.n_receipts_waiting_statement` + `receipts_waiting_cards` and a split
+refusal sentence. Predicted per row on fresh GETs before building (model
+reproduced every live code, 0 control mismatches, and every live
+`waits_for_statements` list, 28/28): July 5 rows move, August 0, September 49
+(40 neighbouring + 6 card-not-loaded to not-loaded-for-date, 3 to not a card
+payment); waiting counts 7 / 0 / 46. Read-time only, no re-match.
+
+**Open, in order (the continuation carries the code pointers):**
+3. Coverage per card, declared: store the PDF's printed Opening/Closing
+   dates (`ingest/statement_pdf.py` `_parse_period` drops the days) and an
+   xlsx export's requested range from its name
+   (`Chase9693_2026-09_posted_0906-0915`) as
+   `statements[].period_declared_start/end`; `covers()` reads it; a family
+   upload covers a subcard only when it printed one of its charges or
+   declares a span.
+4. `cards[].statement_expected` (default true): a card with it false is
+   never waited on. Setting it on 0113 / 6013 / 8311 is a live settings
+   write: owner decision (12 receipts stop waiting, Jul 10 / Aug 2).
+5. Company labels resolve through one `entity_key` (settings aliases +
+   provisioning labels + card entities) in the matcher's entity scope, the
+   hand-match guard and the entity_mismatch advisory. August Lovable 15.00
+   on 2838 is blocked only by "Brisken Corp Services, LLC" vs "Corporate
+   Services"; its reason still reads neighbouring (dated 08-31).
+6. Adjacent borrow keyed by (source batch, document id), carrying the
+   receipt's resolved card into the borrow.
+7. A confirmed-private receipt with no company is not refused
+   `entity_missing` (Jul Brauhaus, Sep DB Fernverkehr).
+Owner decisions pending: item 211 (widen the borrow at the start edge),
+statement_expected on the three dormant cards, the five-name picker.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 140 | Item 220 steps 1 + 2 (front 2): an unmatched receipt's reason reads the card before the date edge; `statement_not_loaded_for_date` + `unmatched_receipts[].waits_for_statements`; German cash/girocard words are not card payments; `summary.n_receipts_waiting_statement` / `receipts_waiting_cards` and a refusal that splits "wait for a statement" from "no charge on any loaded statement". | September told 40 receipts to look in the previous or next month while their statements simply were not loaded yet, and the sign-off refusal pointed Criss at the wrong fix. | PR pending |
 | 139 | Item 216 Build 2 step 3: `summary.categories_by_origin` (`{person, rule, suggestion, none}`) on both payloads, read off each row's own `posting_category` / `suggested_category`; sums to `rows[]` (run) and `n_expenses` (grid). `n_charges_category_guessed` keeps its meaning (the guesses that block the month) | Item 216 read the blocker's 0 / 0 / 1 as "the tool reports no guesses" while 164 receiptless charges carried one; all 164 sit on booked, gray or receipt-owing charges, so the blocker was right and the who-answered count was missing. Run view 68 / 109 / 43 suggestions, grid 27 / 27 / 31 (03:05 backup). Tests: `tests/test_counts_by_origin_item_216_build2_step3.py` (2, route-level) + the contract partition test; five `regress_check` proofs bit | this PR |
 | 138 | Item 216 Build 2 step 2: the model suggests, a rule or a person decides. On a GL month the model's answer moves from `posting_category` to `suggested_category` on both views, reads `check` / `model_suggestion` (one-click confirmable, stored `inherited`), and every file prints `suggested: <account>`, which the poster and the journal check refuse. `is_suggestion_only` + `SUGGESTED_PREFIX` are the one predicate and the one cell; `_TRUSTED_SOURCE` / `_COARSE_SOURCE` retired for `answer_origin`; a person's pick reads EDITED in the export (it read LINE) | Owner ruling 2026-09-25. 85 model-only expenses no longer post as accounts (27 / 27 / 31), the 32 `ready` ones stop being ratified by "Confirm all Ready", and one Confirm restores a posting (measured on the 03:05 backup) | PR #1451 |
 | 137 | Item 216 Build 2 step 1: the model is offered leaf accounts only (`curated_leaves.llm_leaf_labels` drops every account with a postable account under it, read from the chart's parent names), and `_gl_model_result` refuses a parent the model names anyway (`model_picked_parent`); the merchant list, a remembered rule and a person may still pick one. | The model was handed 11 to 13 roll-ups per company and took one 58 times in 164 where Criss took one once in 152 (owner ruling 2026-09-25). The prefix test the sizing used got four accounts wrong per company (`E600010-10-20` is a leaf; `E600010-20` CRM travel and Corporate Services' `E100000` / `E500000` are parents). Tests: `tests/test_model_offered_leaves_item_216_build2.py` (4, two route-level: a receipt upload, and a GL month's charges with a merchant-list parent and Criss's parent pick kept); both wiring points bit under `regress_check`. | #1447 |

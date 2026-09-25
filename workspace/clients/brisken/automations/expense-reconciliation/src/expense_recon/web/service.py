@@ -4220,6 +4220,7 @@ def build_view(
     # charge carries a parallel `reason_code` (`unmatched_reasons`).
     from ..unmatched_reasons import (
         DUPLICATE_COPY,
+        WAITING_FOR_STATEMENT_CODES,
         charge_reason_code,
         loaded_card_keys,
         receipt_reason_code,
@@ -4243,6 +4244,13 @@ def build_view(
     reason_cards = loaded_card_keys(transactions)
     reason_period = statement_period_for_month(run, transactions)
     for rec in unmatched_receipts:
+        # Item 220: the card the chain resolved for the row decides which
+        # statements the date is read against, before the date edge.
+        _reason_card = (card_res_view.get(rec["document_id"]) or {}).get("card")
+        _reason_cov = _c9.reason_coverage(
+            rec_by_id[rec["document_id"]], statement_evidence,
+            card_key=_reason_card.key if _reason_card is not None else None,
+        )
         rec["reason_code"] = receipt_reason_code(
             rec_by_id[rec["document_id"]],
             loaded_cards=reason_cards,
@@ -4253,7 +4261,12 @@ def build_view(
             uncovered_cards=_c9.uncovered_for_receipt(
                 rec_by_id[rec["document_id"]], statement_evidence
             ),
+            coverage=_reason_cov,
         )
+        # Item 220: the cards a waiting receipt waits on, parallel and
+        # absent unless the reason is one of the two waiting codes.
+        if rec["reason_code"] in WAITING_FOR_STATEMENT_CODES and _reason_cov:
+            rec["waits_for_statements"] = list(_reason_cov["waits_for"])
     charge_reasons: dict[str, str] = {}
     for row in rows:
         if row["effective_bucket"] != "unmatched":
@@ -4279,6 +4292,19 @@ def build_view(
         private_docs=frozenset(_private_reimbursements(card_res_view)),
         copy_docs=frozenset(set_aside_copy_ids),
     )
+    # Item 220: the subset of those receipts only waiting for a statement,
+    # and the cards they wait on (parallel; the list is absent when empty).
+    from .month_readiness import receipts_waiting_statement
+
+    _n_waiting, _waiting_cards = receipts_waiting_statement(
+        [*unmatched_receipts, *copies_set_aside],
+        waiting_codes=WAITING_FOR_STATEMENT_CODES,
+        private_docs=frozenset(_private_reimbursements(card_res_view)),
+        copy_docs=frozenset(set_aside_copy_ids),
+    )
+    completeness["n_receipts_waiting_statement"] = _n_waiting
+    if _waiting_cards:
+        completeness["receipts_waiting_cards"] = _waiting_cards
     ready_to_post = n_undecided == 0 and health["state"] == HEALTH_OK
 
     n_tx = len(transactions)

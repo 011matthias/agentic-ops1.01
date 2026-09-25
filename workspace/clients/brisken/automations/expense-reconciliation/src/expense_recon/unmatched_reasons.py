@@ -51,12 +51,20 @@ CARD_STATEMENT_NOT_LOADED = "card_statement_not_loaded"
 NOT_A_CARD_CHARGE = "not_a_card_charge"
 CHARGE_IN_NEIGHBOURING_PERIOD = "charge_in_neighbouring_period"
 NO_CHARGE_ON_ANY_LOADED_STATEMENT = "no_charge_on_any_loaded_statement"
+# Item 220: the card's statements are loaded, just not up to this date.
+STATEMENT_NOT_LOADED_FOR_DATE = "statement_not_loaded_for_date"
 RECEIPT_REASON_CODES = (
     DUPLICATE_COPY,
     CARD_STATEMENT_NOT_LOADED,
     NOT_A_CARD_CHARGE,
     CHARGE_IN_NEIGHBOURING_PERIOD,
     NO_CHARGE_ON_ANY_LOADED_STATEMENT,
+    STATEMENT_NOT_LOADED_FOR_DATE,
+)
+# The two codes that mean "a statement is still to come", which is what the
+# month's completeness sentence names separately (item 220).
+WAITING_FOR_STATEMENT_CODES = frozenset(
+    {CARD_STATEMENT_NOT_LOADED, STATEMENT_NOT_LOADED_FOR_DATE}
 )
 
 # ── charges ─────────────────────────────────────────────────────────────
@@ -87,18 +95,28 @@ RECEIPT_REASON_TEXT = {
         "previous or next month."
     ),
     NOT_A_CARD_CHARGE: "Paid by debit card, cash or transfer, not on this card.",
+    STATEMENT_NOT_LOADED_FOR_DATE: (
+        "The card's statement is not loaded up to this date yet; the charge "
+        "appears when it is."
+    ),
 }
 RECEIPT_REASON_SHORT = {
     NO_CHARGE_ON_ANY_LOADED_STATEMENT: "no charge found",
     CARD_STATEMENT_NOT_LOADED: "card not loaded",
     CHARGE_IN_NEIGHBOURING_PERIOD: "next or previous month",
     NOT_A_CARD_CHARGE: "not a card payment",
+    STATEMENT_NOT_LOADED_FOR_DATE: "statement not loaded yet",
 }
 
-# Verbatim from `tools/recon-match-attribution.py` (NON_CARD_TENDER, BOUNDARY_DAYS).
+# From `tools/recon-match-attribution.py` (NON_CARD_TENDER, BOUNDARY_DAYS),
+# plus the German till words (item 220): "Bar" / "Barzahlung" is cash,
+# "girocard" often prints fused to its mode ("girocardOLV"), and "Kartenzahlung
+# erhalten" is the German till's line for a girocard (EC) payment. Every one
+# stays word-bounded, so "Barcelona" and "Bargain" never match.
 NON_CARD_TENDER = re.compile(
-    r"\b(debit|ec[- ]?karte|girocard|maestro|cash|dinheiro|pix|bank transfer|"
-    r"transfer[êe]ncia|boleto|paypal|cheque|check)\b",
+    r"\b(debit|ec[- ]?karte|girocard(?:olv)?|maestro|cash|dinheiro|pix|bank transfer|"
+    r"transfer[êe]ncia|boleto|paypal|cheque|check|bar(?:zahlung|geld)?|"
+    r"kartenzahlung\s+erhalten)\b",
     re.IGNORECASE,
 )
 BOUNDARY_DAYS = 2
@@ -133,6 +151,7 @@ def receipt_reason_code(
     period: tuple[date, date] | None,
     settled_elsewhere: bool = False,
     uncovered_cards: list | tuple | set = (),
+    coverage: dict | None = None,
 ) -> str:
     """The reason one unmatched receipt has no charge here (never
     `duplicate_copy`: a set-aside copy is named by the list it sits in).
@@ -142,12 +161,38 @@ def receipt_reason_code(
     (`card_suggestion.uncovered_for_receipt`). A receipt that printed no
     card is then waiting for a statement, the same fact the Expenses row
     reads as `waits_for_statement`; before, `card_statement_not_loaded`
-    needed printed digits, so such a receipt read "no charge found"."""
+    needed printed digits, so such a receipt read "no charge found".
+
+    `coverage` (item 220, `card_suggestion.reason_coverage`): what the
+    loaded statements of the receipt's card (or, with no card, of every
+    active card) say about its date. When present the CARD is read before
+    the edge: September 2026 told 38 receipts dated after the last loaded
+    charge that their charge was "likely in the previous or next month"
+    while the Expenses tab said "waiting for the statement" for the same
+    rows. A card with no statement loaded anywhere is
+    `card_statement_not_loaded`; one whose statements stop short of the date
+    is `statement_not_loaded_for_date`; a covered date reads the edge as
+    before, and a card covered by ANOTHER month's statement is neighbouring
+    by construction. Absent (no evidence, or printed digits no registry card
+    names), the order stays date-first."""
     if settled_elsewhere:
         return CHARGE_IN_NEIGHBOURING_PERIOD
     keys = _card_keys(receipt.payment_mode)
     if not keys and receipt.payment_mode and NON_CARD_TENDER.search(receipt.payment_mode):
         return NOT_A_CARD_CHARGE
+    if coverage is not None:
+        waits = coverage.get("waits_for") or []
+        if waits:
+            if set(waits) <= set(coverage.get("never_loaded") or ()):
+                return CARD_STATEMENT_NOT_LOADED
+            return STATEMENT_NOT_LOADED_FOR_DATE
+        if len(coverage.get("cards") or ()) == 1:
+            card_keys = _card_keys(coverage["cards"][0])
+            if card_keys and not (card_keys & loaded_cards):
+                return CHARGE_IN_NEIGHBOURING_PERIOD
+        if _near_edge(receipt.detected_date, period):
+            return CHARGE_IN_NEIGHBOURING_PERIOD
+        return NO_CHARGE_ON_ANY_LOADED_STATEMENT
     if _near_edge(receipt.detected_date, period):
         return CHARGE_IN_NEIGHBOURING_PERIOD
     if keys and not (keys & loaded_cards):
