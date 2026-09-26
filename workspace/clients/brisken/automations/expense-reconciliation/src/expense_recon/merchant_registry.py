@@ -671,12 +671,18 @@ class MerchantRegistry:
             if not probe:
                 continue
             cut = len(str(text).strip()) in _CHASE_CUT_WIDTHS
+            # A kind of shop the line names ('Farmacia', 'e Varejo') and the
+            # listed name does not is another business (item 117's
+            # trade-offs: 'Farmacia Pimentel' is not the petrol station).
+            kinds = {w for w in words if _is_generic_word(w)}
             for _norm, original, canonical, cand_tokens in self._candidates:
                 cand = _key_words(cand_tokens)
                 # Only a listed string that opens with the merchant's own
                 # brand word: 'Twilio Inc' is not 'Sendgrid - Twilio INC'
                 # through its alias 'TWILIO SENDGRID'.
                 if not cand or cand[0] != self._lead.get(canonical):
+                    continue
+                if not kinds <= set(cand_tokens):
                     continue
                 score = _descriptor_score(probe, cand, cut)
                 if score is None:
