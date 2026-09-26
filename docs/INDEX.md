@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-27 | Expense-Recon Front 3 Account | client-dev | [Mini-Checkpoint-1](docs/2026-09-27%20-%20Expense-Recon%20Front%203%20Account/Mini-Checkpoint-1.md) |
 | 2026-09-27 | Brisken Recon Matching Gap Map | client-dev | [Mini-Checkpoint-1](docs/2026-09-27%20-%20Brisken%20Recon%20Matching%20Gap%20Map/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Expense-Recon Front 1 Chase | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Expense-Recon%20Front%201%20Chase/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Expense-Recon Front 4 Copies | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Expense-Recon%20Front%204%20Copies/Mini-Checkpoint-1.md) |
