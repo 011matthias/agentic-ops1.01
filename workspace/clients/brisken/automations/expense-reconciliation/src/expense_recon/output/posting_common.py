@@ -18,6 +18,7 @@ from ..matching.types import Categorization, ClassificationSource, is_suggestion
 
 if TYPE_CHECKING:
     from ..ingest.chart_of_accounts import Account, ChartOfAccounts
+    from ..matching.types import Receipt
 
 
 _CARD_ACCOUNT = "Card: {account_id}"
@@ -96,6 +97,40 @@ def _posting_amounts(
         biggest = max(range(len(out)), key=lambda i: out[i])
         out[biggest] += residual
     return out
+
+
+# Item 224 step 6: how far a receipt's lines may sit from its printed total
+# before the two are said to disagree, and the words the export adds to the
+# description of a split receipt whose lines do.
+LINE_SUM_TOLERANCE = Decimal("0.05")
+LINES_DISAGREE_MARK = "(lines do not add up)"
+
+
+def line_sum_gap(receipt: "Receipt") -> Decimal | None:
+    """The receipt's lines minus its printed total, when the two disagree.
+
+    None when they agree within `LINE_SUM_TOLERANCE`, when the lines equal
+    the total less the printed tax (a receipt priced net: Anthropic's 180.00
+    of lines under a 214.20 total carrying 34.20 VAT), and when there is no
+    total or no line to compare.
+
+    `_posting_amounts` pro-rates the charged amount across the lines, so the
+    TOTAL posts either way and a single-account receipt books right whatever
+    its lines say. Only a receipt split across accounts posts wrong, because
+    each account takes the share its misread lines give it.
+    """
+    total = receipt.detected_total
+    items = receipt.line_items or ()
+    if total is None or not items:
+        return None
+    lines = sum((i.line_total for i in items), Decimal("0"))
+    gap = lines - total
+    if abs(gap) <= LINE_SUM_TOLERANCE:
+        return None
+    tax = receipt.detected_tax
+    if tax is not None and abs(lines - (total - tax)) <= LINE_SUM_TOLERANCE:
+        return None
+    return gap
 
 
 def _str(value: str | None) -> str:

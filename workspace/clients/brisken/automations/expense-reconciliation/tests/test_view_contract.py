@@ -1676,6 +1676,8 @@ REVIEW_REASON_CODES_PIN = {
     "waits_for_statement",
     # Build 4 / item 218: a bill paid by bank transfer (state `none`)
     "bill",
+    # Item 224 step 6: a split receipt whose lines disagree with its total
+    "line_sum_split",
 }
 
 UNMATCHED_RECEIPT_REASON_CODES_PIN = (

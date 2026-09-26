@@ -11969,20 +11969,31 @@ is ignored. (4) The model may not land on E500010-10 unless the merchant is
 Zoho (`account_vendor_specific`). (5) A stored suggestion naming a parent or,
 on a non-Zoho row, E500010-10 reads as its refusal at view time.
 
-**Open, in order (the continuation carries the code pointers):**
-6. Line-sum check: `expenses[].line_sum_gap` and a review note when the lines
-   disagree with the total by more than 0.05 (12 / 11 / 12 receipts); mark the
-   export only where the receipt splits across accounts, since only then do
-   the wrong shares change what posts.
-7. Lovable's two list entries: report which entry each live row lands on
-   (12 "Lovable Labs Incorporated" receipts vs the rest) and put the merge to
-   the owner as a settings write; do not re-ask about Lovable's accounts.
-8. Measure step 2 on all 314 charge descriptors under the live list and the
-   write-plan list (every new hit listed), and steps 4-5 per row on the live
-   payloads after deploy (map: 57 rows on E500010-10, 76 + 28 on a parent).
-Owner decisions pending: item 115 (a Zoho-seeded rule deciding a receipt with
-readable lines), merging the Lovable entries, the write plan's uncontested
-rows.
+**Step 6 SHIPPED 2026-09-27** (PR number in the Shipped table): `expenses[].line_sum_gap`
+(lines minus total, signed) and `line_sum_note`, ABSENT within 0.05 and when
+the lines equal the total less the printed tax (net-priced lines, 16 live rows:
+Anthropic, Google); a split receipt with a gap reads review `line_sum_split`
+(a missing category still wins) and its `expenses.csv` rows end `(lines do not
+add up)`. Predicted on the 2026-09-27 payloads: 13 / 9 / 10 rows carry the
+fields, one splits (July Railway 0088, already `pick`), so no review state and
+no count moves. **Item 115 ruling built in the same PR** (owner yes 2026-09-27):
+on a GL month a Zoho-seeded rule leads on a receipt with readable lines, and
+the second read flags `learned_over_line` where the lines disagree; the bucket
+path is unchanged. **Step 7 DONE 2026-09-27**: since v262 every live Lovable
+row (26 receipts, 9 charges) already names "Lovable Labs"; only a receipt whose
+extracted brand reads "Lovable Labs Incorporated" still reached the second
+entry. On the owner's yes, one settings write folded it into "Lovable Labs"
+aliases (34 -> 33 entries, the other 32 verbatim, `needs_account` unchanged at
+Consulting 8 + Corporate Services 23). **Step 8 first half measured**: the
+offline resolver reproduces the server's `merchant` on all 314 charge rows;
+live list 85 exact / 10 fuzzy (9 LOVABLE, 1 WWW.BRAVE.COM) / 2 descriptor
+(MEGA CENTE CONSTR, ZOHO* ZOHO-ONE) / 217 none; the write-plan list 151 / 17 /
+3 / 143 (new descriptor hit: HOSTINGER US INC; "COMPUTER" 15.96 resolves to
+Perplexity AI, which is how Criss booked eight of them).
+
+**Open:** steps 4-5 per row on the live payloads after this deploy (map: 57
+rows on E500010-10, 76 + 28 on a parent). Owner decision pending: the write
+plan's uncontested rows.
 
 ## Shipped (loop history)
 
