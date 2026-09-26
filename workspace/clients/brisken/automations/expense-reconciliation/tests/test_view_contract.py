@@ -1698,6 +1698,7 @@ REMATCH_TRIGGERS_PIN = {
     "statement", "reread", "receipts", "cards", "master_data", "set_aside",
     "trip", "adjacent_receipts", "expense_edit", "resume", "duplicates",
     "month_move",
+    "duplicates_reapply",  # item 223 step 7: the operator's re-apply route
 }
 
 
