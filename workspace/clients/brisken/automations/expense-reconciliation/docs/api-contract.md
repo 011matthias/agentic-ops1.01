@@ -516,7 +516,9 @@ one event to the month's snapshot (`rematch_log`, capped at 50):
 
 `trigger` is one of `statement` (attach), `reread`, `receipts` (mail, drop,
 folder), `cards`, `master_data`, `set_aside`, `trip`, and since item 112
-`adjacent_receipts` (a neighbouring month's arrival). Since item 103 the four
+`adjacent_receipts` (a neighbouring month's arrival), and since item 223 step 7
+`duplicates_reapply` (the operator re-applying the duplicate rules to a
+matched month, see the last section). Since item 103 the four
 counts are the effective ones the month's page shows at that moment (see "The
 four charge counters count the effective verdict"), not the raw outcome the
 matcher produced. Oldest first. The
@@ -6023,7 +6025,7 @@ tests) now holds each as a literal against its source of truth:
 | `review.state` / `review.reason_code` (both payloads) | the literals every `_review(...)` call in `web/service.py` passes (no single constant exists; read with `ast`, a non-literal code fails the pin) | states `ready` · `check` · `pick` · `none`; codes `uncategorized` · `partial_uncategorized` · `category_account_mismatch` · `vendor_guess` · `unknown_provenance` · `model_suggestion` · `uncertain_match` · `receiptless_suggested` · `missing_fields` · `date_outside_period` · `suggested_private` · `needs_entity` · `needs_entity_settled_outside` · `untrusted_instructions` · `invoice_read_as_statement` · `needs_person` · `needs_cost_center` · `reads_as_reminder` |
 | unmatched `reason_code` | `unmatched_reasons.RECEIPT_REASON_CODES` / `CHARGE_REASON_CODES` | the nine codes in "The unmatched lists say what they hold" |
 | `summary.month_health.state` (+ `reason`, `suspects[]`) | every `HEALTH_*` / `REASON_*` / `SUSPECT_*` constant in `web/month_health.py` | `ok` · `broken`; `zero_match_with_exact_pairs`; `sign` · `currency` · `entity` · `card` · `unknown` |
-| `rematch_log[].trigger` | the `trigger=` literals every `web/*.py` module passes to a re-match call (no single constant exists; read with `ast`) | `statement` · `reread` · `receipts` · `cards` · `master_data` · `set_aside` · `trip` · `adjacent_receipts` · `expense_edit` · `resume` · `duplicates` · `month_move` |
+| `rematch_log[].trigger` | the `trigger=` literals every `web/*.py` module passes to a re-match call (no single constant exists; read with `ast`) | `statement` · `reread` · `receipts` · `cards` · `master_data` · `set_aside` · `trip` · `adjacent_receipts` · `expense_edit` · `resume` · `duplicates` · `month_move` · `duplicates_reapply` (item 223 step 7) |
 
 A new backend value fails CI until the pin and the SPA label move together:
 the failure names the value, and the change that adds it edits the literal in
@@ -7700,3 +7702,108 @@ months. ABSENT when there are none, never null or `[]`.
 Tests: `tests/test_cross_month_account_keys_step5.py` (route-level) and
 `test_cross_month_copies_is_absent_or_non_empty_never_null` in
 `tests/test_view_contract.py`.
+
+## Re-apply the duplicate rules to a matched month (item 223 step 7, 2026-09-27)
+
+Which copy of a duplicated purchase counts is chosen when a month re-matches
+(item 217: the payment receipt over its invoice; front 4: a document over the
+rendered mail body) and stored as the snapshot's `duplicate_kept`. A month
+with a statement shows that stored choice until its next natural re-match, so
+a rule change reaches it only when something else happens to re-match it
+(September 2026 held 12 invoice-over-receipt groups that way). This operator
+route runs that re-match on purpose, one month at a time, after a preview. The
+SPA offers no control for it.
+
+`POST /api/runs/{run_id}/duplicates/reapply`, body:
+
+```json
+{"confirm": "September 2026", "dry_run": true}
+```
+
+`confirm` repeats the month's label (or its run id) for a preview as for a
+real run, so a mistyped id cannot preview another month quietly. `dry_run`
+must be a JSON boolean.
+
+Refusals, in the order they are checked, each writing nothing:
+
+| Status | `code` | When |
+|---|---|---|
+| 404 | `run_not_found` | no such run |
+| 409 | `not_an_expense_batch` | a statement-first run, which has no receipt spine to decide copies on |
+| 409 | `reapply_no_statement` | no statement: nothing is matched, and the month's rules already apply as its page is read |
+| 409 | `month_published` | published; unpublish it first |
+| 409 | `rematch_running` | the month carries an owed re-match mark (`rematch_pending`, item 113) whose latest event is not a recorded failure: a re-match is in flight, or waits for the boot re-pair. A mark whose `failed_at` is at or after its `changed_at` is owed, not running, and a re-apply is its retry |
+| 400 | `reapply_confirm_required` | `confirm` missing or blank |
+| 400 | `reapply_confirm_mismatch` | `confirm` is neither the label nor the run id |
+| 400 | `reapply_dry_run_required` | `dry_run` absent or not a boolean (the string `"false"` included) |
+
+The job checks the 404 and 409 set again when it starts; a refusal there is
+the job's error, code first.
+
+**Dry run** (`dry_run: true`) writes nothing: no snapshot, no decision, no
+job, no log row. The answer (values from the route test's fixture, a Stripe
+invoice and receipt for one 15.00 USD purchase, the invoice stored as kept):
+
+```json
+{"ok": true, "dry_run": true, "run_id": "…", "label": "August 2026",
+ "n_groups": 1,
+ "groups": [{"group_id": "…",
+             "members": ["…Invoice-HMVWDWIL-0029.jpg", "…Receipt-2167-5718.jpg"],
+             "before": {"basis": "vendor_date", "verdict": "copy", "kept": "…Invoice-HMVWDWIL-0029.jpg"},
+             "after":  {"basis": "vendor_date", "verdict": "copy", "kept": "…Receipt-2167-5718.jpg"}}],
+ "counts_in_total": {"true_to_false": ["…Invoice-HMVWDWIL-0029.jpg"],
+                     "false_to_true": ["…Receipt-2167-5718.jpg"]},
+ "totals_by_ccy": {"before": {"USD": "15.00"}, "after": {"USD": "15.00"}}}
+```
+
+- `n_groups`: the month's receipt groups, so an empty `groups` reads as
+  "nothing moves" and not as "no groups found".
+- `groups[]`: only the groups whose `basis`, `verdict` or `kept` moves.
+  `members` sorted; `kept` is the counted copy of a `copy` group and null
+  otherwise; a side is null for a group present on one side only.
+- `counts_in_total`: the documents whose row flips, by id.
+- `totals_by_ccy`: the Expenses summary's field, both sides.
+
+How the "after" side is computed: the Expenses view (the payload `GET
+/api/expense-batches/{id}` serves, without its card tabs) is built twice, as
+stored and over the same run with `duplicate_kept` replaced by the choice a
+re-match would store now. That choice comes from the re-match's own functions:
+`held_documents(store, run)` (what charges hold before the re-match), then
+`duplicate_pool(..., held=...)`, which decides the groups with
+`duplicate_decisions(..., with_statement_check=False)` and runs `choose_kept`,
+over the grid's receipts minus any another month has settled (the pool
+`rematch_month` hands it). A preview cannot see two things: the statement
+check (rung 7) needs the match itself, so each group keeps the restoration the
+last re-match stored; and a charge the matcher pairs differently once another
+copy is in its pool appears only in the real run's `applied`.
+
+**Real run** (`dry_run: false`) answers `{"ok": true, "dry_run": false,
+"job_id": "…"}`. The job runs the month's ordinary re-match,
+`rematch_after_change(..., trigger="duplicates_reapply")`, which records a
+`rematch_log` event with that trigger (the month payload's `last_rematch`).
+`GET /jobs/{id}` then carries:
+
+```json
+{"status": "done", "run_id": "…",
+ "result": {"run_id": "…", "label": "August 2026",
+            "preview": {"n_groups": 1, "groups": ["…the dry run's diff, computed just before the write…"]},
+            "applied": {"n_groups": 1, "groups": ["…the view before the write against the view read back after it…"]},
+            "rematch": {"n_matched": 0, "n_review": 0, "…": "rematch_after_change's own result"}}}
+```
+
+A failed re-match is `status: "error"`, `error: "rematch_failed: …"`, with the
+preview in `result`; the month's match stays as it was and its owed mark
+records the failure (item 113).
+
+A real run changes what any re-match changes: the month's snapshot (pool,
+outcome, `duplicate_kept`, `duplicate_statement_restored`, `rematch_log`), its
+summary, its receipt claims, the tool's own self-confirmations (item 76) and,
+on a Zoho-account month, the categories of rows whose company moved (item
+206). It never changes a charge decision a person confirmed (a copy a charge
+holds stays kept, item 217 rule 1), a reviewer's duplicate ruling (a "Not a
+copy" group stays two purchases), or the stored row of any other month.
+
+Tests: `tests/test_duplicates_reapply_step7.py`, route-level: the swap
+previewed with both databases byte-identical afterwards, the real run's swap
+and its `rematch_log` trigger, a copy a charge holds that does not move, a
+"Not a copy" ruling that survives, and every refusal writing nothing.
