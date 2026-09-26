@@ -221,7 +221,9 @@ def reference_key(receipt: Receipt) -> str | None:
     return ref
 
 
-def find_duplicate_receipts_by_reference(receipts: list[Receipt]) -> list[list[str]]:
+def find_duplicate_receipts_by_reference(
+    receipts: list[Receipt], account_keys: "frozenset[str] | set[str]" = frozenset()
+) -> list[list[str]]:
     """Group document ids of receipts that are copies of ONE document by its
     number: identical ``reference_key`` + total + currency (upper-cased),
     whatever the vendor spelling or the printed date. Each group has 2+
@@ -237,7 +239,7 @@ def find_duplicate_receipts_by_reference(receipts: list[Receipt]) -> list[list[s
     invoice took BASE44 50.00; an Anthropic 51.38 invoice took ANTHROPIC
     51.16 while its receipt copy held the real 51.38 charge).
     """
-    keys = reference_keys(receipts)
+    keys = reference_keys(receipts, account_keys)
     buckets: dict[tuple, list[str]] = defaultdict(list)
     for r in receipts:
         ref = keys.get(r.document_id)
@@ -251,7 +253,9 @@ def find_duplicate_receipts_by_reference(receipts: list[Receipt]) -> list[list[s
     return groups
 
 
-def reference_keys(receipts: list[Receipt]) -> dict[str, str]:
+def reference_keys(
+    receipts: list[Receipt], account_keys: "frozenset[str] | set[str]" = frozenset()
+) -> dict[str, str]:
     """``document_id -> reference_key`` over ONE list, with the account ids
     taken out: a normalized reference that appears on two or more receipts
     of the list with DIFFERENT totals is not a document number, and no
@@ -279,6 +283,7 @@ def reference_keys(receipts: list[Receipt]) -> dict[str, str]:
         if r.detected_total is not None:
             totals_by_ref[ref].add(str(r.detected_total))
     account_ids = {ref for ref, totals in totals_by_ref.items() if len(totals) > 1}
+    account_ids |= set(account_keys or ())  # item 223 step 5: other months said so
     if not account_ids:
         return per_doc
     return {doc: ref for doc, ref in per_doc.items() if ref not in account_ids}
@@ -327,7 +332,9 @@ def _digit_core(text: str | None, receipt: Receipt) -> str | None:
     return core
 
 
-def document_number_cores(receipts: list[Receipt]) -> dict[str, frozenset[str]]:
+def document_number_cores(
+    receipts: list[Receipt], account_keys: "frozenset[str] | set[str]" = frozenset()
+) -> dict[str, frozenset[str]]:
     """``document_id -> the digit cores it prints`` over ONE list, read from
     ``detected_reference``, ``invoice_number`` and ``receipt_number``, with
     account ids taken out exactly as ``reference_keys`` does: a core carried
@@ -350,6 +357,7 @@ def document_number_cores(receipts: list[Receipt]) -> dict[str, frozenset[str]]:
             for c in cores:
                 totals_by_core[c].add(str(r.detected_total))
     account = {c for c, totals in totals_by_core.items() if len(totals) > 1}
+    account |= set(account_keys or ())  # item 223 step 5: other months said so
     out = {}
     for doc, cores in per_doc.items():
         kept = frozenset(cores - account)
@@ -445,11 +453,13 @@ def _union_groups(ids: list[str], linked) -> list[list[str]]:
     return [sorted(g) for g in groups.values() if len(g) >= 2]
 
 
-def find_duplicate_receipts_by_number(receipts: list[Receipt]) -> list[list[str]]:
+def find_duplicate_receipts_by_number(
+    receipts: list[Receipt], account_keys: "frozenset[str] | set[str]" = frozenset()
+) -> list[list[str]]:
     """Groups of receipts that are one document by their digit core or by a
     one-digit misread of it (``_number_link``), whatever the vendor spelling
     or the wrapper words around the number. Sorted, deterministic."""
-    cores = document_number_cores(receipts)
+    cores = document_number_cores(receipts, account_keys)
     by_id = {r.document_id: r for r in receipts}
     buckets: dict[tuple, list[str]] = defaultdict(list)
     for r in receipts:
@@ -499,6 +509,7 @@ def body_twin_partners(receipts: list[Receipt]) -> list[tuple[str, list[str]]]:
 def find_duplicate_receipt_groups(
     receipts: list[Receipt],
     digests: dict[str, str] | None = None,
+    account_keys: "frozenset[str] | set[str]" = frozenset(),
 ) -> list[tuple[list[str], str | None]]:
     """Every CANDIDATE receipt duplicate group with the key that found it:
     ``(members, None)`` for a vendor/date group, ``(members, "reference")``
@@ -519,7 +530,7 @@ def find_duplicate_receipt_groups(
     vendor_date = find_duplicate_receipts(receipts)
     known = {tuple(g) for g in vendor_date}
     out: list[tuple[list[str], str | None]] = [(g, None) for g in vendor_date]
-    for g in find_duplicate_receipts_by_reference(receipts):
+    for g in find_duplicate_receipts_by_reference(receipts, account_keys):
         if tuple(g) in known:
             continue
         known.add(tuple(g))
@@ -535,7 +546,7 @@ def find_duplicate_receipt_groups(
     # membership (and so no saved ruling's group id) moves. A body group
     # lists its partners first and the body last: the body is never the
     # kept member.
-    for g in find_duplicate_receipts_by_number(receipts):
+    for g in find_duplicate_receipts_by_number(receipts, account_keys):
         if tuple(g) in known:
             continue
         known.add(tuple(g))
@@ -553,6 +564,7 @@ def lending_groups(
     receipts: list[Receipt],
     resolutions: dict[str, str] | None = None,
     decisions: "list[ReceiptGroupDecision] | None" = None,
+    account_keys: "frozenset[str] | set[str]" = frozenset(),
 ) -> list[list[str]]:
     """The groups whose copies lend each other a card: every reference group
     (item 69 round A), then every group the app SHOWS as one document, i.e.
@@ -576,10 +588,10 @@ def lending_groups(
     pair only rung 3 can join stays apart: an evidence-free caller lends
     less, never more.
     """
-    groups = find_duplicate_receipts_by_reference(receipts)
+    groups = find_duplicate_receipts_by_reference(receipts, account_keys)
     known = {tuple(g) for g in groups}
     if decisions is None:
-        decisions = decide_receipt_groups(receipts, resolutions=resolutions)
+        decisions = decide_receipt_groups(receipts, resolutions=resolutions, account_keys=account_keys)
     for d in decisions:
         if d.resolution == "ignore" or d.verdict == VERDICT_DISTINCT:
             continue
@@ -596,6 +608,7 @@ def inherit_card_from_copies(
     resolutions: dict[str, str] | None = None,
     card_hints: dict[str, str] | None = None,
     decisions: "list[ReceiptGroupDecision] | None" = None,
+    account_keys: "frozenset[str] | set[str]" = frozenset(),
 ) -> list[Receipt]:
     """The same list, where every copy of one document that names no card
     carries the card its copies name, and every copy with no legal entity
@@ -650,7 +663,7 @@ def inherit_card_from_copies(
     lent_mode: dict[str, str] = {}
     lent_entity: dict[str, str] = {}
     torn: set[tuple[str, str]] = set()
-    for members in lending_groups(receipts, resolutions, decisions):
+    for members in lending_groups(receipts, resolutions, decisions, account_keys):
         if resolutions.get(duplicate_group_id("receipt", members)) == "ignore":  # lends nothing
             continue
         group = [by_id[d] for d in members if d in by_id]
@@ -696,6 +709,7 @@ def collapsed_duplicate_copies(
     digests: dict[str, str] | None = None,
     text_of=None,
     statement_distinct=None,
+    account_keys: "frozenset[str] | set[str]" = frozenset(),
 ) -> set[str]:
     """The document ids a duplicate group contributes BEYOND its first copy,
     for every group whose verdict is ``copy``.
@@ -737,6 +751,7 @@ def collapsed_duplicate_copies(
     return copies_to_collapse(decide_receipt_groups(
         receipts, digests=digests, text_of=text_of,
         resolutions=resolutions, statement_distinct=statement_distinct,
+        account_keys=account_keys,
     ))
 
 
@@ -960,6 +975,7 @@ def decide_receipt_groups(
     text_of=None,
     resolutions: dict[str, str] | None = None,
     statement_distinct=None,
+    account_keys: "frozenset[str] | set[str]" = frozenset(),
 ) -> list[ReceiptGroupDecision]:
     """Every receipt duplicate group with what it is, in the order
     ``find_duplicate_receipt_groups`` lists the candidates (vendor/date,
@@ -977,11 +993,11 @@ def decide_receipt_groups(
     resolutions = resolutions or {}
     restored = set(statement_distinct or ())
     by_id = {r.document_id: r for r in receipts}
-    keys = reference_keys(receipts)
-    cores = document_number_cores(receipts)
+    keys = reference_keys(receipts, account_keys=account_keys)
+    cores = document_number_cores(receipts, account_keys=account_keys)
     out: list[ReceiptGroupDecision] = []
     copy_sets: set[tuple[str, ...]] = set()
-    for members, _key in find_duplicate_receipt_groups(receipts, digests):
+    for members, _key in find_duplicate_receipt_groups(receipts, digests, account_keys):
         gid = duplicate_group_id("receipt", members)
         if _key == BASIS_BODY_TWIN:
             # The body repeats ONE document: its only partner, or partners
@@ -1236,3 +1252,100 @@ def restore_copies_with_their_own_charge(
                 restored.add(d.group_id)
                 break
     return restored
+
+
+# ── Item 223 step 5 (2026-09-27): billing-account keys across months ─────
+#
+# `reference_keys` and `document_number_cores` drop a reference as an account
+# id only when ONE list carries it at different totals. Some vendors print the
+# customer's billing-account code where the document number goes (Railway
+# `77H7ITO0` 5.00 in July and September, Rize `5ZK1BCDG` 12.99 in July and
+# August), and each month holds it once, so the month alone cannot tell. Two
+# real bills of one amount under such a code in one month (a late bill filed
+# with the next) would twin as copies and one would leave the total.
+#
+# The other months can tell: the same number on the same money a billing
+# cycle away is an account, not a document. A re-filed copy of one document
+# prints the same date, so it never becomes a key; it is listed as a
+# cross-month copy instead, for a person to look at. The keys are computed
+# where neighbour months are read (a re-match, a receipt added to a month with
+# no statement) and stored; a page view only reads them.
+
+# Two documents of one amount under one number, printed at least this many
+# days apart, are two bills of one account.
+_BILLING_CYCLE_DAYS = 20
+
+
+def _number_tokens(receipt: Receipt) -> set[str]:
+    """Every number a receipt can be twinned on: its ``reference_key`` and
+    the digit cores (``_digit_core``) of its reference, invoice number and
+    receipt number."""
+    tokens = {
+        reference_key(receipt),
+        _digit_core(receipt.detected_reference, receipt),
+        _digit_core(getattr(receipt, "invoice_number", None), receipt),
+        _digit_core(getattr(receipt, "receipt_number", None), receipt),
+    }
+    tokens.discard(None)
+    return tokens
+
+
+def _vendor_date_key(receipt: Receipt) -> tuple | None:
+    """``find_duplicate_receipts``'s key: normalized vendor, date, total,
+    currency. None when the date or the total was not read."""
+    if receipt.detected_total is None or receipt.detected_date is None:
+        return None
+    return (
+        _norm_vendor(receipt.detected_vendor),
+        receipt.detected_date.isoformat(),
+        str(receipt.detected_total),
+        receipt.detected_currency or "",
+    )
+
+
+def cross_month_evidence(
+    receipts: list[Receipt], other_months: dict[str, list[Receipt]]
+) -> tuple[frozenset[str], list[dict]]:
+    """``(account keys, cross-month copies)`` for one month's ``receipts``
+    against the receipts of the other month batches (``other_months``: batch
+    id -> receipts).
+
+    An account key is a number (``_number_tokens``) a receipt of this month
+    shares with a receipt of another month of the same total and currency
+    whose printed date is at least ``_BILLING_CYCLE_DAYS`` away. Passed as
+    ``account_keys`` it is treated like an in-list account id: no receipt
+    gets it as a document number.
+
+    A cross-month copy is a pair with one ``find_duplicate_receipts`` key
+    (vendor, date, total, currency) across two batches:
+    ``{document_id, batch_id, other_document_id}``, sorted. Advisory only;
+    nothing is collapsed across months."""
+    by_token: dict[str, list[Receipt]] = defaultdict(list)
+    by_copy_key: dict[tuple, list[tuple[str, str]]] = defaultdict(list)
+    for batch_id in sorted(other_months):
+        for other in other_months[batch_id]:
+            for token in _number_tokens(other):
+                by_token[token].append(other)
+            key = _vendor_date_key(other)
+            if key is not None:
+                by_copy_key[key].append((batch_id, other.document_id))
+    keys: set[str] = set()
+    copies: set[tuple[str, str, str]] = set()
+    for r in receipts:
+        for token in _number_tokens(r):
+            if token in keys:
+                continue
+            if any(
+                _same_money(r, other)
+                and (_days_apart(r, other) or 0) >= _BILLING_CYCLE_DAYS
+                for other in by_token.get(token, ())
+            ):
+                keys.add(token)
+        key = _vendor_date_key(r)
+        if key is not None:
+            for batch_id, other_doc in by_copy_key.get(key, ()):
+                copies.add((r.document_id, batch_id, other_doc))
+    return frozenset(keys), [
+        {"document_id": doc, "batch_id": batch_id, "other_document_id": other_doc}
+        for doc, batch_id, other_doc in sorted(copies)
+    ]

@@ -7642,3 +7642,38 @@ Steps 2 to 5 (same day):
   postable accounts under it reads `refusal: "model_picked_parent"` instead
   of a suggestion (`suggested_category` absent), until the row is
   re-categorized. Rules and people are never re-read.
+
+## Billing-account keys across months (item 223 step 5, 2026-09-27)
+
+Some vendors print the customer's billing-account code where the document
+number goes (Railway `77H7ITO0`, Rize `5ZK1BCDG`). One month holding such a
+code once cannot tell it from a document number, so two real bills of one
+amount under it in one month would read as one document and one would leave
+the total.
+
+What is decided: a number (the normalized reference, or the long digit run of
+the reference, invoice number or receipt number) that another month batch
+prints on a receipt of the same total and currency, dated 20 days or more
+away, is an account key. No receipt of the month is twinned on it, exactly as
+an account id found inside one month. A re-filed copy prints the same date,
+so it never becomes a key.
+
+Where it is computed: only where other months may be read, from their stored
+snapshots and the reviewer's stored edits (no file, no model): the re-match,
+and the commit of receipts added to a month with no statement. Trips and
+`TEST` / `UTIL` batches are left out. Stored on the snapshot as
+`duplicate_account_keys` (sorted) and `cross_month_copies`, each absent when
+empty. A page view never reads another month; every surface (grid, run
+payload, months list, export, billing-account index) reads the stored keys.
+A month's keys move only on its own next computing write.
+
+What the reader sees: `duplicate_groups[]` and every count already follow
+the keys. The Expenses payload (`GET /api/expense-batches/{id}`) adds
+`cross_month_copies[]`, objects `{document_id, batch_id, other_document_id}`:
+this month's receipts whose vendor, date, total and currency repeat a
+receipt of batch `batch_id`. Advisory only, nothing is set aside across
+months. ABSENT when there are none, never null or `[]`.
+
+Tests: `tests/test_cross_month_account_keys_step5.py` (route-level) and
+`test_cross_month_copies_is_absent_or_non_empty_never_null` in
+`tests/test_view_contract.py`.

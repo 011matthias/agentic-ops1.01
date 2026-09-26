@@ -178,6 +178,10 @@ EXPENSE_BATCH_CONTRACT = {
     # fixtures load no recurring charge, so a pin here could never be seen.
     "expenses[].waits_for_statements[]": "string",
     "expenses[].review.waits_for_statements[]": "string",
+    # Item 223 step 5: this month's receipts that repeat another month's
+    # (vendor, date, total, currency): `{document_id, batch_id,
+    # other_document_id}`. ABSENT when there are none.
+    "cross_month_copies[]": "object",
 }
 
 RUN_CONTRACT = {
@@ -288,6 +292,9 @@ EXPENSE_BATCH_MUST_COVER = {
     # Item 204: the fixtures' months hold card-less rows no statement covers.
     "expenses[].waits_for_statements[]",
     "expenses[].review.waits_for_statements[]",
+    # Item 223 step 5: the reconciling month's Staples 12.00 of 07-02 repeats
+    # the fixture batch's, filed a batch earlier.
+    "cross_month_copies[]",
 }
 
 RUN_MUST_COVER = {
@@ -657,6 +664,9 @@ def _reconciling_month(client, monkeypatch_setattr) -> tuple[dict, dict]:
         # statement's card, `statements[]`) is observed filled.
         _extraction(vendor="Second Card Co", total="11.00", date="2026-07-02",
                     payment_hint="Visa ending 5555"),
+        # Item 223 step 5: the fixture batch's Staples 12.00 of 07-02 again,
+        # so `cross_month_copies[]` is observed filled.
+        _extraction(vendor="Staples", total="12.00", date="2026-07-02"),
     ])
     monkeypatch_setattr("expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
     # A registry card whose digits match the statement's account, so the
@@ -683,6 +693,7 @@ def _reconciling_month(client, monkeypatch_setattr) -> tuple[dict, dict]:
     resp = client.post(f"/api/expense-batches/{batch_id}/receipts", files=[
         ("files", ("m.jpg", JPG + b"m", "application/octet-stream")),
         ("files", ("n.jpg", JPG + b"n", "application/octet-stream")),
+        ("files", ("o.jpg", JPG + b"o", "application/octet-stream")),
     ])
     assert resp.status_code == 200, resp.text
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
@@ -2167,3 +2178,24 @@ def test_live_merchant_fields_are_absent_or_well_formed(payloads):
                 assert set(vendor["stamped"]) == {"display", "source"}, vendor
                 assert (vendor["stamped"]["display"], vendor["stamped"]["source"]) != (
                     vendor["display"], vendor["source"]), vendor
+
+
+def test_cross_month_copies_is_absent_or_non_empty_never_null(payloads):
+    """Item 223 step 5. `cross_month_copies` on the Expenses payload is
+    ABSENT (never null, never `[]`) or a list of `{document_id, batch_id,
+    other_document_id}` strings naming one of the month's own expenses. The
+    route-level proofs are `tests/test_cross_month_account_keys_step5.py`."""
+    seen = 0
+    for view in payloads["expense_batch"]:
+        if "cross_month_copies" not in view:
+            continue
+        entries = view["cross_month_copies"]
+        assert isinstance(entries, list) and entries, entries
+        docs = {e["document_id"] for e in view["expenses"]}
+        for entry in entries:
+            assert set(entry) == {"document_id", "batch_id", "other_document_id"}, entry
+            assert all(isinstance(v, str) and v for v in entry.values()), entry
+            assert entry["document_id"] in docs, entry
+            assert entry["batch_id"] != view["run_id"], entry
+        seen += 1
+    assert seen, "the reconciling month repeats a receipt of the fixture batch"
