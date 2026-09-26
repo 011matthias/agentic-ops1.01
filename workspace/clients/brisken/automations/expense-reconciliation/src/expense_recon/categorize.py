@@ -977,9 +977,12 @@ def _categorize_one_gl(
 
     recall = _recall_for(receipt, learned)
     has_lines = bool(receipt.line_items) and not _all_vague(receipt.line_items)
-    leads = recall is not None and (
-        not has_lines or (not judge_each_receipt and recall.taught_by_person)
-    )
+    # Item 115, owner ruling 2026-09-27: a rule seeded from Zoho Books leads
+    # on a receipt with readable lines too, as a person's rule does. It is
+    # not validated, so `_gl_learned` still reads the lines and flags the row
+    # (`learned_over_line`) where they disagree. A multi-category merchant is
+    # still judged on each receipt's own lines.
+    leads = recall is not None and (not has_lines or not judge_each_receipt)
     if leads:
         taught = _gl_learned(
             receipt, recall, org_id, learned, labels, client, has_lines)

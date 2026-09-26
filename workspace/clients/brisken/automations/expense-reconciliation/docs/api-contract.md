@@ -7659,3 +7659,39 @@ same-amount receipt the pair books exactly as before. Knob
 `exact_vendor_lookalike_guard` (asset key, default true). Live on 2026-09-27:
 0 pairs on July, August and September. Tests:
 `tests/test_exact_vendor_lookalike_222.py`.
+
+## Lines that do not add up to the total (front 3 step 6, item 224, 2026-09-27)
+
+The extractor reads a total and a list of lines, and nothing compared them.
+The export pro-rates the charged amount across the lines, so the total posts
+either way and a one-account receipt books right whatever its lines say; a
+receipt split across accounts hands each account the share its misread lines
+give it.
+
+Grid (`GET /api/expense-batches/{id}`), per `expenses[]` row, both ABSENT when
+the lines equal the total within 0.05, when they equal the total less the
+printed tax (lines priced net, e.g. Anthropic 180.00 + 34.20 VAT = 214.20), or
+when there is no total or no line:
+
+- `line_sum_gap`: the lines minus the total, a signed amount string in the
+  row's currency (`"400.00"` when the lines read more, `"-24.61"` when less).
+- `line_sum_note`: the English sentence. One-account row: "The lines add up to
+  600.00 USD, not the total 200.00 USD. The total is what posts." Split row:
+  the same head, then "... and they split across accounts, so each account's
+  share may be wrong. Check the receipt; one account for the whole expense
+  books all of it there."
+
+Review: a row that splits across accounts (`is_split`) AND carries a gap reads
+`review.state: "check"`, `reason_code: "line_sum_split"`, the split sentence as
+`reason`, and `review.line_sum_gap` beside it. A missing category (`pick`)
+still outranks it; it outranks every category check. A one-account row's
+review is unchanged.
+
+Export: every `expenses.csv` row of such a split receipt ends its `Expense
+Description` with ` (lines do not add up)`; a one-account receipt is unmarked.
+
+Live on 2026-09-27 payloads: 13 / 9 / 10 rows carry the fields (July / August /
+September; 16 more agree once tax is taken off), one splits (July Railway
+0088, already `pick` on an uncategorized line), so no review state and no
+count moves. Tests: `tests/test_line_sum_224.py` (route-level: upload, the
+reviewer's per-line account picks, grid, `expenses.csv`).

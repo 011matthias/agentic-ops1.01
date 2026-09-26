@@ -11986,20 +11986,31 @@ is ignored. (4) The model may not land on E500010-10 unless the merchant is
 Zoho (`account_vendor_specific`). (5) A stored suggestion naming a parent or,
 on a non-Zoho row, E500010-10 reads as its refusal at view time.
 
-**Open, in order (the continuation carries the code pointers):**
-6. Line-sum check: `expenses[].line_sum_gap` and a review note when the lines
-   disagree with the total by more than 0.05 (12 / 11 / 12 receipts); mark the
-   export only where the receipt splits across accounts, since only then do
-   the wrong shares change what posts.
-7. Lovable's two list entries: report which entry each live row lands on
-   (12 "Lovable Labs Incorporated" receipts vs the rest) and put the merge to
-   the owner as a settings write; do not re-ask about Lovable's accounts.
-8. Measure step 2 on all 314 charge descriptors under the live list and the
-   write-plan list (every new hit listed), and steps 4-5 per row on the live
-   payloads after deploy (map: 57 rows on E500010-10, 76 + 28 on a parent).
-Owner decisions pending: item 115 (a Zoho-seeded rule deciding a receipt with
-readable lines), merging the Lovable entries, the write plan's uncontested
-rows.
+**Step 6 SHIPPED 2026-09-27** (PR number in the Shipped table): `expenses[].line_sum_gap`
+(lines minus total, signed) and `line_sum_note`, ABSENT within 0.05 and when
+the lines equal the total less the printed tax (net-priced lines, 16 live rows:
+Anthropic, Google); a split receipt with a gap reads review `line_sum_split`
+(a missing category still wins) and its `expenses.csv` rows end `(lines do not
+add up)`. Predicted on the 2026-09-27 payloads: 13 / 9 / 10 rows carry the
+fields, one splits (July Railway 0088, already `pick`), so no review state and
+no count moves. **Item 115 ruling built in the same PR** (owner yes 2026-09-27):
+on a GL month a Zoho-seeded rule leads on a receipt with readable lines, and
+the second read flags `learned_over_line` where the lines disagree; the bucket
+path is unchanged. **Step 7 DONE 2026-09-27**: since v262 every live Lovable
+row (26 receipts, 9 charges) already names "Lovable Labs"; only a receipt whose
+extracted brand reads "Lovable Labs Incorporated" still reached the second
+entry. On the owner's yes, one settings write folded it into "Lovable Labs"
+aliases (34 -> 33 entries, the other 32 verbatim, `needs_account` unchanged at
+Consulting 8 + Corporate Services 23). **Step 8 first half measured**: the
+offline resolver reproduces the server's `merchant` on all 314 charge rows;
+live list 85 exact / 10 fuzzy (9 LOVABLE, 1 WWW.BRAVE.COM) / 2 descriptor
+(MEGA CENTE CONSTR, ZOHO* ZOHO-ONE) / 217 none; the write-plan list 151 / 17 /
+3 / 143 (new descriptor hit: HOSTINGER US INC; "COMPUTER" 15.96 resolves to
+Perplexity AI, which is how Criss booked eight of them).
+
+**Open:** steps 4-5 per row on the live payloads after this deploy (map: 57
+rows on E500010-10, 76 + 28 on a parent). Owner decision pending: the write
+plan's uncontested rows.
 
 
 ### 225. What "Save corrections to memory" shows is not tangible (note #91, operator, 2026-09-25 16:15 UTC)
@@ -12032,6 +12043,7 @@ the original unreachable.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 146 | Item 224 step 6 (front 3): `expenses[].line_sum_gap` / `line_sum_note` when a receipt's lines disagree with its total by more than 0.05 (net-of-tax lines agree); a split receipt with a gap reads review `line_sum_split` and its `expenses.csv` rows end `(lines do not add up)`. Item 115 ruling in the same PR: on a GL month a Zoho-seeded rule leads on a lined receipt, the second read flags `learned_over_line`. | Nothing compared a receipt's lines with its total, so a split receipt's accounts could take shares from misread lines with no flag (live: 13 / 9 / 10 rows disagree, one splits); about 41 unsure receipts take a seeded rule's answer at their next categorization. | PR #1481 |
 | 145 | Item 222 step 6 (front 5): `exact_vendor_lookalike_guard`. A card-named EXACT same-currency pair with merchant below 0.5 goes to review (`exact_vendor_disagrees`, cause `merchant_disagrees` + `same_amount_receipt`) when a same-amount receipt is left unmatched; otherwise unchanged | Item 133 rules 1 and 3: no merchant floor alone separates right exact pairs (0.42, 0.46) from the wrong one (0.40); the leftover same-amount receipt does. 0 pairs move on July, August, September and the six bundles; a planted receipt moves exactly the one pair | PR #1479 (merge `be01b686`), Fly v263 2026-09-27; live API on July / August / September unchanged (0 rows carry the code, as predicted), August Matching driven cold (35 of 143 paired, 5 to review) |
 | 144 | Item 224 steps 1-5 (front 3): the grid, the run payload and the reviewer files read the merchant list live (`vendor.display`/`source` + `vendor.stamped`, `merchant {name, match}`, a per-company account decides as a rule with `posting_category.stamped`); a bank-descriptor resolver tier; the close-spelling containment guard; the ZOHO ERP guard (`account_vendor_specific`); stored parent / ZOHO ERP suggestions read as refusals. | The owner's OpenAI and Anthropic accounts reached no row already in a month: 21 receipts (all then post), 46 receiptless charges and 5 matched charges move; the 24 that join a Criss posting all agree. | PR #1477, live Fly v262 2026-09-27 |
 | 143 | Item 223 steps 2-3 (front 4): duplicate rungs `reference_digits` (a shared digit core of reference / invoice_number / receipt_number, merchant identity + amount + date within a day) and `misread_digit` (one digit apart, same day), and a `body_twin` key (a rendered mail body beside the one document it repeats; the body is never kept unless a charge holds it) | One purchase counted twice: July's five slip pairs read two ways (BRL 437.77) plus the E A Locações pair at its next re-match, August's Zoho Books body (USD 576.00), September's four bodies (USD 260.00) | 2026-09-25, PR TBD |

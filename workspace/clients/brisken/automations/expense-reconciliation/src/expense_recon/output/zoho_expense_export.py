@@ -35,11 +35,13 @@ from .posting_common import (
     _DISPOSITION_WITHHELD,
     _REIMBURSABLE_PLACEHOLDER,
     _UNCATEGORIZED,
+    LINES_DISAGREE_MARK,
     _amount,
     _debit_account_and_note,
     _posting_amounts,
     _resolve_account,
     _str,
+    line_sum_gap,
 )
 
 if TYPE_CHECKING:
@@ -388,9 +390,16 @@ def build_expense_row_groups(
                 "; ".join(accounts), None,
                 [i.description for i in r.line_items or () if i.description],
             )]
+        # Item 224 step 6: a split receipt whose lines disagree with its total
+        # hands each account the share its misread lines give it, so every
+        # row of it says so. A one-account receipt posts its total whatever
+        # the lines say, and stays unmarked.
+        mark = len(parts) > 1 and line_sum_gap(r) is not None
         first = True
         for account, amt, part_descs in parts:
             description = "; ".join(part_descs) or vendor
+            if mark:
+                description = f"{description} {LINES_DISAGREE_MARK}"
             rows.append([
                 date_str,
                 account,
