@@ -40,6 +40,21 @@ token; no Supabase.
    `vendor.stamped` ({display, source}) also exists on grid rows; do not
    render it.
 
+4. Lines that do not add up (Expenses grid rows). A row may carry
+   `line_sum_gap` (a signed amount string, the receipt's lines minus its
+   total) and `line_sum_note` (the English sentence). Both are absent on most
+   rows. When present, show one muted line under the row's amount:
+   - EN: "Lines add up to {total + gap}, not {total}. The total is what posts."
+   - PT: "As linhas somam {total + gap}, não {total}. O total é o que é lançado."
+   Compute {total + gap} from the row's `total` and `line_sum_gap` (both
+   strings with thousands commas; parse, add, format with two decimals).
+   i18n key: `expense.line_sum.note`. When the row's `review.reason_code` is
+   `"line_sum_split"`, do not add this line: the review already says it, and
+   the reason renders through the backend sentence until you add
+   `expx.review.reason.line_sum_split` with:
+   - EN: "The lines add up to a different amount than the total, and they split across accounts, so each account's share may be wrong. Check the receipt; one account for the whole expense books all of it there."
+   - PT: "As linhas somam um valor diferente do total e se dividem entre contas, então a parte de cada conta pode estar errada. Confira o recibo; uma conta para a despesa inteira lança tudo nela."
+
 Do not change: how `posting_category`, `suggested_category`, the Confirm
 button, `books_as`, the review states or the filters work; the Settings
 merchant editor; any request the app sends.
@@ -48,6 +63,6 @@ merchant editor; any request the app sends.
 ## Verify after publish
 
 `uv run tools/lovable-bundle-audit.py` greps the bundle for
-`account_vendor_specific`, `stamped` and `merchant.name` / `category.stamped.was`.
+`account_vendor_specific`, `stamped` and `merchant.name` / `category.stamped.was` / `expense.line_sum.note`.
 A live check: a September OpenAI receipt on the Expenses grid shows its
 registry account with "Was: ... (suggested)" under it.
