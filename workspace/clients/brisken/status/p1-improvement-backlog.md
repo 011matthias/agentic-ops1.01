@@ -11943,10 +11943,52 @@ protocol), and the E A Locações pair is nominated for the first time; August
    the ladder, commits group membership + kept order, re-matches. Build and
    test it; run it on nothing.
 
+### 224. The posting account reads the merchant list as it is now (front 3 of the 2026-09-25 parallel round; map `.scratch/recon-matching-gaps-2026-09-25.md`)
+
+A receipt's merchant and its registry account were stamped at ingest and never
+re-read, so the owner's OpenAI and Anthropic accounts (item 219) reached no row
+already in July to September: 64 receipts and 52 charges resolved to a listed
+merchant but showed the raw spelling or the model's guess, while the scorer
+said the per-company map answers 33 rows and agrees with Criss on all 33.
+
+**Steps 1 to 5 SHIPPED** (PR number in the Shipped table). (1) The grid, the
+run payload and the reviewer files read the list live: `vendor.display` /
+`source` (`vendor.stamped` keeps the stored view), a parallel `merchant
+{name, match}`, and a merchant carrying an account for the row's company
+decides it as a rule (`posting_category.stamped` keeps what the row read); a
+person's pick wins; the matcher's pools are untouched. Predicted per row on
+the 16:49 UTC payloads before shipping: 21 receipts (all 21 then post), 46
+receiptless charges (display only), 5 matched charges; 24 of them join a
+Criss posting and all 24 agree, 48 have none yet, 0 disagree. (2) A
+bank-descriptor tier after exact and close spelling (lead word, plus the
+product word for Google / Microsoft / Amazon; only a country code, a short
+code or Chase's cut stub may go uncovered; a tie is no answer), `merchant.match
+"descriptor"`. (3) The close-spelling containment guard: 'Twilio Inc' no longer
+files as SendGrid, 'Google LLC' no longer as Google Ads; a bare platform alias
+is ignored. (4) The model may not land on E500010-10 unless the merchant is
+Zoho (`account_vendor_specific`). (5) A stored suggestion naming a parent or,
+on a non-Zoho row, E500010-10 reads as its refusal at view time.
+
+**Open, in order (the continuation carries the code pointers):**
+6. Line-sum check: `expenses[].line_sum_gap` and a review note when the lines
+   disagree with the total by more than 0.05 (12 / 11 / 12 receipts); mark the
+   export only where the receipt splits across accounts, since only then do
+   the wrong shares change what posts.
+7. Lovable's two list entries: report which entry each live row lands on
+   (12 "Lovable Labs Incorporated" receipts vs the rest) and put the merge to
+   the owner as a settings write; do not re-ask about Lovable's accounts.
+8. Measure step 2 on all 314 charge descriptors under the live list and the
+   write-plan list (every new hit listed), and steps 4-5 per row on the live
+   payloads after deploy (map: 57 rows on E500010-10, 76 + 28 on a parent).
+Owner decisions pending: item 115 (a Zoho-seeded rule deciding a receipt with
+readable lines), merging the Lovable entries, the write plan's uncontested
+rows.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 144 | Item 224 steps 1-5 (front 3): the grid, the run payload and the reviewer files read the merchant list live (`vendor.display`/`source` + `vendor.stamped`, `merchant {name, match}`, a per-company account decides as a rule with `posting_category.stamped`); a bank-descriptor resolver tier; the close-spelling containment guard; the ZOHO ERP guard (`account_vendor_specific`); stored parent / ZOHO ERP suggestions read as refusals. | The owner's OpenAI and Anthropic accounts reached no row already in a month: 21 receipts (all then post), 46 receiptless charges and 5 matched charges move; the 24 that join a Criss posting all agree. | PR pending |
 | 143 | Item 223 steps 2-3 (front 4): duplicate rungs `reference_digits` (a shared digit core of reference / invoice_number / receipt_number, merchant identity + amount + date within a day) and `misread_digit` (one digit apart, same day), and a `body_twin` key (a rendered mail body beside the one document it repeats; the body is never kept unless a charge holds it) | One purchase counted twice: July's five slip pairs read two ways (BRL 437.77) plus the E A Locações pair at its next re-match, August's Zoho Books body (USD 576.00), September's four bodies (USD 260.00) | 2026-09-25, PR TBD |
 | 142 | Item 222 steps 1-5 (front 5): the FX judge is handed the tool's rate, card verdict and merchant agreement (prompt v2, cache keyed on it, look-alike pairs with clean evidence skip the model); `review.cause` / `cause_detail`; booked charges not judged and out of `n_review`; PDF payoffs read `payment`; `reverses_transaction_id` | 13 live verdicts guessed their own rate (one tenfold off); every review row read one generic sentence; July counted 13 booked rows as in review; six payoffs read refund | 2026-09-25 |
 | 141 | Item 221 (front 1): charges with nothing behind them say what they are. Charge `reason_code` + `closed_recurring` / `no_receipt_expected`, `already_booked` reads the reviewer verdict, `reason_label` on every charge element; `n_already_posted` counts booked purchases only; `summary.n_cards_uncovered` / `cards_uncovered[]` and the Publish refusal sentence; `receipt_chase` `date_range` / `charge_month` and the mail grouped by charge month; ask age + `overdue_days` + per-holder mark-all; `python -m expense_recon.zoho.booked_report` (read-only, one-cent control) | July's 24 and August's 40 gray charges read "no receipt found" while the gate called them closed; 3 / 4 / 7 cards had nothing loaded behind "0 need a receipt"; 33 chased charges were filed under the wrong month; Zoho already held 11 + 11 open charges | PR #1468 |

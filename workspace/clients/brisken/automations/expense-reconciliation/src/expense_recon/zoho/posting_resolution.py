@@ -98,6 +98,31 @@ ENTITY_MISSING = "entity_missing"
 # so this is the backstop for a model that names one anyway.
 MODEL_PICKED_PARENT = "model_picked_parent"
 
+# Front 3 step 4 (lever 7, second half, 2026-09-25): an account named after
+# one vendor's product. The model read "Cloud Subscriptions-ZOHO ERP" as any
+# cloud subscription (29 of its 31 picks were not Zoho; 40 charges and 17
+# receipts suggested it on July to September), so a model pick lands on such
+# an account only when the merchant IS that vendor. A person and a rule may
+# still pick it.
+ACCOUNT_VENDOR_SPECIFIC = "account_vendor_specific"
+VENDOR_SPECIFIC_ACCOUNTS = {"E500010-10": ("zoho",)}
+
+
+def vendor_may_post(code: str | None, vendor_names) -> bool:
+    """False when `code` belongs to one vendor and none of `vendor_names`
+    (the row's printed, extracted or canonical names) is that vendor, read by
+    its merchant words (`merchant_identity.identity_key`)."""
+    owners = VENDOR_SPECIFIC_ACCOUNTS.get(code or "")
+    if not owners:
+        return True
+    from ..merchant_identity import identity_key
+
+    if isinstance(vendor_names, str) or vendor_names is None:
+        vendor_names = (vendor_names,)
+    words = {w for name in vendor_names for w in identity_key(name).split()}
+    return any(o in words for o in owners)
+
+
 # What each refusal says to the person who has to act on it. One sentence per
 # code, naming what is missing and who fixes it, because "No category yet"
 # over a refused row reads as "the tool has not looked yet" when it looked and
@@ -129,6 +154,11 @@ _REFUSAL_TEXT = {
     MODEL_PICKED_PARENT: (
         "The tool's reading named a summary account with more specific "
         "accounts under it, so it was not used. Pick one by hand."
+    ),
+    ACCOUNT_VENDOR_SPECIFIC: (
+        "The tool's reading named an account kept for one vendor's product "
+        "(Cloud Subscriptions-ZOHO ERP is for Zoho), and this merchant is "
+        "not that vendor, so it was not used. Pick one by hand."
     ),
 }
 
