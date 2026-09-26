@@ -1691,6 +1691,8 @@ REVIEW_REASON_CODES_PIN = {
     # The published SPA does not localize it yet and shows the English
     # `reason`.
     "reads_as_reminder",
+    # Item 224 step 6: a split receipt whose lines disagree with its total
+    "line_sum_split",
 }
 
 UNMATCHED_RECEIPT_REASON_CODES_PIN = (

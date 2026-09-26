@@ -112,7 +112,7 @@ from ..output.zoho_expense_export import (
     resolve_paid_through,
     write_zoho_expense_export,
 )
-from ..output.posting_common import is_suggested_cell
+from ..output.posting_common import is_suggested_cell, line_sum_gap
 from ..output.zoho_export import write_zoho_export
 from ..cost_centers import COST_CENTER_SCOPE_NOTE
 from ..cost_centers import (
@@ -7781,6 +7781,30 @@ def _reviewer_owns_a_category(document_id: str, overrides: dict) -> bool:
     )
 
 
+def line_sum_note(r: Receipt, gap: Decimal, *, split: bool) -> str:
+    """Item 224 step 6: one sentence saying the receipt's lines and total
+    disagree, and what that does to the posting. `gap` is `line_sum_gap(r)`.
+
+    A one-account receipt posts its total whatever the lines say, so the
+    sentence says the total is what posts. A split one hands each account
+    the share its lines give it, so the sentence says the shares may be
+    wrong and names the edit that settles it: one account for the whole
+    expense books all of it there."""
+    ccy = f" {r.detected_currency}" if r.detected_currency else ""
+    total = r.detected_total or Decimal("0")
+    head = (
+        f"The lines add up to {_fmt_amount(total + gap)}{ccy}, not the total "
+        f"{_fmt_amount(total)}{ccy}"
+    )
+    if not split:
+        return f"{head}. The total is what posts."
+    return (
+        f"{head}, and they split across accounts, so each account's share "
+        "may be wrong. Check the receipt; one account for the whole expense "
+        "books all of it there."
+    )
+
+
 def _expense_review(
     r: Receipt,
     overrides: dict,
@@ -7795,6 +7819,7 @@ def _expense_review(
     needs_cost_center: bool = False,
     settled_outside: bool = False,
     waits_for_statements: list | tuple = (),
+    split_lines_gap: Decimal | None = None,
 ) -> dict:
     """Review-by-exception for one expense (receipt-spine). Missing core
     fields first (an expense cannot export cleanly without date / amount /
@@ -7834,7 +7859,13 @@ def _expense_review(
     the entity directly instead. The person ask goes quiet altogether, for
     the reason the boxes drop `needs_person` (`expense_boxes`): person
     resolution is card-only, so on a row no card paid it is an ask nobody
-    can answer."""
+    can answer.
+
+    `split_lines_gap` (item 224 step 6) is the lines-minus-total gap of a
+    receipt that splits across accounts, None otherwise. Each account then
+    posts the share its lines give it, so misread lines post wrong amounts;
+    it ranks with item 105, above every category check but below a missing
+    category, which is the more actionable ask."""
     missing = [
         label
         for label, value in (
@@ -7985,6 +8016,15 @@ def _expense_review(
             "category.",
             "invoice_read_as_statement",
         )
+    if review["state"] != "pick" and split_lines_gap is not None:
+        return {
+            **_review(
+                "check",
+                line_sum_note(r, split_lines_gap, split=True),
+                "line_sum_split",
+            ),
+            "line_sum_gap": _fmt_amount(split_lines_gap),
+        }
     if (
         review["state"] == "ready"
         and person is not None
@@ -8450,6 +8490,13 @@ def build_expense_view(
         # `n_needs_person` cannot answer the same question differently.
         row_settled_outside = bool(res.get("settled_off_card"))
         box_inputs[r.document_id] = (r, res, cost, row_settled_outside)
+        # Item 224 step 6: the posting fan-out `books_as` shows, read once
+        # here because the review needs to know whether the receipt splits,
+        # and the lines-vs-total gap on the same receipt the fan-out reads.
+        posting_parts = expense_posting_parts(
+            ov_by_doc.get(r.document_id, r), chart_of_accounts=grid_chart
+        )
+        lines_gap = line_sum_gap(ov_by_doc.get(r.document_id, r))
         review = _expense_review(
             r, overrides, entity=res["entity"], period=period,
             untrusted_flags=_row_untrusted(r, intake_provenance),
@@ -8469,6 +8516,7 @@ def build_expense_view(
             waits_for_statements=_c9.waits_for_row(
                 r, res, statement_evidence, row_settled_outside
             ),
+            split_lines_gap=lines_gap if len(posting_parts) > 1 else None,
         )
         # Build 4 / item 218: a bill asks nothing of the card side, so its
         # review is out of `n_review` whatever the card checks would say.
@@ -8558,9 +8606,7 @@ def build_expense_view(
                 # person confirms it. ABSENT on every other part.
                 **({"suggested": True} if is_suggested_cell(account) else {}),
             }
-            for account, amt, _descs in expense_posting_parts(
-                ov_by_doc.get(r.document_id, r), chart_of_accounts=grid_chart
-            )
+            for account, amt, _descs in posting_parts
         ]
         ccy = r.detected_currency or "?"
         if (
@@ -8702,6 +8748,15 @@ def build_expense_view(
         _note = (intake_provenance.get(r.document_id) or {}).get("operator_note")
         if _note:
             expenses[-1]["operator_note"] = str(_note)
+        # Item 224 step 6: the receipt's lines minus its total, signed, and the
+        # sentence that says it. ABSENT when they agree within 0.05 or once the
+        # printed tax is taken off (lines priced net), which is most rows.
+        if lines_gap is not None:
+            expenses[-1]["line_sum_gap"] = _fmt_amount(lines_gap)
+            expenses[-1]["line_sum_note"] = line_sum_note(
+                ov_by_doc.get(r.document_id, r), lines_gap,
+                split=len(posting_parts) > 1,
+            )
         # Item 160 (feedback note #71): name the lines the category verdict
         # is actually about. `posting_category` is the roll-up of the lines
         # that DO carry one, so "Software & Subscriptions" and "one or more
