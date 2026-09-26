@@ -11894,7 +11894,7 @@ verdict lifting a pair: NO, the click stays (not built).
 first on July + August + the six bundles, shipped only if 0 labelled-right
 pairs move). SPA half: `docs/lovable-review-cause-prompt.md`, not pasted.
 
-### 223. Copies and double counting: one number read two ways, the mail body, and the rest of the copies front (gap map 2026-09-25, front 4) (STEPS 1-3 SHIPPED 2026-09-25; steps 4-7 open)
+### 223. Copies and double counting: one number read two ways, the mail body, and the rest of the copies front (gap map 2026-09-25, front 4) (STEPS 1-3 SHIPPED 2026-09-25; STEPS 4, 5, 7 SHIPPED 2026-09-27; step 6 open)
 
 The verified gap map's "Copies and duplicates" section and its CRITIC block
 ("which part of a mail is the receipt"). Seven steps were set; three are done.
@@ -11926,22 +11926,50 @@ protocol), and the E A Locações pair is nominated for the first time; August
 1 (Zoho Books 576.00 body); September 4 bodies; the three September OpenAI
 80.12 invoices stay three. Attribution replay (labels, both live months + the six bundles, old vs new tree): no labelled-right pair moved, July gained 4 clean pairs (0053, 0057, 0058, 0068), bundles 70/95 both; it caught `misread_digit` merging ER-00181 #016/#017 (7-ELEVEN 446525 / 446528, two purchases), so a difference in the last two digits no longer counts.
 
-**Open, in order:**
-4. Kind from the document itself: `document_kind` (invoice / receipt /
-   reminder / statement / other) in the extraction response SCHEMA only, A/B
-   twice old vs twice new over the stored receipts before shipping;
-   `kept_member` reads it before the file name; a `reminder` gets a
-   read-time review note (item 186 extended), never a deletion.
-5. Cross-month reference guard: a reference seen in another month of the
-   same company with the SAME total is a billing-account key (Railway
-   `77H7ITO0` 5.00 Jul + Sep, Rize `5ZK1BCDG` 12.99 Jul + Aug); cross-month
-   vendor/date/amount/currency pairs as an advisory (0 live).
+**Step 4 (SHIPPED 2026-09-27).** The extraction returns `document_kind`
+(invoice / receipt / reminder / statement / other), asked in the response
+schema only; the instructions are byte-identical. The kept copy reads it
+first, then the printed numbers, then the file name; a reminder is never kept
+beside the document it chases, and alone it reads `reads_as_reminder` (stays
+counted, quiet once a category is hers). Only arrivals from the deploy on
+carry it (a re-match reuses stored readings), so no live row moved. A/B over
+the 251 stored documents of the 09-25 backup, two passes per arm, cache off,
+USD 2.32 on the client's key (owner approved; the brief's USD 0.02 was wrong,
+see item 225): 53 of 3,366 readings stable in both arms moved (1.6%, against
+about 6.5% pass-to-pass noise); date, total, document_type, card_last4 0;
+currency 1 (August 0053, a Brazilian slip printing "VALOR 6,00" and no
+currency, BRL -> null, which asks a person; owner chose to ship);
+invoice_number 26, 24 of them Stripe files now reading the number they print.
+`document_kind` named all 57 Invoice / Receipt files right in both passes and
+Redis 0070 a reminder; the printed numbers call 33 real receipts invoices
+(NFC-e slips, OpenAI receipts), hence kind first. Fingerprint re-pinned.
+
+**Step 5 (SHIPPED 2026-09-27).** A reference or digit core that another
+month's receipt carries with the same total and currency and a date at least
+20 days away is a billing-account key: inside a month it no longer twins two
+bills. Computed where neighbour months may be read (`rematch_month`, and a
+receipt add on a month with no statement), stored as snapshot
+`duplicate_account_keys`; page views read the stored list and never load
+another month. Same-date matches across months are served as the advisory
+`cross_month_copies[]`. Predicted on the frozen 09-25 payloads: keys
+`77H7ITO0` (July, September) and `5ZK1BCDG` (July, August), 0 groups move,
+0 cross-month copies; April to June were not in the frozen set. Keys move
+only at a month's own next computing write.
+
+**Step 7 (SHIPPED 2026-09-27, run on nothing).** `POST
+/api/runs/{id}/duplicates/reapply` (operator, typed confirm, `dry_run` a
+required boolean): the dry run answers per group what a re-match would keep
+and which copies change count, writing nothing; a real run is the month's
+ordinary re-match (trigger `duplicates_reapply`) as a job whose result carries
+the preview and the applied diff. Refused: no statement, published, a
+re-match in flight, not an expense batch.
+
+**Open:**
 6. Intake decides once: an Invoice-*.pdf and Receipt-*.pdf naming one
    invoice number in one mail are recorded at arrival
    (`intake_provenance.twin_of`).
-7. `POST /api/runs/{id}/duplicates/reapply` (operator, typed confirm): runs
-   the ladder, commits group membership + kept order, re-matches. Build and
-   test it; run it on nothing.
+- Owner decision per month whether to run step 7's reapply (September's
+  invoice-over-receipt swaps; July's 0076 / 0083 / 0054 leave the count).
 
 ### 224. The posting account reads the merchant list as it is now (front 3 of the 2026-09-25 parallel round; map `.scratch/recon-matching-gaps-2026-09-25.md`)
 
@@ -11984,10 +12012,26 @@ Owner decisions pending: item 115 (a Zoho-seeded rule deciding a receipt with
 readable lines), merging the Lovable entries, the write plan's uncontested
 rows.
 
+### 225. The app prices every photo reading at zero (found 2026-09-27, item 223 step 4 A/B)
+
+`llm/cost.py` carries no price for `gpt-5-mini`, the vision model every
+photographed receipt and rendered mail body is read with
+(`web/service.py` `VISION_MODEL`), so the cost tracker records those calls at
+USD 0. Measured in the step 4 A/B: four passes over 251 stored documents cost
+USD 2.32 at list price while the tracker said USD 0.21; gpt-5-mini was about
+93% of the spend (1,300-1,440 reasoning tokens per call). Every AI-cost figure
+the app shows under-reports by the vision share, and a brief that sized an
+A/B from the tracker was off by a factor of ten. Fix: add the model's price
+(input, cached input, output incl. reasoning tokens) and a test that every
+model the config can name has one.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 147 | Item 223 step 7 (front 4): `POST /api/runs/{id}/duplicates/reapply`, operator, typed confirm, required boolean `dry_run`; the dry run writes nothing and answers per group what a re-match would keep and which copies change count; a real run is the ordinary re-match (trigger `duplicates_reapply`) as a job carrying the preview and the applied diff | A changed duplicate rule reached a matched month only at its next natural re-match (September's 12 invoice-over-receipt swaps); now the owner can preview a month and order it | 2026-09-27, run on nothing |
+| 146 | Item 223 step 5 (front 4): billing-account keys across months (same reference or digit core, same money, dates 20+ days apart) stored at re-match and at a no-statement receipt add as `duplicate_account_keys`, read by every duplicate reader; `cross_month_copies[]` advisory | Two monthly bills of one amount under one account code (Railway `77H7ITO0`, Rize `5ZK1BCDG`) would have twinned inside a month and one would have left the total; 0 live groups move | 2026-09-27 |
+| 145 | Item 223 step 4 (front 4): `document_kind` in the extraction schema only; the kept copy reads it first; a reminder is never kept and alone reads `reads_as_reminder` | Which copy counts depended on file names and on numbers that call Brazilian slips and OpenAI receipts invoices; A/B 53 of 3,366 stable readings moved, 1 currency (to null), 0 date/total/type/card | 2026-09-27 |
 | 144 | Item 224 steps 1-5 (front 3): the grid, the run payload and the reviewer files read the merchant list live (`vendor.display`/`source` + `vendor.stamped`, `merchant {name, match}`, a per-company account decides as a rule with `posting_category.stamped`); a bank-descriptor resolver tier; the close-spelling containment guard; the ZOHO ERP guard (`account_vendor_specific`); stored parent / ZOHO ERP suggestions read as refusals. | The owner's OpenAI and Anthropic accounts reached no row already in a month: 21 receipts (all then post), 46 receiptless charges and 5 matched charges move; the 24 that join a Criss posting all agree. | PR #1477, live Fly v262 2026-09-27 |
 | 143 | Item 223 steps 2-3 (front 4): duplicate rungs `reference_digits` (a shared digit core of reference / invoice_number / receipt_number, merchant identity + amount + date within a day) and `misread_digit` (one digit apart, same day), and a `body_twin` key (a rendered mail body beside the one document it repeats; the body is never kept unless a charge holds it) | One purchase counted twice: July's five slip pairs read two ways (BRL 437.77) plus the E A Locações pair at its next re-match, August's Zoho Books body (USD 576.00), September's four bodies (USD 260.00) | 2026-09-25, PR TBD |
 | 142 | Item 222 steps 1-5 (front 5): the FX judge is handed the tool's rate, card verdict and merchant agreement (prompt v2, cache keyed on it, look-alike pairs with clean evidence skip the model); `review.cause` / `cause_detail`; booked charges not judged and out of `n_review`; PDF payoffs read `payment`; `reverses_transaction_id` | 13 live verdicts guessed their own rate (one tenfold off); every review row read one generic sentence; July counted 13 booked rows as in review; six payoffs read refund | 2026-09-25 |
