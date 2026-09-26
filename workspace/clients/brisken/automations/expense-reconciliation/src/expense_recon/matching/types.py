@@ -484,6 +484,11 @@ class Receipt:
     detected_time: str | None = None
     invoice_number: str | None = None
     receipt_number: str | None = None
+    # Item 223 step 4 (2026-09-27): what the document calls itself (invoice /
+    # receipt / reminder / statement / other), read in the same extraction
+    # call. None for every receipt read before the field existed; a re-match
+    # reuses stored readings, so only arrivals from the deploy on carry it.
+    document_kind: str | None = None
 
     # Merchant registry (2026-07-29): the short storefront brand for
     # `detected_vendor` with legal suffixes / distributor tails stripped

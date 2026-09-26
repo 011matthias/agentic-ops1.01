@@ -1676,6 +1676,10 @@ REVIEW_REASON_CODES_PIN = {
     "waits_for_statement",
     # Build 4 / item 218: a bill paid by bank transfer (state `none`)
     "bill",
+    # item 223 step 4: the reader called the document a payment reminder.
+    # The published SPA does not localize it yet and shows the English
+    # `reason`.
+    "reads_as_reminder",
 }
 
 UNMATCHED_RECEIPT_REASON_CODES_PIN = (

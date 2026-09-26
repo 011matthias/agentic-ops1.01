@@ -58,6 +58,7 @@ from ..duplicates import (
     duplicate_row_flags,
     find_duplicate_receipt_groups,
     inherit_card_from_copies,
+    is_reminder,
     n_extra_copies,
     restore_copies_with_their_own_charge,
     with_kept_first,
@@ -7716,6 +7717,16 @@ def waits_for_statement_sentence(cards) -> str:
     return "No card on this receipt, and no statement is loaded for its date yet."
 
 
+def _reviewer_owns_a_category(document_id: str, overrides: dict) -> bool:
+    """Whether any line of this document carries a category the reviewer
+    set or confirmed (a `category_overrides` row with a category)."""
+    return any(
+        isinstance(key, tuple) and key and key[0] == document_id
+        and (ov or {}).get("category")
+        for key, ov in overrides.items()
+    )
+
+
 def _expense_review(
     r: Receipt,
     overrides: dict,
@@ -7792,6 +7803,20 @@ def _expense_review(
             ),
             "missing": missing,
         }
+    # Item 223 step 4: the reader called this document a payment reminder
+    # about another invoice. The correspondence quarantine sets such mail
+    # aside at ingest only when its text proves it; a reading alone never
+    # removes a row, so it asks. Ranked above the date check because a
+    # reminder is dated when it was sent, not when anything was bought.
+    # Quiet once the reviewer has made a category hers (a pick or Confirm).
+    if is_reminder(r) and not _reviewer_owns_a_category(r.document_id, overrides):
+        return _review(
+            "check",
+            "Reads as a payment reminder, not a purchase. Delete it if its "
+            "invoice is already in the month, or confirm its category to "
+            "keep it.",
+            "reads_as_reminder",
+        )
     # A date years away from the month it was filed under is the vision
     # read being wrong, not the month (backlog item 25). Never corrected
     # here — the read is reported and a human decides, because inventing

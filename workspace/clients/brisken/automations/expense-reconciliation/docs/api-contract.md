@@ -6020,7 +6020,7 @@ tests) now holds each as a literal against its source of truth:
 | Vocabulary | Source of truth | Pinned values |
 |---|---|---|
 | `rows[].row_type` | `ingest._common.ROW_TYPES` and every `ROW_TYPE_*` constant | `purchase` · `payment` · `refund` · `reversal` · `fee` · `interest` |
-| `review.state` / `review.reason_code` (both payloads) | the literals every `_review(...)` call in `web/service.py` passes (no single constant exists; read with `ast`, a non-literal code fails the pin) | states `ready` · `check` · `pick` · `none`; codes `uncategorized` · `partial_uncategorized` · `category_account_mismatch` · `vendor_guess` · `unknown_provenance` · `model_suggestion` · `uncertain_match` · `receiptless_suggested` · `missing_fields` · `date_outside_period` · `suggested_private` · `needs_entity` · `needs_entity_settled_outside` · `untrusted_instructions` · `invoice_read_as_statement` · `needs_person` · `needs_cost_center` |
+| `review.state` / `review.reason_code` (both payloads) | the literals every `_review(...)` call in `web/service.py` passes (no single constant exists; read with `ast`, a non-literal code fails the pin) | states `ready` · `check` · `pick` · `none`; codes `uncategorized` · `partial_uncategorized` · `category_account_mismatch` · `vendor_guess` · `unknown_provenance` · `model_suggestion` · `uncertain_match` · `receiptless_suggested` · `missing_fields` · `date_outside_period` · `suggested_private` · `needs_entity` · `needs_entity_settled_outside` · `untrusted_instructions` · `invoice_read_as_statement` · `needs_person` · `needs_cost_center` · `reads_as_reminder` |
 | unmatched `reason_code` | `unmatched_reasons.RECEIPT_REASON_CODES` / `CHARGE_REASON_CODES` | the nine codes in "The unmatched lists say what they hold" |
 | `summary.month_health.state` (+ `reason`, `suspects[]`) | every `HEALTH_*` / `REASON_*` / `SUSPECT_*` constant in `web/month_health.py` | `ok` · `broken`; `zero_match_with_exact_pairs`; `sign` · `currency` · `entity` · `card` · `unknown` |
 | `rematch_log[].trigger` | the `trigger=` literals every `web/*.py` module passes to a re-match call (no single constant exists; read with `ast`) | `statement` · `reread` · `receipts` · `cards` · `master_data` · `set_aside` · `trip` · `adjacent_receipts` · `expense_edit` · `resume` · `duplicates` · `month_move` |
@@ -7578,3 +7578,26 @@ re-match, because a charge holds its twin; August 1 (the Zoho Books 576.00
 mail body); September 4 (mail bodies: Zoho 50.00, Lovable 60.00, Anthropic
 100.00, Lovable 50.00). The three September OpenAI 80.12 invoices stay three.
 Tests: `tests/test_duplicate_front4_copies.py`.
+
+## What the document calls itself: `document_kind` and `reads_as_reminder` (item 223 step 4, 2026-09-27)
+
+The receipt extraction also returns `document_kind`: `invoice`, `receipt`,
+`reminder`, `statement` or `other`. It is asked in the response schema only
+(last property, the question in its `description`), so the extraction
+instructions are byte-identical; the schema edit does change the extraction
+cache fingerprint, so a document read again after the deploy is a fresh call.
+Stored on the snapshot receipt as `document_kind` (absent on every receipt
+read before 2026-09-27: a re-match reuses stored readings, so only arrivals
+from the deploy on carry it). Not served on `expenses[]`.
+
+Where it is read:
+
+| Reader | Effect |
+|---|---|
+| The kept copy (item 217) | Which member of a copy group is the payment receipt and which its invoice: `document_kind`, then the printed `receipt_number`, then `invoice_number`, then the file name. A member read as `reminder` is never kept beside a document that is not one. |
+| `expenses[].review` | New `reason_code` `reads_as_reminder` (state `check`): the row stays counted and asks a person. Ranked after `missing_fields`, before `date_outside_period`. Quiet once any line carries a category the reviewer set or confirmed. The published SPA does not localize it yet and shows the English `reason`. |
+
+Nothing excludes, deletes or sets aside a document on its `document_kind`;
+the ingest-time correspondence quarantine (text markers plus no itemization)
+is unchanged. Live effect at deploy: none (no stored reading carries the
+field). Tests: `tests/test_document_kind_front4_step4.py`.

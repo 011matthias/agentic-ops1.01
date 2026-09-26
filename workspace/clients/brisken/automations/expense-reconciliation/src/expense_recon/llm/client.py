@@ -192,6 +192,14 @@ class ExtractedReceipt:
     time: str | None = None
     invoice_number: str | None = None
     receipt_number: str | None = None
+    # Item 223 step 4 (front 4, 2026-09-27): what the document says it is,
+    # finer than `document_type` (which decides only whether a file becomes
+    # an expense at all): invoice / receipt / reminder / statement / other.
+    # Asked for in the response schema only, like the three fields above, so
+    # the instructions stay byte-identical. None when absent or unrecognised.
+    # The duplicate ladder reads it before the file name; nothing excludes a
+    # document on it.
+    document_kind: str | None = None
 
 
 @dataclass(frozen=True)
@@ -709,6 +717,21 @@ _EXTRACT_SCHEMA = {
             "type": ["string", "null"],
             "description": "The number the document labels as its receipt number, exactly as printed, or null.",
         },
+        # Item 223 step 4. Same shape as the item 77 amendment above: schema
+        # only, last, the question carried by `description`.
+        "document_kind": {
+            "type": "string",
+            "enum": ["invoice", "receipt", "reminder", "statement", "other"],
+            "description": (
+                "What the document calls itself. invoice = an invoice or bill "
+                "stating an amount charged or due; receipt = proof that a "
+                "payment was made (a payment receipt, till receipt, card slip "
+                "or ticket); reminder = a notice chasing payment of another "
+                "invoice (past due, payment reminder, dunning); statement = a "
+                "bank, card or account statement listing many transactions; "
+                "other = anything else."
+            ),
+        },
     },
     "required": [
         "document_type",
@@ -716,6 +739,7 @@ _EXTRACT_SCHEMA = {
         "tax", "tax_label", "payment_hint", "card_last4",
         "line_items", "confidence", "notes",
         "time", "invoice_number", "receipt_number",
+        "document_kind",
     ],
     "additionalProperties": False,
 }
@@ -1196,7 +1220,20 @@ def _extraction_from_payload(payload: dict) -> ExtractedReceipt:
         time=_time_hhmm(payload.get("time")),
         invoice_number=_opt_str(payload.get("invoice_number")),
         receipt_number=_opt_str(payload.get("receipt_number")),
+        document_kind=_document_kind(payload.get("document_kind")),
     )
+
+
+_DOCUMENT_KINDS = frozenset({"invoice", "receipt", "reminder", "statement", "other"})
+
+
+def _document_kind(value: object) -> str | None:
+    """The document's own kind, whitelisted, or None (absent key, junk, a
+    cached payload read before the field existed). Unlike `_document_type`
+    there is no safe default to collapse to: a guessed kind would steer which
+    copy of a purchase counts."""
+    s = str(value or "").strip().lower()
+    return s if s in _DOCUMENT_KINDS else None
 
 
 _TIME_RE = re.compile(r"^\s*(\d{1,2})[:h.](\d{2})(?::\d{2})?\s*$")

@@ -1036,7 +1036,15 @@ def decide_receipt_groups(
 
 KIND_RECEIPT = "receipt"
 KIND_INVOICE = "invoice"
+KIND_REMINDER = "reminder"
 _NAME_PREFIX = re.compile(r"^\d+__")
+
+
+def is_reminder(receipt: Receipt) -> bool:
+    """Whether the extraction read this document as a payment reminder about
+    another invoice (``document_kind``, item 223 step 4). Only the reading
+    decides; nothing is set aside on it, the view asks a person."""
+    return getattr(receipt, "document_kind", None) == KIND_REMINDER
 
 
 def payment_document_kind(receipt: Receipt) -> str | None:
@@ -1047,12 +1055,23 @@ def payment_document_kind(receipt: Receipt) -> str | None:
     receipt; an ``invoice_number`` with no receipt number is an invoice), then
     the file name, which is how the stored months tell them apart: the
     amendment fields exist only on receipts read since 2026-09-16, while
-    Stripe names its two attachments ``Invoice-...`` and ``Receipt-...``."""
+    Stripe names its two attachments ``Invoice-...`` and ``Receipt-...``.
+
+    Item 223 step 4: what the document calls itself (``document_kind``, read
+    since 2026-09-27) decides before the numbers. Measured over the 251 stored
+    documents, two readings each: it named all 57 Invoice / Receipt files
+    right both times, while the numbers call 33 real receipts invoices
+    (Brazilian NFC-e slips print an invoice number, OpenAI receipts print
+    theirs). A reminder, statement or other kind says neither and falls
+    through to the numbers and the name, as does every older reading."""
+    kind = getattr(receipt, "document_kind", None)
+    if kind in (KIND_RECEIPT, KIND_INVOICE):
+        return kind
     if (getattr(receipt, "receipt_number", None) or "").strip():
         return KIND_RECEIPT
     if (getattr(receipt, "invoice_number", None) or "").strip():
         return KIND_INVOICE
-    name = (receipt.receipt_name or _NAME_PREFIX.sub("", receipt.document_id or "")).lower()
+    name =(receipt.receipt_name or _NAME_PREFIX.sub("", receipt.document_id or "")).lower()
     if name.startswith("receipt"):
         return KIND_RECEIPT
     if name.startswith("invoice"):
@@ -1085,7 +1104,12 @@ def kept_member(
         return members[0]
     # Front 4: a rendered mail body is never the real expense beside the
     # document it repeats (a body a charge holds stays kept by rule 1).
-    documents = [(m, r) for m, r in zip(members, group) if not is_rendered_body(r)]
+    # Item 223 step 4: nor is a document that reads as a payment reminder
+    # beside the invoice or receipt it chases.
+    documents = [
+        (m, r) for m, r in zip(members, group)
+        if not is_rendered_body(r) and not is_reminder(r)
+    ]
     if documents and len(documents) < len(group):
         members = [m for m, _ in documents]
         group = [r for _, r in documents]
