@@ -529,7 +529,7 @@ REFUSAL_CODES_PIN = {
     # Build 2); the SPA reads the English `reason` until it maps the code.
     "model_picked_parent",
     # The model named an account kept for one vendor's product on another
-    # vendor's row (item 221 step 4, E500010-10 ZOHO ERP).
+    # vendor's row (item 224 step 4, E500010-10 ZOHO ERP).
     "account_vendor_specific",
 }
 

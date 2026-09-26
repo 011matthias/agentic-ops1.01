@@ -1,4 +1,4 @@
-# Lovable prompt: the merchant list read live, and one new refusal (backlog item 221, front 3)
+# Lovable prompt: the merchant list read live, and one new refusal (backlog item 224, front 3)
 
 Paste the block below into Lovable (Brisken expense recon SPA).
 
