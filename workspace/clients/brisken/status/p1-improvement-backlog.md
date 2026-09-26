@@ -12008,9 +12008,7 @@ live list 85 exact / 10 fuzzy (9 LOVABLE, 1 WWW.BRAVE.COM) / 2 descriptor
 3 / 143 (new descriptor hit: HOSTINGER US INC; "COMPUTER" 15.96 resolves to
 Perplexity AI, which is how Criss booked eight of them).
 
-**Open:** steps 4-5 per row on the live payloads after this deploy (map: 57
-rows on E500010-10, 76 + 28 on a parent). Owner decision pending: the write
-plan's uncontested rows.
+**Live 2026-09-27 (Fly v264, `bc9daf45`):** the prediction held row for row (13 / 9 / 10 rows carry `line_sum_gap` with the predicted values, no `line_sum_split`, `n_review` 57 / 42 / 62 unchanged); published SPA driven cold on July, no fallback. **Step 8 second half measured:** steps 4-5 (v262) turned 62 live rows (July 19, August 24, September 19) from a pre-filled model suggestion into "pick an account": 27 `account_vendor_specific` (the model had named Zoho ERP for Fireflies, Google, AWS, Trello, Obsidian, ElevenLabs, GitHub), 35 `model_picked_parent` (E500010, E600010-30, E100020 and the like). **Item 216 account map written 2026-09-27 on the owner's yes, the 3+ postings tier only:** 34 accounts on 32 new list entries (readiness 8/8, read back equal); live, 15 receipts and 43 charges now read a rule answer (10 + 43 replaced a suggestion). The 9 two-posting and 3 majority rows, Google Workspace / Cloud, OpenAI / Anthropic / Lovable stay out.
 
 
 ### 225. What "Save corrections to memory" shows is not tangible (note #91, operator, 2026-09-25 16:15 UTC) (BACKEND SHIPPED 2026-09-27; SPA prompt `docs/lovable-memory-plan-sentences-prompt.md` not pasted)
@@ -12064,7 +12062,7 @@ saves in two sections plus the ones it does not save, "Save {n} changes").
 Not built: the sentences are English only (as the Publish checklist already
 is); a PT rendering would need structured fields the SPA composes.
 
-### 226. The Matching page's statement download buttons go (note #92, operator, 2026-09-25 16:23 UTC)
+### 226. The Matching page's statement download buttons go (note #92, operator, 2026-09-25 16:23 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-statement-downloads-off-matching-prompt.md`, not pasted)
 
 Verbatim, on April 2026's Matching page (`/runs/0603bb0e6f38`): *"remove
 these statement download buttons"*. The Statements drop-down on that page
@@ -12075,12 +12073,29 @@ month page and is the precedent for the shape. Check first whether any other
 route still offers the statement file, so removing the link does not leave
 the original unreachable.
 
+**Read 2026-09-27.** The note's anchor is the Downloads row itself
+("DownloadsReconciliation (PDF)Report (Excel)Reconciled CSVStatement
+Chase1176_2026-04_post…"), not the Statements drop-down: since item 141 the
+Matching page's header shows no download (`showDownload={active !==
+"matching"}`), and its statement downloads are item 141's per-workbook
+"Statement {file}" buttons in `SummaryBar`. Driven cold on April the same day
+(0 writes): five buttons in the row, two of them the Chase1176 and Chase9693
+workbooks. The backend has NO route for a statement's raw upload; the only
+statement file it serves is `GET /runs/{id}/statement-categorized.xlsx`
+(her workbook plus the tool's account column, `xlsx` only). After the change
+that file stays reachable from the Expenses page's statements table (April:
+Download on both workbook rows), which is the one place left to get it; the
+CSV statement never had a download. **Prompt:**
+`docs/lovable-statement-downloads-off-matching-prompt.md` (the row keeps
+Reconciliation (PDF), Report (Excel), Reconciled CSV; the `statements` and
+`writebackAvailable` props and the two `sum.dl.statement*` keys go).
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
 | 147 | Item 225 (note #91): memory-plan lesson sentences say what the next receipt gets ("From now on, ERICK SPORTS receipts ... are filled in as paid with Credit Card - 8311 (Dirk Neumann - Cloud Services)"), a card by its Settings label and person, and a merchant-list card lesson names the receipts the card learner observed (`sources` + "Seen on N receipts"), read through one helper the learner also uses (`registry_card_observations`). SPA half `docs/lovable-memory-plan-sentences-prompt.md` pending | April's Save dialog read "erick sports · Brisken Holding, LLC · card_key -> card-8311" and "This also updates 16 merchants"; Dirk and Matthias could not tell what either meant, and the 16 merchant-list lessons carried no rows at all | PR (this); route-level `tests/test_memory_plan_tangible_item_225.py` (3), `regress_check` red on all three wires |
-| 146 | Item 224 step 6 (front 3): `expenses[].line_sum_gap` / `line_sum_note` when a receipt's lines disagree with its total by more than 0.05 (net-of-tax lines agree); a split receipt with a gap reads review `line_sum_split` and its `expenses.csv` rows end `(lines do not add up)`. Item 115 ruling in the same PR: on a GL month a Zoho-seeded rule leads on a lined receipt, the second read flags `learned_over_line`. | Nothing compared a receipt's lines with its total, so a split receipt's accounts could take shares from misread lines with no flag (live: 13 / 9 / 10 rows disagree, one splits); about 41 unsure receipts take a seeded rule's answer at their next categorization. | PR #1481 |
+| 146 | Item 224 step 6 (front 3): `expenses[].line_sum_gap` / `line_sum_note` when a receipt's lines disagree with its total by more than 0.05 (net-of-tax lines agree); a split receipt with a gap reads review `line_sum_split` and its `expenses.csv` rows end `(lines do not add up)`. Item 115 ruling in the same PR: on a GL month a Zoho-seeded rule leads on a lined receipt, the second read flags `learned_over_line`. | Nothing compared a receipt's lines with its total, so a split receipt's accounts could take shares from misread lines with no flag (live: 13 / 9 / 10 rows disagree, one splits); about 41 unsure receipts take a seeded rule's answer at their next categorization. | PR #1481, live Fly v264 2026-09-27 |
 | 145 | Item 222 step 6 (front 5): `exact_vendor_lookalike_guard`. A card-named EXACT same-currency pair with merchant below 0.5 goes to review (`exact_vendor_disagrees`, cause `merchant_disagrees` + `same_amount_receipt`) when a same-amount receipt is left unmatched; otherwise unchanged | Item 133 rules 1 and 3: no merchant floor alone separates right exact pairs (0.42, 0.46) from the wrong one (0.40); the leftover same-amount receipt does. 0 pairs move on July, August, September and the six bundles; a planted receipt moves exactly the one pair | PR #1479 (merge `be01b686`), Fly v263 2026-09-27; live API on July / August / September unchanged (0 rows carry the code, as predicted), August Matching driven cold (35 of 143 paired, 5 to review) |
 | 144 | Item 224 steps 1-5 (front 3): the grid, the run payload and the reviewer files read the merchant list live (`vendor.display`/`source` + `vendor.stamped`, `merchant {name, match}`, a per-company account decides as a rule with `posting_category.stamped`); a bank-descriptor resolver tier; the close-spelling containment guard; the ZOHO ERP guard (`account_vendor_specific`); stored parent / ZOHO ERP suggestions read as refusals. | The owner's OpenAI and Anthropic accounts reached no row already in a month: 21 receipts (all then post), 46 receiptless charges and 5 matched charges move; the 24 that join a Criss posting all agree. | PR #1477, live Fly v262 2026-09-27 |
 | 143 | Item 223 steps 2-3 (front 4): duplicate rungs `reference_digits` (a shared digit core of reference / invoice_number / receipt_number, merchant identity + amount + date within a day) and `misread_digit` (one digit apart, same day), and a `body_twin` key (a rendered mail body beside the one document it repeats; the body is never kept unless a charge holds it) | One purchase counted twice: July's five slip pairs read two ways (BRL 437.77) plus the E A Locações pair at its next re-match, August's Zoho Books body (USD 576.00), September's four bodies (USD 260.00) | 2026-09-25, PR TBD |
