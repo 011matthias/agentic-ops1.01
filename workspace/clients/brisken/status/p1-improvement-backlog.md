@@ -11890,9 +11890,26 @@ of 20 qualify at its next natural re-match, all unlabelled; July 10 qualify,
 6 labelled right, 0 wrong, all booked so nothing moves). A p >= 0.85 model
 verdict lifting a pair: NO, the click stays (not built).
 
-**Open:** step 6 (candidate-level merchant floor for exact pairs, measured
-first on July + August + the six bundles, shipped only if 0 labelled-right
-pairs move). SPA half: `docs/lovable-review-cause-prompt.md`, not pasted.
+**Step 6 shipped 2026-09-27 (PR TBD): the card-named sibling of D5.**
+`MatchingConfig.exact_vendor_lookalike_guard` (asset key, default on): a
+chosen same-currency EXACT pair whose receipt names a card and whose
+merchant words disagree (`_vendor_score` below 0.5) moves to
+`judgment_required` with `review_code: exact_vendor_disagrees` only when
+ANOTHER receipt of the same total and currency is left unmatched after the
+assignment; it keeps its assignment, as D5 does. `review.cause`
+`merchant_disagrees` with `cause_detail.same_amount_receipt`. Measured
+before and after on a fresh read-only DB copy: July, August and the six
+bundles byte-identical in `tools/recon-match-attribution.py` (July 30 right
+/ 0 wrong, August 6 / 2, bundles 70/95); a direct probe over those plus
+September finds two chosen pairs under 0.5 with a card (July Network
+Solutions 7.98 at 0.46, labelled right; September SendGrid 89.95 at 0.32),
+neither with a same-amount receipt left over, so 0 move. Differential proof:
+one planted 7.98 USD receipt in live July moves exactly Network Solutions to
+review and nothing else. Scorer 76.0, guard PASS, CI accuracy no diff.
+August's two labelled-wrong pairs (`0015` at 0.52, `0025` at 1.00) are not
+this shape. SPA half (the no-card sentence would be wrong here):
+`docs/lovable-review-cause-prompt.md` gains `merchant_disagrees_waiting`,
+still not pasted.
 
 ### 223. Copies and double counting: one number read two ways, the mail body, and the rest of the copies front (gap map 2026-09-25, front 4) (STEPS 1-3 SHIPPED 2026-09-25; steps 4-7 open)
 
@@ -11988,6 +12005,7 @@ rows.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 145 | Item 222 step 6 (front 5): `exact_vendor_lookalike_guard`. A card-named EXACT same-currency pair with merchant below 0.5 goes to review (`exact_vendor_disagrees`, cause `merchant_disagrees` + `same_amount_receipt`) when a same-amount receipt is left unmatched; otherwise unchanged | Item 133 rules 1 and 3: no merchant floor alone separates right exact pairs (0.42, 0.46) from the wrong one (0.40); the leftover same-amount receipt does. 0 pairs move on July, August, September and the six bundles; a planted receipt moves exactly the one pair | 2026-09-27, PR TBD |
 | 144 | Item 224 steps 1-5 (front 3): the grid, the run payload and the reviewer files read the merchant list live (`vendor.display`/`source` + `vendor.stamped`, `merchant {name, match}`, a per-company account decides as a rule with `posting_category.stamped`); a bank-descriptor resolver tier; the close-spelling containment guard; the ZOHO ERP guard (`account_vendor_specific`); stored parent / ZOHO ERP suggestions read as refusals. | The owner's OpenAI and Anthropic accounts reached no row already in a month: 21 receipts (all then post), 46 receiptless charges and 5 matched charges move; the 24 that join a Criss posting all agree. | PR pending |
 | 143 | Item 223 steps 2-3 (front 4): duplicate rungs `reference_digits` (a shared digit core of reference / invoice_number / receipt_number, merchant identity + amount + date within a day) and `misread_digit` (one digit apart, same day), and a `body_twin` key (a rendered mail body beside the one document it repeats; the body is never kept unless a charge holds it) | One purchase counted twice: July's five slip pairs read two ways (BRL 437.77) plus the E A Locações pair at its next re-match, August's Zoho Books body (USD 576.00), September's four bodies (USD 260.00) | 2026-09-25, PR TBD |
 | 142 | Item 222 steps 1-5 (front 5): the FX judge is handed the tool's rate, card verdict and merchant agreement (prompt v2, cache keyed on it, look-alike pairs with clean evidence skip the model); `review.cause` / `cause_detail`; booked charges not judged and out of `n_review`; PDF payoffs read `payment`; `reverses_transaction_id` | 13 live verdicts guessed their own rate (one tenfold off); every review row read one generic sentence; July counted 13 booked rows as in review; six payoffs read refund | 2026-09-25 |
