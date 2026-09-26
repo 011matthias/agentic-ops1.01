@@ -134,6 +134,8 @@ from ..merchant_registry import (
 # account came from a company's rule says more) and the seed marker the
 # Memory page flags a Zoho-history row with.
 from ..categorize import REGISTRY_DEFAULT_REASONING
+# Front 3 step 1: a merchant's per-company account read at view time.
+from ..categorize import live_registry_accounts, live_registry_charge_accounts
 from ..learning.consult import ZOHO_SEED_PREFIX
 from .month_health import (
     HEALTH_OK,
@@ -3392,6 +3394,26 @@ def build_view(
     chase list is still built (it is derived from the rows) with no address
     and no hint on it: the groups and their counts never depend on it."""
     transactions, receipts, outcome, parse_errors = snapshot_from_dict(run.snapshot)
+    # Front 3 step 1: the merchant list as it reads NOW names each row's
+    # merchant and, where it carries an account for the row's company, the
+    # account (a rule's answer, never the model's). Only the GET route passes
+    # settings; every other caller reads the rows as stored.
+    live_registry = MerchantRegistry.from_settings(settings) if settings else None
+    # A receipt whose own company is blank takes the company of the charge
+    # holding it (the grid reads it off the card chain; without this the
+    # reconcile row kept the stored suggestion the grid had replaced).
+    tx_company = {t.transaction_id: t.legal_entity_id for t in transactions}
+    live_entity_by_doc = {
+        m.document_id: tx_company.get(m.transaction_id, "")
+        for m in (*outcome.matches, *outcome.judgment_required, *outcome.ambiguous)
+    }
+    receipts, live_receipts_stamped = live_registry_accounts(
+        receipts, live_registry, entity_orgs=gl_run_entity_orgs(run),
+        entity_by_doc={
+            r.document_id: live_entity_by_doc.get(r.document_id, "")
+            for r in receipts if not str(r.legal_entity_id or "").strip()
+        },
+    )
     rec_by_id = {r.document_id: r for r in receipts}
     # Note item T3: which upload printed each charge, and where. Read once
     # per payload (it walks `statements[]` and one map per upload) and put
@@ -3407,11 +3429,25 @@ def build_view(
     # snapshot as copies; fold them into the lookup so a cross-batch
     # pairing renders its receipt. They are NOT part of `receipts`: the
     # month's own pool, counts, and export never absorb them.
+    borrowed = []
     for bd in (run.snapshot or {}).get(BORROWED_RECEIPTS_KEY) or []:
         try:
             br = receipt_from_dict(bd)
         except (KeyError, TypeError, ValueError):
             continue
+        if br.document_id not in rec_by_id:
+            borrowed.append(br)
+    # Front 3 step 1: a borrowed receipt reads the list as it is now too, or
+    # the charge holding it here disagrees with its own month's grid.
+    borrowed, borrowed_stamped = live_registry_accounts(
+        borrowed, live_registry, entity_orgs=gl_run_entity_orgs(run),
+        entity_by_doc={
+            br.document_id: live_entity_by_doc.get(br.document_id, "")
+            for br in borrowed if not str(br.legal_entity_id or "").strip()
+        },
+    )
+    live_receipts_stamped.update(borrowed_stamped)
+    for br in borrowed:
         rec_by_id.setdefault(br.document_id, br)
     # Where each borrowed receipt lives. Read once here because both the
     # candidate rows below and the settled-row badge further down name it,
@@ -3455,11 +3491,16 @@ def build_view(
     # Slice 10: receiptless-charge categorizations (extra snapshot key;
     # absent on pre-Slice-10 runs => empty map, rows render as before).
     # Item 109: the reviewer's own picks lie over the tool's guesses.
-    charge_cats = apply_charge_category_overrides(
+    stored_charge_cats, live_charges_stamped = live_registry_charge_accounts(
         {
             tx_id: categorization_from_dict(d)
             for tx_id, d in (run.snapshot.get("charge_categorizations") or {}).items()
         },
+        transactions, outcome.unmatched_transactions, live_registry,
+        entity_orgs=gl_run_entity_orgs(run),
+    )
+    charge_cats = apply_charge_category_overrides(
+        stored_charge_cats,
         overrides,
         outcome.unmatched_transactions,
         entity_orgs=gl_run_entity_orgs(run),
@@ -3846,6 +3887,15 @@ def build_view(
             if proposed is not None:
                 posting_category, suggested_category = proposed
                 proposed_flag = {"posting_category_proposed": True}
+        # Front 3 step 1: a posting the live merchant list decided carries
+        # what the row read before, as stored. ABSENT everywhere else.
+        if posting_category is not None:
+            _was = live_stamped_category(
+                tx_id, held_doc, live_charges_stamped, live_receipts_stamped,
+                overrides, gl_run_entity_orgs(run),
+            )
+            if _was is not None:
+                posting_category = {**posting_category, "stamped": _was}
         review = resolve_review(
             is_posted=is_posted,
             effective_bucket=effective_bucket,
@@ -3878,6 +3928,10 @@ def build_view(
                 "transaction_id": tx_id,
                 "date": tx.transaction_date.isoformat() if tx.transaction_date else "",
                 "vendor": tx.vendor_from_statement,
+                # Front 3 step 1: the listed merchant the bank's description
+                # names, resolved against the list as it reads now. ABSENT
+                # when the list names none.
+                **charge_merchant_field(live_registry, tx),
                 "amount": _fmt_amount(tx.amount),
                 "currency": tx.transaction_currency,
                 "account_id": tx.account_id,
@@ -8043,7 +8097,8 @@ def batch_list_summary(store: RunStore, run: RunRow) -> dict:
         # first, exactly as the batch page decides them).
         resolutions = store.get_duplicate_resolutions(run.run_id)
         inherited = inherit_card_from_copies(
-            receipts, resolutions, _batch_card_hints(run.config)
+            receipts, resolutions, _batch_card_hints(run.config),
+            account_keys=stored_duplicate_account_keys(run),
         )
         copies = decided_copies(
             run,
@@ -8134,7 +8189,7 @@ def grid_card_chain(
     # its receipt copy names the card. A group ruled `ignore` lends nothing,
     # and an operator-assigned hint word is never overwritten (grid).
     grid_hints = _batch_card_hints(run.config)
-    receipts = inherit_card_from_copies(receipts, resolutions, grid_hints, duplicate_decisions(run, receipts, resolutions))  # grid
+    receipts = inherit_card_from_copies(receipts, resolutions, grid_hints, duplicate_decisions(run, receipts, resolutions), account_keys=stored_duplicate_account_keys(run))  # grid
     # Item 169: and the card a correction remembers, read live rather than
     # off the stamp ingest left, so a fix taught after this month was
     # ingested reaches it. Silent without a learning store.
@@ -8219,6 +8274,14 @@ def build_expense_view(
         run, overrides, field_overrides, edits, resolutions,
         settings=settings, decisions=decisions,
         learning_db_path=learning_db_path,
+    )
+    # Front 3 step 1: the merchant list as it reads NOW, for each row's
+    # merchant, its display name and, where the merchant carries an account
+    # for the company the row shows, the account. Stored rows are untouched.
+    live_registry = MerchantRegistry.from_settings(settings) if settings else None
+    receipts, live_stamped = live_registry_accounts(
+        receipts, live_registry, entity_orgs=gl_run_entity_orgs(run),
+        entity_by_doc=resolved_entities(card_res),
     )
     # Keep the pre-edit receipts so the vendor object can always show the
     # ORIGINAL extracted name as `raw`, even after a reviewer vendor edit
@@ -8427,6 +8490,16 @@ def build_expense_view(
             suggested = {
                 **suggested, "source": _coarse_source_join(suggested.get("source"))
             }
+        if posting is not None and r.document_id in live_stamped:
+            _was_p, _was_s = _row_categories(
+                live_stamped[r.document_id], overrides, None,
+                entity_orgs=gl_run_entity_orgs(run), entity=res["entity"],
+            )
+            _was = _was_s or _was_p
+            if _was is not None:
+                posting = {**posting, "stamped": {
+                    **_was, "source": _coarse_source_join(_was.get("source")),
+                }}
         pt_account, pt_source = resolve_paid_through(
             r,
             field_overrides.get(r.document_id, {}).get("paid_through") or None,
@@ -8560,10 +8633,13 @@ def build_expense_view(
             # so the grid shows the canonical name AND why it differs. This is
             # an expense-grid-only shape; the reconcile workbench keeps the
             # string (_receipt_view is unchanged there).
-            "vendor": _expense_vendor_view(
+            # Front 3 step 1: `display` and `source` read the merchant list as
+            # it is NOW; `stamped` keeps what ingest stored when that differs.
+            "vendor": expense_vendor_view_live(
                 r, orig_by_id.get(r.document_id),
-                field_overrides.get(r.document_id, {}),
+                field_overrides.get(r.document_id, {}), live_registry,
             ),
+            **receipt_merchant_field(live_registry, r),
             # Receipt-first fields _receipt_view does not carry (build_view
             # consumers are unchanged; these are expense-row additions).
             "tax": _fmt_amount(r.detected_tax),
@@ -9106,6 +9182,10 @@ def build_expense_view(
             }
             for i in parse_errors
         ],
+        # Item 223 step 5: this month's receipts that repeat another month's
+        # (vendor, date, total, currency), as the last computing write found
+        # them. Advisory; ABSENT when there are none, never null.
+        **cross_month_copies_field(run, receipts),
     }
 
 
@@ -9135,6 +9215,7 @@ def _expense_export_inputs(
     merchants: dict | None = None,
     learning_db_path: "Path | None" = None,
     private_cards: dict | None = None,
+    live_accounts: bool = False,
 ) -> tuple[list, dict]:
     """`(receipts, kwargs)` for the expense export — the overlay order the
     view uses (`apply_expense_edits` then `apply_overrides`) plus the card /
@@ -9173,7 +9254,7 @@ def _expense_export_inputs(
     # Item 69 round A: the grid's card inheritance, so grid and export move
     # together on a copy that borrowed its card.
     export_hints = _batch_card_hints(run.config)
-    receipts = inherit_card_from_copies(receipts, dup_resolutions, export_hints, duplicate_decisions(run, receipts, dup_resolutions))  # export
+    receipts = inherit_card_from_copies(receipts, dup_resolutions, export_hints, duplicate_decisions(run, receipts, dup_resolutions), account_keys=stored_duplicate_account_keys(run))  # export
     # Item 169: the grid's live read of a remembered card, so the file a
     # reviewer downloads files a receipt under the card the screen showed it
     # on. Cards R3 is the whole reason this sits on both paths.
@@ -9197,6 +9278,16 @@ def _expense_export_inputs(
         # never the matcher's neighbour and trip pools, which pass none.
         account_cards=request_account_cards() if settled_cards is not None else None,
     )
+    # Front 3 step 1: the files a reviewer downloads (`live_accounts`: the
+    # CSV, the month report, bills.csv) carry the merchant list's account
+    # for the row's company exactly as the grid shows it. The matcher's trip
+    # and neighbour pools leave it off: they read receipts, never accounts.
+    if live_accounts:
+        receipts, _stamped = live_registry_accounts(
+            receipts, MerchantRegistry.from_settings({"merchants": merchants}),
+            entity_orgs=gl_run_entity_orgs(run),
+            entity_by_doc=resolved_entities(card_res),
+        )
     # After the card pass (which reads no category) so item 201's account
     # name resolves in the company this row exports under, as on the grid.
     receipts = apply_overrides(
@@ -9265,6 +9356,7 @@ def regenerate_expense_export(
         run, overrides, field_overrides, edits, dup_resolutions,
         settled_cards=csv_settled, merchants=merchants,
         learning_db_path=learning_db_path, private_cards=private_cards,
+        live_accounts=True,
     )
     kwargs.pop("private_by_doc")  # the CSV reads it through paid_through_by_doc
     copies = decided_copies(
@@ -9492,7 +9584,7 @@ def build_expense_report(
     receipts, kwargs = _expense_export_inputs(
         run, overrides, field_overrides, edits, dup_resolutions,
         settled_cards=report_settled, merchants=report_merchants,
-        learning_db_path=learning_db_path,
+        learning_db_path=learning_db_path, live_accounts=True,
         private_cards=(settings or {}).get("private_cards"),
     )
     copies = decided_copies(
@@ -14444,6 +14536,17 @@ def _add_receipts_locked(
         all_provenance.setdefault(k, v)
     if all_provenance:
         new_snapshot["intake_provenance"] = all_provenance
+    # Item 223 step 5: a month with no statement is never re-matched, so this
+    # commit is where its account keys are computed (over the pool with the
+    # reviewer's edits, as the grid reads it) and stored. A month with a
+    # statement re-matches right after this and computes them there.
+    if not has_statement(run):
+        edited_pool = apply_expense_edits(
+            pool, store.get_expense_field_overrides(run.run_id),
+            store.get_expense_edits(run.run_id), default_entity=entity,
+        )
+        add_keys, add_copies = cross_month_duplicate_evidence(store, run, edited_pool)
+        store_cross_month_evidence(new_snapshot, add_keys, add_copies)
     # Item 113: the receipts and the debt to re-pair them are ONE write, so
     # no restart can store the one without the other.
     if (new_receipts or rematch_owed) and has_statement(run):
@@ -15598,7 +15701,11 @@ def rematch_month(
     # to match), and a hint word the operator assigned is kept.
     dup_resolutions = store.get_duplicate_resolutions(run.run_id)
     bake_hints = _batch_card_hints(cfg)
-    receipts = inherit_card_from_copies(receipts, dup_resolutions, bake_hints, duplicate_decisions(run, receipts, dup_resolutions))  # before the card chain
+    # Item 223 step 5: the numbers other months show to be a billing account
+    # (and this month's copies of their documents), read from their stored
+    # snapshots now, used by the bake and the pool below, stored at commit.
+    dup_account_keys, cross_copies = cross_month_duplicate_evidence(store, run, receipts)
+    receipts = inherit_card_from_copies(receipts, dup_resolutions, bake_hints, duplicate_decisions(run, receipts, dup_resolutions, account_keys=dup_account_keys), account_keys=dup_account_keys)  # before the card chain
     # Cards R3: bake the SAME per-receipt entity the grid and the export
     # showed (override -> hint assignment -> card registry -> stamped
     # value) into the pool the matcher sees. Matching is entity-scoped
@@ -15670,7 +15777,8 @@ def rematch_month(
     # Item 217: the copy a charge already holds stays the kept one, so a
     # confirmed decision never ends up naming a set-aside copy.
     pool, collapsed, dup_decisions = duplicate_pool(
-        run, pool, dup_resolutions, held=held_documents(store, run)
+        run, pool, dup_resolutions, held=held_documents(store, run),
+        account_keys=dup_account_keys,
     )
     receipt_digest_map = receipt_digests(run, receipts)
     # R4b (item 38 ruling 3): the pool spans trips. Receipts from trips
@@ -15979,6 +16087,7 @@ def rematch_month(
             new_snapshot[DUPLICATE_KEPT_KEY] = kept_copies
         else:
             new_snapshot.pop(DUPLICATE_KEPT_KEY, None)
+        store_cross_month_evidence(new_snapshot, dup_account_keys, cross_copies)  # item 223 step 5
         if charge_categorizations:
             new_snapshot["charge_categorizations"] = {
                 tx_id: categorization_to_dict(c)
@@ -17041,7 +17150,7 @@ def regenerate_bills_export(
         run, overrides, field_overrides, edits, dup_resolutions,
         settled_cards=export_settled_cards(run, charge_decisions),
         merchants=merchants, learning_db_path=learning_db_path,
-        private_cards=private_cards,
+        private_cards=private_cards, live_accounts=True,
     )
     copies = decided_copies(
         run, receipts, dup_resolutions, charge_decisions=charge_decisions,
@@ -17679,11 +17788,15 @@ def duplicate_decisions(
     *,
     work_dir: "Path | None" = None,
     with_statement_check: bool = True,
+    account_keys: "frozenset[str] | None" = None,
 ) -> list:
     """The month's receipt groups, each decided (`decide_receipt_groups`)
     with this run's evidence. `with_statement_check` reads the last
     re-match's rung-7 restorations off the snapshot; `rematch_month` passes
     False because it is about to run that check itself."""
+    # Item 223 step 5: the account keys the last computing write stored; a
+    # re-match passes the ones it has just computed. Never loaded here.
+    account_keys = stored_duplicate_account_keys(run) if account_keys is None else account_keys
     statement = (
         (run.snapshot or {}).get(DUPLICATE_STATEMENT_KEY) or []
         if with_statement_check else []
@@ -17694,6 +17807,7 @@ def duplicate_decisions(
         text_of=receipt_text_layer(run, work_dir=work_dir),
         resolutions=resolutions or {},
         statement_distinct=statement,
+        account_keys=account_keys,  # item 223 step 5: stored, or the re-match's
     )
     if not with_statement_check:
         return decisions  # a re-match chooses the kept copy itself
@@ -17830,6 +17944,7 @@ def duplicate_pool(
     *,
     work_dir: "Path | None" = None,
     held: "set[str] | None" = None,
+    account_keys: "frozenset[str] | None" = None,
 ):
     """`(pool without collapsed copies, collapsed ids, decisions)`: the
     candidate pool a re-match hands the matcher before the statement check.
@@ -17841,6 +17956,7 @@ def duplicate_pool(
     invoice, else the first. The returned decisions carry it first."""
     decisions = duplicate_decisions(
         run, pool, resolutions, work_dir=work_dir, with_statement_check=False,
+        account_keys=account_keys,  # item 223 step 5: a re-match's own keys
     )
     decisions = with_kept_first(
         decisions, choose_kept(decisions, pool, frozenset(held or ()))
@@ -19248,3 +19364,185 @@ def fx_pair_confirmable(row: dict, cand: dict) -> bool:
     if cand.get("card_pct") not in (100, 50) or row.get("cards_differ"):
         return False
     return True
+
+
+# ── Front 3 step 1 (2026-09-25): merchant identity read live ───────────
+#
+# A receipt's merchant was stamped when it arrived (`canonical_vendor`,
+# `vendor_source`) and never re-read, so a merchant added to the list later
+# reached no row already in a month: 64 receipts and 52 charges on July to
+# September read the raw spelling or the model's guess while Settings'
+# `needs_account` (which resolves live) already named them. These helpers
+# read the list as it is now. Nothing here writes.
+
+
+def _merchant_field(match) -> dict:
+    """`{"merchant": {name, match}}` for a registry hit, `{}` otherwise
+    (absent, never null). `match` is how the list matched: exact, fuzzy or
+    descriptor."""
+    if match is None:
+        return {}
+    return {"merchant": {"name": match.canonical_name, "match": match.kind}}
+
+
+def receipt_merchant_field(registry, receipt: Receipt) -> dict:
+    """The grid row's `merchant`, resolved as the engine resolves a receipt
+    (the extracted brand, then the printed name)."""
+    if not registry:
+        return {}
+    return _merchant_field(
+        registry.resolve(receipt.vendor_clean, receipt.detected_vendor)
+    )
+
+
+def charge_merchant_field(registry, tx) -> dict:
+    """The run row's `merchant`, resolved from the bank's description the way
+    `categorize_charges` resolves a receiptless charge."""
+    if not registry:
+        return {}
+    from ..categorize_charges import build_charge_pseudo_receipt
+
+    pseudo = build_charge_pseudo_receipt(tx)
+    return _merchant_field(
+        registry.resolve(pseudo.vendor_clean, pseudo.detected_vendor)
+    )
+
+
+def expense_vendor_view_live(
+    eff: Receipt, orig: "Receipt | None", field_ov: dict, registry,
+) -> dict:
+    """`_expense_vendor_view` with the registry read now instead of from the
+    ingest stamp. A person's vendor edit still wins; a merchant the list
+    names today reads its canonical name with source `registry`; a stamped
+    canonical the list no longer names falls back to the extracted (or
+    learned) spelling. `stamped` (`{display, source}`) keeps the stored view
+    when it differs; ABSENT otherwise."""
+    stored = _expense_vendor_view(eff, orig, field_ov)
+    if registry is None or stored["source"] == "override":
+        return stored
+    match = registry.resolve(eff.vendor_clean, eff.detected_vendor)
+    if match is not None:
+        live = {"display": match.canonical_name, "raw": stored["raw"],
+                "source": "registry"}
+    else:
+        live = _expense_vendor_view(
+            replace(eff, canonical_vendor=None), orig, field_ov)
+    if (live["display"], live["source"]) != (stored["display"], stored["source"]):
+        live["stamped"] = {"display": stored["display"], "source": stored["source"]}
+    return live
+
+
+def live_stamped_category(
+    tx_id: str, held_doc: str | None, charges_stamped: dict,
+    receipts_stamped: dict, overrides: dict, entity_orgs: dict | None,
+) -> dict | None:
+    """What a run row's category read before the live registry rule decided
+    it: the held receipt's stored suggestion (else its stored posting), or a
+    receiptless charge's stored categorization. None when the rule did not
+    touch the row, or the row carried nothing before."""
+    if held_doc:
+        if held_doc not in receipts_stamped:
+            return None
+        was_p, was_s = _row_categories(
+            receipts_stamped[held_doc], overrides, None, entity_orgs=entity_orgs,
+        )
+        return was_s or was_p
+    if tx_id in charges_stamped:
+        return _charge_category_view(charges_stamped[tx_id])
+    return None
+
+
+# ── Item 223 step 5 (2026-09-27): billing-account keys across months ─────
+#
+# `duplicates.cross_month_evidence` over this month's receipts and the other
+# month batches'. Computed only where neighbour months may be read: the
+# re-match (`rematch_month`) and the commit of receipts added to a month with
+# no statement (`_add_receipts_locked`), which is never re-matched. Both store
+# the result on the snapshot; every reader (the views, the months list, the
+# export, the billing-account index, the attribution tool through
+# `duplicate_pool`) reads the stored keys and never loads another month.
+
+# Snapshot key: the numbers other months show to be a billing account, sorted.
+# Absent when there are none.
+DUPLICATE_ACCOUNT_KEYS_KEY = "duplicate_account_keys"
+# Snapshot key: `[{document_id, batch_id, other_document_id}]`, this month's
+# receipts that repeat another month's (vendor, date, total, currency).
+# Advisory, served as `cross_month_copies[]`; absent when there are none.
+CROSS_MONTH_COPIES_KEY = "cross_month_copies"
+
+
+def stored_duplicate_account_keys(run: RunRow) -> frozenset[str]:
+    """The account keys the month's last computing write stored."""
+    raw = (run.snapshot or {}).get(DUPLICATE_ACCOUNT_KEYS_KEY) or []
+    return frozenset(str(k) for k in raw if k)
+
+
+def other_month_receipts(store: RunStore, run: RunRow) -> dict[str, list[Receipt]]:
+    """batch id -> receipts of every OTHER month batch, read from the stored
+    snapshots and the reviewer's stored edits (no file, no model): company
+    months in expense mode, trips and `TEST` / `UTIL` fixture batches left
+    out (the billing-account index's rule). A batch whose snapshot cannot be
+    read lends nothing, which leaves this month as it was before the rule."""
+    from ..billing_account import _FIXTURE_PREFIXES
+
+    out: dict[str, list[Receipt]] = {}
+    for other in store.list_runs():
+        if other.run_id == run.run_id:
+            continue
+        if (other.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+            continue
+        if is_trip_batch(other):
+            continue
+        if str(other.label or "").strip().upper().startswith(_FIXTURE_PREFIXES):
+            continue
+        try:
+            out[str(other.run_id)] = apply_expense_edits(
+                baseline_receipts(other),
+                store.get_expense_field_overrides(other.run_id),
+                store.get_expense_edits(other.run_id),
+                default_entity=(
+                    ((other.config or {}).get("expense") or {}).get("legal_entity_id", "")
+                ),
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
+
+
+def cross_month_duplicate_evidence(
+    store: RunStore, run: RunRow, receipts: list[Receipt]
+) -> tuple[frozenset[str], list[dict]]:
+    """`(account keys, cross-month copies)` for `receipts`, this month's
+    effective list, against the other month batches. Write paths only."""
+    from ..duplicates import cross_month_evidence
+
+    return cross_month_evidence(receipts, other_month_receipts(store, run))
+
+
+def store_cross_month_evidence(snapshot: dict, keys, copies) -> None:
+    """Write both keys onto a snapshot being committed; pop each when empty."""
+    if keys:
+        snapshot[DUPLICATE_ACCOUNT_KEYS_KEY] = sorted(keys)
+    else:
+        snapshot.pop(DUPLICATE_ACCOUNT_KEYS_KEY, None)
+    if copies:
+        snapshot[CROSS_MONTH_COPIES_KEY] = [dict(c) for c in copies]
+    else:
+        snapshot.pop(CROSS_MONTH_COPIES_KEY, None)
+
+
+def cross_month_copies_field(run: RunRow, receipts: list[Receipt]) -> dict:
+    """`{"cross_month_copies": [...]}` for the Expenses payload, the stored
+    entries whose document is still one of `receipts`; `{}` when none, so the
+    field is absent rather than empty or null."""
+    docs = {r.document_id for r in receipts}
+    entries = [
+        {
+            "document_id": str(e.get("document_id") or ""),
+            "batch_id": str(e.get("batch_id") or ""),
+            "other_document_id": str(e.get("other_document_id") or ""),
+        }
+        for e in (run.snapshot or {}).get(CROSS_MONTH_COPIES_KEY) or []
+        if isinstance(e, dict) and e.get("document_id") in docs
+    ]
+    return {"cross_month_copies": entries} if entries else {}

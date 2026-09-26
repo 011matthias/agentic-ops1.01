@@ -7601,3 +7601,102 @@ Nothing excludes, deletes or sets aside a document on its `document_kind`;
 the ingest-time correspondence quarantine (text markers plus no itemization)
 is unchanged. Live effect at deploy: none (no stored reading carries the
 field). Tests: `tests/test_document_kind_front4_step4.py`.
+
+## Merchant identity and the listed account, read live (front 3 step 1, 2026-09-25)
+
+A receipt's merchant and its registry account used to be stamped when the
+receipt arrived and never re-read, so a merchant added to the list later
+(OpenAI and Anthropic with their accounts, item 219) reached no row already in
+a month. Both payloads now read the merchant list as it is when the payload is
+built. Nothing stored changes.
+
+Grid (`GET /api/expense-batches/{id}`), per `expenses[]` row:
+
+- `vendor.display` / `vendor.source` resolve against the list now: a person's
+  vendor edit still wins (`override`); else a listed merchant reads its
+  canonical name with `source: "registry"`; else the learned or extracted
+  spelling. `vendor.stamped` = `{display, source}` as ingest stored them,
+  present only when that differs from the live pair; ABSENT otherwise.
+- `merchant` = `{name, match}`: the listed merchant the row names (`match` is
+  how the list matched it: `exact`, `fuzzy`, or `descriptor` once the
+  bank-descriptor tier exists). ABSENT when the list names none.
+
+Run payload (`GET /api/runs/{id}`), per `rows[]` charge:
+
+- `merchant`, same shape, resolved from the bank's description the way a
+  receiptless charge is categorized. `vendor` stays the bank's text.
+
+Both payloads, the account: on a Zoho-account month, a merchant whose
+per-company map (`settings.merchants[].accounts`) names an account for the
+row's company decides the account at read time, as the ingest tier would (a
+rule's answer, `origin: "rule"`, source `registry`; the line's `provenance`
+and a charge's `posting_category.provenance` read "merchant registry account
+for {company}"). The company is the one the row shows. Only a person's pick
+outranks it. The model's answer is replaced, never moved into the posting:
+`suggested_category` is absent on such a row.
+
+- `posting_category.stamped` = what the row read before this rule decided it
+  (the stored suggestion if there was one, else the stored posting; the
+  category shape: `category`, `zoho_account`, `source`, `origin`). ABSENT on
+  every row the rule did not change, and on a changed row that carried
+  nothing before.
+
+The reviewer files follow the screen: `expenses.csv`, the month report and
+`bills.csv` apply the same rule. The matcher's trip and neighbour pools do not
+(they read receipts, never accounts), and every caller of `build_view` other
+than the GET route reads the rows as stored.
+
+Tests: `tests/test_front3_identity_live.py` (route-level: grid, run payload,
+`expenses.csv`, a person's pick) and the type guard
+`test_live_merchant_fields_are_absent_or_well_formed` in
+`tests/test_view_contract.py`.
+
+Steps 2 to 5 (same day):
+
+- `merchant.match: "descriptor"`: the list matched a bank line through the
+  descriptor tier (the listed name's lead word, plus the product word on
+  Google / Microsoft / Amazon), after exact and close spelling found nothing.
+- New refusal code `account_vendor_specific` (review `reason_code:
+  "category_refused"`, `refusal: "account_vendor_specific"`): the model named
+  an account kept for one vendor's product (E500010-10, Cloud
+  Subscriptions-ZOHO ERP) on a row whose merchant is not that vendor. Given at
+  categorization, and at read time for a suggestion stored before the rule.
+- At read time a stored model suggestion naming a summary account with
+  postable accounts under it reads `refusal: "model_picked_parent"` instead
+  of a suggestion (`suggested_category` absent), until the row is
+  re-categorized. Rules and people are never re-read.
+
+## Billing-account keys across months (item 223 step 5, 2026-09-27)
+
+Some vendors print the customer's billing-account code where the document
+number goes (Railway `77H7ITO0`, Rize `5ZK1BCDG`). One month holding such a
+code once cannot tell it from a document number, so two real bills of one
+amount under it in one month would read as one document and one would leave
+the total.
+
+What is decided: a number (the normalized reference, or the long digit run of
+the reference, invoice number or receipt number) that another month batch
+prints on a receipt of the same total and currency, dated 20 days or more
+away, is an account key. No receipt of the month is twinned on it, exactly as
+an account id found inside one month. A re-filed copy prints the same date,
+so it never becomes a key.
+
+Where it is computed: only where other months may be read, from their stored
+snapshots and the reviewer's stored edits (no file, no model): the re-match,
+and the commit of receipts added to a month with no statement. Trips and
+`TEST` / `UTIL` batches are left out. Stored on the snapshot as
+`duplicate_account_keys` (sorted) and `cross_month_copies`, each absent when
+empty. A page view never reads another month; every surface (grid, run
+payload, months list, export, billing-account index) reads the stored keys.
+A month's keys move only on its own next computing write.
+
+What the reader sees: `duplicate_groups[]` and every count already follow
+the keys. The Expenses payload (`GET /api/expense-batches/{id}`) adds
+`cross_month_copies[]`, objects `{document_id, batch_id, other_document_id}`:
+this month's receipts whose vendor, date, total and currency repeat a
+receipt of batch `batch_id`. Advisory only, nothing is set aside across
+months. ABSENT when there are none, never null or `[]`.
+
+Tests: `tests/test_cross_month_account_keys_step5.py` (route-level) and
+`test_cross_month_copies_is_absent_or_non_empty_never_null` in
+`tests/test_view_contract.py`.

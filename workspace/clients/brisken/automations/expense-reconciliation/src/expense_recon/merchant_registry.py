@@ -249,8 +249,12 @@ def _covers(
 def _fuzzy_score(
     probe_norm: str, cand_norm: str,
     probe_tokens: list[str], cand_tokens: list[str], threshold: float,
+    canonical_lead: str | None = None,
 ) -> float:
-    """The fuzzy tier's score for one probe x candidate (0-100)."""
+    """The fuzzy tier's score for one probe x candidate (0-100).
+
+    `canonical_lead` is the lead key word of the candidate's merchant's
+    CANONICAL name (front 3 step 3), for the containment guard below."""
     probe_keys = _key_words(probe_tokens)
     cand_keys = _key_words(cand_tokens)
     if not probe_keys or not cand_keys:
@@ -275,7 +279,111 @@ def _fuzzy_score(
         total += len(t)
         if _covers(t, cand):
             covered += len(t)
-    return score * covered / total
+    score = score * covered / total
+    # Front 3 step 3, the containment guard. token_set_ratio scores 100
+    # whenever the probe's words sit inside a longer name, and the discount
+    # above only counts the PROBE's uncovered words, so a name that says
+    # less than the listed one reached it: 'Twilio Inc' filed as 'Sendgrid -
+    # Twilio INC' (through its alias 'TWILIO SENDGRID'), 'Google LLC' as
+    # Google Ads. A probe that is a strict subset of the candidate now needs
+    # the lead word of the merchant's own name, and on a platform brand the
+    # product word, and it scores just under an equal-words name so a
+    # shorter listed name covering the same words wins.
+    if probe_distinct and all(
+        _covers(t, cand_distinct) for t in probe_distinct
+    ) and not all(_covers(t, probe_distinct) for t in cand_distinct):
+        if canonical_lead and not _covers(canonical_lead, probe_keys):
+            return 0.0
+        if cand_keys[0] in PLATFORM_WORDS and len(cand_keys) > 1 and not any(
+            _word_covers(t, cand_keys[1]) for t in probe_keys[1:]
+        ):
+            return 0.0
+        score -= 0.5
+    return score
+
+
+# Front 3 step 2: brands that sell several products whose bookings differ
+# (Google Workspace vs Google Ads; Microsoft 365 vs Azure; AWS vs an Amazon
+# order; Zoho One vs Zoho Books). A bank line naming only the brand names no
+# merchant among them, so the descriptor tier asks for the product word too.
+PLATFORM_WORDS = frozenset({
+    "google", "microsoft", "msft", "amazon", "amz", "aws",
+})
+
+# Chase prints a card line's merchant field cut to this many characters
+# ('GOOGLE *Workspace_bris'); the last word of such a line may be cut short.
+_CHASE_CUT_WIDTHS = frozenset({22, 23})
+
+
+def _is_bare_platform_alias(alias: str, canonical_keys: list[str]) -> bool:
+    """An alias that is only a platform brand ('google') on a merchant whose
+    own name carries a product ('Google Ads'): it names every product of the
+    brand, so like a generic alias it is ignored (front 3 step 3; it filed
+    'Google LLC' as Google Ads in the planned list)."""
+    keys = _key_words(_tokens(alias))
+    return (
+        len(keys) == 1 and keys[0] in PLATFORM_WORDS
+        and len(canonical_keys) > 1 and canonical_keys[0] == keys[0]
+    )
+
+
+def _word_covers(line_word: str, name_word: str) -> bool:
+    """A bank line's word stands for a listed name's word: the same word, or
+    one cut short by the card network (four letters at least on the shorter
+    side, so 'Workspac' is Workspace and 'go' is not Google)."""
+    if line_word == name_word:
+        return True
+    short, long_ = sorted((line_word, name_word), key=len)
+    return len(short) >= 4 and long_.startswith(short)
+
+
+def _descriptor_score(
+    probe: list[str], cand: list[str], cut: bool = False,
+) -> int | None:
+    """How many of a listed name's key words a bank line's key words cover,
+    or None when the descriptor tier's rules say it is not this merchant
+    (see `MerchantRegistry._descriptor_hit`). `cut` says the line is at
+    Chase's cut width, so its last word may be a stub."""
+    if not cand:
+        return None
+    lead = cand[0]
+    if probe[0] == lead:
+        rest = probe[1:]
+    else:
+        # The line split a one-word name ('Host Europe' for 'HostEurope').
+        acc, i = "", 0
+        while i < len(probe) and lead.startswith(acc + probe[i]):
+            acc += probe[i]
+            i += 1
+        if len(lead) < 5 or acc != lead:
+            return None
+        rest = probe[i:]
+    # A handle or product code that repeats the brand ('ZOHO* ZOHO-ONE').
+    rest = [w for w in rest if w != lead]
+    if lead in PLATFORM_WORDS:
+        products = cand[1:]
+        if not products:
+            # A bare brand is the merchant only when the line says nothing
+            # more: "GOOGLE" is Google, "GOOGLE *ADS" is not.
+            if [w for w in rest if len(w) >= 3]:
+                return None
+        elif not any(_word_covers(w, products[0]) for w in rest):
+            return None
+    covered = [w for w in rest if any(_word_covers(w, c) for c in cand[1:])]
+    # A word the name does not carry is a country or state code (three
+    # letters at most), a short code the reference rule keeps ('B2vMDX'
+    # carries a digit), or the stub Chase's cut left at the end of the line.
+    # Anything else is another business ('FENIX TURISMO' is not
+    # Supermercado Fenix), so the line is not this merchant.
+    uncovered = [
+        w for w in rest
+        if w not in covered and len(w) > 3
+        and not any(ch.isdigit() for ch in w)
+        and not (cut and w == probe[-1])
+    ]
+    if uncovered or len([w for w in rest if w not in covered]) > 1:
+        return None
+    return 1 + len(covered)
 
 
 def drop_unvouched_remembered_cards(receipts: list, registry) -> list:
@@ -414,6 +522,8 @@ class MerchantRegistry:
         self._exact: dict[str, tuple[str, str]] = {}
         # (normalized, original, canonical, folded words) for the fuzzy sweep
         self._candidates: list[tuple[str, str, str, list[str]]] = []
+        # canonical -> the lead key word of its own name (front 3 step 3)
+        self._lead: dict[str, str] = {}
 
         # Deterministic ordering: sort by canonical so a first-wins result on
         # any normalized-key or fuzzy-score collision is stable across runs.
@@ -426,9 +536,13 @@ class MerchantRegistry:
             if not canonical:
                 continue
             self._entries[canonical] = entry
+            canonical_keys = _key_words(_tokens(canonical))
+            if canonical_keys:
+                self._lead[canonical] = canonical_keys[0]
             aliases = [
                 a for a in (entry.get("aliases") or [])
                 if not is_generic_alias(str(a or ""))
+                and not _is_bare_platform_alias(str(a or ""), canonical_keys)
             ]
             for raw in (canonical, *aliases):
                 s = str(raw or "").strip()
@@ -506,7 +620,8 @@ class MerchantRegistry:
             probe_tokens = _tokens(raw)
             for cand_norm, cand_orig, canonical, cand_tokens in self._candidates:
                 score = _fuzzy_score(
-                    norm, cand_norm, probe_tokens, cand_tokens, self.threshold
+                    norm, cand_norm, probe_tokens, cand_tokens, self.threshold,
+                    canonical_lead=self._lead.get(canonical),
                 )
                 if score > best_score:
                     best_score = score
@@ -514,7 +629,73 @@ class MerchantRegistry:
                     best_original = cand_orig
         if best_canonical is not None and best_score >= self.threshold:
             return self._match(best_canonical, best_original, best_score, "fuzzy")
+        # 3) Descriptor (front 3 step 2): a bank line's merchant words.
+        hit = self._descriptor_hit(vendor_clean, vendor_raw)
+        if hit is not None:
+            canonical, original = hit
+            return self._match(canonical, original, 100.0, "descriptor")
         return None
+
+    def _descriptor_hit(
+        self, vendor_clean: str | None, vendor_raw: str | None,
+    ) -> tuple[str, str] | None:
+        """The descriptor tier: `(canonical, matched string)` or None.
+
+        A card network's line carries the merchant's name plus words the
+        merchant does not: a truncation ('GOOGLE *Workspace_bris'), a country
+        ('HOSTINGER US INC'), a product ('ZOHO* ZOHO-ONE'), a city ('Host
+        Europe RN36953805 Koeln'). The fuzzy tier discounts every one of those
+        words, so these lines missed even under the planned aliases.
+
+        Here the line is first reduced to its merchant words
+        (`merchant_identity.identity_key`: the location tail, phone numbers,
+        references and legal forms go), then a listed name matches when its
+        LEAD word opens the line (or, for a one-word name of five letters or
+        more, the line's first words run together spell it: 'Host Europe' is
+        'HostEurope'). For the platforms that sell several products under one
+        brand (Google Workspace, Cloud, Play and Ads; Microsoft; Amazon and
+        AWS), the lead word alone names no merchant, so the listed name's
+        product word has to appear too, whole or cut short. At most one of
+        the line's other words may go uncovered, and only a country or state
+        code, a short code, or the stub at the end of a line cut at Chase's
+        width. Only a listed string that opens with the merchant's own brand
+        word takes part, and two different merchants matching equally well
+        is no answer."""
+        from .merchant_identity import identity_key
+
+        best: tuple[int, str, str] | None = None
+        tied = False
+        for text in (vendor_raw, vendor_clean):
+            words = _tokens(identity_key(text)) if text else []
+            probe = _key_words(words)
+            if not probe:
+                continue
+            cut = len(str(text).strip()) in _CHASE_CUT_WIDTHS
+            # A kind of shop the line names ('Farmacia', 'e Varejo') and the
+            # listed name does not is another business (item 117's
+            # trade-offs: 'Farmacia Pimentel' is not the petrol station).
+            kinds = {w for w in words if _is_generic_word(w)}
+            for _norm, original, canonical, cand_tokens in self._candidates:
+                cand = _key_words(cand_tokens)
+                # Only a listed string that opens with the merchant's own
+                # brand word: 'Twilio Inc' is not 'Sendgrid - Twilio INC'
+                # through its alias 'TWILIO SENDGRID'.
+                if not cand or cand[0] != self._lead.get(canonical):
+                    continue
+                if not kinds <= set(cand_tokens):
+                    continue
+                score = _descriptor_score(probe, cand, cut)
+                if score is None:
+                    continue
+                if best is None or score > best[0]:
+                    best, tied = (score, canonical, original), False
+                elif score == best[0] and canonical != best[1]:
+                    tied = True
+            if best is not None:
+                break
+        if best is None or tied:
+            return None
+        return best[1], best[2]
 
     def vouches_one_card(
         self, vendor_clean: str | None, vendor_raw: str | None
