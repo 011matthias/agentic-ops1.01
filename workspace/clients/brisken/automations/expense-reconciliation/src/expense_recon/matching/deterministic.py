@@ -27,7 +27,7 @@ if TYPE_CHECKING:  # annotations only; the body imports Path itself
 import difflib
 import re
 from dataclasses import dataclass, field, replace
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from decimal import Decimal
 
 from .types import Match, MatchOutcome, MatchType, Receipt, Transaction
@@ -297,7 +297,7 @@ _TUNABLE_BOOL = frozenset({
     "card_scoping", "fx_self_derived_rates", "fx_self_derived_review",
     "uniqueness_spoken_for",
     "vendor_ignore_reference_tokens", "no_card_rival_review",
-    "no_card_vendor_guard",
+    "no_card_vendor_guard", "exact_vendor_lookalike_guard",
 })
 
 
@@ -582,6 +582,18 @@ class MatchingConfig:
     # 47%) leave reconciled, and three right pairs whose charge prints a
     # CNPJ descriptor go to review with them. False restores booking.
     no_card_vendor_guard: bool = True
+    # `exact_vendor_lookalike_guard` (item 222 step 6, item 133 rules 1 and
+    # 3): the card-named sibling of `no_card_vendor_guard`. A chosen EXACT
+    # same-currency pair whose receipt names a card and whose merchant words
+    # disagree (`_vendor_score` below `EXACT_VENDOR_FLOOR`) goes to
+    # `judgment_required` with `EXACT_VENDOR_LOOKALIKE_REVIEW` only when
+    # ANOTHER receipt of the same total and currency is left unmatched: two
+    # round amounts from different vendors, and the tool cannot say which is
+    # this charge's. It keeps its assignment, exactly as D5 does. A floor
+    # alone cannot be drawn (labelled-right pairs sit at 0.42 and 0.46, the
+    # wrong one at 0.40), so the waiting receipt is what separates them.
+    # False restores booking.
+    exact_vendor_lookalike_guard: bool = True
 
     @classmethod
     def from_dict(cls, data: Mapping) -> "MatchingConfig":
@@ -1818,6 +1830,11 @@ NO_CARD_RIVAL_REVIEW = "no_card_rival_on_other_card"
 # the same 0.5 the API shows as `vendor_pct` 50).
 NO_CARD_VENDOR_REVIEW = "no_card_vendor_disagrees"
 NO_CARD_VENDOR_FLOOR = 0.5
+# `Match.review_code` when `exact_vendor_lookalike_guard` sent a card-named
+# EXACT pair to review: the merchant words disagree (below
+# `EXACT_VENDOR_FLOOR`, the same 0.5) and a same-amount receipt waits.
+EXACT_VENDOR_LOOKALIKE_REVIEW = "exact_vendor_disagrees"
+EXACT_VENDOR_FLOOR = NO_CARD_VENDOR_FLOOR
 # `Match.review_code` when the bilateral-uniqueness gate demoted a clean
 # rate-derived pair because a rival agrees just as cleanly (front 5,
 # 2026-09-25). A card-contradiction demotion keeps no code: its cards differ.
@@ -1896,6 +1913,50 @@ def no_card_vendor_disagrees(
         and match.vendor_score < NO_CARD_VENDOR_FLOOR
         and card_evidence(tx, receipt)[0] == "none"
     )
+
+
+def same_amount_receipts_waiting(
+    tx: Transaction,
+    receipt: Receipt,
+    match: Match,
+    unmatched: "Iterable[Receipt]",
+    cfg: MatchingConfig,
+) -> list[Receipt]:
+    """The unmatched receipts that send this chosen pair to review under
+    `exact_vendor_lookalike_guard`, or [] when the pair books as before.
+
+    Only a same-currency EXACT pair whose receipt names a card (a no-card
+    receipt is `no_card_vendor_guard`'s) and whose merchant words disagree
+    qualifies; then every OTHER unmatched receipt of the same total in the
+    same currency counts. Public so the attribution tool reads the
+    matcher's rule."""
+    if not cfg.exact_vendor_lookalike_guard:
+        return []
+    if match.match_type is not MatchType.EXACT or match.vendor_score >= EXACT_VENDOR_FLOOR:
+        return []
+    total = receipt.detected_total
+    if total is None or receipt.detected_currency != tx.transaction_currency:
+        return []
+    if card_evidence(tx, receipt)[0] == "none":
+        return []
+    return [
+        r for r in unmatched
+        if r.document_id != receipt.document_id
+        and r.detected_total is not None
+        and r.detected_currency == receipt.detected_currency
+        and abs(r.detected_total - total) <= cfg.amount_exact_tolerance
+    ]
+
+
+def _exact_vendor_lookalike_note(match: Match, waiting: "list[Receipt]") -> str:
+    r = waiting[0]
+    when = r.detected_date.isoformat() if r.detected_date else "no date"
+    more = f" and {len(waiting) - 1} more" if len(waiting) > 1 else ""
+    return (
+        f"the merchants differ ({round(match.vendor_score * 100)}%) and another "
+        f"receipt of the same amount is still unmatched ({r.detected_vendor or r.document_id} "
+        f"{r.detected_total} {r.detected_currency or ''} on {when}{more})"
+    ).replace("  ", " ")
 
 
 def _no_card_vendor_note(match: Match) -> str:
@@ -2438,6 +2499,33 @@ def match_month(
             outcome.judgment_required.append(c.match)
         assigned_tx.add(c.match.transaction_id)
         assigned_rec.add(c.match.document_id)
+
+    # Item 222 step 6 (item 133 rules 1 and 3): the card-named sibling of the
+    # D5 guard above. Only after the assignment is it known which receipts
+    # are left over, so a booked EXACT pair whose merchant disagrees moves to
+    # review here when a same-amount receipt waits unmatched. Its assignment
+    # stands: the same charge and receipt stay consumed.
+    if cfg.exact_vendor_lookalike_guard and outcome.matches:
+        leftover = [
+            r for r in receipts
+            if r.document_id not in assigned_rec and r.document_id not in held_by_tie
+        ]
+        kept: list[Match] = []
+        for m in outcome.matches:
+            waiting = same_amount_receipts_waiting(
+                tx_by_id[m.transaction_id], rec_by_id[m.document_id], m, leftover, cfg,
+            )
+            if not waiting:
+                kept.append(m)
+                continue
+            outcome.judgment_required.append(replace(
+                m,
+                requires_review=True,
+                review_code=m.review_code or EXACT_VENDOR_LOOKALIKE_REVIEW,
+                reason=m.reason.rstrip(".")
+                + f". Review: {_exact_vendor_lookalike_note(m, waiting)}.",
+            ))
+        outcome.matches[:] = kept
 
     # Every transaction not assigned and not ambiguous is unmatched —
     # either it had no candidate, or every candidate receipt was claimed

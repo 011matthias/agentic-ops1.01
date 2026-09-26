@@ -19129,6 +19129,7 @@ _CAUSE_CONVERSION = re.compile(
     r"(?:, [+-]?[0-9.]+% from the charge)?\.\s*)"
 )
 _CAUSE_NO_CARD_RIVAL = re.compile(r"a charge on another card also fits \((.+?)\)")
+_CAUSE_SAME_AMOUNT = re.compile(r"same amount is still unmatched \((.+?)\)\.")
 _CAUSE_RIVAL_TEXT = "another charge or receipt agrees just as cleanly"
 # Since front 5 the demotion names its rival(s) after that clause.
 _CAUSE_RIVAL_NAMED = re.compile(r"agrees just as cleanly: (.+?)\)\.")
@@ -19201,6 +19202,14 @@ def review_cause_for_row(row: dict, charges_by_doc: dict) -> dict:
     verdict = _cause_model_verdict(reason)
     if code == "no_card_vendor_disagrees":
         detail["vendor_pct"] = c.get("vendor_pct")
+        return {"cause": "merchant_disagrees", "cause_detail": detail}
+    if code == "exact_vendor_disagrees":
+        # Item 222 step 6: the receipt names a card, so the no-card sentence
+        # would be wrong; `same_amount_receipt` is what switches the SPA.
+        detail["vendor_pct"] = c.get("vendor_pct")
+        m = _CAUSE_SAME_AMOUNT.search(reason)
+        if m:
+            detail["same_amount_receipt"] = m.group(1)
         return {"cause": "merchant_disagrees", "cause_detail": detail}
     if code == "no_card_rival_on_other_card":
         m = _CAUSE_NO_CARD_RIVAL.search(reason)
