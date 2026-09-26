@@ -12013,7 +12013,7 @@ rows on E500010-10, 76 + 28 on a parent). Owner decision pending: the write
 plan's uncontested rows.
 
 
-### 225. What "Save corrections to memory" shows is not tangible (note #91, operator, 2026-09-25 16:15 UTC)
+### 225. What "Save corrections to memory" shows is not tangible (note #91, operator, 2026-09-25 16:15 UTC) (BACKEND SHIPPED 2026-09-27; SPA prompt `docs/lovable-memory-plan-sentences-prompt.md` not pasted)
 
 Read off `GET /feedback.jsonl` on 2026-09-27 (92 notes; #91 and #92 were
 the only ones with no item). Verbatim, on April 2026's Expenses view
@@ -12027,6 +12027,42 @@ concrete changes to two people who made them. Not investigated yet: open
 the dialog on April read-only (writes aborted), write down what each line
 says against the correction behind it, and compare with the owner's
 explain-memory-by-example ruling (D4, item 204: "account -> card -> count").
+
+**Read 2026-09-27 (cold drive of the published SPA, 0 writes).** April's
+dialog renders `memory-plan.writes[]` as a What / About / Value table:
+"Company | erick sports | Brisken Holding, LLC" and "Correction | erick sports
+· Brisken Holding, LLC · card_key | card-8311", then "This also updates 16
+merchants in the merchant list." and "Save 2 rules". Against the corrections
+behind it: both rows come from ONE edited receipt (ERICK SPORTS 49.98 BRL,
+2026-04-01, card picked as 8311), and the 16 merchants are the card learner's
+work: 14 learn a card (`card_key_learned`), 2 (MARTINO SUPERMERCADO, MEGA
+CENTER) were seen on 0340 and 2838 and learn none. Three things made it
+untangible: the storage key instead of the vendor as printed, `card_key` /
+`card-8311` instead of "paid with Credit Card - 8311 (Dirk Neumann - Cloud
+Services)", and a count with nothing behind it. The same reply already carried
+`lessons[]` (item 183, what the Publish checklist shows), but its sentences
+said "its card_key reads card-8311" and "Merchant list, X: card card-0340;
+seen on card card-0340", and the 16 card lessons had NO `sources`: the card
+learner reads receipts whose card was observed, a path `_registry_rows` never
+attributed. The button saves exactly the default lessons (`ml.select`), so the
+dialog listing `writes` could also disagree with the save on a month holding a
+conflict or a drift lesson.
+
+**Backend (this item).** Lesson sentences say what the next receipt gets
+("From now on, ERICK SPORTS receipts in Brisken Holding, LLC are filled in as
+paid with Credit Card - 8311 (Dirk Neumann - Cloud Services).", "Merchant
+list, Americanas: paid with Credit Card Chase Visa - 0340 (Criss Neumann), so
+its next receipt gets that card. Seen on N receipts: ..."), cards by their
+Settings label and person, and a card lesson's `sources` hold the receipts
+the learner observed, read from one helper both use
+(`service.registry_card_observations`), so the rows shown are the rows taught.
+Route-level `tests/test_memory_plan_tangible_item_225.py` (3); `regress_check`
+red on all three wires (the observations passed to the lessons, the card map,
+the card naming in the merchant-list sentence). **SPA half:**
+`docs/lovable-memory-plan-sentences-prompt.md` (the dialog lists the lessons it
+saves in two sections plus the ones it does not save, "Save {n} changes").
+Not built: the sentences are English only (as the Publish checklist already
+is); a PT rendering would need structured fields the SPA composes.
 
 ### 226. The Matching page's statement download buttons go (note #92, operator, 2026-09-25 16:23 UTC)
 
@@ -12043,6 +12079,7 @@ the original unreachable.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 147 | Item 225 (note #91): memory-plan lesson sentences say what the next receipt gets ("From now on, ERICK SPORTS receipts ... are filled in as paid with Credit Card - 8311 (Dirk Neumann - Cloud Services)"), a card by its Settings label and person, and a merchant-list card lesson names the receipts the card learner observed (`sources` + "Seen on N receipts"), read through one helper the learner also uses (`registry_card_observations`). SPA half `docs/lovable-memory-plan-sentences-prompt.md` pending | April's Save dialog read "erick sports · Brisken Holding, LLC · card_key -> card-8311" and "This also updates 16 merchants"; Dirk and Matthias could not tell what either meant, and the 16 merchant-list lessons carried no rows at all | PR (this); route-level `tests/test_memory_plan_tangible_item_225.py` (3), `regress_check` red on all three wires |
 | 146 | Item 224 step 6 (front 3): `expenses[].line_sum_gap` / `line_sum_note` when a receipt's lines disagree with its total by more than 0.05 (net-of-tax lines agree); a split receipt with a gap reads review `line_sum_split` and its `expenses.csv` rows end `(lines do not add up)`. Item 115 ruling in the same PR: on a GL month a Zoho-seeded rule leads on a lined receipt, the second read flags `learned_over_line`. | Nothing compared a receipt's lines with its total, so a split receipt's accounts could take shares from misread lines with no flag (live: 13 / 9 / 10 rows disagree, one splits); about 41 unsure receipts take a seeded rule's answer at their next categorization. | PR #1481 |
 | 145 | Item 222 step 6 (front 5): `exact_vendor_lookalike_guard`. A card-named EXACT same-currency pair with merchant below 0.5 goes to review (`exact_vendor_disagrees`, cause `merchant_disagrees` + `same_amount_receipt`) when a same-amount receipt is left unmatched; otherwise unchanged | Item 133 rules 1 and 3: no merchant floor alone separates right exact pairs (0.42, 0.46) from the wrong one (0.40); the leftover same-amount receipt does. 0 pairs move on July, August, September and the six bundles; a planted receipt moves exactly the one pair | PR #1479 (merge `be01b686`), Fly v263 2026-09-27; live API on July / August / September unchanged (0 rows carry the code, as predicted), August Matching driven cold (35 of 143 paired, 5 to review) |
 | 144 | Item 224 steps 1-5 (front 3): the grid, the run payload and the reviewer files read the merchant list live (`vendor.display`/`source` + `vendor.stamped`, `merchant {name, match}`, a per-company account decides as a rule with `posting_category.stamped`); a bank-descriptor resolver tier; the close-spelling containment guard; the ZOHO ERP guard (`account_vendor_specific`); stored parent / ZOHO ERP suggestions read as refusals. | The owner's OpenAI and Anthropic accounts reached no row already in a month: 21 receipts (all then post), 46 receiptless charges and 5 matched charges move; the 24 that join a Criss posting all agree. | PR #1477, live Fly v262 2026-09-27 |
