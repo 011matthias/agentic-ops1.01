@@ -12028,7 +12028,7 @@ the dialog on April read-only (writes aborted), write down what each line
 says against the correction behind it, and compare with the owner's
 explain-memory-by-example ruling (D4, item 204: "account -> card -> count").
 
-### 226. The Matching page's statement download buttons go (note #92, operator, 2026-09-25 16:23 UTC)
+### 226. The Matching page's statement download buttons go (note #92, operator, 2026-09-25 16:23 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-statement-downloads-off-matching-prompt.md`, not pasted)
 
 Verbatim, on April 2026's Matching page (`/runs/0603bb0e6f38`): *"remove
 these statement download buttons"*. The Statements drop-down on that page
@@ -12038,6 +12038,23 @@ Lovable prompt; item 141 (note #68) removed repeated download buttons on the
 month page and is the precedent for the shape. Check first whether any other
 route still offers the statement file, so removing the link does not leave
 the original unreachable.
+
+**Read 2026-09-27.** The note's anchor is the Downloads row itself
+("DownloadsReconciliation (PDF)Report (Excel)Reconciled CSVStatement
+Chase1176_2026-04_post…"), not the Statements drop-down: since item 141 the
+Matching page's header shows no download (`showDownload={active !==
+"matching"}`), and its statement downloads are item 141's per-workbook
+"Statement {file}" buttons in `SummaryBar`. Driven cold on April the same day
+(0 writes): five buttons in the row, two of them the Chase1176 and Chase9693
+workbooks. The backend has NO route for a statement's raw upload; the only
+statement file it serves is `GET /runs/{id}/statement-categorized.xlsx`
+(her workbook plus the tool's account column, `xlsx` only). After the change
+that file stays reachable from the Expenses page's statements table (April:
+Download on both workbook rows), which is the one place left to get it; the
+CSV statement never had a download. **Prompt:**
+`docs/lovable-statement-downloads-off-matching-prompt.md` (the row keeps
+Reconciliation (PDF), Report (Excel), Reconciled CSV; the `statements` and
+`writebackAvailable` props and the two `sum.dl.statement*` keys go).
 
 ## Shipped (loop history)
 
