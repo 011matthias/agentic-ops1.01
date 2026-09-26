@@ -7807,3 +7807,19 @@ Tests: `tests/test_duplicates_reapply_step7.py`, route-level: the swap
 previewed with both databases byte-identical afterwards, the real run's swap
 and its `rematch_log` trigger, a copy a charge holds that does not move, a
 "Not a copy" ruling that survives, and every refusal writing nothing.
+## A card-named exact pair whose merchant disagrees waits in review when a same-amount receipt is left over: `review_code` `exact_vendor_disagrees` (item 222 step 6, 2026-09-27)
+
+The card-named sibling of `no_card_vendor_disagrees`. A chosen same-currency
+`exact` pair whose receipt names a card (`card_evidence.receipt` is not
+`none`) and whose `vendor_pct` is under 50 keeps its assignment but files in
+`review`, `requires_review: true`, `review_code: "exact_vendor_disagrees"`,
+when ANOTHER receipt of the same total and currency is unmatched after the
+assignment. The reason ends "the merchants differ (N%) and another receipt of
+the same amount is still unmatched ({vendor} {total} {currency} on {date})".
+`review.cause` is `merchant_disagrees`, and `cause_detail` adds
+`same_amount_receipt` (that parenthesis, as text) beside `vendor_pct`; its
+presence is what says the receipt DID name a card. Without a leftover
+same-amount receipt the pair books exactly as before. Knob
+`exact_vendor_lookalike_guard` (asset key, default true). Live on 2026-09-27:
+0 pairs on July, August and September. Tests:
+`tests/test_exact_vendor_lookalike_222.py`.
