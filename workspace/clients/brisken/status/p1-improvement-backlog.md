@@ -12065,20 +12065,6 @@ month page and is the precedent for the shape. Check first whether any other
 route still offers the statement file, so removing the link does not leave
 the original unreachable.
 
-<<<<<<< HEAD
-### 227. The app prices every photo reading at zero (found 2026-09-27, item 223 step 4 A/B)
-
-`llm/cost.py` carries no price for `gpt-5-mini`, the vision model every
-photographed receipt and rendered mail body is read with
-(`web/service.py` `VISION_MODEL`), so the cost tracker records those calls at
-USD 0. Measured in the step 4 A/B: four passes over 251 stored documents cost
-USD 2.32 at list price while the tracker said USD 0.21; gpt-5-mini was about
-93% of the spend (1,300-1,440 reasoning tokens per call). Every AI-cost figure
-the app shows under-reports by the vision share, and a brief that sized an
-A/B from the tracker was off by a factor of ten. Fix: add the model's price
-(input, cached input, output incl. reasoning tokens) and a test that every
-model the config can name has one.
-=======
 **Read 2026-09-27.** The note's anchor is the Downloads row itself
 ("DownloadsReconciliation (PDF)Report (Excel)Reconciled CSVStatement
 Chase1176_2026-04_post…"), not the Statements drop-down: since item 141 the
@@ -12095,20 +12081,28 @@ CSV statement never had a download. **Prompt:**
 `docs/lovable-statement-downloads-off-matching-prompt.md` (the row keeps
 Reconciliation (PDF), Report (Excel), Reconciled CSV; the `statements` and
 `writebackAvailable` props and the two `sum.dl.statement*` keys go).
->>>>>>> origin/main
+
+### 227. The app prices every photo reading at zero (found 2026-09-27, item 223 step 4 A/B)
+
+`llm/cost.py` carries no price for `gpt-5-mini`, the vision model every
+photographed receipt and rendered mail body is read with
+(`web/service.py` `VISION_MODEL`), so the cost tracker records those calls at
+USD 0. Measured in the step 4 A/B: four passes over 251 stored documents cost
+USD 2.32 at list price while the tracker said USD 0.21; gpt-5-mini was about
+93% of the spend (1,300-1,440 reasoning tokens per call). Every AI-cost figure
+the app shows under-reports by the vision share, and a brief that sized an
+A/B from the tracker was off by a factor of ten. Fix: add the model's price
+(input, cached input, output incl. reasoning tokens) and a test that every
+model the config can name has one.
 
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
-<<<<<<< HEAD
 | 149 | Item 223 step 7 (front 4): `POST /api/runs/{id}/duplicates/reapply`, operator, typed confirm, required boolean `dry_run`; the dry run writes nothing and answers per group what a re-match would keep and which copies change count; a real run is the ordinary re-match (trigger `duplicates_reapply`) as a job carrying the preview and the applied diff | A changed duplicate rule reached a matched month only at its next natural re-match (September's 12 invoice-over-receipt swaps); now the owner can preview a month and order it | 2026-09-27, run on nothing |
 | 148 | Item 223 step 5 (front 4): billing-account keys across months (same reference or digit core, same money, dates 20+ days apart) stored at re-match and at a no-statement receipt add as `duplicate_account_keys`, read by every duplicate reader; `cross_month_copies[]` advisory | Two monthly bills of one amount under one account code (Railway `77H7ITO0`, Rize `5ZK1BCDG`) would have twinned inside a month and one would have left the total; 0 live groups move | 2026-09-27 |
 | 147 | Item 223 step 4 (front 4): `document_kind` in the extraction schema only; the kept copy reads it first; a reminder is never kept and alone reads `reads_as_reminder` | Which copy counts depended on file names and on numbers that call Brazilian slips and OpenAI receipts invoices; A/B 53 of 3,366 stable readings moved, 1 currency (to null), 0 date/total/type/card | 2026-09-27 |
-| 146 | Item 224 step 6 (front 3): `expenses[].line_sum_gap` / `line_sum_note` when a receipt's lines disagree with its total by more than 0.05 (net-of-tax lines agree); a split receipt with a gap reads review `line_sum_split` and its `expenses.csv` rows end `(lines do not add up)`. Item 115 ruling in the same PR: on a GL month a Zoho-seeded rule leads on a lined receipt, the second read flags `learned_over_line`. | Nothing compared a receipt's lines with its total, so a split receipt's accounts could take shares from misread lines with no flag (live: 13 / 9 / 10 rows disagree, one splits); about 41 unsure receipts take a seeded rule's answer at their next categorization. | PR #1481 |
-=======
 | 146 | Item 224 step 6 (front 3): `expenses[].line_sum_gap` / `line_sum_note` when a receipt's lines disagree with its total by more than 0.05 (net-of-tax lines agree); a split receipt with a gap reads review `line_sum_split` and its `expenses.csv` rows end `(lines do not add up)`. Item 115 ruling in the same PR: on a GL month a Zoho-seeded rule leads on a lined receipt, the second read flags `learned_over_line`. | Nothing compared a receipt's lines with its total, so a split receipt's accounts could take shares from misread lines with no flag (live: 13 / 9 / 10 rows disagree, one splits); about 41 unsure receipts take a seeded rule's answer at their next categorization. | PR #1481, live Fly v264 2026-09-27 |
->>>>>>> origin/main
 | 145 | Item 222 step 6 (front 5): `exact_vendor_lookalike_guard`. A card-named EXACT same-currency pair with merchant below 0.5 goes to review (`exact_vendor_disagrees`, cause `merchant_disagrees` + `same_amount_receipt`) when a same-amount receipt is left unmatched; otherwise unchanged | Item 133 rules 1 and 3: no merchant floor alone separates right exact pairs (0.42, 0.46) from the wrong one (0.40); the leftover same-amount receipt does. 0 pairs move on July, August, September and the six bundles; a planted receipt moves exactly the one pair | PR #1479 (merge `be01b686`), Fly v263 2026-09-27; live API on July / August / September unchanged (0 rows carry the code, as predicted), August Matching driven cold (35 of 143 paired, 5 to review) |
 | 144 | Item 224 steps 1-5 (front 3): the grid, the run payload and the reviewer files read the merchant list live (`vendor.display`/`source` + `vendor.stamped`, `merchant {name, match}`, a per-company account decides as a rule with `posting_category.stamped`); a bank-descriptor resolver tier; the close-spelling containment guard; the ZOHO ERP guard (`account_vendor_specific`); stored parent / ZOHO ERP suggestions read as refusals. | The owner's OpenAI and Anthropic accounts reached no row already in a month: 21 receipts (all then post), 46 receiptless charges and 5 matched charges move; the 24 that join a Criss posting all agree. | PR #1477, live Fly v262 2026-09-27 |
 | 143 | Item 223 steps 2-3 (front 4): duplicate rungs `reference_digits` (a shared digit core of reference / invoice_number / receipt_number, merchant identity + amount + date within a day) and `misread_digit` (one digit apart, same day), and a `body_twin` key (a rendered mail body beside the one document it repeats; the body is never kept unless a charge holds it) | One purchase counted twice: July's five slip pairs read two ways (BRL 437.77) plus the E A Locações pair at its next re-match, August's Zoho Books body (USD 576.00), September's four bodies (USD 260.00) | 2026-09-25, PR TBD |
