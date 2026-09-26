@@ -12001,6 +12001,33 @@ Owner decisions pending: item 115 (a Zoho-seeded rule deciding a receipt with
 readable lines), merging the Lovable entries, the write plan's uncontested
 rows.
 
+
+### 225. What "Save corrections to memory" shows is not tangible (note #91, operator, 2026-09-25 16:15 UTC)
+
+Read off `GET /feedback.jsonl` on 2026-09-27 (92 notes; #91 and #92 were
+the only ones with no item). Verbatim, on April 2026's Expenses view
+(`/expenses/0603bb0e6f38`): *"make sure the corrections displayed to user
+when "Save corrections to memory" button is clicked are tangible, dirk and i
+had trouble understanding it"*. A follow-up to item 163 (note #81, the
+memory journal: `lovable-memory-journal-prompt.md`, published 2026-09-23),
+which made the button say where corrections are saved and made them
+reversible; this note says the list it shows still does not read as
+concrete changes to two people who made them. Not investigated yet: open
+the dialog on April read-only (writes aborted), write down what each line
+says against the correction behind it, and compare with the owner's
+explain-memory-by-example ruling (D4, item 204: "account -> card -> count").
+
+### 226. The Matching page's statement download buttons go (note #92, operator, 2026-09-25 16:23 UTC)
+
+Verbatim, on April 2026's Matching page (`/runs/0603bb0e6f38`): *"remove
+these statement download buttons"*. The Statements drop-down on that page
+lists each statement file with a Download link (April holds 3 files; August,
+driven 2026-09-27, shows Download on its two workbooks). SPA only, a
+Lovable prompt; item 141 (note #68) removed repeated download buttons on the
+month page and is the precedent for the shape. Check first whether any other
+route still offers the statement file, so removing the link does not leave
+the original unreachable.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
