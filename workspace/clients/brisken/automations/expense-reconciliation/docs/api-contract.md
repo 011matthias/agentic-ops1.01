@@ -7642,3 +7642,55 @@ Steps 2 to 5 (same day):
   postable accounts under it reads `refusal: "model_picked_parent"` instead
   of a suggestion (`suggested_category` absent), until the row is
   re-categorized. Rules and people are never re-read.
+
+## What a statement declares, and cards with no statement (item 220 steps 3-4, front 2, 2026-09-27)
+
+### `statements[].period_declared_start` · `statements[].period_declared_end`
+
+Parallel, absent when the upload declares no period, never null. ISO dates.
+The period the upload names for ITSELF, beside the charge-derived
+`period_start..period_end`:
+
+- a Chase cycle PDF: its printed `Opening/Closing Date` (the year was read
+  before, the days were dropped);
+- a SharePoint-pulled Chase export: the POSTED range in its name,
+  `Chase9693_2026-09_posted_0906-0915_from-SharePoint.xlsx` = 09-06..09-15
+  (its own rows ran 09-04..09-14).
+
+Recorded on an attach and on a statement re-read. An entry stored before has
+no field; a workbook's range is then read off `upload_name` at read time, a
+stored PDF has none until it is attached or re-read again.
+
+**Coverage by date changes twice** (this replaces the family sentence of the
+item 204 section above): a card is covered over the UNION of the printed and
+the declared span, and a family's subcards (`Card.parent`) are covered by an
+upload only when it printed one of their charges or declares its period. An
+upload that printed no 0340 charge and names no period says nothing about
+0340 (the April 2026 2838 activity CSV carried no 3876 charge at all). No
+field changes shape; `waits_for_statements`, `reason_code` and
+`receipts_waiting_cards` read the new coverage.
+
+### `cards[].statement_expected`
+
+Boolean on the card registry entry, default `true`, stored only when `false`
+(like `active`). Emitted on `GET /api/cards` `cards[]` and on
+`GET /api/settings` `cards_effective[]`. `PUT /api/settings` accepts it on
+`cards[slug]`; a non-boolean is `400 invalid_body` with
+`field: "cards[slug].statement_expected"`.
+
+**Save rule.** The cards map stays whole-map replace, with one exception:
+an entry whose payload does not MENTION `statement_expected` keeps a stored
+`false`. An explicit `true` clears it; a card left out of the map goes with
+its flag. A Settings > Cards save from a build that does not know the field
+therefore cannot erase it.
+
+`false` means the card's statements will never be loaded (a dormant fee-only
+card, one nobody can export). Read LIVE from settings, never snapshotted:
+nothing waits for such a card. A card-less receipt no longer lists it in
+`waits_for_statements` (both payloads) or `receipts_waiting_cards`, and a
+receipt whose own card is such a card reads
+`no_charge_on_any_loaded_statement`, never the neighbouring-month code.
+Front 1's `summary.cards_uncovered[]` (the Publish warning) is unchanged: the
+card still has no statement.
+
+Tests: `tests/test_statement_declared_item_220.py` (20, route-level).

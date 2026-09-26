@@ -11764,6 +11764,30 @@ payment); waiting counts 7 / 0 / 46. Read-time only, no re-match.
    `entity_missing` (Jul Brauhaus, Sep DB Fernverkehr).
 Owner decisions pending: item 211 (widen the borrow at the start edge),
 statement_expected on the three dormant cards, the five-name picker.
+
+**Steps 3 + 4 SHIPPED 2026-09-27** (PR number in the Shipped table; the three
+owner decisions above were all YES on 2026-09-25). Step 3: new
+`statement_declared.py`; `statements[].period_declared_start/end` from a
+PDF's Opening/Closing Date and a SharePoint export's posted range
+(`Chase9693_2026-09_posted_0906-0915` = 09-06..09-15; rows 09-04..09-14),
+recorded on attach and re-read, a stored workbook's read off `upload_name`;
+coverage is the union of printed and declared span, and a subcard is covered
+only by an upload that printed one of its charges or declares its period.
+Step 4: `cards[].statement_expected` (default true, stored only when false,
+validated in the settings PUT, and a save that does not mention it keeps a
+stored false so an SPA that does not know it cannot erase it); nothing waits
+for such a card and a receipt on it reads `no_charge_on_any_loaded_statement`.
+Measured on fresh GETs 2026-09-27 before building (model reproduced 27/27
+live `waits_for_statements`): step 3 moves 0 reason codes; its only live
+effect is 4 waiting lists (Aug 0002 Perplexity / 0033 E A LOCACOES gain 0340,
+because `August2026.xlsx` printed no 0340 charge and declares no period;
+Sep 0032 / 0083, dated 09-15, drop 9693). Rule kept as written, not widened
+to month-named workbooks: April's 2838 activity CSV carried no 3876 charge.
+With the settings write (0113 / 6013 / 8311 false): July 5 receipts move
+(0003, 0053, 0063 to neighbouring; 0004, 0070 to no charge on any loaded
+statement), waiting 6 -> 1; Expenses waiting rows Jul 11 -> 1, Aug 2 keep
+waiting on 0340 only, Sep 14 lose the three labels. The map's "12 receipts
+stop waiting" is 10 today because Criss worked July since.
 ### 221. Charges with nothing behind them say what they are (front 1 of the 2026-09-25 gap-map round) (SHIPPED 2026-09-25, PR #1468; SPA prompt `docs/lovable-chase-honesty-prompt.md` not pasted)
 
 Source: the verified gap map of 2026-09-25 (`.scratch/recon-matching-gaps-2026-09-25.md`,
@@ -11988,6 +12012,7 @@ rows.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 145 | Item 220 steps 3 + 4 (front 2): a statement's declared period (`statements[].period_declared_start/end`, PDF Opening/Closing Date, SharePoint export posted range) widens its coverage, a subcard is covered only when printed or declared, and `cards[].statement_expected` false means nothing waits for the card. | Three cards nobody can export (0113, 6013, 8311) kept card-less receipts waiting forever, and one printed 2838 charge vouched for subcards the file never showed. | PR #TBD |
 | 144 | Item 224 steps 1-5 (front 3): the grid, the run payload and the reviewer files read the merchant list live (`vendor.display`/`source` + `vendor.stamped`, `merchant {name, match}`, a per-company account decides as a rule with `posting_category.stamped`); a bank-descriptor resolver tier; the close-spelling containment guard; the ZOHO ERP guard (`account_vendor_specific`); stored parent / ZOHO ERP suggestions read as refusals. | The owner's OpenAI and Anthropic accounts reached no row already in a month: 21 receipts (all then post), 46 receiptless charges and 5 matched charges move; the 24 that join a Criss posting all agree. | PR pending |
 | 143 | Item 223 steps 2-3 (front 4): duplicate rungs `reference_digits` (a shared digit core of reference / invoice_number / receipt_number, merchant identity + amount + date within a day) and `misread_digit` (one digit apart, same day), and a `body_twin` key (a rendered mail body beside the one document it repeats; the body is never kept unless a charge holds it) | One purchase counted twice: July's five slip pairs read two ways (BRL 437.77) plus the E A Locações pair at its next re-match, August's Zoho Books body (USD 576.00), September's four bodies (USD 260.00) | 2026-09-25, PR TBD |
 | 142 | Item 222 steps 1-5 (front 5): the FX judge is handed the tool's rate, card verdict and merchant agreement (prompt v2, cache keyed on it, look-alike pairs with clean evidence skip the model); `review.cause` / `cause_detail`; booked charges not judged and out of `n_review`; PDF payoffs read `payment`; `reverses_transaction_id` | 13 live verdicts guessed their own rate (one tenfold off); every review row read one generic sentence; July counted 13 booked rows as in review; six payoffs read refund | 2026-09-25 |

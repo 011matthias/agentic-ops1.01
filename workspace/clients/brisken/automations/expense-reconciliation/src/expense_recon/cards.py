@@ -810,6 +810,11 @@ class Card:
     currency: str = ""
     active: bool = True
     source: str = SOURCE_SETTINGS
+    # Item 220 step 4: False on a card whose statements will not be loaded
+    # (a dormant fee-only card, one nobody can export). Read LIVE from
+    # settings by `card_suggestion.statement_evidence`, which then never
+    # makes a receipt wait for it; never snapshotted into a batch.
+    statement_expected: bool = True
 
     @property
     def display_label(self) -> str:
@@ -850,6 +855,7 @@ def card_to_dict(card: Card) -> dict:
         "currency": card.currency,
         "active": card.active,
         "source": card.source,
+        "statement_expected": card.statement_expected,
     }
 
 
@@ -942,9 +948,44 @@ def normalize_cards_setting(raw: object, *, known: dict | None = None) -> dict:
             out["aliases"] = aliases
         if entry.get("active") is False:
             out["active"] = False
+        # Item 220 step 4: stored only when False, like `active`.
+        expected = entry.get("statement_expected", True)
+        if not isinstance(expected, bool):
+            raise CodedValueError(
+                f"cards[{slug!r}].statement_expected must be true or false",
+                code="invalid_body", field=f"cards[{slug}].statement_expected",
+            )
+        if expected is False:
+            out["statement_expected"] = False
         cleaned[slug] = out
     _validate_card_parents(cleaned, known)
     return cleaned
+
+
+def keep_unsent_statement_expected(
+    cleaned: dict[str, dict], raw: object, stored: object
+) -> dict[str, dict]:
+    """The settings PUT's cards map with `statement_expected: false` carried
+    over onto every entry whose PAYLOAD did not mention the key (item 220
+    step 4).
+
+    The cards map is whole-map replace, and an SPA build that does not read
+    and write a field erases it on save (`person`, `default_cost_center`
+    before their prompts landed). This flag is set by the owner's order, not
+    on a screen, so a Settings > Cards save of a label must not quietly put
+    three cards nobody can export back into every waiting list. An explicit
+    `true` still clears it; a card left out of the map goes with its flag."""
+    raw_map = raw if isinstance(raw, dict) else {}
+    stored_map = stored if isinstance(stored, dict) else {}
+    out = dict(cleaned)
+    for slug, entry in cleaned.items():
+        sent = raw_map.get(slug)
+        if isinstance(sent, dict) and "statement_expected" in sent:
+            continue
+        before = stored_map.get(slug)
+        if isinstance(before, dict) and before.get("statement_expected") is False:
+            out[slug] = {**entry, "statement_expected": False}
+    return out
 
 
 def _validate_card_parents(cleaned: dict[str, dict], known: dict | None) -> None:
@@ -1210,6 +1251,7 @@ def _card_from_setting(slug: str, entry: dict) -> Card:
         currency=str(entry.get("currency") or "").strip().upper(),
         active=entry.get("active") is not False,
         source=SOURCE_SETTINGS,
+        statement_expected=entry.get("statement_expected") is not False,
     )
 
 
