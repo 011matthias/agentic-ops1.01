@@ -12258,6 +12258,32 @@ bundles and the live months, read-only, which pairs' gap and band change when
 the rate is taken on the receipt date, and report the count that crosses into
 the clean band, right or wrong, before proposing anything.
 
+### 231. A month's done counts go small; what needs a look stays big (note #97, operator, 2026-09-27 19:39 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-quiet-done-tiles-prompt.md`, not pasted)
+
+Verbatim, on September's Expenses page (`/expenses/51a22ad72864`), anchor
+"Review by exception. Ready rows can go out as is; the others need a look.":
+*"These filters inside months need to show the postive things ("categorized",
+"ready") small, and formatted with the obvious intent of enabling
+distinguishment from the stuff that needs user's attention"*.
+
+**Read 2026-09-27.** The tiles are `ExpensesReviewGrid.tsx`'s summary block:
+two grids of the same `Tile` (11 px label, 2xl number), so "Categorized 32"
+(green) and "Ready 28" (plain) sit between and beside "Needs category 37"
+(amber) at the same weight, and a zero "Missing receipt image" renders as a
+big neutral 0. Live September at the time: `n_expenses` 69, `n_categorized`
+32, `n_uncategorized` 37, `n_ready` 28, `n_needs_company_or_person` 18,
+`n_private` 2, `n_needs_cost_center` 0, `n_missing_receipt_image` 0 with
+`has_image_info` true, `n_receipts_unrenderable` 0. Every count the new shape
+needs is already in `summary` and already follows the card tab (`boxCount`),
+so it is SPA only. **Prompt:** `docs/lovable-quiet-done-tiles-prompt.md`:
+Expenses + Totals stay as the context row; the attention tiles (Needs
+category, No company or person, Needs a cost center, a non-zero Missing
+receipt image, Receipts not in report) sit under an amber "Needs a look"
+label, full size with an amber tint, only when above zero ("Nothing needs a
+look." when none is); Categorized, Ready, a zero Missing receipt image and
+Private become one line of small chips (green with a check, Private grey),
+each keeping its `boxFilter` toggle.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
