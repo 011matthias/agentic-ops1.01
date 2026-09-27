@@ -12547,7 +12547,22 @@ numbers off, the table reads the picked card's month entry, captions reworded.
 Route-level `tests/test_months_card_figures_item_236.py` (5), 3 of them red
 with the set-aside card stamping disabled.
 
-### 237. The Receipts page takes a .zip and files each receipt in it by its own month (owner directive 2026-09-27) (BACKEND BUILT 2026-09-27; SPA prompt `docs/lovable-receipts-drop-zip-prompt.md` not pasted)
+### 237. The Receipts page takes a .zip and files each receipt in it by its own month (owner directive 2026-09-27) (BACKEND LIVE 2026-09-27: PR #1514, Fly `fc8db9cc`; SPA prompt `docs/lovable-receipts-drop-zip-prompt.md` not pasted)
+
+**Live (2026-09-27 ~21:35 UTC).** Deployed with `deploy.py` (healthz commit
+`fc8db9cc`, machine size = `fly.toml`); nothing was processing and no re-match
+was pending beforehand. Differential drill through `POST /api/receipts`, a drop
+that can file nothing (a damaged `TEST-broken.zip` and a `TEST-sheet.zip`
+holding only `TEST-notes.xlsx`), run on the old build and again on the new one:
+before, both zips read `unsupported-type`; after, `TEST-broken.zip` reads
+`zip-unreadable` with its `reason_label`, and the sheet zip was opened, its
+member row `TEST-notes.xlsx` reading `unsupported-type` with `from_zip:
+"TEST-sheet.zip"`. `n_filed` 0 and 7 months before and after on both runs, so
+nothing landed. Cold drive of `/receipts` (real Chrome, gate login, 0 non-GET):
+heading "Receipts", help line unchanged, file input `accept`
+`image/*,application/pdf`, i.e. the page still keeps zips out until the prompt
+is pasted. The squash commit on main is titled "item 232" (the number before
+siblings took 232-236); this heading is the record.
 
 **Why.** On 2026-09-27 a cardholder mailed a 13 MB zip of 108 receipt PDFs
 spanning January to September. Mail never opens a zip (by design), and the
