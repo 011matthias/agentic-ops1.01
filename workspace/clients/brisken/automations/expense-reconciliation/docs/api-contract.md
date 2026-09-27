@@ -8076,3 +8076,60 @@ because private is resolved at read time (the row's flag, the private card
 list, the month strip) and can be undone. Undo private and the row asks for
 its company again. A private row that shows a company keeps the engine's
 verdict for that company. Pinned by `tests/test_private_no_company_item220.py`.
+
+## Send a month to Zoho Books (added 2026-09-28, owner decision)
+
+A "Send to Zoho" button on a company month, pressed by Criss when the month
+is done. Two routes; both 404 while `EXPENSE_RECON_RECEIPT_FIRST` is unset.
+Writes go to the TEST-BTS sandbox only; production stays read-only until
+Brisken signs off a mapping. Design and guards:
+`docs/zoho-month-end-posting.md`, "Sending from the app".
+
+### `GET /api/runs/{id}/zoho-send`: the preview
+
+Reads Zoho, writes nothing. While the server switch
+(`EXPENSE_RECON_ZOHO_POST`) is off it reads nothing and answers
+`{enabled: false, reason}`: show the button disabled with the reason.
+
+Switched on, 200:
+
+| Field | Meaning |
+|---|---|
+| `enabled` | `true` |
+| `status` | `ready` (something to send), `nothing_to_send`, or `blocked` |
+| `reason` | plain sentence when `blocked` (a month typed in by hand, Zoho unreachable), else `null` |
+| `detail` | the runner's own sentence behind a block, for whoever investigates; not for the screen |
+| `month` | `YYYY-MM`, from the month's name |
+| `company` / `test_company` | the Zoho company it goes to (`TEST-BTS`) and `true` while that is the test company |
+| `currency` | the currency amounts are entered in (foreign receipts are converted at the file's exchange rate) |
+| `count` / `total` | how many entries and their total, `total` a string with two decimals |
+| `entries[]` | `{reference, date, vendor, amount, currency, accounts[]}`, one per entry to be made |
+| `held_back[]` | `{reference, reason, message, detail}`: rows that will NOT be sent; show `message` |
+| `already_sent` | how many of this month's references were sent before |
+| `confirm` | pass back unchanged to send; `""` when `blocked` |
+
+Refusals: 409 `zoho_send_no_month` (the month's name names no month; rename
+it, for example "September 2026"), 409 `zoho_send_refused` with a plain
+`error` (no Zoho login on the server, Zoho answered with an error).
+
+### `POST /api/runs/{id}/zoho-send`: the send
+
+Body `{confirm}` from the preview. Answers `{ok: true, job_id}`; poll
+`GET /jobs/{job_id}`. Refusals: 409 `zoho_send_off`, 400
+`zoho_send_confirm_required`.
+
+The done job's `result`:
+
+| Field | Meaning |
+|---|---|
+| `ok` | `true` only when everything sent read back exactly |
+| `reason` | plain sentence when nothing or not everything was sent (the month changed after the preview, a month typed in by hand, Zoho stopped answering), else `null` |
+| `sent` / `checked_ok` | entries made, and how many read back identical |
+| `total_sent` / `total_in_zoho` / `totals_match` | the planned total, the total Zoho holds for the new entries, and whether they agree |
+| `problems[]` | `{reference, problems[]}` for an entry that read back different |
+| `rejected[]` / `unsure[]` | `{reference, message}`: Zoho refused it (safe to retry), or its outcome is unknown (needs a check before anything is sent again) |
+| `held_back[]` | as in the preview |
+| `log[]` | the runner's step-by-step lines; not for the screen |
+
+A send that cannot start (another send running, no Zoho login) ends the job
+as `error` with a plain sentence. Tests: `tests/test_web_zoho_send.py`.

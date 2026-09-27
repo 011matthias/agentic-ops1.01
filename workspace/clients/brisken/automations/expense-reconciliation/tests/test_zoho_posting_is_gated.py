@@ -24,6 +24,15 @@ What the old guard forbade and this one deliberately allows: an importable
 `expense_recon.zoho` package, a Zoho host string, a `ZOHO_*` read in the CLI
 layer, and the `zoho-post` subcommand. Those are the connection the owner
 asked for.
+
+**2026-09-28, the in-app send (owner decision).** The owner chose a "Send to
+Zoho" button in the app, pressed by Criss, over the operator-run CLI. So the
+first guarantee narrows rather than disappears: exactly ONE web module,
+`web/zoho_send.py`, may reach the posting package, and only through the
+month-end runner (`zoho.reconcile_month`), which keeps the sandbox-only
+org assertion, the `EXPENSE_RECON_ZOHO_POST=1` switch, the no-double-post
+ledger and the occupancy check. Every other web module is held to the old
+rule. `test_web_zoho_send.py` drives the behavior through the routes.
 """
 from __future__ import annotations
 
@@ -59,12 +68,20 @@ _ZOHO_IMPORT = re.compile(
 )
 
 
+# The one web module allowed to reach the posting package (2026-09-28).
+SEAM = WEB / "zoho_send.py"
+
+
 def _web_sources() -> list[Path]:
-    return [p for p in WEB.rglob("*.py") if "__pycache__" not in p.parts]
+    """Every web module but the seam."""
+    return [
+        p for p in WEB.rglob("*.py")
+        if "__pycache__" not in p.parts and p != SEAM
+    ]
 
 
 def test_the_hosted_web_layer_never_reaches_zoho():
-    """An HTTP request must not be able to write into Brisken's books."""
+    """Outside the seam, no web module names a Zoho host or credential."""
     hits: list[str] = []
     for path in _web_sources():
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -86,9 +103,38 @@ def test_the_web_layer_does_not_import_the_posting_modules():
         if _ZOHO_IMPORT.search(text):
             hits.append(str(path.relative_to(SRC)))
     assert not hits, (
-        "web modules import the Zoho posting path; posting must stay a "
-        "CLI-only action behind the 4.8 gates:\n" + "\n".join(hits)
+        "web modules import the Zoho posting path; outside web/zoho_send.py "
+        "the web layer must never reach it:\n" + "\n".join(hits)
     )
+
+
+def test_the_seam_reaches_posting_only_through_the_month_runner():
+    """`web/zoho_send.py` imports the month-end runner and nothing else
+    from the posting package, names no Zoho host or credential, and never
+    picks the org: the runner's sandbox default and `assert_org` decide it.
+    A seam that imported the client or the ledger directly could post
+    around every guard the runner carries."""
+    text = SEAM.read_text(encoding="utf-8")
+    imports = [m.group(0).strip() for m in _ZOHO_IMPORT.finditer(text)]
+    assert imports == ["from ..zoho import"], imports
+    assert re.search(r"^from \.\.zoho import reconcile_month as rm$", text, re.M)
+    for pattern in _ZOHO_SURFACE:
+        assert not pattern.search(text), f"seam names {pattern.pattern!r}"
+    assert "run_month(" in text
+    # Reading `run.org.org_id` back is fine; passing one in is not.
+    assert not re.search(r"\borg_id\s*=(?!=)", text), "the seam must not choose the org"
+    # The live call carries the reviewer's confirm value, so what is sent
+    # is what was previewed.
+    assert "expect_fingerprint=confirm" in text
+
+
+def test_the_app_reaches_zoho_only_through_the_seam():
+    """The seam exists and is what the routes use; if it were deleted the
+    exclusion above would guard nothing, silently."""
+    assert SEAM.exists()
+    app = (WEB / "app.py").read_text(encoding="utf-8")
+    assert "from . import zoho_send" in app
+    assert "zoho_send.send(" in app
 
 
 def test_the_import_guard_discriminates():

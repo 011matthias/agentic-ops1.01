@@ -49,6 +49,9 @@ route 404s while the flag is unset):
     DELETE /api/runs/{id}/expenses/{doc}         soft-remove an expense
     GET  /runs/{id}/expenses.csv   Zoho Expenses import CSV, edits applied
     GET  /runs/{id}/bills.csv      bills paid by bank transfer (item 218)
+    GET  /api/runs/{id}/zoho-send  preview a month's send into Zoho Books
+    POST /api/runs/{id}/zoho-send  send it ({confirm}; a job), behind
+         EXPENSE_RECON_ZOHO_POST=1, TEST-BTS sandbox only (2026-09-28)
 """
 from __future__ import annotations
 
@@ -722,6 +725,37 @@ def _run_gl_conversion_job(
             store.set_job_status(
                 job_id, JOB_ERROR, error=str(exc), updated_at=_now_iso()
             )
+
+
+def _run_zoho_send_job(
+    db_path: Path, job_id: str, run_id: str, csv_path: Path, period: str,
+    ledger: Path, confirm: str,
+) -> None:
+    """Send one month into Zoho Books off the request (2026-09-28): a post
+    plus a read-back per entry is tens of seconds. The job's `result` is
+    `zoho_send.send`'s body; a send that could not start lands as the job's
+    error with its plain sentence. The per-send CSV copy is removed either
+    way."""
+    from . import zoho_send
+
+    try:
+        with RunStore(db_path) as store:
+            store.set_job_stage(job_id, "sending to Zoho", _now_iso())
+        result = zoho_send.send(
+            csv_path=csv_path, period=period, ledger=ledger, confirm=confirm,
+        )
+        with RunStore(db_path) as store:
+            store.set_job_status(
+                job_id, JOB_DONE, run_id=run_id, result=json.dumps(result),
+                updated_at=_now_iso(),
+            )
+    except Exception as exc:  # noqa: BLE001 - surface any failure to the poller
+        with RunStore(db_path) as store:
+            store.set_job_status(
+                job_id, JOB_ERROR, error=str(exc), updated_at=_now_iso()
+            )
+    finally:
+        csv_path.unlink(missing_ok=True)
 
 
 def _claim_pooled_quietly(
@@ -6306,10 +6340,24 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         /runs/{id}/zoho.csv."""
         if not _receipt_first_on():
             return _flag_off()
+        path, _run, err = _build_expense_export(run_id)
+        if err is not None:
+            return err
+        return FileResponse(
+            path,
+            filename=f"expenses-{run_id}.csv",
+            media_type="text/csv",
+        )
+
+    def _build_expense_export(run_id: str):
+        """(path, run, None) with the month's Zoho Expenses CSV written, or
+        (None, None, response). ONE builder for the download and the in-app
+        send, so the file Criss can open and the entries the button sends
+        cannot differ."""
         with open_store() as store:
             run, err = _expense_run_or_error(store, run_id)
             if err is not None:
-                return err
+                return None, None, err
             overrides = store.get_category_overrides(run_id)
             field_overrides = store.get_expense_field_overrides(run_id)
             edits = store.get_expense_edits(run_id)
@@ -6332,11 +6380,103 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # exports `(private expense)` like a row Criss confirmed.
             private_cards=csv_settings.get("private_cards"),
         )
-        return FileResponse(
-            path,
-            filename=f"expenses-{run_id}.csv",
-            media_type="text/csv",
+        return path, run, None
+
+    # 2026-09-28 (owner decision): "Send to Zoho" in the app, pressed by
+    # Criss. `zoho_send` is the one web module that reaches the posting
+    # path; every guard is the month-end runner's own (see its docstring).
+    def _zoho_send_setup(run_id: str):
+        """(csv copy, period, None) or (None, None, response). The CSV is
+        copied per call so a download regenerating the shared file cannot
+        change what a running send reads."""
+        from . import zoho_send
+
+        path, run, err = _build_expense_export(run_id)
+        if err is not None:
+            return None, None, err
+        period = zoho_send.month_of(run.label)
+        if period is None:
+            return None, None, JSONResponse(
+                {"error": "this month's name does not say which month it is, "
+                          "so it cannot be sent; rename it (for example "
+                          "'September 2026') and try again",
+                 "code": "zoho_send_no_month"},
+                status_code=409,
+            )
+        copy = Path(path).with_name(f"zoho-send-{uuid.uuid4().hex[:12]}.csv")
+        shutil.copyfile(path, copy)
+        return copy, period, None
+
+    @app.get("/api/runs/{run_id}/zoho-send")
+    def zoho_send_preview(run_id: str):
+        """What pressing Send would enter into Zoho Books: reads Zoho, posts
+        nothing. `enabled: false` (and nothing read) while the server switch
+        is off, so the app can grey the button out."""
+        from . import zoho_send
+
+        if not _receipt_first_on():
+            return _flag_off()
+        if not zoho_send.switched_on():
+            return JSONResponse({
+                "enabled": False,
+                "reason": "Sending to Zoho is switched off on the server.",
+            })
+        copy, period, err = _zoho_send_setup(run_id)
+        if err is not None:
+            return err
+        try:
+            body = zoho_send.preview(
+                csv_path=copy, period=period,
+                ledger=zoho_send.ledger_path(app.state.data_root),
+            )
+        except zoho_send.SendRefused as exc:
+            return JSONResponse(
+                {"error": str(exc), "code": "zoho_send_refused"}, status_code=409
+            )
+        finally:
+            copy.unlink(missing_ok=True)
+        return JSONResponse(jsonable_encoder(body))
+
+    @app.post("/api/runs/{run_id}/zoho-send")
+    def zoho_send_start(
+        run_id: str, background: BackgroundTasks,
+        payload: dict | None = Body(None),
+    ):
+        """Send the month the reviewer just previewed. Body `{confirm}` is
+        the preview's `confirm` value; the send aborts, writing nothing,
+        when the month no longer matches it. Answers a job id; the job's
+        `result` says what was sent and whether Zoho read back the same."""
+        from . import zoho_send
+
+        if not _receipt_first_on():
+            return _flag_off()
+        if not zoho_send.switched_on():
+            return JSONResponse(
+                {"error": "sending to Zoho is switched off on the server",
+                 "code": "zoho_send_off"},
+                status_code=409,
+            )
+        confirm = (
+            str(payload.get("confirm", "")).strip()
+            if isinstance(payload, dict) else ""
         )
+        if not confirm:
+            return JSONResponse(
+                {"error": "confirm is required: send the preview's confirm value",
+                 "code": "zoho_send_confirm_required"},
+                status_code=400,
+            )
+        copy, period, err = _zoho_send_setup(run_id)
+        if err is not None:
+            return err
+        job_id = uuid.uuid4().hex[:12]
+        with open_store() as store:
+            store.create_job(job_id, None, _now_iso())
+        background.add_task(
+            _run_zoho_send_job, app.state.db_path, job_id, run_id, copy,
+            period, zoho_send.ledger_path(app.state.data_root), confirm,
+        )
+        return JSONResponse({"ok": True, "job_id": job_id})
 
     # Build 4 / backlog item 218 (owner decisions 2026-09-25): the month's
     # bills paid by bank transfer, the rows expenses.csv leaves out, for
