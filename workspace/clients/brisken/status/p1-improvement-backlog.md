@@ -11894,6 +11894,25 @@ natural re-match. Read-time: a borrowed receipt's image under the borrowing
 month's run id now serves the home month's file (four referenced today: June
 `0038`, July `0008`, September `0001` / `0003`), where it used to 404.
 
+**Step 6 deployed 2026-09-27.** PR #1512 (merge `dc20372f`) is live in Fly v272
+(`fc8db9cc`, a sibling's deploy of #1514, which carries it; this session's own
+`deploy.py` run was stopped before it released, because it had built the
+older `1fa8bf67` and releasing it would have rolled #1514 back). Live after,
+as predicted: each of the four referenced borrowed receipts (September `0001` /
+`0003` from August, June `0038` from July, July `0008` from June) returns its
+image through the BORROWING month, 200 with the same bytes as through its home
+month, where it returned 404 before; no row's pairing moved and no payload
+carries `document_id` yet (every stored `receipt_sources` predates the code).
+Cold SPA drive of September's Matching page (own browser, the run read once and
+replayed, writes aborted: 0), identical before and after: no error boundary,
+11 "August 2026" badges, the OpenAI rows present; the page requests no receipt
+image, so the image route's gain is proven by the API probe, not by a render.
+Found while driving, not this change's: September's OPENAI 81.12 charge now
+holds August's `0033` E A LOCACOES 340 BRL receipt (a pairing made after the
+2026-09-25 backup; vendor disagrees). And the newest SharePoint backup is
+still 2026-09-25T03:35Z although the in-app schedule backs up on every boot;
+cause not measured (the Fly log window held no backup line).
+
 ### 221. Charges with nothing behind them say what they are (front 1 of the 2026-09-25 gap-map round) (SHIPPED 2026-09-25, PR #1468; SPA prompt `docs/lovable-chase-honesty-prompt.md` not pasted)
 
 Source: the verified gap map of 2026-09-25 (`.scratch/recon-matching-gaps-2026-09-25.md`,
@@ -12562,7 +12581,22 @@ on the three months moved to the GL accounts on 2026-09-25 (they agreed on
 2026-09-24, item 193's check). Fix = the list counts the page's boxes; owner
 call pending.
 
-### 237. The Receipts page takes a .zip and files each receipt in it by its own month (owner directive 2026-09-27) (BACKEND BUILT 2026-09-27; SPA prompt `docs/lovable-receipts-drop-zip-prompt.md` not pasted)
+### 237. The Receipts page takes a .zip and files each receipt in it by its own month (owner directive 2026-09-27) (BACKEND LIVE 2026-09-27: PR #1514, Fly `fc8db9cc`; SPA prompt `docs/lovable-receipts-drop-zip-prompt.md` not pasted)
+
+**Live (2026-09-27 ~21:35 UTC).** Deployed with `deploy.py` (healthz commit
+`fc8db9cc`, machine size = `fly.toml`); nothing was processing and no re-match
+was pending beforehand. Differential drill through `POST /api/receipts`, a drop
+that can file nothing (a damaged `TEST-broken.zip` and a `TEST-sheet.zip`
+holding only `TEST-notes.xlsx`), run on the old build and again on the new one:
+before, both zips read `unsupported-type`; after, `TEST-broken.zip` reads
+`zip-unreadable` with its `reason_label`, and the sheet zip was opened, its
+member row `TEST-notes.xlsx` reading `unsupported-type` with `from_zip:
+"TEST-sheet.zip"`. `n_filed` 0 and 7 months before and after on both runs, so
+nothing landed. Cold drive of `/receipts` (real Chrome, gate login, 0 non-GET):
+heading "Receipts", help line unchanged, file input `accept`
+`image/*,application/pdf`, i.e. the page still keeps zips out until the prompt
+is pasted. The squash commit on main is titled "item 232" (the number before
+siblings took 232-236); this heading is the record.
 
 **Why.** On 2026-09-27 a cardholder mailed a 13 MB zip of 108 receipt PDFs
 spanning January to September. Mail never opens a zip (by design), and the

@@ -11,6 +11,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-27 | Expense-Recon Front 2 Adjacent Borrow | client-dev | [Mini-Checkpoint-1](docs/2026-09-27%20-%20Expense-Recon%20Front%202%20Adjacent%20Borrow/Mini-Checkpoint-1.md) |
+| 2026-09-27 | Brisken Recon Held Mail And Receipts Zip Drop | client-dev | [→](docs/2026-09-27%20-%20Brisken%20Recon%20Held%20Mail%20And%20Receipts%20Zip%20Drop/Checkpoint.md) |
 | 2026-09-27 | Expense-Recon Notes 99-106 Duplicate | client-dev | [Mini-Checkpoint-1](docs/2026-09-27%20-%20Expense-Recon%20Notes%2099-106%20Duplicate/Mini-Checkpoint-1.md) |
 | 2026-09-27 | Expense-Recon Notes 99-106 Matching Header | client-dev | [Mini-Checkpoint-1](docs/2026-09-27%20-%20Expense-Recon%20Notes%2099-106%20Matching%20Header/Mini-Checkpoint-1.md) |
 | 2026-09-27 | Expense-Recon Note 97 Filters | client-dev | [Mini-Checkpoint-1](docs/2026-09-27%20-%20Expense-Recon%20Note%2097%20Filters/Mini-Checkpoint-1.md) |
