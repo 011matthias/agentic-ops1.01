@@ -4801,8 +4801,19 @@ Parallel to item 185's charge figures and item 190's `receipt_months` /
 - Item 193: `n_needs_category` on each `receipt_months[]` entry, each card
   (its own) and `no_card` (and its months): the expenses in the NEEDS
   CATEGORY box (`"uncategorized"` in `expenses[].boxes`), so per month the
-  cards plus No card equal `summary.n_uncategorized`. It is the number the
-  months strip shows beside each card.
+  cards plus No card equal `summary.n_uncategorized`. It was the number the
+  months strip showed beside each card until item 231 took the number off.
+- Item 231: `n_set_aside` on each `receipt_months[]` entry, each card (its
+  own) and `no_card` (and its months): the files the quarantine still holds
+  back (`set_aside[]` not restored), so per month the cards plus No card
+  equal `summary.n_set_aside`. With `n_expenses` and `n_needs_category` these
+  are the months list's three columns for a picked card. A set-aside file
+  files under the card its own reading resolves to (the chain an unheld
+  receipt follows), else No card; a legacy entry, which kept no reading,
+  always reads No card. The month's payload says where each went:
+  `GET /api/expense-batches/{id}` `set_aside[].card_section` (`""` = no
+  card). A card whose only file in a month is a set-aside one gets a
+  `receipt_months[]` entry with `n_expenses` 0.
 
 `never_loaded` keeps its meaning (no charge and no statement anywhere), which
 the months strip's disclosure uses. The overview folds away only a card that
