@@ -8152,7 +8152,13 @@ def _expense_account_options(run: RunRow) -> list[str]:
         return []
 
 
-def batch_list_summary(store: RunStore, run: RunRow) -> dict:
+def batch_list_summary(
+    store: RunStore,
+    run: RunRow,
+    *,
+    settings: dict | None = None,
+    learning_db_path: "Path | None" = None,
+) -> dict:
     """The batch-list row's summary, with the counts the operator compares
     against the batch page derived from the SAME live state that page
     renders — the stored summary is frozen at ingest, so before this a
@@ -8235,8 +8241,23 @@ def batch_list_summary(store: RunStore, run: RunRow) -> dict:
             r for r in receipts
             if r.document_id not in copies and r.document_id not in bills
         ]
+        # Item 238: and each of them is categorized or not exactly as its row
+        # on the page is, through the grid's own card chain and
+        # `grid_posting` (the live merchant accounts, the company the row
+        # shows, the chart gate), not a second reading of the overrides.
+        if settings is None:
+            settings = store.get_settings()
+        chain = grid_card_chain(
+            run, overrides, store.get_expense_field_overrides(run.run_id),
+            store.get_expense_edits(run.run_id), resolutions,
+            settings=settings, decisions=store.get_decisions(run.run_id),
+            learning_db_path=learning_db_path,
+        )
+        posted = grid_posting(
+            run, chain.receipts, chain.card_res, overrides, settings,
+        ).by_doc
         n_categorized, n_uncategorized = categorized_counts(
-            apply_overrides(counted, overrides, entity_orgs=gl_run_entity_orgs(run))
+            [posted.get(r.document_id, r) for r in counted]
         )
     except (KeyError, TypeError, ValueError):
         # A malformed snapshot hides ONE batch's counts (it keeps the stored
@@ -8344,6 +8365,67 @@ def grid_card_chain(
     )
 
 
+class GridPosting(NamedTuple):
+    """What `grid_posting` decides: the pool with the merchant list's live
+    accounts laid on, that list, which rows it stamped, the chart gate, and
+    each row as it posts (`by_doc`), the receipts a row's category and its
+    Categorized / Needs category box are read from."""
+
+    receipts: list
+    live_registry: "MerchantRegistry | None"
+    live_stamped: dict
+    gate: object
+    by_doc: dict
+
+
+def grid_posting(
+    run: RunRow,
+    receipts: list,
+    card_res: dict,
+    overrides: dict,
+    settings: dict | None,
+) -> GridPosting:
+    """The categories the Expenses grid shows, over `grid_card_chain`'s pool
+    and card resolution. `build_expense_view` decides each row's boxes from
+    `by_doc` and `batch_list_summary` counts the months list's pair from it,
+    so the list and the page answer "needs a category" with one rule.
+
+    Item 238: the list used to count `apply_overrides` over its own pool,
+    skipping the live merchant read, and on the months moved to the GL
+    accounts it read fewer rows needing a category than their pages (4 each
+    live on 2026-09-27). Those rows carry a model suggestion stored before
+    today's refusals (a summary account with postable accounts under it, an
+    account kept for another vendor's product: `_stale_suggestion`, front 3
+    steps 4 and 5): the page re-reads it as a refusal and asks for a
+    category, the list counted the stored code as an answer."""
+    entity_orgs = gl_run_entity_orgs(run)
+    entity_by_doc = resolved_entities(card_res)
+    # Front 3 step 1: the merchant list as it reads NOW, for each row's
+    # merchant, its display name and, where the merchant carries an account
+    # for the company the row shows, the account. Stored rows are untouched.
+    live_registry = MerchantRegistry.from_settings(settings) if settings else None
+    receipts, live_stamped = live_registry_accounts(
+        receipts, live_registry, entity_orgs=entity_orgs,
+        entity_by_doc=entity_by_doc,
+    )
+    # Override-applied twins for the `books_as` fan-out (backlog item 2):
+    # the export applies category overrides before splitting, so the grid's
+    # depiction must too, or the two would disagree after a reclassify.
+    # Residual R1: and the chart gate the export runs (`gated_for_posting`,
+    # the same call `build_expense_row_groups` makes), with the same chart,
+    # or a line whose account the company's chart rejects reads as that
+    # account here and as its category in the CSV for the same purchase.
+    # Item 201: on a GL month a picked leaf code reads its account name in
+    # the company the row SHOWS (the card chain's answer), which can be set
+    # where the receipt's own stamp is blank. The export does the same.
+    gate = _coa_gate_from_config(run.config, run.work_dir)
+    by_doc = {x.document_id: x for x in gated_for_posting(apply_overrides(
+        receipts, overrides, entity_orgs=entity_orgs,
+        entity_by_doc=entity_by_doc,
+    ), gate)}
+    return GridPosting(receipts, live_registry, live_stamped, gate, by_doc)
+
+
 def build_expense_view(
     run: RunRow,
     overrides: dict,
@@ -8387,13 +8469,10 @@ def build_expense_view(
         settings=settings, decisions=decisions,
         learning_db_path=learning_db_path,
     )
-    # Front 3 step 1: the merchant list as it reads NOW, for each row's
-    # merchant, its display name and, where the merchant carries an account
-    # for the company the row shows, the account. Stored rows are untouched.
-    live_registry = MerchantRegistry.from_settings(settings) if settings else None
-    receipts, live_stamped = live_registry_accounts(
-        receipts, live_registry, entity_orgs=gl_run_entity_orgs(run),
-        entity_by_doc=resolved_entities(card_res),
+    # The categories the grid shows, decided once for the page and the months
+    # list (`grid_posting`, item 238).
+    receipts, live_registry, live_stamped, grid_gate, ov_by_doc = grid_posting(
+        run, receipts, card_res, overrides, settings,
     )
     # Keep the pre-edit receipts so the vendor object can always show the
     # ORIGINAL extracted name as `raw`, even after a reviewer vendor edit
@@ -8407,14 +8486,6 @@ def build_expense_view(
     manual_add_ids = {e["document_id"] for e in edits if e["op"] == "add"}
     receipts_dir = Path(run.work_dir) / "receipts"
     intake_provenance = (run.snapshot or {}).get("intake_provenance") or {}
-    # Override-applied twins for the `books_as` fan-out (backlog item 2):
-    # the export applies category overrides before splitting, so the grid's
-    # depiction must too, or the two would disagree after a reclassify.
-    # Residual R1: and the chart gate the export runs (`gated_for_posting`,
-    # the same call `build_expense_row_groups` makes), with the same chart,
-    # or a line whose account the company's chart rejects reads as that
-    # account here and as its category in the CSV for the same purchase.
-    grid_gate = _coa_gate_from_config(run.config, run.work_dir)
     grid_chart = getattr(grid_gate, "chart", None) if grid_gate is not None else None
 
     n_learned_lines = 0
@@ -8449,13 +8520,6 @@ def build_expense_view(
     exp_cfg = (run.config or {}).get("expense") or {}
     default_pt = exp_cfg.get("default_paid_through")
     card_accts = exp_cfg.get("card_accounts")
-    # Item 201: on a GL month a picked leaf code reads its account name in
-    # the company the row SHOWS (the card chain's answer above), which can be
-    # set where the receipt's own stamp is blank. The export does the same.
-    ov_by_doc = {x.document_id: x for x in gated_for_posting(apply_overrides(
-        receipts, overrides, entity_orgs=gl_run_entity_orgs(run),
-        entity_by_doc=resolved_entities(card_res),
-    ), grid_gate)}
     # Item 47: the cost-center chain, over the same pass's cards. Silent
     # for every row while the owner has defined no cost centers.
     cost_res = resolve_batch_row_cost_centers(

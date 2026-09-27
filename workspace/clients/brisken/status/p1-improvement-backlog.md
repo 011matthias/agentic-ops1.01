@@ -12580,8 +12580,7 @@ page reads `n_uncategorized` 38 / `n_categorized` 32. The list is the odd one
 out: `batch_list_summary` derives its pair with `categorized_counts` over the
 receipts instead of counting the page's NEEDS CATEGORY box, and the two part
 on the three months moved to the GL accounts on 2026-09-25 (they agreed on
-2026-09-24, item 193's check). Fix = the list counts the page's boxes; owner
-call pending.
+2026-09-24, item 193's check). Owner chose the fix the same day: item 238.
 
 ### 237. The Receipts page takes a .zip and files each receipt in it by its own month (owner directive 2026-09-27) (BACKEND LIVE 2026-09-27: PR #1514, Fly `fc8db9cc`; SPA prompt `docs/lovable-receipts-drop-zip-prompt.md` not pasted)
 
@@ -12644,6 +12643,33 @@ cap was per zip, so 1000 zips could each buy 500 reads.
 **SPA half.** The page filters zips out client-side (`accept` and the
 file-name regex), so nothing changes for the operator until
 `docs/lovable-receipts-drop-zip-prompt.md` is pasted.
+
+### 238. The months list counts "needs a category" the way each month's page does (found in item 236, owner chose the fix 2026-09-27)
+
+Live 2026-09-27: on the three months moved to the GL accounts the list read
+4 fewer rows needing a category than their pages (September 34 vs 38,
+August 15 vs 19, July 23 vs 27), so item 236's per-card figures could not add
+up to the All row. **Cause, measured on the 2026-09-25 backup (not the chart
+gate first guessed):** the page reads each row through the grid's card chain
+and the live merchant read (`live_registry_accounts`), which re-reads a model
+suggestion stored before today's refusals (`_stale_suggestion`, front 3 steps
+4-5: summary account `E500010` with postable accounts under it, another
+vendor's product account `E500010-10`) as a refusal. The list counted
+`apply_overrides` over its own pool, so the stored code stayed an answer.
+On the backup: 29 rows in September, 11 in August, 11 in July.
+
+**Built.** `grid_posting` (service.py) holds the page's steps once (live
+merchant accounts, overrides with the row's company, chart gate);
+`build_expense_view` and `batch_list_summary` both call it, the list over
+`grid_card_chain`. That costs the list about 4x (0.12 s to 0.53 s locally for
+7 months), so `GET /api/expense-batches` keeps its body under the card
+roll-up's data key (`CardStatusMemo`, rebuilt on the first read after any
+write; repeat reads ~0 s). Backup check, old vs new tree: 3 months differ
+before, 0 after; `n_expenses` and the four bucket months unchanged. Tests
+`tests/test_months_list_needs_category_item_238.py` (4, through the routes):
+restoring the old count turns 3 red, freezing the kept body turns the edit
+test red. Trips list (`trip_view`) calls the same summary without the
+learning store: remembered cards do not reach a trip's list count.
 
 ## Shipped (loop history)
 
