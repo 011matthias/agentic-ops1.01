@@ -57,9 +57,17 @@ The All view of the table, the months themselves, the Cards page (`/cards`), the
 
 ## 5. How to check it worked
 
+Live figures, read 2026-09-27 after the backend deploy (Receipts / Needs category / Set aside; an empty Set aside cell is 0):
+
+| Pick | September | August | July | June | May | April |
+|---|---|---|---|---|---|---|
+| 2838 | 4 / 1 / 0 | 9 / 4 / 0 | 17 / 4 / 0 | 1 / 0 / 0 | 1 / 0 / 0 | 10 / 2 / 0 |
+| 3876 | 9 / 8 / 0 | 29 / 9 / 0 | 32 / 11 / 0 | 18 / 0 / 0 | 17 / 1 / 0 | not listed |
+| No card | 21 / 20 / 4 | 3 / 3 / 0 | 12 / 11 / 1 | 3 / 1 / 0 | 1 / 1 / 0 | 6 / 1 / 1 |
+
 - `/months`: no chip in the strip carries a number, No card included; "All" as before.
-- Pick 3876 (a subcard): each month's Needs category equals the NEEDS CATEGORY box on that month's page opened with 3876 picked.
-- Pick 2838: its figures leave out 3876's, 3645's and 0340's receipts.
-- For any one month, the figures under each top-level card, each subcard and No card add up to that month's row under All, column by column.
+- Pick 2838: the table reads its row above, not the month totals (September 70 / 34 / 4 under All).
+- Pick 3876: January 2026 is listed too, 1 / 0 / 0.
+- Pick 9693: July reads 1 / 1 / 1 (its one set-aside file).
 - Switch to PT: the caption reads "Recibos, Sem categoria e Separados contam só os deste cartão, por mês. …".
 ````

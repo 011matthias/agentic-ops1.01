@@ -12537,7 +12537,8 @@ Ruling in the same exchange: an account counts only its own (2838 without
 whole-month totals under every pick, so 2838's chip read 11 over rows adding
 to 80.
 
-Backend (PR pending): `receipt_months[].n_set_aside` and
+Backend SHIPPED (PR #1505, merge `1fa8bf67`, deployed 2026-09-27 via
+`deploy.py`, `/healthz` on that commit): `receipt_months[].n_set_aside` and
 `no_card.months[].n_set_aside` on `GET /api/cards/status`, card and no-card
 totals, and `set_aside[].card_section` on the month payload. A set-aside file
 files under the card its own reading resolves to (the unheld-receipt chain),
@@ -12546,6 +12547,20 @@ SPA half `docs/lovable-months-card-figures-prompt.md` (NOT PASTED): chip
 numbers off, the table reads the picked card's month entry, captions reworded.
 Route-level `tests/test_months_card_figures_item_236.py` (5), 3 of them red
 with the set-aside card stamping disabled.
+
+**Live, read after the deploy (GETs only).** In all 7 months the cards plus
+No card equal the months list for Receipts and Set aside (set aside: April 1
+and September 4 on No card, July 1 on 9693 + 1 on No card). A cold browser
+load of `/months` renders as before and receives the new fields; 0 writes.
+**Open, found here, not built:** Needs category does NOT add up in July,
+August and September: the cards sum 4 above the months list in each (Sept
+38 vs 34, Aug 19 vs 15, Jul 27 vs 23). The cards are right: September's own
+page reads `n_uncategorized` 38 / `n_categorized` 32. The list is the odd one
+out: `batch_list_summary` derives its pair with `categorized_counts` over the
+receipts instead of counting the page's NEEDS CATEGORY box, and the two part
+on the three months moved to the GL accounts on 2026-09-25 (they agreed on
+2026-09-24, item 193's check). Fix = the list counts the page's boxes; owner
+call pending.
 
 ## Shipped (loop history)
 
