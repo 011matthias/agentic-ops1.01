@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-09-25
+updated: 2026-09-27
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -12000,7 +12000,7 @@ this shape. SPA half (the no-card sentence would be wrong here):
 `docs/lovable-review-cause-prompt.md` gains `merchant_disagrees_waiting`,
 still not pasted.
 
-### 223. Copies and double counting: one number read two ways, the mail body, and the rest of the copies front (gap map 2026-09-25, front 4) (STEPS 1-3 SHIPPED 2026-09-25; STEPS 4, 5, 7 SHIPPED 2026-09-27; step 6 open)
+### 223. Copies and double counting: one number read two ways, the mail body, and the rest of the copies front (gap map 2026-09-25, front 4) (STEPS 1-3 SHIPPED 2026-09-25; STEPS 4, 5, 7 SHIPPED 2026-09-27; STEP 6 SHIPPED 2026-09-27)
 
 The verified gap map's "Copies and duplicates" section and its CRITIC block
 ("which part of a mail is the receipt"). Seven steps were set; three are done.
@@ -12070,10 +12070,45 @@ ordinary re-match (trigger `duplicates_reapply`) as a job whose result carries
 the preview and the applied diff. Refused: no statement, published, a
 re-match in flight, not an expense batch.
 
+**Step 6 (SHIPPED 2026-09-27, Shipped row 154).** When two files ONE mail
+delivered name one invoice number (normalized, 5+ characters), one reads as
+the invoice and one as the payment receipt, with one amount and currency and
+no two different cards, and no third file of that mail carries the number,
+the intake records the pair on both files' provenance
+(`intake_provenance[doc].twin_of`, served as `submitted_by.twin_of`), in the
+add path and in a month a mail creates. Rung 0 of the ladder reads it (basis
+`intake_twin`), re-checked on every read, so a reviewer's edit that splits the
+amounts hands the pair back to the older rungs; "Not a copy" still outranks
+it; a moved receipt drops the record. Predicted before building on the step-4
+A/B readings (both passes agreeing) joined to the live mails (the archive,
+or arrival stamp + address on rows older than the archive key): ten pairs,
+July 1 (H0LHY2WQ-0029, USD 200.00), August 1 (HMVWDWIL-0029, 15.00),
+September 8 (K5WRAWFK-0001, HMVWDWIL-0031 / -0033 / -0034 / -0035 / -0036,
+H0LHY2WQ-0033 / -0035), every one already a single live copy group; the
+counted copy is the charge-held invoice in three (July, August, September
+K5WRAWFK) and the receipt in seven, and item 217's choice is untouched.
+Five more Anthropic mails (890D70BF, 214D91B6, DZ9BH3VA, EF742DD0) read the
+invoice number on one pass of two, so arrival would pair them only
+sometimes; the older rungs already group them. No
+stored file carries the record, so no live row moved. The new case it
+closes: a pair nothing older joins (vendor spelled two ways, different
+references, no text layer) counted twice; the route test pins it at one.
+
+**The four newer reasons never render (found 2026-09-27, SPA gate).**
+`duplicateReason()` in the SPA's `CompareCopies.tsx` uses
+`wb.dups.basis.<basis>` only for a basis inside its `BASIS_KEYS` set, and the
+published bundle's set is still the first seven (`hash` ... `statement`). So
+`lovable-copies-kind-prompt.md` ("copy only; no logic change") put the
+`reference_digits` / `misread_digit` / `body_twin` labels in the bundle where
+nothing can reach them, and `intake_twin` would join them: 12 live groups
+(July 6 `reference_digits` + 1 `misread_digit`, August 1 and September 4
+`body_twin`, API read 2026-09-27) read "Decided by the tool". **Prompt:**
+`docs/lovable-duplicate-reasons-gate-prompt.md` adds the four names to the set
+(and the `intake_twin` key only if the copies-kind paste has not). Lesson for
+label-only prompts: grep the component that renders the key for a gate before
+calling a prompt copy-only.
+
 **Open:**
-6. Intake decides once: an Invoice-*.pdf and Receipt-*.pdf naming one
-   invoice number in one mail are recorded at arrival
-   (`intake_provenance.twin_of`).
 - Owner decision per month whether to run step 7's reapply (September's
   invoice-over-receipt swaps; July's 0076 / 0083 / 0054 leave the count).
 
@@ -12225,7 +12260,7 @@ month, read off `/feedback.jsonl` on 2026-09-27 after item 225 shipped. The
 prompt above removes the buttons in `SummaryBar` for every month, so it covers
 #93 with no change.
 
-### 227. The app prices every photo reading at zero (found 2026-09-27, item 223 step 4 A/B)
+### 227. The app prices every photo reading at zero (found 2026-09-27, item 223 step 4 A/B) (SHIPPED 2026-09-27, Shipped row 155)
 
 `llm/cost.py` carries no price for `gpt-5-mini`, the vision model every
 photographed receipt and rendered mail body is read with
@@ -12237,6 +12272,20 @@ the app shows under-reports by the vision share, and a brief that sized an
 A/B from the tracker was off by a factor of ten. Fix: add the model's price
 (input, cached input, output incl. reasoning tokens) and a test that every
 model the config can name has one.
+
+**Shipped 2026-09-27.** `gpt-5-mini` USD 0.25 input / 0.025 cached input /
+2.00 output per 1M tokens, with the cached-input rate of every other priced
+model (OpenAI Standard tier, read the same day from
+developers.openai.com/api/docs/pricing); the client passes the cached part of
+the prompt (`prompt_tokens_details.cached_tokens`), and output already counts
+the reasoning tokens. Pinned on the A/B's first reading (6,416 in, 1,098 out,
+USD 0.0038, the figure the A/B's own list-price script gave). A test scans the
+source for every model its LLM configuration names (`model` /
+`vision_model` values and defaults, `EXPENSE_RECON_VISION_MODEL`'s default,
+the client's constructor default) and fails on one without a price. Only
+calls from the deploy on are costed right; stored run and ingest cost figures
+stay as recorded. `tests/test_llm_cost_item_227.py` (5), two regress proofs
+red under mutation (the price row, the cached read).
 
 ### 228. The "Was: …" line under a category goes (note #94, operator, 2026-09-26 23:53 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-was-line-off-prompt.md`, not pasted)
 
@@ -12350,7 +12399,33 @@ fill the days before the provider's history from the ECB's own daily series
 `pick()` prefers), then let each month take it at its next natural re-match.
 Nothing is built.
 
-### 231. The months list shows the picked card's own figures (owner, 2026-09-27, in session)
+### 231. A month's done counts go small; what needs a look stays big (note #97, operator, 2026-09-27 19:39 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-quiet-done-tiles-prompt.md`, not pasted)
+
+Verbatim, on September's Expenses page (`/expenses/51a22ad72864`), anchor
+"Review by exception. Ready rows can go out as is; the others need a look.":
+*"These filters inside months need to show the postive things ("categorized",
+"ready") small, and formatted with the obvious intent of enabling
+distinguishment from the stuff that needs user's attention"*.
+
+**Read 2026-09-27.** The tiles are `ExpensesReviewGrid.tsx`'s summary block:
+two grids of the same `Tile` (11 px label, 2xl number), so "Categorized 32"
+(green) and "Ready 28" (plain) sit between and beside "Needs category 37"
+(amber) at the same weight, and a zero "Missing receipt image" renders as a
+big neutral 0. Live September at the time: `n_expenses` 69, `n_categorized`
+32, `n_uncategorized` 37, `n_ready` 28, `n_needs_company_or_person` 18,
+`n_private` 2, `n_needs_cost_center` 0, `n_missing_receipt_image` 0 with
+`has_image_info` true, `n_receipts_unrenderable` 0. Every count the new shape
+needs is already in `summary` and already follows the card tab (`boxCount`),
+so it is SPA only. **Prompt:** `docs/lovable-quiet-done-tiles-prompt.md`:
+Expenses + Totals stay as the context row; the attention tiles (Needs
+category, No company or person, Needs a cost center, a non-zero Missing
+receipt image, Receipts not in report) sit under an amber "Needs a look"
+label, full size with an amber tint, only when above zero ("Nothing needs a
+look." when none is); Categorized, Ready, a zero Missing receipt image and
+Private become one line of small chips (green with a check, Private grey),
+each keeping its `boxFilter` toggle.
+
+### 232. The months list shows the picked card's own figures (owner, 2026-09-27, in session)
 
 Verbatim, on `/months` with 2838 picked: *"remove that number"* (item 193's
 needs-category count beside each chip) and *"the 'Receipts', 'Needs
@@ -12369,13 +12444,15 @@ files under the card its own reading resolves to (the unheld-receipt chain),
 else No card. Receipts and Needs category already had per-card month figures.
 SPA half `docs/lovable-months-card-figures-prompt.md` (NOT PASTED): chip
 numbers off, the table reads the picked card's month entry, captions reworded.
-Route-level `tests/test_months_card_figures_item_231.py` (5), 3 of them red
+Route-level `tests/test_months_card_figures_item_232.py` (5), 3 of them red
 with the set-aside card stamping disabled.
 
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 155 | Item 227: `gpt-5-mini` priced (USD 0.25 / 0.025 cached / 2.00 per 1M), cached input billed at each model's cached rate, and a test that fails on any model the configuration names without a price | Every photo reading was costed at USD 0, about 93% of the real spend (A/B: USD 2.32 at list, tracker USD 0.21) | 2026-09-27, PR #1500, Fly v270 (commit `987e0b52`); costs only calls from the deploy on, no live read possible without an arrival |
+| 154 | Item 223 step 6 (front 4): the intake records an invoice and its payment receipt that one mail delivered, naming one invoice number with one amount, on both files' provenance (`submitted_by.twin_of`); rung 0 of the duplicate ladder starts from it (basis `intake_twin`), re-checked on every read, a reviewer still outranks it | A Stripe-style pair whose vendor spelling, references and text layer all differ reached no duplicate key and counted twice; now the arrival decides it once. Live: no stored file carries the record; the 10 July-September mails the rule would pair already count once | 2026-09-27, PR #1496, deployed with #1500 as Fly v270 (commit `987e0b52`); live: July 21 / August 6 / September 24 duplicate groups, per-row counting, totals and copies all unchanged against a read taken just before the deploy, 0 `intake_twin` groups, 0 `twin_of` rows (as predicted); cold SPA drive rendered September USD 5,241.09 and July USD 31,882.49 |
 | 153 | Item 229 (note #95): a judged reason is served and printed without the model's own words or its approximate rate (`without_model_prose`): the Matching row's cause line, its expanded candidates, the Reconciled CSV and the Excel notes read the verdict, p and the tool's conversion. Item 228's prompt `docs/lovable-was-line-off-prompt.md` written (SPA only, not pasted). | April's Matching page printed the model's sentence under 12 rows, one of them wrong on the rate (104.00 USD vs the tool's 109.83) and on the card; the owner called it slop. | PR #1497 |
 | 152 | Item 220 step 5 (front 2): one `entity_key` per company (the org's single provisioning spelling, else the label), in the matcher's entity scope, the hand-match guard, the per-row re-match advisory and a five-name picker; stored spellings kept. | A receipt picked as "Brisken Corp Services, LLC" never reached its own "Corporate Services" charge, and the picker offered eight names for five companies. | PR #1495 |
 | 151 | Item 220 steps 3 + 4 (front 2): a statement's declared period (`statements[].period_declared_start/end`, PDF Opening/Closing Date, SharePoint export posted range) widens its coverage, a subcard is covered only when printed or declared, and `cards[].statement_expected` false means nothing waits for the card. | Three cards nobody can export (0113, 6013, 8311) kept card-less receipts waiting forever, and one printed 2838 charge vouched for subcards the file never showed. | PR #1491 |

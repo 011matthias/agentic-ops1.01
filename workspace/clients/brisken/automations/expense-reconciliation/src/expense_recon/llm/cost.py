@@ -22,7 +22,30 @@ _PRICING_PER_MILLION: dict[str, tuple[Decimal, Decimal]] = {
     "gpt-4o": (Decimal("2.500"), Decimal("10.000")),
     "gpt-4.1-mini": (Decimal("0.400"), Decimal("1.600")),
     "gpt-4.1": (Decimal("2.000"), Decimal("8.000")),
+    # Item 227 (2026-09-27): the vision model every photographed receipt and
+    # rendered mail body is read with (`web.service.VISION_MODEL`). Unpriced
+    # until now, so the tracker recorded about 93% of the real spend at 0.
+    # Output includes the reasoning tokens (1,300-1,440 per receipt read).
+    "gpt-5-mini": (Decimal("0.250"), Decimal("2.000")),
 }
+
+# Cached input, USD per 1M tokens: the part of `prompt_tokens` the provider
+# served from its prompt cache (`prompt_tokens_details.cached_tokens`).
+# OpenAI Standard tier, read 2026-09-27 from
+# https://developers.openai.com/api/docs/pricing. A model missing here bills
+# its cached tokens at the full input rate.
+_CACHED_INPUT_PER_MILLION: dict[str, Decimal] = {
+    "gpt-4o-mini": Decimal("0.075"),
+    "gpt-4o": Decimal("1.250"),
+    "gpt-4.1-mini": Decimal("0.100"),
+    "gpt-4.1": Decimal("0.500"),
+    "gpt-5-mini": Decimal("0.025"),
+}
+
+
+def is_priced(model: str) -> bool:
+    """Whether a call to ``model`` is costed, rather than recorded at 0."""
+    return model in _PRICING_PER_MILLION
 
 
 @dataclass(frozen=True)
@@ -33,16 +56,22 @@ class TokenUsage:
     input_tokens: int
     output_tokens: int
     cost_usd: Decimal
+    # Item 227: the part of `input_tokens` served from the prompt cache.
+    cached_input_tokens: int = 0
 
     @classmethod
     def from_counts(
-        cls, model: str, input_tokens: int, output_tokens: int
+        cls, model: str, input_tokens: int, output_tokens: int,
+        cached_input_tokens: int = 0,
     ) -> TokenUsage:
         in_rate, out_rate = _PRICING_PER_MILLION.get(
             model, (Decimal("0"), Decimal("0"))
         )
+        cached = max(0, min(cached_input_tokens, input_tokens))
+        cached_rate = _CACHED_INPUT_PER_MILLION.get(model, in_rate)
         cost = (
-            (Decimal(input_tokens) * in_rate)
+            (Decimal(input_tokens - cached) * in_rate)
+            + (Decimal(cached) * cached_rate)
             + (Decimal(output_tokens) * out_rate)
         ) / Decimal("1000000")
         return cls(
@@ -50,6 +79,7 @@ class TokenUsage:
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             cost_usd=cost,
+            cached_input_tokens=cached,
         )
 
 

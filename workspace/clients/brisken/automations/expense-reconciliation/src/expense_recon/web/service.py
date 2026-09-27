@@ -64,6 +64,7 @@ from ..duplicates import (
     restore_copies_with_their_own_charge,
     with_kept_first,
 )
+from ..duplicates import stamp_intake_twins, twin_links  # item 223 step 6
 from ..ingest._common import merge_transactions
 from ..matching.types import (
     DECIDED_ORIGINS,
@@ -6634,8 +6635,11 @@ def execute_expense_batch(
     if prepared.intake_provenance:
         # A batch created FROM mailed receipts (item 39 materialization,
         # R3 trip join) carries the submitters the same way the
-        # incremental add path records them.
-        snapshot["intake_provenance"] = dict(prepared.intake_provenance)
+        # incremental add path records them, the item 223 step 6 twin
+        # record included.
+        snapshot["intake_provenance"] = dict(
+            stamp_intake_twins(prepared.intake_provenance, receipts)
+        )
 
     if on_stage is not None:
         try:
@@ -8192,6 +8196,7 @@ def batch_list_summary(store: RunStore, run: RunRow) -> dict:
         inherited = inherit_card_from_copies(
             receipts, resolutions, _batch_card_hints(run.config),
             account_keys=stored_duplicate_account_keys(run),
+            twins=stored_intake_twins(run),
         )
         copies = decided_copies(
             run,
@@ -10340,7 +10345,7 @@ def receipt_card_counts(view: dict) -> dict[str, dict[str, int]]:
     counts, so a month's cards plus its no-card section add up to the months
     list's Needs category column.
 
-    And `n_set_aside` (item 231): the files the quarantine still holds back
+    And `n_set_aside` (item 232): the files the quarantine still holds back
     (`set_aside[]` not restored, the set `summary.n_set_aside` counts), each
     under its `card_section`, so the same sum holds for the Set aside column.
     A card whose only file this month is a set-aside one gets a key here too,
@@ -10450,7 +10455,7 @@ def build_card_status(
     each card (its own, not its subcards': picking 2838 shows 2838's rows) and
     `no_card`.
 
-    Item 231 (owner 2026-09-27: with a card picked, the months list's
+    Item 232 (owner 2026-09-27: with a card picked, the months list's
     Receipts, Needs category and Set aside "need to adjust automatically to
     only display" that card's, per month) adds the third figure: each receipt
     month and `no_card.months[]` entry carries `n_set_aside`, with
@@ -11168,7 +11173,7 @@ def attach_expense_card_tabs(
         sec["n_expenses"] = n_total
         sec["totals_by_ccy"] = _per_ccy(sums_total)
     view["card_sections"] = sections
-    # Item 231: a file the quarantine set aside is held by no charge, so it
+    # Item 232: a file the quarantine set aside is held by no charge, so it
     # files where an unheld receipt does (`card_sections`): under the card
     # its own reading resolves to. A legacy entry kept no reading and has no
     # `document_id`, so it reads "", the no-card section, as does a file
@@ -14698,6 +14703,9 @@ def _add_receipts_locked(
     # stored file, so a direct-alias submission is never overwritten by a
     # later bulk re-upload of the same bytes under a new name.
     all_provenance = dict(run.snapshot.get("intake_provenance") or {})
+    # Item 223 step 6: an invoice and its receipt this mail delivered are
+    # recorded as one purchase once, here, from the readings just made.
+    new_provenance = stamp_intake_twins(new_provenance, new_receipts) or {}
     for k, v in new_provenance.items():
         all_provenance.setdefault(k, v)
     if all_provenance:
@@ -17754,6 +17762,9 @@ def move_expense_to_month(
                     (source.snapshot or {}).get("intake_provenance") or {}
                 ).get(document_id)
                 if provenance:
+                    # Item 223 step 6: the twin stays behind, so the record
+                    # would name a file this month does not hold.
+                    provenance = {k: v for k, v in provenance.items() if k != "twin_of"}
                     t_snapshot["intake_provenance"] = {
                         **(t_snapshot.get("intake_provenance") or {}),
                         new_doc: provenance,
@@ -17969,6 +17980,7 @@ def duplicate_decisions(
         resolutions=resolutions or {},
         statement_distinct=statement,
         account_keys=account_keys,  # item 223 step 5: stored, or the re-match's
+        twins=stored_intake_twins(run),  # item 223 step 6: recorded at arrival
     )
     if not with_statement_check:
         return decisions  # a re-match chooses the kept copy itself
@@ -19822,3 +19834,11 @@ def entity_mismatch_advisory(
             f"{'it' if one else 'them'}: {named}."
         )
     return " ".join(parts) or None
+
+
+def stored_intake_twins(run: RunRow) -> dict[str, str]:
+    """Item 223 step 6: the invoice + receipt pairs the intake recorded on
+    arrival (`intake_provenance[doc].twin_of`), `document id -> twin`. Read
+    from the snapshot only; a month whose mail predates the record has
+    none, and its groups are decided by the older rungs exactly as before."""
+    return twin_links((run.snapshot or {}).get("intake_provenance"))

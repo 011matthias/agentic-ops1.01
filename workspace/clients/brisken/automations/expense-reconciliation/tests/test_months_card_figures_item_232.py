@@ -1,4 +1,4 @@
-"""Item 231: with a card picked, the months list shows that card's figures.
+"""Item 232: with a card picked, the months list shows that card's figures.
 
 Owner, 2026-09-27, on the /months list with 2838 picked: the Receipts, Needs
 category and Set aside columns "need to adjust automatically to only display"
