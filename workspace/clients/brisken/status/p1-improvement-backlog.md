@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-09-25
+updated: 2026-09-27
 ---
 
 # Expense tool: improvement backlog (the one list)
