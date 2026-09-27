@@ -59,6 +59,6 @@ State 2026-09-27 (item 223 step 6): the SPA SOURCE
 (`gh api repos/011matthias/brisken-expense-review/contents/src/lib/i18n.tsx`)
 already carries the three `reference_digits` / `misread_digit` / `body_twin`
 keys in EN and PT; `mh.rematch.trigger.duplicates_reapply` and
-`wb.dups.basis.intake_twin` are absent. Source is not the published bundle,
-so the bundle audit above still decides. No live group reads `intake_twin`
-until a Stripe-style mail arrives after the step 6 deploy.
+`wb.dups.basis.intake_twin` are absent. The published-bundle audit of the same
+day (#1494) confirms the three basis labels are live. No live group reads
+`intake_twin` until a Stripe-style mail arrives after the step 6 deploy.
