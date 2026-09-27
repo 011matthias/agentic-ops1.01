@@ -12,6 +12,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-09-27 | Expense-Recon Note 97 Filters | client-dev | [Mini-Checkpoint-1](docs/2026-09-27%20-%20Expense-Recon%20Note%2097%20Filters/Mini-Checkpoint-1.md) |
+| 2026-09-27 | Expense-Recon Front 4 Step 6 And Item 227 | client-dev | [Mini-Checkpoint-1](docs/2026-09-27%20-%20Expense-Recon%20Front%204%20Step%206%20And%20Item%20227/Mini-Checkpoint-1.md) |
 | 2026-09-27 | Expense-Recon Front 2 Entity Key | client-dev | [Mini-Checkpoint-1](docs/2026-09-27%20-%20Expense-Recon%20Front%202%20Entity%20Key/Mini-Checkpoint-1.md) |
 | 2026-09-27 | Expense-Recon Notes 94-96 | client-dev | [Mini-Checkpoint-1](docs/2026-09-27%20-%20Expense-Recon%20Notes%2094-96/Mini-Checkpoint-1.md) |
 | 2026-09-27 | Expense-Recon Front 4 Copies Part 2 | client-dev | [→](docs/2026-09-27%20-%20Expense-Recon%20Front%204%20Copies%20Part%202/Checkpoint.md) |
