@@ -12597,7 +12597,7 @@ Backend SHIPPED (PR #1505, merge `1fa8bf67`, deployed 2026-09-27 via
 totals, and `set_aside[].card_section` on the month payload. A set-aside file
 files under the card its own reading resolves to (the unheld-receipt chain),
 else No card. Receipts and Needs category already had per-card month figures.
-SPA half `docs/lovable-months-card-figures-prompt.md` (NOT PASTED): chip
+SPA half `docs/lovable-months-card-figures-prompt.md` (PUBLISHED by the owner, driven 2026-09-28, PROMPT-STATUS Applied): chip
 numbers off, the table reads the picked card's month entry, captions reworded.
 Route-level `tests/test_months_card_figures_item_236.py` (5), 3 of them red
 with the set-aside card stamping disabled.
@@ -12703,6 +12703,8 @@ before, 0 after; `n_expenses` and the four bucket months unchanged. Tests
 restoring the old count turns 3 red, freezing the kept body turns the edit
 test red. Trips list (`trip_view`) calls the same summary without the
 learning store: remembered cards do not reach a trip's list count.
+
+**LIVE 2026-09-28** (PR #1526, merge `7e5dd03c`, `deploy.py`, healthz on that commit). Read after the deploy: all 7 months reconcile on all three columns, cards plus No card against the list (September 70 / 38 / 4, August 49 / 19 / 0, July 67 / 27 / 2); a cold drive of `/months` shows the same and, with item 236's published SPA, each card's own figures. First list read after the deploy 1.2 s (the kept body being built).
 
 ## Shipped (loop history)
 
