@@ -117,6 +117,11 @@ class LessonContext:
     # `(transaction_id, document_id)` behind a new spelling in its entry.
     identity: Any = None
     alias_pairs: dict = field(default_factory=dict)
+    # Item 225: card key -> Card, so a lesson names a card as Settings does;
+    # and, per merchant, the `(document_id, card key)` receipts whose card the
+    # merchant-list card learner reads (`registry_card_observations`).
+    cards: dict = field(default_factory=dict)
+    card_seen: dict = field(default_factory=dict)
 
 
 # ── describing ──────────────────────────────────────────────────────────
@@ -161,16 +166,57 @@ def _row_source(ctx: LessonContext, document_id: str, line_index=None) -> dict:
     return out
 
 
-def _rows_text(sources: list[dict]) -> str:
-    if not sources:
-        return ""
+def _shown(sources: list[dict]) -> str:
     shown = ", ".join(
         " ".join(p for p in (s["vendor"], s["total"], s["currency"], s["date"]) if p)
         for s in sources[:3]
     )
-    more = f" and {len(sources) - 3} more" if len(sources) > 3 else ""
+    return shown + (f" and {len(sources) - 3} more" if len(sources) > 3 else "")
+
+
+def _rows_text(sources: list[dict]) -> str:
+    if not sources:
+        return ""
     noun = "row" if len(sources) == 1 else "rows"
-    return f" From {len(sources)} corrected {noun}: {shown}{more}."
+    return f" From {len(sources)} corrected {noun}: {_shown(sources)}."
+
+
+def _seen_text(sources: list[dict]) -> str:
+    if not sources:
+        return ""
+    noun = "receipt" if len(sources) == 1 else "receipts"
+    return f" Seen on {len(sources)} {noun}: {_shown(sources)}."
+
+
+def _card_text(ctx: LessonContext, key) -> str:
+    """A card as Settings names it, with its person: `Credit Card - 8311
+    (Dirk Neumann - Cloud Services)`. The bare key only for a card nobody
+    has defined."""
+    card = ctx.cards.get(str(key or ""))
+    if card is None:
+        return str(key or "")
+    person = getattr(card, "person", "") or ""
+    return f"{card.display_label} ({person})" if person else card.display_label
+
+
+def _cards_text(ctx: LessonContext, keys) -> str:
+    names = [_card_text(ctx, k) for k in keys]
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def _vendor_text(sources: list[dict], fallback: str) -> str:
+    """The vendor as the receipt prints it (`ERICK SPORTS`), not the key the
+    memory is stored under (`erick sports`)."""
+    return next((s["vendor"] for s in sources if s.get("vendor")), "") or fallback
+
+
+# What a remembered field fills in on the next receipt (`_LEARNABLE_FIELDS`).
+_FIELD_PHRASE = {
+    "card_key": "paid with {}",
+    "paid_through": "paid through {}",
+    "vendor": "named {}",
+    "tax_label": "with the tax line {}",
+}
 
 
 # ── attributing a learning row to the rows that taught it ───────────────
@@ -205,17 +251,25 @@ def _field_sources(ctx: LessonContext) -> dict[tuple, list[str]]:
 # ── the lessons ─────────────────────────────────────────────────────────
 
 
-def _describe_write(ctx: LessonContext, table: str, key: tuple, last) -> str:
+def _describe_write(ctx: LessonContext, table: str, key: tuple, last, sources=()) -> str:
+    """What the next receipt gets, in the words the grid uses (item 225:
+    note #91, "make sure the corrections displayed ... are tangible")."""
     if table == "merchant_category":
         entity, vendor = key
         company, org = _company(ctx, entity)
-        return f"{vendor} in {company}: {_value_text(last.args[2], last.args[3], org)}."
+        vendor = _vendor_text(list(sources), vendor)
+        return (f"From now on, {vendor} receipts in {company} get "
+                f"{_value_text(last.args[2], last.args[3], org)}.")
     if table == "merchant_entity":
-        return f"{key[0]} belongs to {last.args[1]}."
+        vendor = _vendor_text(list(sources), key[0])
+        return f"From now on, {vendor} receipts go to the company {last.args[1]}."
     if table == "field_correction":
         entity, vendor, fname = key
         company, _org = _company(ctx, entity)
-        return f"{vendor} in {company}: its {fname} reads {last.args[3]}."
+        vendor = _vendor_text(list(sources), vendor)
+        value = _card_text(ctx, last.args[3]) if fname == "card_key" else last.args[3]
+        phrase = _FIELD_PHRASE.get(fname, fname + " {}").format(value)
+        return f"From now on, {vendor} receipts in {company} are filled in as {phrase}."
     if table == "vendor_alias":
         return f"The bank's {key[1]} is the receipt vendor {key[2]}."
     if table == "merchant_fx":
@@ -223,24 +277,45 @@ def _describe_write(ctx: LessonContext, table: str, key: tuple, last) -> str:
     return f"{table} {'|'.join(key)}."
 
 
-def _registry_changes(before: dict | None, after: dict | None) -> str:
+def _registry_changes(before: dict | None, after: dict | None, ctx=None) -> str:
     b, a = before or {}, after or {}
     parts = []
     new_aliases = [x for x in a.get("aliases") or [] if x not in (b.get("aliases") or [])]
     if new_aliases:
         parts.append("new spelling " + ", ".join(new_aliases))
     for fld, label in (("category", "category"), ("zoho_account", "account"),
-                       ("cost_center", "cost center"), ("card_key", "card")):
+                       ("cost_center", "cost center")):
         if a.get(fld) != b.get(fld) and a.get(fld):
             parts.append(f"{label} {a.get(fld)}")
     accounts_a, accounts_b = a.get("accounts") or {}, b.get("accounts") or {}
     for company in sorted(accounts_a):
         if accounts_a[company] != accounts_b.get(company):
             parts.append(f"account in {company} {accounts_a[company]}")
-    seen = [c for c in a.get("cards_seen") or [] if c not in (b.get("cards_seen") or [])]
-    if seen:
-        parts.append("seen on card " + ", ".join(seen))
+    card = _registry_card_change(b, a, ctx)
+    if card:
+        parts.append(card)
     return "; ".join(parts) or "entry updated"
+
+
+def _registry_card_change(b: dict, a: dict, ctx) -> str:
+    """The card half of a merchant-list change as what the next receipt gets
+    (item 225). Only the card learner moves these fields: one card seen ->
+    that card is filled in; a second card -> none is, and a learned one goes."""
+    seen_a = list(a.get("cards_seen") or [])
+    new_seen = [c for c in seen_a if c not in (b.get("cards_seen") or [])]
+    key_a, key_b = a.get("card_key"), b.get("card_key")
+    if key_a == key_b and not new_seen:
+        return ""
+    name = (lambda k: _card_text(ctx, k)) if ctx is not None else str
+    names = (lambda ks: _cards_text(ctx, ks)) if ctx is not None else ", ".join
+    if key_a and key_a != key_b:
+        return f"paid with {name(key_a)}, so its next receipt gets that card"
+    if key_b and not key_a:
+        return (f"paid with {names(seen_a)}, so the card it had learned "
+                f"({name(key_b)}) is no longer filled in")
+    if len(seen_a) > 1:
+        return f"paid with {names(seen_a)}, so no card is filled in for it"
+    return f"seen on {names(new_seen)}"
 
 
 def _registry_rows(ctx: LessonContext, merchant: str) -> list[tuple]:
@@ -370,7 +445,8 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
             kind=KIND_CORRECTION,
             table=table,
             key=dict(zip(TABLE_KEYS[table], key)),
-            description=_describe_write(ctx, table, key, writes[-1]) + _rows_text(sources),
+            description=(_describe_write(ctx, table, key, writes[-1], sources)
+                         + _rows_text(sources)),
             sources=sources,
             default_keep=True,
             writes=writes,
@@ -386,15 +462,25 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
         sources = [_row_source(ctx, d, ln) for d, ln in _registry_rows(ctx, merchant)]
         for tx_id, doc in ctx.alias_pairs.get(merchant, ()):
             sources += [_row_source(ctx, f"charge:{tx_id}"), _row_source(ctx, doc)]
+        # Item 225: a card change names the receipts whose card taught it,
+        # read from the same observations the card learner reads.
+        seen_on = []
+        if _registry_card_change(b or {}, a or {}, None):
+            taken = {s["document_id"] for s in sources}
+            seen_on = [
+                _row_source(ctx, doc)
+                for doc in dict.fromkeys(d for d, _k in ctx.card_seen.get(merchant, ()))
+                if doc not in taken
+            ]
         held = " Held for the owner: never written from a checklist." if gated else ""
         lessons.append(Lesson(
             id=lesson_id(REGISTRY, (merchant,)),
             kind=KIND_CORRECTION,
             table=REGISTRY,
             key={"merchant": merchant},
-            description=(f"Merchant list, {merchant}: {_registry_changes(b, a)}."
-                         + _rows_text(sources) + held),
-            sources=sources,
+            description=(f"Merchant list, {merchant}: {_registry_changes(b, a, ctx)}."
+                         + _rows_text(sources) + _seen_text(seen_on) + held),
+            sources=sources + seen_on,
             default_keep=not gated,
             owner_gated=gated,
             merchant=merchant,

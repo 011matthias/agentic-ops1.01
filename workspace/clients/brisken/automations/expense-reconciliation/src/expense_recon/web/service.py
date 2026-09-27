@@ -5329,6 +5329,33 @@ def registry_upserts_from_expense_run(
 _CARD_OBSERVATION_SOURCES = frozenset({"override", "hint", "settled_charge"})
 
 
+def registry_card_observations(
+    registry, effective_receipts: "list[Receipt]", card_res: dict[str, dict],
+) -> dict[str, list[tuple[str, str]]]:
+    """`{canonical merchant: [(document_id, card key), ...]}`: every receipt
+    whose card counts as an observation of where that merchant's spend lands.
+
+    The card learner below reads its cards from here, and the memory plan
+    (item 225) reads the same receipts as the rows a merchant-list card
+    lesson came from, so what the dialog shows and what the save teaches are
+    one list."""
+    out: dict[str, list[tuple[str, str]]] = {}
+    if not registry:
+        return out
+    for r in effective_receipts:
+        res = card_res.get(r.document_id) or {}
+        card = res.get("card")
+        if card is None or res.get("card_source") not in _CARD_OBSERVATION_SOURCES:
+            continue
+        match = registry.resolve(r.vendor_clean, r.detected_vendor)
+        if match is None:
+            continue
+        key = str(getattr(card, "key", "") or "").strip()
+        if key:
+            out.setdefault(match.canonical_name, []).append((r.document_id, key))
+    return out
+
+
 def registry_card_upserts_from_expense_run(
     merchants: dict,
     *,
@@ -5368,18 +5395,12 @@ def registry_card_upserts_from_expense_run(
     if not registry:
         return base, empty
 
-    seen: dict[str, set[str]] = {}
-    for r in effective_receipts:
-        res = card_res.get(r.document_id) or {}
-        card = res.get("card")
-        if card is None or res.get("card_source") not in _CARD_OBSERVATION_SOURCES:
-            continue
-        match = registry.resolve(r.vendor_clean, r.detected_vendor)
-        if match is None:
-            continue
-        key = str(getattr(card, "key", "") or "").strip()
-        if key:
-            seen.setdefault(match.canonical_name, set()).add(key)
+    seen: dict[str, set[str]] = {
+        canonical: {key for _doc, key in obs}
+        for canonical, obs in registry_card_observations(
+            registry, effective_receipts, card_res
+        ).items()
+    }
     if not seen:
         return base, empty
 
@@ -18745,7 +18766,12 @@ def _memory_plan(
     manual_payloads: dict = {}
     rec_by_id: dict = {}
     gl = None
+    cards: dict = {}
+    card_seen: dict = {}
     if run_mode(run) == MODE_EXPENSE_GENERATION:
+        from ..cards import cards_from_setting
+        from ..merchant_registry import MerchantRegistry
+
         receipts, effective, manual_payloads = expense_learning_inputs(
             run, overrides, field_overrides, edits,
         )
@@ -18753,10 +18779,25 @@ def _memory_plan(
             transaction_from_dict(t)
             for t in (run.snapshot or {}).get("transactions") or []
         ])
-        gl = registry_gl_context(run, settings, resolve_batch_row_cards(
+        card_res = resolve_batch_row_cards(
             effective, run.config, field_overrides,
             settled_cards=export_settled_cards(run, decisions),
-        ))
+        )
+        gl = registry_gl_context(run, settings, card_res)
+        # Item 225: a lesson names a card the way Settings names it, and a
+        # merchant-list card lesson names the receipts that taught it.
+        cards = {
+            **{res["card"].key: res["card"] for res in card_res.values() if res.get("card")},
+            **cards_from_setting(settings.get("cards")),
+        }
+        # Resolved on the list AFTER this save, as the card learner resolves
+        # it: a merchant the same save creates is a merchant it teaches.
+        card_seen = registry_card_observations(
+            MerchantRegistry.from_settings({"merchants": (
+                merchants_after if merchants_after is not None else merchants_before
+            )}),
+            effective, card_res,
+        )
     ctx = ml.LessonContext(
         run=run, writes=writes, merchants_before=merchants_before,
         merchants_after=merchants_after, overrides=overrides or {},
@@ -18764,6 +18805,7 @@ def _memory_plan(
         effective=effective, manual_payloads=manual_payloads,
         rec_by_id=rec_by_id, gl=gl, now_iso=now_iso,
         identity=memory_identity(settings), alias_pairs=alias_pairs,
+        cards=cards, card_seen=card_seen,
     )
     return ctx, ml.build_lessons(ctx), learned
 
