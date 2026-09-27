@@ -9,10 +9,19 @@ The app is the matching engine. Zoho Books is the downstream ledger and
 receives finished, pre-matched entries only. Nothing about that changes how
 the month is reconciled; it changes only where the result lands.
 
-## The one thing blocking live posting
+## What blocks posting into the real books
 
-**The Books refresh token is read-only.** Asked for its own grant, it
-answers:
+**Update 2026-09-24: the grant was widened, and the owner ruled it off
+limits for production.** The token now carries `ZohoBooks.expenses.CREATE`,
+`expenses.READ`, `contacts.READ` and `accountants.READ` (read off the
+`scope` field on two refreshes). The same day the owner ruled that every
+production org stays strictly read-only and writes are confined to the
+TEST-BTS sandbox (`822116290`). So the API no longer stops a write into
+Criss's months; the runner's `assert_org` and the owner ruling do. The
+history below is kept because it explains the scopes.
+
+**Until 2026-09-24 the Books refresh token was read-only.** Asked for its
+own grant, it answered:
 
 ```
 ZohoBooks.documents.READ ZohoBooks.expenses.READ ZohoBooks.bills.READ
@@ -50,19 +59,46 @@ Verify the result by reading the `scope` field off the token response, not
 by attempting a write. A write that succeeds has already changed a client's
 books.
 
-## Why posting cannot be a hosted feature
+## Sending from the app (owner decision 2026-09-28)
 
-`test_zoho_posting_is_gated.py` keeps the hosted web layer free of any Zoho
-import or credential. Posting is an operator-run CLI action behind four
-gates that must all be open: the `zoho.post.enabled` config flag, the
-`EXPENSE_RECON_ZOHO_POST=1` environment flag, an explicit org allowlist, and
-`--go`.
+Until 2026-09-28 posting was an operator-run CLI action and the hosted web
+layer held no Zoho import or credential, so that a deploy could never write
+into Brisken's ledger without anyone deciding to. The owner then chose a
+"Send to Zoho" button in the app, pressed by Criss when her month is done.
+Criss acting on her own month is what
+`feedback_recon_no_live_writes_criss_acts` asks for; what the move gives up is
+the wall that made a hosted write impossible, so the button carries the
+runner's guards rather than new ones.
 
-The reason is not tidiness. Criss works her months in the app, and
-`feedback_recon_no_live_writes_criss_acts` says her data is hers to change.
-If an HTTP route could post, a deploy could write into Brisken's live ledger
-without anyone deciding to. Keeping the path in the CLI means a human ran it
-on purpose, with the invasive-action gate in front.
+How it works:
+
+1. The app shows a preview: `GET /api/runs/{id}/zoho-send` builds the
+   month's Expenses CSV with the SAME builder as the `expenses.csv`
+   download, runs `reconcile_month.run_month` as a dry run (reads Zoho,
+   writes nothing) and answers what would be entered, the total, what is
+   held back and why, and a `confirm` value (`plan_fingerprint`).
+2. Criss confirms: `POST /api/runs/{id}/zoho-send {confirm}` starts a job
+   that runs the same runner live with `expect_fingerprint=confirm`. A month
+   edited after the preview aborts before the first write.
+3. The job reads every new entry back from Zoho and reports whether the
+   stored total matches.
+
+Guards, all the runner's own: TEST-BTS sandbox only (`assert_org`; no route
+can choose the org), `EXPENSE_RECON_ZOHO_POST=1` on the server (off by
+default, and while it is off the preview reads nothing), the durable ledger
+at `<data root>/zoho-post-ledger.sqlite` (nothing twice), the occupancy check
+(a hand-entered month is refused), one send at a time. `web/zoho_send.py` is
+the only web module allowed to reach the posting package, and only through
+`reconcile_month`; `test_zoho_posting_is_gated.py` pins that, and
+`test_web_zoho_send.py` drives the routes.
+
+Before the button goes live on Fly: the Zoho credentials become Fly
+secrets, the switch is set, and the sandbox ledger the CLI built
+(`context/zoho-post-ledger-testbts.sqlite`, July and August posted) is copied
+to the data root so the app knows what is already in TEST-BTS. Production
+needs Brisken's sign-off on a per-org row in `ORG_PROFILES` and a lift of
+the 2026-09-24 ruling; the CLI (`reconcile_month`, `zoho-post`) keeps working
+unchanged.
 
 ## Not a feed problem, a handoff problem
 

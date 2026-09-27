@@ -57,6 +57,7 @@ deployment-level switch `zoho_post_cli` requires.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import sys
 from collections import Counter
@@ -103,6 +104,7 @@ __all__ = [
     "assert_org",
     "compare_expense",
     "main",
+    "plan_fingerprint",
     "resolve_profile",
     "run_month",
 ]
@@ -236,6 +238,11 @@ class MonthRun:
     report: ExpensePostReport | None = None
     readback: tuple[ReadbackResult, ...] = ()
     ledger_states: dict[str, int] = field(default_factory=dict)
+    # Set once the live chart is pulled, so a caller can name accounts
+    # without a second chart read.
+    account_names: dict[str, str] = field(default_factory=dict)
+    # `plan_fingerprint(send_plan)`: what a reviewer confirms in the app.
+    fingerprint: str = ""
     abort_reason: str | None = None
     exit_code: int = 0
 
@@ -262,6 +269,16 @@ class MonthRun:
 def _make_client(org_id: str) -> ZohoClient:
     """Module-level so tests can monkeypatch it with a fake."""
     return ZohoClient(zoho_config_from_env(org_id))
+
+
+def plan_fingerprint(plan: ExpensePlan) -> str:
+    """One string for exactly what a send plan would post: every
+    reference with the content hash of its payload. The app shows a
+    preview, the reviewer confirms this value, and a live run whose plan
+    fingerprints differently aborts before its first write, so what is sent
+    is what was looked at (2026-09-28, the in-app send)."""
+    parts = sorted(f"{p.reference}:{p.content_hash}" for p in plan.postable)
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()[:32]
 
 
 def _plan_kwargs(org: OrgProfile, period: str) -> dict:
@@ -309,11 +326,16 @@ def run_month(
     client_factory: Callable[[str], ZohoClient] | None = None,
     environ: Mapping[str, str] | None = None,
     emit: Callable[[str], None] = print,
+    expect_fingerprint: str | None = None,
 ) -> MonthRun:
     """The runner. Returns the `MonthRun` with `exit_code` set.
 
     Raises `RunRefused` (before any read) for a wrong org, a bad card
     override, a malformed period, or a live run without the env gate.
+
+    `expect_fingerprint`, on a live run, is the `plan_fingerprint` the
+    reviewer confirmed; a plan that fingerprints differently aborts before
+    the post stage, with nothing written.
     """
     org = resolve_profile(
         org_id, card_account_id=card_account_id, card_name=card_name
@@ -389,6 +411,7 @@ def run_month(
             run.ledger_states = _ledger_states(ledger, org.org_id)
             return _finish(run, emit)
         emit(f"\n[3/7] chart: {len(chart)} accounts pulled live from org {org.org_id}")
+        run.account_names = _account_names(chart)
         plan = plan_expense_post(groups, chart, ledger, **kwargs)
         run.plan = plan
 
@@ -418,13 +441,23 @@ def run_month(
         )
         _assert_send_plan(send_plan, selected, expected_total)
         run.send_plan = send_plan
+        run.fingerprint = plan_fingerprint(send_plan)
         emit(f"      PLAN ASSERT: {len(send_plan.postable)} expense(s), zero "
              f"refusals, tie-out {send_plan.total:.2f} {org.base_currency} "
-             "(read from the plan)")
+             f"(read from the plan), fingerprint {run.fingerprint}")
 
         if dry_run:
             emit("\n[5/7] post: SKIPPED (dry run)")
             emit("[6/7] readback: SKIPPED (dry run)")
+            run.ledger_states = _ledger_states(ledger, org.org_id)
+            return _finish(run, emit)
+
+        if expect_fingerprint is not None and run.fingerprint != expect_fingerprint:
+            run.abort_reason = (
+                f"plan changed since it was confirmed: fingerprint "
+                f"{run.fingerprint} != confirmed {expect_fingerprint}"
+            )
+            emit(f"\n[5/7] ABORT: {run.abort_reason}")
             run.ledger_states = _ledger_states(ledger, org.org_id)
             return _finish(run, emit)
 
