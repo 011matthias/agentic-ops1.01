@@ -213,6 +213,21 @@ their ordinary lesson. The publish summary's `registry` block gains
 OpenAI, Anthropic and Lovable keep `owner_gated` on their `registry:` lesson
 whether or not they are locked; a drift lesson about them is not gated.
 
+Item 225 (note #91, 2026-09-27): a correction lesson's `description` says what
+the next receipt gets, with the vendor as the receipt prints it ("From now on,
+ERICK SPORTS receipts go to the company Brisken Holding, LLC.", "... in
+<company> are filled in as paid with <card label> (<person>)"; the four
+remembered fields read "paid with", "paid through", "named", "with the tax
+line"). A card is named by its Settings `label` and `person`, never its key
+(the bare key only for a card nobody defined). A `registry:` lesson whose card
+fields change reads "paid with <card>, so its next receipt gets that card",
+"paid with <A> and <B>, so no card is filled in for it", or "... so the card it
+had learned (<card>) is no longer filled in", followed by "Seen on N
+receipts: ..."; those receipts (the ones whose card the learner observed,
+`registry_card_observations`) are appended to its `sources`. The phrases
+"new spelling", "account in <company>", and the "From N corrected rows" suffix
+are unchanged. Descriptions are English only.
+
 ## `parse_issues` specifically
 
 ```json
