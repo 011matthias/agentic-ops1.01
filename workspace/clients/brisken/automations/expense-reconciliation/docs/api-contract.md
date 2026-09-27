@@ -2189,13 +2189,21 @@ month's next re-match. One receipt still settles exactly one charge.
 ### The id collision, stated
 
 Receipt ids are position-prefixed per batch (`0000__a.jpg`), so two
-different receipts can share an id across batches. The month's own copy
-wins and the colliding neighbour receipt is simply not borrowed. This bites
-harder than it does on trips because neighbouring months are ingested the
-same way: July and August shared four ids on 2026-09-15, all
-`NNNN__rendered-body.pdf`. Offering two receipts under one id would corrupt
-the matcher's consumption set and the view's lookup, which is worse than a
-narrower pool.
+different receipts can share an id across batches: July and August shared
+four `NNNN__rendered-body.pdf` ids on 2026-09-15. Since item 220 step 6
+(2026-09-27) the colliding neighbour receipt is borrowed under its own pool
+id, `{home run id}~{its id}` (`borrowed_pool_id`), and that is the id
+`rows[].chosen_document_id`, `candidates[].document_id` and the
+`receipt_sources` key carry. Its `receipt_sources` entry, and so `from_batch`
+and `settled_by`, add `document_id`: the id the receipt has in its home month.
+ABSENT on every other borrowed receipt, whose pool id is its own id. The claim
+is written on (home run, home id), so the home month's `settled_by` reads as
+before, and `GET /api/runs/{borrowing run}/receipts/{pool id}/image` serves the
+home month's file (any borrowed receipt's id does, since the same change).
+
+Item 211 (same PR): a period that opens on the 1st, a calendar-month export,
+borrows receipts printed up to 3 days before it (`ADJACENT_START_EDGE_DAYS`,
+`adjacent_borrow_window`); a card-cycle period is not widened.
 
 ## Report totals are formed in Decimal (added 2026-09-15, item 65)
 
@@ -4828,8 +4836,19 @@ Parallel to item 185's charge figures and item 190's `receipt_months` /
 - Item 193: `n_needs_category` on each `receipt_months[]` entry, each card
   (its own) and `no_card` (and its months): the expenses in the NEEDS
   CATEGORY box (`"uncategorized"` in `expenses[].boxes`), so per month the
-  cards plus No card equal `summary.n_uncategorized`. It is the number the
-  months strip shows beside each card.
+  cards plus No card equal `summary.n_uncategorized`. It was the number the
+  months strip showed beside each card until item 236 took the number off.
+- Item 236: `n_set_aside` on each `receipt_months[]` entry, each card (its
+  own) and `no_card` (and its months): the files the quarantine still holds
+  back (`set_aside[]` not restored), so per month the cards plus No card
+  equal `summary.n_set_aside`. With `n_expenses` and `n_needs_category` these
+  are the months list's three columns for a picked card. A set-aside file
+  files under the card its own reading resolves to (the chain an unheld
+  receipt follows), else No card; a legacy entry, which kept no reading,
+  always reads No card. The month's payload says where each went:
+  `GET /api/expense-batches/{id}` `set_aside[].card_section` (`""` = no
+  card). A card whose only file in a month is a set-aside one gets a
+  `receipt_months[]` entry with `n_expenses` 0.
 
 `never_loaded` keeps its meaning (no charge and no statement anywhere), which
 the months strip's disclosure uses. The overview folds away only a card that

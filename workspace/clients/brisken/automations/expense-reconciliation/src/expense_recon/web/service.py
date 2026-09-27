@@ -10357,20 +10357,34 @@ def receipt_card_counts(view: dict) -> dict[str, dict[str, int]]:
     And `n_needs_category` (item 193): the rows in the NEEDS CATEGORY box
     (`"uncategorized"` in `expenses[].boxes`), the set `summary.n_uncategorized`
     counts, so a month's cards plus its no-card section add up to the months
-    list's Needs category column."""
+    list's Needs category column.
+
+    And `n_set_aside` (item 236): the files the quarantine still holds back
+    (`set_aside[]` not restored, the set `summary.n_set_aside` counts), each
+    under its `card_section`, so the same sum holds for the Set aside column.
+    A card whose only file this month is a set-aside one gets a key here too,
+    with `n_expenses` 0."""
     counts: dict[str, dict[str, int]] = {}
+
+    def _entry(key: str) -> dict[str, int]:
+        return counts.setdefault(key, {
+            "n_expenses": 0, "n_without_charge": 0, "n_needs_category": 0,
+            "n_set_aside": 0,
+        })
+
     for expense in view.get("expenses") or []:
         if expense.get("counts_in_total") is False:
             continue
-        key = str(expense.get("card_section") or "")
-        entry = counts.setdefault(
-            key, {"n_expenses": 0, "n_without_charge": 0, "n_needs_category": 0},
-        )
+        entry = _entry(str(expense.get("card_section") or ""))
         entry["n_expenses"] += 1
         if expense.get("without_charge"):
             entry["n_without_charge"] += 1
         if "uncategorized" in (expense.get("boxes") or []):
             entry["n_needs_category"] += 1
+    for held_back in view.get("set_aside") or []:
+        if held_back.get("restored"):
+            continue
+        _entry(str(held_back.get("card_section") or ""))["n_set_aside"] += 1
     return counts
 
 
@@ -10454,6 +10468,14 @@ def build_card_status(
     needing a category, all months. `n_needs_category` on each receipt month,
     each card (its own, not its subcards': picking 2838 shows 2838's rows) and
     `no_card`.
+
+    Item 236 (owner 2026-09-27: with a card picked, the months list's
+    Receipts, Needs category and Set aside "need to adjust automatically to
+    only display" that card's, per month) adds the third figure: each receipt
+    month and `no_card.months[]` entry carries `n_set_aside`, with
+    `n_expenses` and `n_needs_category` the other two columns, a card
+    counting only its own as in item 193. Totals `n_set_aside` on each card
+    and on `no_card`.
     """
     from ..output._pdf_common import _add_money
 
@@ -10590,6 +10612,7 @@ def build_card_status(
                 "n_expenses": int(figures.get("n_expenses") or 0),
                 "n_without_charge": int(figures.get("n_without_charge") or 0),
                 "n_needs_category": int(figures.get("n_needs_category") or 0),
+                "n_set_aside": int(figures.get("n_set_aside") or 0),
             }
             if key:
                 entry["statement"] = key in stated
@@ -10629,6 +10652,7 @@ def build_card_status(
         slot["n_needs_category"] = sum(
             m["n_needs_category"] for m in receipt_months
         )
+        slot["n_set_aside"] = sum(m["n_set_aside"] for m in receipt_months)
         cards.append(slot)
 
     months.sort(
@@ -10672,6 +10696,7 @@ def build_card_status(
             "n_needs_category": sum(
                 m["n_needs_category"] for m in no_card_months
             ),
+            "n_set_aside": sum(m["n_set_aside"] for m in no_card_months),
         },
         "unreadable": unreadable,
         # Rendered verbatim as the page's footnote, so it is prose for
@@ -11162,6 +11187,17 @@ def attach_expense_card_tabs(
         sec["n_expenses"] = n_total
         sec["totals_by_ccy"] = _per_ccy(sums_total)
     view["card_sections"] = sections
+    # Item 236: a file the quarantine set aside is held by no charge, so it
+    # files where an unheld receipt does (`card_sections`): under the card
+    # its own reading resolves to. A legacy entry kept no reading and has no
+    # `document_id`, so it reads "", the no-card section, as does a file
+    # whose reading names no card.
+    set_aside_cards = report_receipt_cards(
+        set_aside_receipts(run.snapshot or {}), run.config, field_overrides
+    )
+    for entry in view.get("set_aside") or []:
+        doc = str(entry.get("document_id") or "")
+        entry["card_section"] = (set_aside_cards.get(doc) or ("", ""))[0]
     return view
 
 
@@ -13791,6 +13827,16 @@ def set_aside_entries(snapshot: dict) -> list[dict]:
     return _derive_legacy_set_aside(snapshot.get("parse_errors", []))
 
 
+def set_aside_receipts(snapshot: dict) -> "list[Receipt]":
+    """The readings the set-aside entries kept, one per entry that has one
+    (a legacy entry has none), restored ones included."""
+    return [
+        receipt_from_dict(e["receipt"])
+        for e in set_aside_entries(snapshot)
+        if isinstance(e.get("receipt"), dict)
+    ]
+
+
 def _set_aside_document_id(entry: dict) -> dict:
     """`{"document_id": ...}` for a set-aside entry that records the
     receipt it set aside, `{}` for a legacy one that does not."""
@@ -15645,8 +15691,8 @@ def sync_claim_for_decision(
         status in (STATUS_CONFIRMED, STATUS_ALREADY_POSTED)
         and chosen_document_id is not None
     )
-    source = receipt_source_run(run, doc)
-    prior = store.get_claims_on_receipts(source).get(doc)
+    source, home_doc = receipt_source_ref(run, doc)  # item 220 step 6
+    prior = store.get_claims_on_receipts(source).get(home_doc)
     if prior is not None and prior["claimed_by_run_id"] != run.run_id:
         if explicit_pick:
             other = store.get_run(prior["claimed_by_run_id"])
@@ -15668,7 +15714,7 @@ def sync_claim_for_decision(
     # one charge never pins two.
     store.delete_claims_for_tx(run.run_id, transaction_id)
     ok = store.upsert_receipt_claim(
-        source, doc, run.run_id, transaction_id, now_iso
+        source, home_doc, run.run_id, transaction_id, now_iso
     )
     if not ok and explicit_pick:
         return Refusal(
@@ -16134,6 +16180,14 @@ def rematch_month(
                 return str(hit["run_id"])
             return receipt_source_run(run, doc)
 
+        def _ref(doc: str) -> tuple[str, str]:
+            # Item 220 step 6: the claims key is (home run, id THERE); a pool
+            # id and an id of this month's own can be the same string.
+            hit = borrowed_origins.get(doc)
+            if hit is not None:
+                return str(hit["run_id"]), str(hit.get("document_id") or doc)
+            return receipt_source_ref(run, doc)
+
         pair_docs = {
             m.document_id
             for m in (
@@ -16144,13 +16198,13 @@ def rematch_month(
         }
         claim_sources = {_src(d) for d in pair_docs}
         claim_sources.add(run.run_id)
-        claims_now: dict[str, dict] = {}
+        claims_now: dict[tuple[str, str], dict] = {}
         for src in sorted(claim_sources):
             for doc, c in store.get_claims_on_receipts(src).items():
                 if c["claimed_by_run_id"] != run.run_id:
-                    claims_now[doc] = c
+                    claims_now[(src, doc)] = c
         downgraded = False
-        lost_docs = pair_docs & set(claims_now)
+        lost_docs = {d for d in pair_docs if _ref(d) in claims_now}
         if lost_docs:
             downgraded = _downgrade_claimed_pairs(
                 outcome, lost_docs, pool_doc_ids
@@ -16167,17 +16221,19 @@ def rematch_month(
         seen_claim_keys: set[tuple[str, str]] = set()
         for tx_id in sorted(settled):
             doc = settled[tx_id]
-            key = (_src(doc), doc)
+            key = _ref(doc)
             if key in seen_claim_keys:
                 continue
             seen_claim_keys.add(key)
-            triples.append((key[0], doc, tx_id))
+            triples.append((key[0], key[1], tx_id))
         conflicts = store.replace_claims_by_run(
             run.run_id, triples, now_iso or datetime.now().isoformat()
         )
         if conflicts:
+            refused = {(s, d) for s, d, _ in conflicts}
             downgraded = _downgrade_claimed_pairs(
-                outcome, {doc for _, doc, _ in conflicts}, pool_doc_ids
+                outcome, {d for d in settled.values() if _ref(d) in refused},
+                pool_doc_ids,
             ) or downgraded
         if downgraded:
             base["outcome"] = outcome_to_dict(outcome)
@@ -16651,14 +16707,23 @@ def adjacent_pool_for_month(
 
     The exclusions are `trip_pool_for_month`'s, for the same reasons: a trip
     batch is not a neighbour, a receipt another run has already claimed is
-    out (the advisory read of the cross-batch never-settle guard), a
-    confirmed private expense is not company-card money, and a document id
-    this month's own pool already holds is dropped. That last one bites
-    harder here than it does on trips, because neighbouring months are
-    ingested the same way and collide by construction: July and August share
-    four ids today, all `NNNN__rendered-body.pdf`. The colliding receipt
-    simply is not borrowed; offering two receipts under one id would corrupt
-    the matcher's consumption set and the view's lookup."""
+    out (the advisory read of the cross-batch never-settle guard), and a
+    confirmed private expense is not company-card money.
+
+    Item 220 step 6: a document id this month's pool already holds is no
+    longer dropped. Neighbouring months are ingested the same way and collide
+    by construction (July and August shared four `NNNN__rendered-body.pdf`
+    ids), so the colliding receipt joins under its own pool id,
+    `borrowed_pool_id(home run, id)`, and its origin carries the id it has
+    at home (`document_id`). One pool id per receipt keeps the matcher's
+    consumption set and the view's lookup whole; `receipt_source_ref` turns
+    the pool id back into (home run, id) for the claims and the image.
+
+    Item 211 (owner yes 2026-09-25): eligibility starts
+    `ADJACENT_START_EDGE_DAYS` before a period that opens on the 1st
+    (`adjacent_borrow_window`), so a receipt printed on the 31st reaches a
+    calendar-month statement. The receipt carries the card its home row resolved
+    (`bake_card_scope`), so a pick or a hint made there scopes it here."""
     if is_trip_batch(run):
         return [], {}
     ym = month_from_label(run.label)
@@ -16667,7 +16732,7 @@ def adjacent_pool_for_month(
     period = statement_period_for_month(run, transactions)
     if period is None:
         return [], {}
-    lo, hi = period
+    lo, hi = adjacent_borrow_window(period)
     wanted = adjacent_months(ym)
     neighbours = []
     for other in store.list_runs():
@@ -16702,9 +16767,13 @@ def adjacent_pool_for_month(
         private = o_kwargs["private_by_doc"]
         claims = store.get_claims_on_receipts(other.run_id)
         entity_by_doc = o_kwargs.get("entity_by_doc") or {}
+        home_cards = resolve_batch_row_cards(
+            o_receipts, other.config, o_field,
+            private_cards=(store.get_settings() or {}).get("private_cards"),
+        )
         for r in o_receipts:
             doc = r.document_id
-            if doc in own_doc_ids or doc in origins or doc in private:
+            if doc in private:
                 continue
             if r.detected_date is None or not (lo <= r.detected_date <= hi):
                 continue
@@ -16714,11 +16783,19 @@ def adjacent_pool_for_month(
             ent = entity_by_doc.get(doc)
             if ent and ent != r.legal_entity_id:
                 r = replace(r, legal_entity_id=ent)
+            r = bake_card_scope([r], home_cards)[0]
+            pool_id = doc
+            if doc in own_doc_ids or doc in origins:
+                pool_id = borrowed_pool_id(other.run_id, doc)
+                if pool_id in own_doc_ids or pool_id in origins:
+                    continue
+                r = replace(r, document_id=pool_id)
             borrowed.append(r)
-            origins[doc] = {
+            origins[pool_id] = {
                 "run_id": other.run_id,
                 "label": other.label or other.run_id,
                 "kind": ADJACENT_BORROW_KIND,
+                **({"document_id": doc} if pool_id != doc else {}),
             }
     return borrowed, origins
 
@@ -16775,11 +16852,59 @@ def neighbour_months_covering(
         period = statement_period_for_month(other, transactions)
         if period is None:
             continue
-        lo, hi = period
+        lo, hi = adjacent_borrow_window(period)  # item 211: the borrow's own window
         if any(lo <= d <= hi for d in dates):
             found.append((oym, str(other.run_id), other))
     found.sort(key=lambda n: (n[0], n[1]))
     return [other for _oym, _rid, other in found]
+
+
+# Item 211 (owner yes 2026-09-25): a calendar-month export opens on the 1st,
+# so a subscription invoiced on the last day and charged on the 1st would
+# sit outside every period. The borrow reaches this many days before the
+# period's first charge, and never past its last.
+ADJACENT_START_EDGE_DAYS = 3
+# Item 220 step 6: the pool id of a borrowed receipt whose own id the
+# borrowing pool already holds. Unreserved in a URL path, never produced by
+# ingest (ids are `NNNN__name`), and it keeps the file's extension last.
+BORROWED_ID_SEP = "~"
+
+
+def adjacent_borrow_window(period: tuple[date, date]) -> tuple[date, date]:
+    """The dates a neighbour's receipt may carry to join this month's pool:
+    the statement period, widened at the START edge only (item 211) and only
+    when the period opens on the 1st, the calendar-month export the item is
+    about. A card-cycle period already reaches back over the month end (Chase
+    opens on the 30th or 31st), and widening it too offered wrong neighbours:
+    measured on the 2026-09-25 backup, May and June each drew one foreign
+    receipt into review against another vendor's charge (Fenix 117.79 BRL on
+    Passaguai 23.49 USD, Anthropic 99.95 EUR on Cheers 120 USD) and gained
+    nothing right. The one window the borrow and the arrival trigger share."""
+    lo, hi = period
+    if lo.day != 1:
+        return lo, hi
+    return lo - timedelta(days=ADJACENT_START_EDGE_DAYS), hi
+
+
+def borrowed_pool_id(home_run_id: str, document_id: str) -> str:
+    """The pool id a colliding neighbour receipt is borrowed under (item 220
+    step 6); its `receipt_sources` entry keeps the id it has at home."""
+    return f"{home_run_id}{BORROWED_ID_SEP}{document_id}"
+
+
+def receipt_source_ref(run: RunRow, document_id: str) -> tuple[str, str]:
+    """`(home run, id there)` for a document in this run's pool: the claims
+    key and the file's address. A borrowed receipt reads its
+    `receipt_sources` entry (the entry's `document_id` when it was borrowed
+    under a pool id, item 220 step 6); anything else lives here under the
+    id it has. `receipt_source_run` is the first half."""
+    entry = ((run.snapshot or {}).get(RECEIPT_SOURCES_KEY) or {}).get(document_id)
+    if isinstance(entry, dict):
+        return (
+            str(entry.get("run_id") or run.run_id),
+            str(entry.get("document_id") or document_id),
+        )
+    return str(entry or run.run_id), document_id
 
 
 def _owe_neighbour_rematches_locked(
@@ -16907,6 +17032,10 @@ def borrowed_source_view(entry: object) -> dict | None:
     out["label"] = entry.get("label")
     if entry.get("kind"):
         out["kind"] = entry.get("kind")
+    # Item 220 step 6: the id the receipt has at home, only when it was
+    # borrowed under a pool id (`borrowed_pool_id`). Absent otherwise.
+    if entry.get("document_id"):
+        out["document_id"] = entry.get("document_id")
     return out
 # ── Settled outside the card (backlog item 62) ──────────────────────────
 # Some receipts never post to a card at all. July 2026 holds a Redis
@@ -19217,9 +19346,9 @@ def charges_settled_elsewhere(run: RunRow) -> dict:
                 tx = tx_by_id.get(tx_id)
                 if tx is None or state.get("bucket") != "reconciled":
                     continue
-                if state.get("held_doc") != doc:
-                    continue
-                if receipt_source_run(other, doc) != run.run_id:
+                # Item 220 step 6: the holder may hold it under a pool id.
+                held = str(state.get("held_doc") or "")
+                if receipt_source_ref(other, held) != (run.run_id, doc):
                     continue
                 out[doc] = tx
     except sqlite3.Error:
