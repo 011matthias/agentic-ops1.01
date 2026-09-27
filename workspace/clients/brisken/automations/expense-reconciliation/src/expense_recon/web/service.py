@@ -58,6 +58,7 @@ from ..duplicates import (
     duplicate_row_flags,
     find_duplicate_receipt_groups,
     inherit_card_from_copies,
+    is_reminder,
     n_extra_copies,
     restore_copies_with_their_own_charge,
     with_kept_first,
@@ -7791,6 +7792,16 @@ def waits_for_statement_sentence(cards) -> str:
     return "No card on this receipt, and no statement is loaded for its date yet."
 
 
+def _reviewer_owns_a_category(document_id: str, overrides: dict) -> bool:
+    """Whether any line of this document carries a category the reviewer
+    set or confirmed (a `category_overrides` row with a category)."""
+    return any(
+        isinstance(key, tuple) and key and key[0] == document_id
+        and (ov or {}).get("category")
+        for key, ov in overrides.items()
+    )
+
+
 def line_sum_note(r: Receipt, gap: Decimal, *, split: bool) -> str:
     """Item 224 step 6: one sentence saying the receipt's lines and total
     disagree, and what that does to the posting. `gap` is `line_sum_gap(r)`.
@@ -7898,6 +7909,20 @@ def _expense_review(
             ),
             "missing": missing,
         }
+    # Item 223 step 4: the reader called this document a payment reminder
+    # about another invoice. The correspondence quarantine sets such mail
+    # aside at ingest only when its text proves it; a reading alone never
+    # removes a row, so it asks. Ranked above the date check because a
+    # reminder is dated when it was sent, not when anything was bought.
+    # Quiet once the reviewer has made a category hers (a pick or Confirm).
+    if is_reminder(r) and not _reviewer_owns_a_category(r.document_id, overrides):
+        return _review(
+            "check",
+            "Reads as a payment reminder, not a purchase. Delete it if its "
+            "invoice is already in the month, or confirm its category to "
+            "keep it.",
+            "reads_as_reminder",
+        )
     # A date years away from the month it was filed under is the vision
     # read being wrong, not the month (backlog item 25). Never corrected
     # here — the read is reported and a human decides, because inventing
@@ -8133,7 +8158,8 @@ def batch_list_summary(store: RunStore, run: RunRow) -> dict:
         # first, exactly as the batch page decides them).
         resolutions = store.get_duplicate_resolutions(run.run_id)
         inherited = inherit_card_from_copies(
-            receipts, resolutions, _batch_card_hints(run.config)
+            receipts, resolutions, _batch_card_hints(run.config),
+            account_keys=stored_duplicate_account_keys(run),
         )
         copies = decided_copies(
             run,
@@ -8224,7 +8250,7 @@ def grid_card_chain(
     # its receipt copy names the card. A group ruled `ignore` lends nothing,
     # and an operator-assigned hint word is never overwritten (grid).
     grid_hints = _batch_card_hints(run.config)
-    receipts = inherit_card_from_copies(receipts, resolutions, grid_hints, duplicate_decisions(run, receipts, resolutions))  # grid
+    receipts = inherit_card_from_copies(receipts, resolutions, grid_hints, duplicate_decisions(run, receipts, resolutions), account_keys=stored_duplicate_account_keys(run))  # grid
     # Item 169: and the card a correction remembers, read live rather than
     # off the stamp ingest left, so a fix taught after this month was
     # ingested reaches it. Silent without a learning store.
@@ -9232,6 +9258,10 @@ def build_expense_view(
             }
             for i in parse_errors
         ],
+        # Item 223 step 5: this month's receipts that repeat another month's
+        # (vendor, date, total, currency), as the last computing write found
+        # them. Advisory; ABSENT when there are none, never null.
+        **cross_month_copies_field(run, receipts),
     }
 
 
@@ -9300,7 +9330,7 @@ def _expense_export_inputs(
     # Item 69 round A: the grid's card inheritance, so grid and export move
     # together on a copy that borrowed its card.
     export_hints = _batch_card_hints(run.config)
-    receipts = inherit_card_from_copies(receipts, dup_resolutions, export_hints, duplicate_decisions(run, receipts, dup_resolutions))  # export
+    receipts = inherit_card_from_copies(receipts, dup_resolutions, export_hints, duplicate_decisions(run, receipts, dup_resolutions), account_keys=stored_duplicate_account_keys(run))  # export
     # Item 169: the grid's live read of a remembered card, so the file a
     # reviewer downloads files a receipt under the card the screen showed it
     # on. Cards R3 is the whole reason this sits on both paths.
@@ -14582,6 +14612,17 @@ def _add_receipts_locked(
         all_provenance.setdefault(k, v)
     if all_provenance:
         new_snapshot["intake_provenance"] = all_provenance
+    # Item 223 step 5: a month with no statement is never re-matched, so this
+    # commit is where its account keys are computed (over the pool with the
+    # reviewer's edits, as the grid reads it) and stored. A month with a
+    # statement re-matches right after this and computes them there.
+    if not has_statement(run):
+        edited_pool = apply_expense_edits(
+            pool, store.get_expense_field_overrides(run.run_id),
+            store.get_expense_edits(run.run_id), default_entity=entity,
+        )
+        add_keys, add_copies = cross_month_duplicate_evidence(store, run, edited_pool)
+        store_cross_month_evidence(new_snapshot, add_keys, add_copies)
     # Item 113: the receipts and the debt to re-pair them are ONE write, so
     # no restart can store the one without the other.
     if (new_receipts or rematch_owed) and has_statement(run):
@@ -15736,7 +15777,11 @@ def rematch_month(
     # to match), and a hint word the operator assigned is kept.
     dup_resolutions = store.get_duplicate_resolutions(run.run_id)
     bake_hints = _batch_card_hints(cfg)
-    receipts = inherit_card_from_copies(receipts, dup_resolutions, bake_hints, duplicate_decisions(run, receipts, dup_resolutions))  # before the card chain
+    # Item 223 step 5: the numbers other months show to be a billing account
+    # (and this month's copies of their documents), read from their stored
+    # snapshots now, used by the bake and the pool below, stored at commit.
+    dup_account_keys, cross_copies = cross_month_duplicate_evidence(store, run, receipts)
+    receipts = inherit_card_from_copies(receipts, dup_resolutions, bake_hints, duplicate_decisions(run, receipts, dup_resolutions, account_keys=dup_account_keys), account_keys=dup_account_keys)  # before the card chain
     # Cards R3: bake the SAME per-receipt entity the grid and the export
     # showed (override -> hint assignment -> card registry -> stamped
     # value) into the pool the matcher sees. Matching is entity-scoped
@@ -15808,7 +15853,8 @@ def rematch_month(
     # Item 217: the copy a charge already holds stays the kept one, so a
     # confirmed decision never ends up naming a set-aside copy.
     pool, collapsed, dup_decisions = duplicate_pool(
-        run, pool, dup_resolutions, held=held_documents(store, run)
+        run, pool, dup_resolutions, held=held_documents(store, run),
+        account_keys=dup_account_keys,
     )
     receipt_digest_map = receipt_digests(run, receipts)
     # R4b (item 38 ruling 3): the pool spans trips. Receipts from trips
@@ -16117,6 +16163,7 @@ def rematch_month(
             new_snapshot[DUPLICATE_KEPT_KEY] = kept_copies
         else:
             new_snapshot.pop(DUPLICATE_KEPT_KEY, None)
+        store_cross_month_evidence(new_snapshot, dup_account_keys, cross_copies)  # item 223 step 5
         if charge_categorizations:
             new_snapshot["charge_categorizations"] = {
                 tx_id: categorization_to_dict(c)
@@ -17817,11 +17864,15 @@ def duplicate_decisions(
     *,
     work_dir: "Path | None" = None,
     with_statement_check: bool = True,
+    account_keys: "frozenset[str] | None" = None,
 ) -> list:
     """The month's receipt groups, each decided (`decide_receipt_groups`)
     with this run's evidence. `with_statement_check` reads the last
     re-match's rung-7 restorations off the snapshot; `rematch_month` passes
     False because it is about to run that check itself."""
+    # Item 223 step 5: the account keys the last computing write stored; a
+    # re-match passes the ones it has just computed. Never loaded here.
+    account_keys = stored_duplicate_account_keys(run) if account_keys is None else account_keys
     statement = (
         (run.snapshot or {}).get(DUPLICATE_STATEMENT_KEY) or []
         if with_statement_check else []
@@ -17832,6 +17883,7 @@ def duplicate_decisions(
         text_of=receipt_text_layer(run, work_dir=work_dir),
         resolutions=resolutions or {},
         statement_distinct=statement,
+        account_keys=account_keys,  # item 223 step 5: stored, or the re-match's
     )
     if not with_statement_check:
         return decisions  # a re-match chooses the kept copy itself
@@ -17968,6 +18020,7 @@ def duplicate_pool(
     *,
     work_dir: "Path | None" = None,
     held: "set[str] | None" = None,
+    account_keys: "frozenset[str] | None" = None,
 ):
     """`(pool without collapsed copies, collapsed ids, decisions)`: the
     candidate pool a re-match hands the matcher before the statement check.
@@ -17979,6 +18032,7 @@ def duplicate_pool(
     invoice, else the first. The returned decisions carry it first."""
     decisions = duplicate_decisions(
         run, pool, resolutions, work_dir=work_dir, with_statement_check=False,
+        account_keys=account_keys,  # item 223 step 5: a re-match's own keys
     )
     decisions = with_kept_first(
         decisions, choose_kept(decisions, pool, frozenset(held or ()))
@@ -19502,3 +19556,99 @@ def live_stamped_category(
     if tx_id in charges_stamped:
         return _charge_category_view(charges_stamped[tx_id])
     return None
+
+
+# ── Item 223 step 5 (2026-09-27): billing-account keys across months ─────
+#
+# `duplicates.cross_month_evidence` over this month's receipts and the other
+# month batches'. Computed only where neighbour months may be read: the
+# re-match (`rematch_month`) and the commit of receipts added to a month with
+# no statement (`_add_receipts_locked`), which is never re-matched. Both store
+# the result on the snapshot; every reader (the views, the months list, the
+# export, the billing-account index, the attribution tool through
+# `duplicate_pool`) reads the stored keys and never loads another month.
+
+# Snapshot key: the numbers other months show to be a billing account, sorted.
+# Absent when there are none.
+DUPLICATE_ACCOUNT_KEYS_KEY = "duplicate_account_keys"
+# Snapshot key: `[{document_id, batch_id, other_document_id}]`, this month's
+# receipts that repeat another month's (vendor, date, total, currency).
+# Advisory, served as `cross_month_copies[]`; absent when there are none.
+CROSS_MONTH_COPIES_KEY = "cross_month_copies"
+
+
+def stored_duplicate_account_keys(run: RunRow) -> frozenset[str]:
+    """The account keys the month's last computing write stored."""
+    raw = (run.snapshot or {}).get(DUPLICATE_ACCOUNT_KEYS_KEY) or []
+    return frozenset(str(k) for k in raw if k)
+
+
+def other_month_receipts(store: RunStore, run: RunRow) -> dict[str, list[Receipt]]:
+    """batch id -> receipts of every OTHER month batch, read from the stored
+    snapshots and the reviewer's stored edits (no file, no model): company
+    months in expense mode, trips and `TEST` / `UTIL` fixture batches left
+    out (the billing-account index's rule). A batch whose snapshot cannot be
+    read lends nothing, which leaves this month as it was before the rule."""
+    from ..billing_account import _FIXTURE_PREFIXES
+
+    out: dict[str, list[Receipt]] = {}
+    for other in store.list_runs():
+        if other.run_id == run.run_id:
+            continue
+        if (other.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+            continue
+        if is_trip_batch(other):
+            continue
+        if str(other.label or "").strip().upper().startswith(_FIXTURE_PREFIXES):
+            continue
+        try:
+            out[str(other.run_id)] = apply_expense_edits(
+                baseline_receipts(other),
+                store.get_expense_field_overrides(other.run_id),
+                store.get_expense_edits(other.run_id),
+                default_entity=(
+                    ((other.config or {}).get("expense") or {}).get("legal_entity_id", "")
+                ),
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
+
+
+def cross_month_duplicate_evidence(
+    store: RunStore, run: RunRow, receipts: list[Receipt]
+) -> tuple[frozenset[str], list[dict]]:
+    """`(account keys, cross-month copies)` for `receipts`, this month's
+    effective list, against the other month batches. Write paths only."""
+    from ..duplicates import cross_month_evidence
+
+    return cross_month_evidence(receipts, other_month_receipts(store, run))
+
+
+def store_cross_month_evidence(snapshot: dict, keys, copies) -> None:
+    """Write both keys onto a snapshot being committed; pop each when empty."""
+    if keys:
+        snapshot[DUPLICATE_ACCOUNT_KEYS_KEY] = sorted(keys)
+    else:
+        snapshot.pop(DUPLICATE_ACCOUNT_KEYS_KEY, None)
+    if copies:
+        snapshot[CROSS_MONTH_COPIES_KEY] = [dict(c) for c in copies]
+    else:
+        snapshot.pop(CROSS_MONTH_COPIES_KEY, None)
+
+
+def cross_month_copies_field(run: RunRow, receipts: list[Receipt]) -> dict:
+    """`{"cross_month_copies": [...]}` for the Expenses payload, the stored
+    entries whose document is still one of `receipts`; `{}` when none, so the
+    field is absent rather than empty or null."""
+    docs = {r.document_id for r in receipts}
+    entries = [
+        {
+            "document_id": str(e.get("document_id") or ""),
+            "batch_id": str(e.get("batch_id") or ""),
+            "other_document_id": str(e.get("other_document_id") or ""),
+        }
+        for e in (run.snapshot or {}).get(CROSS_MONTH_COPIES_KEY) or []
+        if isinstance(e, dict) and e.get("document_id") in docs
+    ]
+    return {"cross_month_copies": entries} if entries else {}

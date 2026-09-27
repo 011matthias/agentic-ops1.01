@@ -4,8 +4,9 @@
 the PDF text-layer suffix and the strict response schema
 (`extraction_cache.prompt_fingerprint`, with the cache version in front). It
 keys the extraction cache: any edit to any of the three changes the value,
-every stored reading becomes unreachable, and the next re-match re-reads and
-re-bills the whole history. The owner's record of prompt edits says each one
+every cached reading becomes unreachable, and every document read after the
+edit is a fresh, billed call (arrivals, a set-aside restore on a legacy month;
+a re-match reuses the snapshot's stored readings and reads nothing). The owner's record of prompt edits says each one
 moved 12-41 of 129 stored readings, none of which was visible at the moment
 the edit was made. Nothing guarded the edit; the cache invalidation was the
 first sign.
@@ -29,8 +30,9 @@ from __future__ import annotations
 
 from expense_recon.llm import client, extraction_cache
 
-# Computed 2026-09-18 from the prompt text and schema as committed that day.
-PINNED = "918136353aa0384cd2f2b45080fca006cbcae5fc255cc37a389914d825fe868c"
+# Computed 2026-09-27 (item 223 step 4, `document_kind` added to the schema;
+# A/B over 251 stored documents in the PR) from the prompt text and schema.
+PINNED = "41f094df1d0c287b636384fc1e390de9729660e8802e3e0b3b9451abd904105c"
 
 
 def test_the_extraction_prompt_fingerprint_is_pinned():
