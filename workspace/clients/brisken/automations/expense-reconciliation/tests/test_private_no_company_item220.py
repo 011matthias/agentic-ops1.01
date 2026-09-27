@@ -27,13 +27,13 @@ from expense_recon.web.service import (  # noqa: E402
     PRIVATE_NO_COMPANY_TEXT,
 )
 from expense_recon.web.store import RunStore  # noqa: E402
-from tests.test_card_company_recategorizes_item_206 import (  # noqa: E402,F401
+from tests.test_card_company_recategorizes_item_206 import (  # noqa: E402
     CARDS,
     CORP,
+    _app,
     _month,
     _row,
     _stored,
-    web,
 )
 
 DB_3281 = "DEBIT-MASTERCARD ***** ***** ***** 3281"
@@ -41,6 +41,14 @@ OLD_SENTENCE = "Set the company, then pick the account."
 # A non-private row with no company asks for it; with no statement loaded for
 # the fixture's cards the ask is phrased as waiting for one (item 204).
 COMPANY_ASKS = {"needs_entity", "waits_for_statement"}
+
+
+@pytest.fixture
+def web(tmp_path, monkeypatch):
+    """Item 206's GL month fixture: two company cards, curated charts."""
+    with _app(tmp_path, monkeypatch, gl=True) as c:
+        assert c.put("/api/settings", json={"cards": CARDS}).status_code == 200
+        yield c
 
 
 def _summary(web, batch_id) -> dict:
