@@ -4802,8 +4802,8 @@ Parallel to item 185's charge figures and item 190's `receipt_months` /
   (its own) and `no_card` (and its months): the expenses in the NEEDS
   CATEGORY box (`"uncategorized"` in `expenses[].boxes`), so per month the
   cards plus No card equal `summary.n_uncategorized`. It was the number the
-  months strip showed beside each card until item 232 took the number off.
-- Item 232: `n_set_aside` on each `receipt_months[]` entry, each card (its
+  months strip showed beside each card until item 236 took the number off.
+- Item 236: `n_set_aside` on each `receipt_months[]` entry, each card (its
   own) and `no_card` (and its months): the files the quarantine still holds
   back (`set_aside[]` not restored), so per month the cards plus No card
   equal `summary.n_set_aside`. With `n_expenses` and `n_needs_category` these

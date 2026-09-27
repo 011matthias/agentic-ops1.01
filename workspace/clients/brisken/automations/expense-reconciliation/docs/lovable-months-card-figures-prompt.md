@@ -1,4 +1,4 @@
-# Lovable prompt: the months list shows the picked card's own figures (item 232)
+# Lovable prompt: the months list shows the picked card's own figures (item 236)
 
 **NOT PASTED.** Owner, 2026-09-27, on `/months` with 2838 picked: *"remove that
 number"* (the one beside each card chip, item 193's needs-category count) and

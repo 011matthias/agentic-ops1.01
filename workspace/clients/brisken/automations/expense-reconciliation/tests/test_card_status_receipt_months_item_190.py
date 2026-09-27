@@ -139,7 +139,7 @@ def test_a_month_with_only_receipts_on_a_card_is_named(client):
         # Item 192's parallel fields: no statement yet, so no charge either.
         "n_without_charge": 1,
         "statement": False,
-        # Item 232: nothing was set aside.
+        # Item 236: nothing was set aside.
         "n_set_aside": 0,
     }]
     assert card["months"] == [], "the charge side is unchanged"

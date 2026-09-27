@@ -10345,7 +10345,7 @@ def receipt_card_counts(view: dict) -> dict[str, dict[str, int]]:
     counts, so a month's cards plus its no-card section add up to the months
     list's Needs category column.
 
-    And `n_set_aside` (item 232): the files the quarantine still holds back
+    And `n_set_aside` (item 236): the files the quarantine still holds back
     (`set_aside[]` not restored, the set `summary.n_set_aside` counts), each
     under its `card_section`, so the same sum holds for the Set aside column.
     A card whose only file this month is a set-aside one gets a key here too,
@@ -10455,7 +10455,7 @@ def build_card_status(
     each card (its own, not its subcards': picking 2838 shows 2838's rows) and
     `no_card`.
 
-    Item 232 (owner 2026-09-27: with a card picked, the months list's
+    Item 236 (owner 2026-09-27: with a card picked, the months list's
     Receipts, Needs category and Set aside "need to adjust automatically to
     only display" that card's, per month) adds the third figure: each receipt
     month and `no_card.months[]` entry carries `n_set_aside`, with
@@ -11173,7 +11173,7 @@ def attach_expense_card_tabs(
         sec["n_expenses"] = n_total
         sec["totals_by_ccy"] = _per_ccy(sums_total)
     view["card_sections"] = sections
-    # Item 232: a file the quarantine set aside is held by no charge, so it
+    # Item 236: a file the quarantine set aside is held by no charge, so it
     # files where an unheld receipt does (`card_sections`): under the card
     # its own reading resolves to. A legacy entry kept no reading and has no
     # `document_id`, so it reads "", the no-card section, as does a file
