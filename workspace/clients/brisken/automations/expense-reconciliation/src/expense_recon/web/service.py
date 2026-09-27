@@ -3601,6 +3601,7 @@ def build_view(
     # with a receipt picked as 2838) is named on the page, not only the next
     # proposal.
     from ..matching.deterministic import _tx_card_keys, card_evidence, cards_differ
+    from ..matching.judgment import without_model_prose
 
     card_res_view = resolve_batch_row_cards(
         receipts, run.config, field_overrides or {},
@@ -3746,7 +3747,9 @@ def build_view(
                     "match_type": m.match_type.value,
                     "confidence": m.confidence,
                     "score": m.score,
-                    "reason": m.reason,
+                    # Item 229: the verdict and the tool's numbers, never
+                    # the model's own sentence.
+                    "reason": without_model_prose(m.reason),
                     "requires_review": m.requires_review,
                     "is_chosen": m.document_id == held_doc,
                     # PR D — the sub-scores behind `score`, as 0-100 ints for
@@ -19267,11 +19270,6 @@ REVIEW_CAUSES = (
 _CAUSE_MODEL = re.compile(
     r"FX judgment: likely (NOT the same|same) purchase \(p=([0-9.]+)\)\.\s*"
 )
-_CAUSE_CONVERSION = re.compile(
-    r"^(?:~?[0-9.,]+ \w+ from .*?\(approx rate, review\)\.\s*"
-    r"|[0-9.,]+ \w+ = [0-9.,]+ \w+ at the tool's rate [0-9.]+"
-    r"(?:, [+-]?[0-9.]+% from the charge)?\.\s*)"
-)
 _CAUSE_NO_CARD_RIVAL = re.compile(r"a charge on another card also fits \((.+?)\)")
 _CAUSE_SAME_AMOUNT = re.compile(r"same amount is still unmatched \((.+?)\)\.")
 _CAUSE_RIVAL_TEXT = "another charge or receipt agrees just as cleanly"
@@ -19279,13 +19277,13 @@ _CAUSE_RIVAL_TEXT = "another charge or receipt agrees just as cleanly"
 _CAUSE_RIVAL_NAMED = re.compile(r"agrees just as cleanly: (.+?)\)\.")
 
 
-def _cause_model_verdict(reason: str) -> tuple[str, float, str] | None:
-    """`("not" | "same", p, the model's own sentence)` off a judged reason."""
+def _cause_model_verdict(reason: str) -> tuple[str, float] | None:
+    """`("not" | "same", p)` off a judged reason. The model's own sentence is
+    not carried (item 229, note #95): the served reason no longer holds it."""
     m = _CAUSE_MODEL.search(reason or "")
     if m is None:
         return None
-    rest = _CAUSE_CONVERSION.sub("", reason[m.end():], count=1).strip()
-    return ("not" if m.group(1).startswith("NOT") else "same"), float(m.group(2)), rest
+    return ("not" if m.group(1).startswith("NOT") else "same"), float(m.group(2))
 
 
 def _cause_rivals(row: dict, cand: dict, charges_by_doc: dict) -> dict:
@@ -19362,8 +19360,6 @@ def review_cause_for_row(row: dict, charges_by_doc: dict) -> dict:
         return {"cause": "no_card_rival", "cause_detail": detail}
     if verdict is not None and verdict[0] == "not":
         detail["model_p"] = verdict[1]
-        if verdict[2]:
-            detail["model_reasoning"] = verdict[2]
         return {"cause": "model_doubts", "cause_detail": detail}
     band = fx.get("reference_gap_band")
     if band in ("review", "outside"):
