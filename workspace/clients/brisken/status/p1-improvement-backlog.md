@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-09-25
+updated: 2026-09-27
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -11838,6 +11838,21 @@ LLC" (Lovable row), September 5; hand-matching August 0008 to its charge is
 allowed. Not wired, belongs to front 5: `judgment.judge_unmatched`'s raw
 entity compare. Why 0008 and 0009 are not collapsed as copies is front 4's.
 
+**Step 5 deployed 2026-09-27.** PR #1495 (merge `49cc1638`), Fly v268 via
+`deploy.py` (`/healthz` on the merge). Live after the deploy, exactly as
+predicted on the pre-deploy GETs: settings `entity_options` 8 -> 5
+(Consulting, Brisken Holding LLC, Cloud Services, Corporate Services, Brisken
+GmbH), July 6 (+ "Brisken Cloud Services, LLC"), August 6 (+ "Brisken Corp
+Services, LLC"), September 5; no row in any month holds a company its month's
+list lacks. Waiting and need-charge counts unchanged (the one September move,
+receipt 0096 Chili's arriving by intake between the pulls, is not this
+change). Cold SPA drive of August's Expenses (own browser, login form, the
+grid read once and replayed, writes aborted: 0): 55 of 55 rows, the Lovable
+row's company select reads "Brisken Corp Services, LLC", Moghul Mahal reads
+"Brisken GmbH", the dropdown offers "Leave blank" plus the six names. The
+matcher half reaches August at its next natural re-match; the guard half was
+proven by the route test, not by a live hand match (a write on Criss's month).
+
 ### 221. Charges with nothing behind them say what they are (front 1 of the 2026-09-25 gap-map round) (SHIPPED 2026-09-25, PR #1468; SPA prompt `docs/lovable-chase-honesty-prompt.md` not pasted)
 
 Source: the verified gap map of 2026-09-25 (`.scratch/recon-matching-gaps-2026-09-25.md`,
@@ -11985,7 +12000,7 @@ this shape. SPA half (the no-card sentence would be wrong here):
 `docs/lovable-review-cause-prompt.md` gains `merchant_disagrees_waiting`,
 still not pasted.
 
-### 223. Copies and double counting: one number read two ways, the mail body, and the rest of the copies front (gap map 2026-09-25, front 4) (STEPS 1-3 SHIPPED 2026-09-25; STEPS 4, 5, 7 SHIPPED 2026-09-27; step 6 open)
+### 223. Copies and double counting: one number read two ways, the mail body, and the rest of the copies front (gap map 2026-09-25, front 4) (STEPS 1-3 SHIPPED 2026-09-25; STEPS 4, 5, 7 SHIPPED 2026-09-27; STEP 6 SHIPPED 2026-09-27)
 
 The verified gap map's "Copies and duplicates" section and its CRITIC block
 ("which part of a mail is the receipt"). Seven steps were set; three are done.
@@ -12055,10 +12070,31 @@ ordinary re-match (trigger `duplicates_reapply`) as a job whose result carries
 the preview and the applied diff. Refused: no statement, published, a
 re-match in flight, not an expense batch.
 
+**Step 6 (SHIPPED 2026-09-27, Shipped row 154).** When two files ONE mail
+delivered name one invoice number (normalized, 5+ characters), one reads as
+the invoice and one as the payment receipt, with one amount and currency and
+no two different cards, and no third file of that mail carries the number,
+the intake records the pair on both files' provenance
+(`intake_provenance[doc].twin_of`, served as `submitted_by.twin_of`), in the
+add path and in a month a mail creates. Rung 0 of the ladder reads it (basis
+`intake_twin`), re-checked on every read, so a reviewer's edit that splits the
+amounts hands the pair back to the older rungs; "Not a copy" still outranks
+it; a moved receipt drops the record. Predicted before building on the step-4
+A/B readings (both passes agreeing) joined to the live mails (the archive,
+or arrival stamp + address on rows older than the archive key): ten pairs,
+July 1 (H0LHY2WQ-0029, USD 200.00), August 1 (HMVWDWIL-0029, 15.00),
+September 8 (K5WRAWFK-0001, HMVWDWIL-0031 / -0033 / -0034 / -0035 / -0036,
+H0LHY2WQ-0033 / -0035), every one already a single live copy group; the
+counted copy is the charge-held invoice in three (July, August, September
+K5WRAWFK) and the receipt in seven, and item 217's choice is untouched.
+Five more Anthropic mails (890D70BF, 214D91B6, DZ9BH3VA, EF742DD0) read the
+invoice number on one pass of two, so arrival would pair them only
+sometimes; the older rungs already group them. No
+stored file carries the record, so no live row moved. The new case it
+closes: a pair nothing older joins (vendor spelled two ways, different
+references, no text layer) counted twice; the route test pins it at one.
+
 **Open:**
-6. Intake decides once: an Invoice-*.pdf and Receipt-*.pdf naming one
-   invoice number in one mail are recorded at arrival
-   (`intake_provenance.twin_of`).
 - Owner decision per month whether to run step 7's reapply (September's
   invoice-over-receipt swaps; July's 0076 / 0083 / 0054 leave the count).
 
@@ -12210,7 +12246,7 @@ month, read off `/feedback.jsonl` on 2026-09-27 after item 225 shipped. The
 prompt above removes the buttons in `SummaryBar` for every month, so it covers
 #93 with no change.
 
-### 227. The app prices every photo reading at zero (found 2026-09-27, item 223 step 4 A/B) (SHIPPED 2026-09-27, Shipped row 154)
+### 227. The app prices every photo reading at zero (found 2026-09-27, item 223 step 4 A/B) (SHIPPED 2026-09-27, Shipped row 155)
 
 `llm/cost.py` carries no price for `gpt-5-mini`, the vision model every
 photographed receipt and rendered mail body is read with
@@ -12237,7 +12273,7 @@ calls from the deploy on are costed right; stored run and ingest cost figures
 stay as recorded. `tests/test_llm_cost_item_227.py` (5), two regress proofs
 red under mutation (the price row, the cached read).
 
-### 228. The "Was: …" line under a category goes (note #94, operator, 2026-09-26 23:53 UTC)
+### 228. The "Was: …" line under a category goes (note #94, operator, 2026-09-26 23:53 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-was-line-off-prompt.md`, not pasted)
 
 Verbatim, on September's Matching page (`/runs/51a22ad72864`), anchor "Was: IT:
 Computer and Internet Expenses (suggested)": *"remove this "was..." line, no
@@ -12248,7 +12284,17 @@ SPA only, a Lovable prompt: drop the "Was" line wherever `stamped.was`
 renders; the backend field can stay (other readers: check the CSV and the PDFs
 before removing it there). Not investigated beyond locating the component.
 
-### 229. The FX judge's reason reads as model prose (note #95, operator, 2026-09-26 23:54 UTC)
+Done as a prompt. Nothing on the backend reads `stamped` (service.py only
+writes it; the CSV, the Excel report and both PDFs never print it), so the
+field stays and only the SPA changes: `StampedLine` renders in two places,
+`RunWorkbench.tsx` (Matching) and `ExpensesReviewGrid.tsx` (Expenses), and
+both go with the component and its three keys. Live before the paste: 19
+September, 25 July and 51 August Matching rows carry the line, and several
+repeat the account the row already shows (September GITHUB, DIGITALOCEAN,
+SERVERPILOT). The bundle crawl for this item also found that the owner had
+published 14 of the Not-applied prompts; a sibling audit marked the same rows the same hour (PR #1494).
+
+### 229. The FX judge's reason reads as model prose (note #95, operator, 2026-09-26 23:54 UTC) (SHIPPED 2026-09-27, backend only, no paste)
 
 Verbatim, on April's Matching page (`/runs/0603bb0e6f38`), anchor "The
 converted amount of 104.00 USD is close to the transaction amount, but the
@@ -12260,7 +12306,36 @@ not pasted), and whether the pasted cause line would already replace it. If
 the structured cause covers every judged pair, the fix is to stop showing the
 model prose, not to rewrite it.
 
-### 230. Does the receipt-day FX rate settle more pairs? (note #96, operator, 2026-09-26 23:55 UTC)
+Read before building: `lovable-review-cause-prompt.md` IS published, and it
+is what printed the sentence. Its `ReviewCauseLine` renders
+`cause_detail.model_reasoning` under a `model_doubts` cause, and the backend
+derived that field at read time from the tail of `candidates[].reason`
+(`_fx_reason` appends the model's own words). The same tail also printed in
+the expanded Matching row (`candidate.reason`), the Reconciled CSV and the
+Excel report's notes. The sentence was wrong as well as wordy: April's
+SUPERMEC SAO JOSE 107.11 USD read "104.00 USD ... the card numbers match only
+partially", the model's own rate, while the tool's April ECB rate puts the
+receipt at 109.83 USD (-2.48%). Live: 26 judged candidate reasons carried the
+model's conversion and sentence (April 14, July 9, August 2, June 1), 14
+pending rows printed it as their cause line (April 12, August 2), none used
+the tool's rate.
+
+Removed, not rewritten, because the cause line already states the verdict
+("The AI doubts this is the same purchase (30%)") and the expanded row prints
+the tool's conversion beside every FX candidate. `matching/judgment.py`
+`without_model_prose` serves a judged reason as the verdict, p and the tool's
+own conversion when one was printed; an ambiguous pick keeps "Ambiguous pick
+(p=..)."; every other reason passes unchanged (188 live candidates: the 26
+change, 162 do not). Applied where the view builds `candidates[].reason`, in
+the Reconciled CSV and in the Excel report's notes; `cause_detail` no longer
+carries `model_reasoning`. The stored reason keeps the text, and the CLI's
+`--explain` debug sheet still prints it. Read-time, so every stored month
+reads the short form on deploy with no re-match. The published SPA needs no
+paste: with the field absent its third line renders nothing. Route-level
+`tests/test_model_prose_item_229.py` (4); `regress_check` red on the served
+reason, the CSV and the Excel notes.
+
+### 230. Does the receipt-day FX rate settle more pairs? (note #96, operator, 2026-09-26 23:55 UTC) (MEASURED 2026-09-27: the receipt day does not; the day's rate does, and the table has none before 2026-07-22)
 
 Verbatim, on April's Matching page, anchor "12.90 EUR x 1.17064 = 15.10 USD ·
 difference +1.02 USD (+6.75%)": *"look if certainty gets significantly
@@ -12272,11 +12347,51 @@ bundles and the live months, read-only, which pairs' gap and band change when
 the rate is taken on the receipt date, and report the count that crosses into
 the clean band, right or wrong, before proposing anything.
 
+Measured read-only 2026-09-27. **The receipt date buys nothing.** Of the 111
+cross-currency candidates in the seven live months, 102 carry a receipt
+dated the same day as the charge, so the two rates are the same rate; the
+other 9 sit 1-5 days apart and, at the ECB daily rate, their gap moves 0 to
+0.7 points; one changes band (JoseliMariaDos 8.40 USD: 2.45% on the charge's
+07-19, 1.79% on the receipt's 07-23), and the app already scores it 1.96%
+because its table starts 07-22. The six labelled bundles, replayed through the
+pinned scorer's `evaluate_bundle` with an ECB daily table injected: 72 right,
+0 wrong on the charge day and 72 right, 0 wrong on the receipt day (the
+receipt day wins one pair in November 2024 and loses one in April 2026). The
+note's own pair does not test it either: VERSAILLES 16.12 USD and its 12.90
+EUR receipt are both dated 2026-04-22, and the +6.75% is in the amounts.
+
+**What does move certainty is having the day's rate at all.** The same
+replay against the shipped rungs (self-derived, then the ECB monthly
+average): 70 right, 0 wrong, so the day's rate adds 2 right and 0 wrong. On
+the live months, April, May, June and July before 07-22 are still priced at
+the ECB monthly average, and April's BRL moved enough inside the month that
+the average sits 2-3 points off the day: at the ECB rate of the charge day,
+11 of April's 12 review pairs and June's SUPERMEC SAO JOSE fall inside the 2%
+band (8 of the 11 name the same merchant on both sides, 83-100%; none is
+labelled, so right or wrong is not known), and one July pair (JoseliMariaDos
+8.40 USD) leaves it (1.96% at 07-22's fallback rate, 2.45% at 07-19's own).
+
+**Why those months have no day's rate, and never will on the current
+source:** the app's table holds 48 days, 2026-07-22 to 2026-09-25
+(`GET /api/settings` `fx_daily_rates.first_day`), while the same status reads
+`backfilled_from: 2025-12-01`. That field records the request, not what came
+back. A differential probe of OpenTickers `/historical` (EUR->USD): a July
+window returns the three days the table holds, 2026-04-01..05 returns 0
+records, and 2025-12-01..2026-09-27 returns nothing before 07-22. So a
+re-match of April does not help; it falls through to the monthly average
+again. The option, if the owner wants it (the matching program is closed):
+fill the days before the provider's history from the ECB's own daily series
+(`data-api.ecb.europa.eu`, public, no key; the ECB record is already the one
+`pick()` prefers), then let each month take it at its next natural re-match.
+Nothing is built.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
-| 154 | Item 227: `gpt-5-mini` priced (USD 0.25 / 0.025 cached / 2.00 per 1M), cached input billed at each model's cached rate, and a test that fails on any model the configuration names without a price | Every photo reading was costed at USD 0, about 93% of the real spend (A/B: USD 2.32 at list, tracker USD 0.21) | 2026-09-27, PR TBD |
+| 155 | Item 227: `gpt-5-mini` priced (USD 0.25 / 0.025 cached / 2.00 per 1M), cached input billed at each model's cached rate, and a test that fails on any model the configuration names without a price | Every photo reading was costed at USD 0, about 93% of the real spend (A/B: USD 2.32 at list, tracker USD 0.21) | 2026-09-27, PR #1500 |
+| 154 | Item 223 step 6 (front 4): the intake records an invoice and its payment receipt that one mail delivered, naming one invoice number with one amount, on both files' provenance (`submitted_by.twin_of`); rung 0 of the duplicate ladder starts from it (basis `intake_twin`), re-checked on every read, a reviewer still outranks it | A Stripe-style pair whose vendor spelling, references and text layer all differ reached no duplicate key and counted twice; now the arrival decides it once. Live: no stored file carries the record; the 10 July-September mails the rule would pair already count once | 2026-09-27, PR #1496 |
+| 153 | Item 229 (note #95): a judged reason is served and printed without the model's own words or its approximate rate (`without_model_prose`): the Matching row's cause line, its expanded candidates, the Reconciled CSV and the Excel notes read the verdict, p and the tool's conversion. Item 228's prompt `docs/lovable-was-line-off-prompt.md` written (SPA only, not pasted). | April's Matching page printed the model's sentence under 12 rows, one of them wrong on the rate (104.00 USD vs the tool's 109.83) and on the card; the owner called it slop. | PR #1497 |
 | 152 | Item 220 step 5 (front 2): one `entity_key` per company (the org's single provisioning spelling, else the label), in the matcher's entity scope, the hand-match guard, the per-row re-match advisory and a five-name picker; stored spellings kept. | A receipt picked as "Brisken Corp Services, LLC" never reached its own "Corporate Services" charge, and the picker offered eight names for five companies. | PR #1495 |
 | 151 | Item 220 steps 3 + 4 (front 2): a statement's declared period (`statements[].period_declared_start/end`, PDF Opening/Closing Date, SharePoint export posted range) widens its coverage, a subcard is covered only when printed or declared, and `cards[].statement_expected` false means nothing waits for the card. | Three cards nobody can export (0113, 6013, 8311) kept card-less receipts waiting forever, and one printed 2838 charge vouched for subcards the file never showed. | PR #1491 |
 | 150 | Item 223 step 7 (front 4): `POST /api/runs/{id}/duplicates/reapply`, operator, typed confirm, required boolean `dry_run`; the dry run writes nothing and answers per group what a re-match would keep and which copies change count; a real run is the ordinary re-match (trigger `duplicates_reapply`) as a job carrying the preview and the applied diff | A changed duplicate rule reached a matched month only at its next natural re-match (September's 12 invoice-over-receipt swaps); now the owner can preview a month and order it | 2026-09-27, run on nothing |

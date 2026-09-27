@@ -64,6 +64,7 @@ from ..duplicates import (
     restore_copies_with_their_own_charge,
     with_kept_first,
 )
+from ..duplicates import stamp_intake_twins, twin_links  # item 223 step 6
 from ..ingest._common import merge_transactions
 from ..matching.types import (
     DECIDED_ORIGINS,
@@ -3600,6 +3601,7 @@ def build_view(
     # with a receipt picked as 2838) is named on the page, not only the next
     # proposal.
     from ..matching.deterministic import _tx_card_keys, card_evidence, cards_differ
+    from ..matching.judgment import without_model_prose
 
     card_res_view = resolve_batch_row_cards(
         receipts, run.config, field_overrides or {},
@@ -3745,7 +3747,9 @@ def build_view(
                     "match_type": m.match_type.value,
                     "confidence": m.confidence,
                     "score": m.score,
-                    "reason": m.reason,
+                    # Item 229: the verdict and the tool's numbers, never
+                    # the model's own sentence.
+                    "reason": without_model_prose(m.reason),
                     "requires_review": m.requires_review,
                     "is_chosen": m.document_id == held_doc,
                     # PR D — the sub-scores behind `score`, as 0-100 ints for
@@ -6631,8 +6635,11 @@ def execute_expense_batch(
     if prepared.intake_provenance:
         # A batch created FROM mailed receipts (item 39 materialization,
         # R3 trip join) carries the submitters the same way the
-        # incremental add path records them.
-        snapshot["intake_provenance"] = dict(prepared.intake_provenance)
+        # incremental add path records them, the item 223 step 6 twin
+        # record included.
+        snapshot["intake_provenance"] = dict(
+            stamp_intake_twins(prepared.intake_provenance, receipts)
+        )
 
     if on_stage is not None:
         try:
@@ -8189,6 +8196,7 @@ def batch_list_summary(store: RunStore, run: RunRow) -> dict:
         inherited = inherit_card_from_copies(
             receipts, resolutions, _batch_card_hints(run.config),
             account_keys=stored_duplicate_account_keys(run),
+            twins=stored_intake_twins(run),
         )
         copies = decided_copies(
             run,
@@ -14649,6 +14657,9 @@ def _add_receipts_locked(
     # stored file, so a direct-alias submission is never overwritten by a
     # later bulk re-upload of the same bytes under a new name.
     all_provenance = dict(run.snapshot.get("intake_provenance") or {})
+    # Item 223 step 6: an invoice and its receipt this mail delivered are
+    # recorded as one purchase once, here, from the readings just made.
+    new_provenance = stamp_intake_twins(new_provenance, new_receipts) or {}
     for k, v in new_provenance.items():
         all_provenance.setdefault(k, v)
     if all_provenance:
@@ -17705,6 +17716,9 @@ def move_expense_to_month(
                     (source.snapshot or {}).get("intake_provenance") or {}
                 ).get(document_id)
                 if provenance:
+                    # Item 223 step 6: the twin stays behind, so the record
+                    # would name a file this month does not hold.
+                    provenance = {k: v for k, v in provenance.items() if k != "twin_of"}
                     t_snapshot["intake_provenance"] = {
                         **(t_snapshot.get("intake_provenance") or {}),
                         new_doc: provenance,
@@ -17920,6 +17934,7 @@ def duplicate_decisions(
         resolutions=resolutions or {},
         statement_distinct=statement,
         account_keys=account_keys,  # item 223 step 5: stored, or the re-match's
+        twins=stored_intake_twins(run),  # item 223 step 6: recorded at arrival
     )
     if not with_statement_check:
         return decisions  # a re-match chooses the kept copy itself
@@ -19255,11 +19270,6 @@ REVIEW_CAUSES = (
 _CAUSE_MODEL = re.compile(
     r"FX judgment: likely (NOT the same|same) purchase \(p=([0-9.]+)\)\.\s*"
 )
-_CAUSE_CONVERSION = re.compile(
-    r"^(?:~?[0-9.,]+ \w+ from .*?\(approx rate, review\)\.\s*"
-    r"|[0-9.,]+ \w+ = [0-9.,]+ \w+ at the tool's rate [0-9.]+"
-    r"(?:, [+-]?[0-9.]+% from the charge)?\.\s*)"
-)
 _CAUSE_NO_CARD_RIVAL = re.compile(r"a charge on another card also fits \((.+?)\)")
 _CAUSE_SAME_AMOUNT = re.compile(r"same amount is still unmatched \((.+?)\)\.")
 _CAUSE_RIVAL_TEXT = "another charge or receipt agrees just as cleanly"
@@ -19267,13 +19277,13 @@ _CAUSE_RIVAL_TEXT = "another charge or receipt agrees just as cleanly"
 _CAUSE_RIVAL_NAMED = re.compile(r"agrees just as cleanly: (.+?)\)\.")
 
 
-def _cause_model_verdict(reason: str) -> tuple[str, float, str] | None:
-    """`("not" | "same", p, the model's own sentence)` off a judged reason."""
+def _cause_model_verdict(reason: str) -> tuple[str, float] | None:
+    """`("not" | "same", p)` off a judged reason. The model's own sentence is
+    not carried (item 229, note #95): the served reason no longer holds it."""
     m = _CAUSE_MODEL.search(reason or "")
     if m is None:
         return None
-    rest = _CAUSE_CONVERSION.sub("", reason[m.end():], count=1).strip()
-    return ("not" if m.group(1).startswith("NOT") else "same"), float(m.group(2)), rest
+    return ("not" if m.group(1).startswith("NOT") else "same"), float(m.group(2))
 
 
 def _cause_rivals(row: dict, cand: dict, charges_by_doc: dict) -> dict:
@@ -19350,8 +19360,6 @@ def review_cause_for_row(row: dict, charges_by_doc: dict) -> dict:
         return {"cause": "no_card_rival", "cause_detail": detail}
     if verdict is not None and verdict[0] == "not":
         detail["model_p"] = verdict[1]
-        if verdict[2]:
-            detail["model_reasoning"] = verdict[2]
         return {"cause": "model_doubts", "cause_detail": detail}
     band = fx.get("reference_gap_band")
     if band in ("review", "outside"):
@@ -19780,3 +19788,11 @@ def entity_mismatch_advisory(
             f"{'it' if one else 'them'}: {named}."
         )
     return " ".join(parts) or None
+
+
+def stored_intake_twins(run: RunRow) -> dict[str, str]:
+    """Item 223 step 6: the invoice + receipt pairs the intake recorded on
+    arrival (`intake_provenance[doc].twin_of`), `document id -> twin`. Read
+    from the snapshot only; a month whose mail predates the record has
+    none, and its groups are decided by the older rungs exactly as before."""
+    return twin_links((run.snapshot or {}).get("intake_provenance"))

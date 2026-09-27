@@ -31,6 +31,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from ..matching.judgment import without_model_prose
 from ..matching.types import (
     DECIDED_ORIGINS,
     Categorization,
@@ -301,7 +302,7 @@ def _rows_from_match(
         MatchType.FX_BASE_AMOUNT,
         MatchType.AMBIGUOUS,
     ) and match.reason:
-        note_bits.append(match.reason)
+        note_bits.append(without_model_prose(match.reason))
     note = " · ".join(note_bits)
 
     if not receipt.line_items:
