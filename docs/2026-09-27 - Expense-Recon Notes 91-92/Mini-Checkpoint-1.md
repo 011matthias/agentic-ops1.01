@@ -1,13 +1,13 @@
 # Mini-Checkpoint: Expense-Recon Notes 91-92
 
 **Date:** 2026-09-27
-**Status:** items 225 + 226 done; notes #93-#96 read and itemized (227-229), not started
+**Status:** items 225 + 226 done; notes #93-#96 read and itemized (228-230), not started
 **Type:** mini
 
 ---
 
 ## Summary
-Feedback notes #91 and #92 answered. Item 226 (Matching statement download buttons) is a SPA prompt, merged in PR #1484. Item 225 (the memory-save dialog is not tangible) has its backend live (PR #1487, Fly v265) plus a SPA prompt for the Save dialog. The store grew to 96 notes during the session; #93 is covered by 226, and #94-#96 became items 227-229.
+Feedback notes #91 and #92 answered. Item 226 (Matching statement download buttons) is a SPA prompt, merged in PR #1484. Item 225 (the memory-save dialog is not tangible) has its backend live (PR #1487, Fly v265) plus a SPA prompt for the Save dialog. The store grew to 96 notes during the session; #93 is covered by 226, and #94-#96 became items 228-230.
 
 ## What Was Done
 - **226 (note #92):** the anchor is the Downloads row, not the Statements drop-down. The backend serves no raw statement upload, only `statement-categorized.xlsx`, and that stays reachable from the Expenses statements table. Prompt `docs/lovable-statement-downloads-off-matching-prompt.md`, PR #1484 (75012308).
@@ -27,12 +27,12 @@ Feedback notes #91 and #92 answered. Item 226 (Matching statement download butto
 - Waits on Criss: nothing.
 
 ## Next Steps
-1. Item 227 (note #94): drop the "Was: …" line (`category.stamped.was`, SPA `GlAccountPicker.tsx` ~223). SPA prompt; check whether the CSV/PDF read the field before touching the backend.
-2. Item 228 (note #95): the FX judge's model prose ("The converted amount of 104.00 USD is close to …"). Read which field carries it and whether item 222's structured `review.cause` (prompt `lovable-review-cause-prompt.md`, not pasted) already replaces it.
-3. Item 229 (note #96): measurement only. Would a receipt-day FX rate (the charge-day rung is `MatchingConfig.daily_rate`, `matching/deterministic.py:698`) settle more pairs? Labelled bundles plus live months, read-only; the matching program is closed.
+1. Item 228 (note #94): drop the "Was: …" line (`category.stamped.was`, SPA `GlAccountPicker.tsx` ~223). SPA prompt; check whether the CSV/PDF read the field before touching the backend.
+2. Item 229 (note #95): the FX judge's model prose ("The converted amount of 104.00 USD is close to …"). Read which field carries it and whether item 222's structured `review.cause` (prompt `lovable-review-cause-prompt.md`, not pasted) already replaces it.
+3. Item 230 (note #96): measurement only. Would a receipt-day FX rate (the charge-day rung is `MatchingConfig.daily_rate`, `matching/deterministic.py:698`) settle more pairs? Labelled bundles plus live months, read-only; the matching program is closed.
 
 ## Files to Read First
-- `workspace/clients/brisken/status/p1-improvement-backlog.md` (items 225-229)
+- `workspace/clients/brisken/status/p1-improvement-backlog.md` (items 225-230)
 - `workspace/clients/brisken/automations/expense-reconciliation/docs/PROMPT-STATUS.md` (Not applied)
 - `workspace/clients/brisken/automations/expense-reconciliation/docs/PARALLEL-ROUND-PROTOCOL.md`
 
@@ -41,7 +41,7 @@ Feedback notes #91 and #92 answered. Item 226 (Matching statement download butto
 ````
 /comd_resume brisken
 
-# Feedback notes #94, #95, #96: items 227, 228, 229
+# Feedback notes #94, #95, #96: items 228, 229, 230
 
 ## Where it stands
 Notes #91 and #92 are answered (2026-09-27):
@@ -50,18 +50,18 @@ Notes #91 and #92 are answered (2026-09-27):
 
 Waits on the owner: pasting those two prompts (plus the older Not-applied rows in PROMPT-STATUS, among them `lovable-review-cause-prompt.md`). Waits on Criss: nothing.
 
-`/feedback.jsonl` held 96 notes at the end of the session; #94-#96 are backlog items 227-229 (end of Open in `workspace/clients/brisken/status/p1-improvement-backlog.md`). Re-read the store first: diff the count against 96.
+`/feedback.jsonl` held 96 notes at the end of the session; #94-#96 are backlog items 228-230 (end of Open in `workspace/clients/brisken/status/p1-improvement-backlog.md`). Re-read the store first: diff the count against 96.
 
 ## The queue, in order
-1. **Item 227 (note #94, operator 2026-09-26 23:53 UTC, September Matching `/runs/51a22ad72864`): "remove this "was..." line, no need for that".** Anchor: "Was: IT: Computer and Internet Expenses (suggested)". The line is item 224's `category.stamped.was`, rendered in the SPA's `src/components/GlAccountPicker.tsx` (~line 223, keys `category.stamped.*`; read it with `gh api repos/011matthias/brisken-expense-review/contents/src/components/GlAccountPicker.tsx`). SPA prompt: `docs/lovable-{slug}-prompt.md` + a PROMPT-STATUS Not-applied row. Before touching the backend field, check whether the CSV or the PDFs read `stamped`.
-2. **Item 228 (note #95, operator 2026-09-26 23:54 UTC, April Matching `/runs/0603bb0e6f38`): "ai slop remove or improve".** Anchor: "The converted amount of 104.00 USD is close to the transaction amount, but the vendors ar…", which is the FX judge's model-written reason (item 222; judge in `matching/deterministic.py` + `llm/client.py`). Read which field carries it (`review.reason` vs item 222's structured `review.cause` / `cause_detail`) and whether the unpasted `lovable-review-cause-prompt.md` would already replace it. If the structured cause covers every judged pair, stop showing the prose rather than rewriting it.
-3. **Item 229 (note #96, operator 2026-09-26 23:55 UTC, April Matching): "look if certainty gets significantly improved if fx rate from date of receipt is used".** Anchor: "12.90 EUR x 1.17064 = 15.10 USD · difference +1.02 USD (+6.75%)". Measurement only; the matching program is closed. The daily rung reads the CHARGE day (`MatchingConfig.daily_rate`, `matching/deterministic.py:698`, nearest day within 4). Measure, read-only, on the labelled bundles and the live months, which pairs' gap and band change on the RECEIPT date, counting right and wrong crossings. Report before proposing.
+1. **Item 228 (note #94, operator 2026-09-26 23:53 UTC, September Matching `/runs/51a22ad72864`): "remove this "was..." line, no need for that".** Anchor: "Was: IT: Computer and Internet Expenses (suggested)". The line is item 224's `category.stamped.was`, rendered in the SPA's `src/components/GlAccountPicker.tsx` (~line 223, keys `category.stamped.*`; read it with `gh api repos/011matthias/brisken-expense-review/contents/src/components/GlAccountPicker.tsx`). SPA prompt: `docs/lovable-{slug}-prompt.md` + a PROMPT-STATUS Not-applied row. Before touching the backend field, check whether the CSV or the PDFs read `stamped`.
+2. **Item 229 (note #95, operator 2026-09-26 23:54 UTC, April Matching `/runs/0603bb0e6f38`): "ai slop remove or improve".** Anchor: "The converted amount of 104.00 USD is close to the transaction amount, but the vendors ar…", which is the FX judge's model-written reason (item 222; judge in `matching/deterministic.py` + `llm/client.py`). Read which field carries it (`review.reason` vs item 222's structured `review.cause` / `cause_detail`) and whether the unpasted `lovable-review-cause-prompt.md` would already replace it. If the structured cause covers every judged pair, stop showing the prose rather than rewriting it.
+3. **Item 230 (note #96, operator 2026-09-26 23:55 UTC, April Matching): "look if certainty gets significantly improved if fx rate from date of receipt is used".** Anchor: "12.90 EUR x 1.17064 = 15.10 USD · difference +1.02 USD (+6.75%)". Measurement only; the matching program is closed. The daily rung reads the CHARGE day (`MatchingConfig.daily_rate`, `matching/deterministic.py:698`, nearest day within 4). Measure, read-only, on the labelled bundles and the live months, which pairs' gap and band change on the RECEIPT date, counting right and wrong crossings. Report before proposing.
 
 ## How to work
 Protocol: `workspace/clients/brisken/automations/expense-reconciliation/docs/PARALLEL-ROUND-PROTOCOL.md`.
-- **Worktree.** Work in your own worktree off origin/main (`git -C C:\Users\neuma_p1qrsic\Repo\agentic-ops1 worktree add -b client/brisken/p1-item-227 C:\Users\neuma_p1qrsic\Repo\agentic-ops1-item227 origin/main`).
+- **Worktree.** Work in your own worktree off origin/main (`git -C C:\Users\neuma_p1qrsic\Repo\agentic-ops1 worktree add -b client/brisken/p1-item-228 C:\Users\neuma_p1qrsic\Repo\agentic-ops1-item228 origin/main`).
 - **Shared files.** Append, never reflow.
-- **After a push.** Merge origin/main and expect to renumber a Shipped row (the next free row is 148). Run `gh pr merge` as its own call.
+- **After a push.** Merge origin/main and expect to renumber a Shipped row (the next free row is 151). Run `gh pr merge` as its own call.
 - **CI watch.** Arm a Monitor on a script that reads `mergeable` as well as checks: a CONFLICTING PR never gets checks and sits silent. Keep merge, deploy and live check in the same turn.
 - **Deploy.** Only via `deploy.py` from a detached origin/main worktree (`agentic-ops1-deploy` exists). flyctl may not find its token: export `FLY_API_TOKEN` read from `~/.fly/config.yml`.
 - **Drive.** Cold, with headless Playwright `channel="chrome"` (PEP 723 `playwright>=1.49`, `uv run --python 3.12`).
