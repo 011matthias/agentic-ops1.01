@@ -66,7 +66,8 @@ Live figures, read 2026-09-27 after the backend deploy (Receipts / Needs categor
 | No card | 21 / 20 / 4 | 3 / 3 / 0 | 12 / 11 / 1 | 3 / 1 / 0 | 1 / 1 / 0 | 6 / 1 / 1 |
 
 - `/months`: no chip in the strip carries a number, No card included; "All" as before.
-- Pick 2838: the table reads its row above, not the month totals (September 70 / 34 / 4 under All).
+- Pick 2838: the table reads its row above, not the month totals (September 70 / 38 / 4 under All).
+- For any one month, the figures under every card and No card add up to the All row, column by column.
 - Pick 3876: January 2026 is listed too, 1 / 0 / 0.
 - Pick 9693: July reads 1 / 1 / 1 (its one set-aside file).
 - Switch to PT: the caption reads "Recibos, Sem categoria e Separados contam só os deste cartão, por mês. …".

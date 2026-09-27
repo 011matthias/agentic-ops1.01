@@ -5056,17 +5056,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             )
         return JSONResponse(body)
 
-    @app.get("/api/expense-batches")
-    def list_expense_batches():
-        """Expense batches only (mode-filtered runs), newest first — the
-        SPA's batch landing screen."""
-        if not _receipt_first_on():
-            return _flag_off()
+    def _expense_batches_body() -> bytes:
+        """`GET /api/expense-batches`' response body."""
         # The rows are composed INSIDE the store context: the summary is
         # derived from each batch's live overlay, which needs a live store.
         # Trip batches live on the trips list (GET /api/trips), not here:
         # the months screen stays months (item 38).
         with open_store() as store:
+            settings = store.get_settings()
             batches = [
                 {
                     "batch_id": r.run_id,
@@ -5079,7 +5076,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     "batch_type": batch_type(r),
                     # Derived, not the frozen ingest summary: the list and
                     # the batch page must show one number (2026-08-22).
-                    "summary": batch_list_summary(store, r),
+                    # Item 238: the page's settings and remembered cards.
+                    "summary": batch_list_summary(
+                        store, r, settings=settings,
+                        learning_db_path=app.state.learning_db_path,
+                    ),
                     # Lifecycle: False = still collecting receipts; True =
                     # statement attached, review lives in the workbench.
                     "has_statement": has_statement(r),
@@ -5091,7 +5092,30 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 if (r.config or {}).get("mode") == MODE_EXPENSE_GENERATION
                 and not is_trip_batch(r)
             ]
-        return JSONResponse({"batches": batches})
+        return JSONResponse({"batches": batches}).body
+
+    # Item 238: counting each month's categories the way its page does runs
+    # the grid's card chain per month (about 4x the list's old cost, measured
+    # on the 2026-09-25 backup), so the body is kept under the card roll-up's
+    # key and rebuilt on the first read after any write in the data folder:
+    # an edit is on the list at the next load, and reads in between cost
+    # nothing. No warm-up: a rebuild happens only when the list is asked for.
+    expense_batches_memo = CardStatusMemo(
+        version=lambda: card_status_data_version(
+            data_root_path,
+            tuple(Path(p) for p in [os.environ.get(CARDS_ENV)] if p),
+        ),
+        build=_expense_batches_body,
+    )
+    app.state.expense_batches_memo = expense_batches_memo
+
+    @app.get("/api/expense-batches")
+    def list_expense_batches():
+        """Expense batches only (mode-filtered runs), newest first — the
+        SPA's batch landing screen."""
+        if not _receipt_first_on():
+            return _flag_off()
+        return Response(expense_batches_memo.get(), media_type="application/json")
 
     def _card_status_body() -> bytes:
         """The roll-up's response body. It opens its own billing-account
