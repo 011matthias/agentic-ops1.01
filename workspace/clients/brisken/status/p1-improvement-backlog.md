@@ -12547,6 +12547,53 @@ numbers off, the table reads the picked card's month entry, captions reworded.
 Route-level `tests/test_months_card_figures_item_236.py` (5), 3 of them red
 with the set-aside card stamping disabled.
 
+### 237. The Receipts page takes a .zip and files each receipt in it by its own month (owner directive 2026-09-27) (BACKEND BUILT 2026-09-27; SPA prompt `docs/lovable-receipts-drop-zip-prompt.md` not pasted)
+
+**Why.** On 2026-09-27 a cardholder mailed a 13 MB zip of 108 receipt PDFs
+spanning January to September. Mail never opens a zip (by design), and the
+only zip-capable upload was the month upload, which files a whole zip into ONE
+month and dedupes only inside it: dropped into August, that zip would have
+skipped the 30 receipts August held and re-added the 75 that live in other
+months. The owner: "enable the Receipts page to also be able to accept zip
+files". The Receipts page routes each FILE by its own date and dedupes in the
+destination month, so it is the entrance where a mixed zip is safe.
+
+**Built.** `intake_mail.expand_dropped_zips`, called first in
+`route_dropped_receipts`: each zip the operator dropped (`NNNN__x.zip`) is
+unpacked beside itself as `NNNN-MMMM__member` and deleted, so every member gets
+its own routing verdict, ledger row and month dedupe through the unchanged
+router; each member row carries `from_zip`. Refused whole, one row under the
+zip's name, nothing read: `zip-unreadable`, `zip-too-many-files` (+ `limit`,
+the drop's unpacked total across all its zips past `FOLDER_MAX_FILES`, checked
+before any write), `zip-no-space` (unpacking would breach the mailbox's
+free-disk floor). Unsupported members and a zip inside the zip read
+`unsupported-type` (never recursed); a damaged member reads `empty-file` and
+the rest still file; member names cut at 100 characters. The three new codes
+carry `reason_label` (rule 5). Restart-safe with item 114: leftovers of an
+interrupted unpack are deleted before a zip still present is checked, the zip
+is deleted only after its last member, and a write failure fails the drop as a
+whole. `service.zip_member_name` is now the one naming rule for both zip
+entrances (folders flatten, backslash separators count, `__MACOSX` forks and
+dotfiles skipped).
+
+**Adversarial review (subagent, before commit).** Found five defects and a
+cost risk in the first draft, all fixed with a test each: a resumed drop could
+refuse a zip on disk space yet file the partial member an interrupted pass had
+left; a zip member needing a month had no correct re-file path on the page
+(hence `from_zip` and the prompt's "take it out of the zip"); the disk refusal
+borrowed `too-large` ("the file is too large") and refused even a zip with
+nothing to write; a member name past 245 characters failed the whole drop; the
+write-failure test asserted a resume the job runner never performs; the file
+cap was per zip, so 1000 zips could each buy 500 reads.
+
+**Tests.** 13 in `tests/test_receipts_drop.py` section 4, most through
+`POST /api/receipts`; `regress_check.py` unwiring the call in
+`route_dropped_receipts` turns the route-level ones red.
+
+**SPA half.** The page filters zips out client-side (`accept` and the
+file-name regex), so nothing changes for the operator until
+`docs/lovable-receipts-drop-zip-prompt.md` is pasted.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |

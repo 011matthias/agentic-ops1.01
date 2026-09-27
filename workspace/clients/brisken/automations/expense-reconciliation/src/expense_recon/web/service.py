@@ -31,7 +31,7 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
 from typing import NamedTuple
 from decimal import Decimal
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from .. import inspect as stmt_inspect
 from ..batch_period import (
@@ -2016,6 +2016,22 @@ def upload_issue(
     return prose, {"code": code, "file": file, "suffix": suffix, "limit": limit}
 
 
+def zip_member_name(info) -> str | None:
+    """The file name a zip member is filed under, or None for a member that
+    is not a file of its own: a directory entry, or a dotfile (macOS packs
+    `__MACOSX/._x.pdf` resource forks beside every real file, and those are
+    not receipts). Folders flatten to the bare name, and a Windows zip's
+    backslash separators count as separators, so `a\\b.pdf` files as `b.pdf`
+    rather than as one name with a backslash in it. One rule for every
+    entrance that opens a zip (the month upload and the Receipts drop)."""
+    if info.is_dir():
+        return None
+    name = PurePosixPath(str(info.filename).replace("\\", "/")).name
+    if not name or name.startswith("."):
+        return None
+    return name
+
+
 def _folder_receipt_files(staging_dir: Path):
     """Yield (display_name, data_bytes) for every receipt in a staging dir,
     expanding a `.zip` member-by-member so memory stays bounded to one file at
@@ -2031,10 +2047,8 @@ def _folder_receipt_files(staging_dir: Path):
             try:
                 with zipfile.ZipFile(p) as zf:
                     for info in zf.infolist():
-                        if info.is_dir():
-                            continue
-                        name = Path(info.filename).name
-                        if not name or name.startswith("."):
+                        name = zip_member_name(info)
+                        if name is None:
                             continue
                         with zf.open(info) as fh:
                             yield name, fh.read(FOLDER_RECEIPT_MAX_BYTES + 1)

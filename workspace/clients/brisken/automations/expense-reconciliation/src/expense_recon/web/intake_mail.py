@@ -4402,6 +4402,194 @@ def _drop_progress_due(done: int, total: int) -> bool:
     )
 
 
+# A zip dropped on the Receipts page (owner directive 2026-09-27) is opened on
+# the server and every member files on its own, exactly as if the operator had
+# dropped the files themselves: its own month verdict, its own ledger row, and
+# the destination month's content dedupe. A pile that spans months is the case
+# the month upload gets wrong (it files a whole zip into ONE month and dedupes
+# only there), which is why the zip belongs on this page.
+#
+# Only a zip the operator dropped is opened (`NNNN__x.zip`, the endpoint's
+# spool name). Members are written beside it as `NNNN-MMMM__member` so they
+# keep the drop's order, and a zip inside a zip is left as a member and
+# rejected on type rather than recursed into. Which zip a member came from is
+# kept in a dotfile manifest beside them, so a member row can say so even
+# after the zip is gone (a restart re-runs the drop over the members alone).
+DROP_ZIP_UNREADABLE = "zip-unreadable"
+DROP_ZIP_TOO_MANY = "zip-too-many-files"
+DROP_ZIP_NO_SPACE = "zip-no-space"
+_DROP_ZIP_RE = re.compile(r"^(\d{4})__.+\.zip$", re.IGNORECASE)
+_DROP_MEMBER_RE = re.compile(r"^(\d{4})-\d{4}__")
+_DROP_SPOOL_PREFIX_RE = re.compile(r"^\d{4}(?:-\d{4})?__")
+_DROP_ZIP_MANIFEST = ".zip-origins.json"
+# A member's file name is capped well under the 255-byte filesystem limit
+# (the `NNNN-MMMM__` prefix rides on top), keeping its extension, so one long
+# name inside a zip can never fail the whole drop.
+_DROP_MEMBER_NAME_MAX = 100
+# Rule 5: the reason set grew, so the new codes ship their English prose
+# beside the code (`reason_label`). A page that does not know a code yet
+# prints the label instead of a raw token.
+_DROP_ZIP_REASON_LABELS = {
+    DROP_ZIP_UNREADABLE: (
+        "this zip could not be opened (it is damaged, or not really a zip)"
+    ),
+    DROP_ZIP_TOO_MANY: (
+        "unpacking this zip would take the drop past {limit} files; drop it"
+        " on its own, or split it into smaller zips"
+    ),
+    DROP_ZIP_NO_SPACE: (
+        "the server does not have the free space to unpack this zip right"
+        " now; nothing in it was filed"
+    ),
+}
+
+
+def _disk_can_take(root: Path, n_bytes: int) -> bool:
+    """Would writing ``n_bytes`` more keep the volume above the mailbox's
+    free-disk floor? Unpacking a zip is the one place a drop can grow the
+    volume by far more than it received, and the mailbox refuses mail below
+    that floor, so a big zip must not be what stops receipts arriving.
+    Cannot-say answers yes: the write itself still fails loudly."""
+    try:
+        usage = shutil.disk_usage(str(root))
+    except OSError:
+        return True
+    return usage.free - max(0, n_bytes) >= free_disk_floor(usage.total)
+
+
+def _drop_member_file_name(name: str) -> str:
+    """The on-disk (and ledger) name of a zip member: the endpoint's
+    character rule, capped at `_DROP_MEMBER_NAME_MAX` with the extension
+    kept."""
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", name) or "file"
+    if len(safe) <= _DROP_MEMBER_NAME_MAX:
+        return safe
+    stem, dot, ext = safe.rpartition(".")
+    ext = ext[:16]
+    if not dot or not stem:
+        return safe[:_DROP_MEMBER_NAME_MAX]
+    return stem[: _DROP_MEMBER_NAME_MAX - len(ext) - 1] + "." + ext
+
+
+def drop_zip_origins(staging: Path) -> dict[str, str]:
+    """``{zip prefix NNNN: the zip's display name}`` for this drop's
+    unpacked zips; empty when there is none or the manifest is unreadable
+    (a member row then simply carries no `from_zip`)."""
+    try:
+        data = json.loads(
+            (Path(staging) / _DROP_ZIP_MANIFEST).read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return {}
+    return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+
+
+def expand_dropped_zips(staging: Path) -> dict[str, dict]:
+    """Open every zip the operator dropped into ``staging`` and write its
+    members beside it, so the router below sees a pile of plain files.
+
+    Returns ``{staged zip name: ledger fields}`` for each zip refused WHOLE
+    and left in place, one row under the zip's name, nothing in it read:
+    ``zip-unreadable``; ``zip-too-many-files`` with ``limit`` when its members
+    would take the drop's unpacked total past ``FOLDER_MAX_FILES`` (counted
+    across every zip in the drop, before anything is written, because each
+    member costs a read before the per-month cap could drop it); or
+    ``zip-no-space`` when unpacking would breach the disk floor.
+
+    Per member: a type the page does not take is written as an EMPTY
+    placeholder (the router's type check runs first and names it, the bytes
+    are never needed), a receipt is read up to one byte past the size cap
+    (the router's size check names an oversized one), and a member that
+    cannot be read (a damaged entry, a password) is written empty and reads
+    ``empty-file``. One bad member never sinks the rest of the zip.
+
+    Restart-safe (item 114 re-runs an interrupted drop over the same folder):
+    the zip is deleted only after its last member is written, and before a
+    zip still present is looked at, whatever members an interrupted pass left
+    for it are deleted, so a refused zip never leaves part of itself to be
+    filed and the checks see the space those members held. A restart after
+    the delete finds plain files and nothing to open. A failure while WRITING
+    raises: the drop fails as a drop, never as a "bad zip" with half its
+    members on disk."""
+    import zipfile
+
+    from .service import (
+        FOLDER_MAX_FILES,
+        FOLDER_RECEIPT_MAX_BYTES,
+        zip_member_name,
+    )
+
+    staging = Path(staging)
+    refused: dict[str, dict] = {}
+    zips = sorted(
+        p for p in staging.iterdir()
+        if p.is_file() and _DROP_ZIP_RE.match(p.name)
+    )
+    if not zips:
+        return refused
+    pending = {_DROP_ZIP_RE.match(z.name).group(1) for z in zips}
+    for p in staging.iterdir():
+        m = _DROP_MEMBER_RE.match(p.name)
+        if m and m.group(1) in pending:
+            p.unlink()  # left by an interrupted pass over a zip still here
+    unpacked = sum(1 for p in staging.iterdir() if _DROP_MEMBER_RE.match(p.name))
+    origins = drop_zip_origins(staging)
+
+    for zpath in zips:
+        prefix = _DROP_ZIP_RE.match(zpath.name).group(1)
+        # Only READING the directory decides "unreadable": a malformed zip
+        # can fail as BadZipFile, ValueError, EOFError or struct.error. A
+        # failure while WRITING members (disk, permissions) is not the zip's
+        # fault and must fail the drop loudly.
+        try:
+            zf = zipfile.ZipFile(zpath)
+            members = [
+                (info, name) for info in zf.infolist()
+                if (name := zip_member_name(info)) is not None
+            ]
+        except Exception:  # noqa: BLE001 - see above: reading only
+            log.warning("drop zip %s unreadable", zpath.name, exc_info=True)
+            refused[zpath.name] = {"reason": DROP_ZIP_UNREADABLE}
+            continue
+        with zf:
+            if unpacked + len(members) > FOLDER_MAX_FILES:
+                refused[zpath.name] = {
+                    "reason": DROP_ZIP_TOO_MANY, "limit": FOLDER_MAX_FILES,
+                }
+                continue
+            need = sum(
+                min(info.file_size, FOLDER_RECEIPT_MAX_BYTES + 1)
+                for info, name in members
+                if Path(name).suffix.lower() in FOLDER_RECEIPT_SUFFIXES
+            )
+            if need and not _disk_can_take(staging, need):
+                refused[zpath.name] = {"reason": DROP_ZIP_NO_SPACE}
+                continue
+            origins[prefix] = _DROP_SPOOL_PREFIX_RE.sub("", zpath.name)
+            manifest = staging / _DROP_ZIP_MANIFEST
+            tmp = manifest.with_name(manifest.name + ".tmp")
+            tmp.write_text(json.dumps(origins), encoding="utf-8")
+            os.replace(tmp, manifest)
+            for j, (info, name) in enumerate(members, start=1):
+                dest = zpath.with_name(
+                    f"{prefix}-{j:04d}__{_drop_member_file_name(name)}"
+                )
+                if Path(name).suffix.lower() not in FOLDER_RECEIPT_SUFFIXES:
+                    dest.write_bytes(b"")
+                    continue
+                try:
+                    with zf.open(info) as fh:
+                        data = fh.read(FOLDER_RECEIPT_MAX_BYTES + 1)
+                except Exception:  # noqa: BLE001 - one member, not the pile
+                    log.warning("drop zip %s: member %s unreadable",
+                                zpath.name, name, exc_info=True)
+                    data = b""
+                dest.write_bytes(data)
+        unpacked += len(members)
+        zpath.unlink()
+    return refused
+
+
 def route_dropped_receipts(
     db_path: Path,
     learning_db_path: Path | None,
@@ -4443,7 +4631,11 @@ def route_dropped_receipts(
     / ``upload-cap`` (with ``limit``) HERE, before the ingest call whose
     internal cap would otherwise skip those files while the row read
     ``filed``; re-dropping the same pile is safe because content dedupe
-    skips what already landed."""
+    skips what already landed.
+
+    A dropped zip is opened first (`expand_dropped_zips`) and each member
+    files on its own row; a zip refused whole gets one ``rejected`` row
+    under its own name."""
     from .service import FOLDER_RECEIPT_MAX_BYTES
 
     def _stage(name: str) -> None:
@@ -4454,7 +4646,14 @@ def route_dropped_receipts(
                 pass
 
     now = _now_iso()
-    staged = sorted(p for p in Path(staging).iterdir() if p.is_file())
+    zip_refusals = expand_dropped_zips(Path(staging))
+    zip_origins = drop_zip_origins(Path(staging))
+    # Dotfiles are the drop's own bookkeeping (the zip manifest); the
+    # endpoint spools every upload under an `NNNN__` name.
+    staged = sorted(
+        p for p in Path(staging).iterdir()
+        if p.is_file() and not p.name.startswith(".")
+    )
     with RunStore(db_path) as store:
         settings = store.get_settings()
 
@@ -4469,12 +4668,20 @@ def route_dropped_receipts(
     records: list[dict] = []
     to_read: list[int] = []
     for path in staged:
-        display = re.sub(r"^\d{4}__", "", path.name)
+        display = _DROP_SPOOL_PREFIX_RE.sub("", path.name)
         suffix = path.suffix.lower()
+        refusal = zip_refusals.get(path.name)
+        if refusal is not None:
+            row = {"file": display, "status": "rejected", **refusal}
+            label = _DROP_ZIP_REASON_LABELS.get(str(refusal.get("reason")))
+            if label:
+                row["reason_label"] = label.format(limit=refusal.get("limit"))
+            records.append({"row": row, "path": path, "month": None,
+                            "display": display})
+            continue
         if suffix not in FOLDER_RECEIPT_SUFFIXES:
-            # Zips included, deliberately: a zip's members would each need
-            # their own routing verdict, and the page is a drag-and-drop
-            # of the files themselves.
+            # Includes a zip found INSIDE a dropped zip: only the operator's
+            # own zips are opened, never recursively.
             records.append({
                 "row": {"file": display, "status": "rejected",
                         "reason": "unsupported-type"},
@@ -4574,6 +4781,12 @@ def route_dropped_receipts(
     # from `records` in staged order, so the same staging folder yields a
     # byte-identical `rows` whether the reads ran one at a time or six.
     for rec in records:
+        member = _DROP_MEMBER_RE.match(rec["path"].name)
+        if member and member.group(1) in zip_origins:
+            # The page holds the zip, not this file, so it cannot re-send
+            # the file alone (the needs_month picker's move); the row says
+            # where the file came from instead.
+            rec["row"]["from_zip"] = zip_origins[member.group(1)]
         rows.append(rec["row"])
         if rec["month"] is not None:
             routed.setdefault(rec["month"], []).append(
