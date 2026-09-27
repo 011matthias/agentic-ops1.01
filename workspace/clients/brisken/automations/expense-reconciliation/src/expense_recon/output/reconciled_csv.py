@@ -42,6 +42,7 @@ from ..categorize import (
     DECISION_KEPT_ER,
     DECISION_REVIEW_UNRESOLVED,
 )
+from ..matching.judgment import without_model_prose
 from ..matching.types import (
     Categorization,
     Match,
@@ -320,7 +321,7 @@ def build_reconciled_rows(
             match.match_type.value if match is not None else "",
             f"{match.confidence:.2f}" if match is not None else "",
             str(match.score) if (match is not None and match.score) else "",
-            match.reason if match is not None else "",
+            without_model_prose(match.reason) if match is not None else "",
             # expense enrichment
             rec.document_id if rec is not None else "",
             _str(report_ref),
