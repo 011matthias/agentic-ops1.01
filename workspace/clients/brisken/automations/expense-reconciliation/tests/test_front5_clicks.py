@@ -243,7 +243,8 @@ def test_the_run_view_names_the_models_doubt(tmp_path, monkeypatch):
     assert review["reason_code"] == "uncertain_match"
     assert review["cause"] == "model_doubts"
     assert review["cause_detail"]["model_p"] == 0.4
-    assert review["cause_detail"]["model_reasoning"] == "model text"
+    # Item 229 (note #95): the model's own sentence is no longer served.
+    assert "model_reasoning" not in review["cause_detail"]
     assert review["cause_detail"]["document_id"] == row["candidates"][0]["document_id"]
 
 
