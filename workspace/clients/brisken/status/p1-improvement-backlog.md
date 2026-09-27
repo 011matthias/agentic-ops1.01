@@ -12212,7 +12212,7 @@ both go with the component and its three keys. Live before the paste: 19
 September, 25 July and 51 August Matching rows carry the line, and several
 repeat the account the row already shows (September GITHUB, DIGITALOCEAN,
 SERVERPILOT). The bundle crawl for this item also found that the owner had
-published 14 of the Not-applied prompts (PROMPT-STATUS rows marked in place).
+published 14 of the Not-applied prompts; a sibling audit marked the same rows the same hour (PR #1494).
 
 ### 229. The FX judge's reason reads as model prose (note #95, operator, 2026-09-26 23:54 UTC) (SHIPPED 2026-09-27, backend only, no paste)
 
