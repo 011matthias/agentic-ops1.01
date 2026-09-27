@@ -11838,6 +11838,21 @@ LLC" (Lovable row), September 5; hand-matching August 0008 to its charge is
 allowed. Not wired, belongs to front 5: `judgment.judge_unmatched`'s raw
 entity compare. Why 0008 and 0009 are not collapsed as copies is front 4's.
 
+**Step 5 deployed 2026-09-27.** PR #1495 (merge `49cc1638`), Fly v268 via
+`deploy.py` (`/healthz` on the merge). Live after the deploy, exactly as
+predicted on the pre-deploy GETs: settings `entity_options` 8 -> 5
+(Consulting, Brisken Holding LLC, Cloud Services, Corporate Services, Brisken
+GmbH), July 6 (+ "Brisken Cloud Services, LLC"), August 6 (+ "Brisken Corp
+Services, LLC"), September 5; no row in any month holds a company its month's
+list lacks. Waiting and need-charge counts unchanged (the one September move,
+receipt 0096 Chili's arriving by intake between the pulls, is not this
+change). Cold SPA drive of August's Expenses (own browser, login form, the
+grid read once and replayed, writes aborted: 0): 55 of 55 rows, the Lovable
+row's company select reads "Brisken Corp Services, LLC", Moghul Mahal reads
+"Brisken GmbH", the dropdown offers "Leave blank" plus the six names. The
+matcher half reaches August at its next natural re-match; the guard half was
+proven by the route test, not by a live hand match (a write on Criss's month).
+
 ### 221. Charges with nothing behind them say what they are (front 1 of the 2026-09-25 gap-map round) (SHIPPED 2026-09-25, PR #1468; SPA prompt `docs/lovable-chase-honesty-prompt.md` not pasted)
 
 Source: the verified gap map of 2026-09-25 (`.scratch/recon-matching-gaps-2026-09-25.md`,
