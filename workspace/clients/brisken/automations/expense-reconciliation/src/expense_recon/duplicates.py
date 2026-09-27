@@ -1288,7 +1288,7 @@ def restore_copies_with_their_own_charge(
             for t in free:
                 if (r.detected_currency or "") != t.transaction_currency:
                     continue
-                if not pair_in_scope(t, r, tx_keys[t.transaction_id], scope):
+                if not pair_in_scope(t, r, tx_keys[t.transaction_id], scope, cfg.entity_keys):
                     continue
                 m = match_one(t, r, cfg)
                 if m is not None and m.match_type == MatchType.EXACT:
