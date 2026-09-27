@@ -12210,7 +12210,7 @@ month, read off `/feedback.jsonl` on 2026-09-27 after item 225 shipped. The
 prompt above removes the buttons in `SummaryBar` for every month, so it covers
 #93 with no change.
 
-### 227. The app prices every photo reading at zero (found 2026-09-27, item 223 step 4 A/B)
+### 227. The app prices every photo reading at zero (found 2026-09-27, item 223 step 4 A/B) (SHIPPED 2026-09-27, Shipped row 154)
 
 `llm/cost.py` carries no price for `gpt-5-mini`, the vision model every
 photographed receipt and rendered mail body is read with
@@ -12222,6 +12222,20 @@ the app shows under-reports by the vision share, and a brief that sized an
 A/B from the tracker was off by a factor of ten. Fix: add the model's price
 (input, cached input, output incl. reasoning tokens) and a test that every
 model the config can name has one.
+
+**Shipped 2026-09-27.** `gpt-5-mini` USD 0.25 input / 0.025 cached input /
+2.00 output per 1M tokens, with the cached-input rate of every other priced
+model (OpenAI Standard tier, read the same day from
+developers.openai.com/api/docs/pricing); the client passes the cached part of
+the prompt (`prompt_tokens_details.cached_tokens`), and output already counts
+the reasoning tokens. Pinned on the A/B's first reading (6,416 in, 1,098 out,
+USD 0.0038, the figure the A/B's own list-price script gave). A test scans the
+source for every model its LLM configuration names (`model` /
+`vision_model` values and defaults, `EXPENSE_RECON_VISION_MODEL`'s default,
+the client's constructor default) and fails on one without a price. Only
+calls from the deploy on are costed right; stored run and ingest cost figures
+stay as recorded. `tests/test_llm_cost_item_227.py` (5), two regress proofs
+red under mutation (the price row, the cached read).
 
 ### 228. The "Was: …" line under a category goes (note #94, operator, 2026-09-26 23:53 UTC)
 
@@ -12262,6 +12276,7 @@ the clean band, right or wrong, before proposing anything.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 154 | Item 227: `gpt-5-mini` priced (USD 0.25 / 0.025 cached / 2.00 per 1M), cached input billed at each model's cached rate, and a test that fails on any model the configuration names without a price | Every photo reading was costed at USD 0, about 93% of the real spend (A/B: USD 2.32 at list, tracker USD 0.21) | 2026-09-27, PR TBD |
 | 152 | Item 220 step 5 (front 2): one `entity_key` per company (the org's single provisioning spelling, else the label), in the matcher's entity scope, the hand-match guard, the per-row re-match advisory and a five-name picker; stored spellings kept. | A receipt picked as "Brisken Corp Services, LLC" never reached its own "Corporate Services" charge, and the picker offered eight names for five companies. | PR #1495 |
 | 151 | Item 220 steps 3 + 4 (front 2): a statement's declared period (`statements[].period_declared_start/end`, PDF Opening/Closing Date, SharePoint export posted range) widens its coverage, a subcard is covered only when printed or declared, and `cards[].statement_expected` false means nothing waits for the card. | Three cards nobody can export (0113, 6013, 8311) kept card-less receipts waiting forever, and one printed 2838 charge vouched for subcards the file never showed. | PR #1491 |
 | 150 | Item 223 step 7 (front 4): `POST /api/runs/{id}/duplicates/reapply`, operator, typed confirm, required boolean `dry_run`; the dry run writes nothing and answers per group what a re-match would keep and which copies change count; a real run is the ordinary re-match (trigger `duplicates_reapply`) as a job carrying the preview and the applied diff | A changed duplicate rule reached a matched month only at its next natural re-match (September's 12 invoice-over-receipt swaps); now the owner can preview a month and order it | 2026-09-27, run on nothing |

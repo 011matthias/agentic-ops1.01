@@ -7962,3 +7962,14 @@ receipt whose company's card merely has no statement loaded is not named;
 that is `waits_for_statements`.
 
 Tests: `tests/test_entity_key_220.py` (8, route-level).
+## AI cost figures include the vision model (item 227, 2026-09-27)
+
+No field changes. `summary.llm_cost_usd` (a month's creation) and
+`expense_ingest.cost_usd` (a receipt add) are still list-price estimates from
+`llm/cost.py`, but a photographed receipt or rendered mail body read by
+`gpt-5-mini` is now costed (USD 0.25 input, 0.025 cached input, 2.00 output
+per 1M tokens; output includes reasoning tokens) instead of recorded at 0,
+and the cached part of any prompt bills at its model's cached rate. Figures
+stored before the deploy keep the value they were recorded with.
+
+Tests: `tests/test_llm_cost_item_227.py`.
