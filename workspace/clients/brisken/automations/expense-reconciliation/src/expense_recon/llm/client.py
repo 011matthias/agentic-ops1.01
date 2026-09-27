@@ -1151,11 +1151,17 @@ class OpenAIClient:
             usage = response.usage
             input_tokens = getattr(usage, "prompt_tokens", 0) or 0
             output_tokens = getattr(usage, "completion_tokens", 0) or 0
+            # Item 227: the cached part of the prompt bills at its own rate.
+            details = getattr(usage, "prompt_tokens_details", None)
+            cached_tokens = getattr(details, "cached_tokens", 0) or 0
         except AttributeError:
             input_tokens = 0
             output_tokens = 0
+            cached_tokens = 0
         self.cost_tracker.record(
-            TokenUsage.from_counts(model or self.model, input_tokens, output_tokens)
+            TokenUsage.from_counts(
+                model or self.model, input_tokens, output_tokens, cached_tokens
+            )
         )
 
 
