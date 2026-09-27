@@ -992,14 +992,41 @@ uses, materializing absent months unconditionally (`created_by:
 "drop"`; the auto-materialize flag gates MAIL only). A file with no
 readable plausible date is `needs_month` and NOT ingested; the optional
 form field `month` ("YYYY-MM") is the operator override and files every
-file in that call (`month_source: "operator"`). Zips are not expanded
-here (`rejected` / `unsupported-type`) — one file per receipt.
+file in that call (`month_source: "operator"`).
+
+**Zips (item 232, 2026-09-27).** A `.zip` dropped here is opened on the
+server and every member files on its own row, exactly as if its files
+had been dropped one by one: its own month verdict, the destination
+month's content dedupe (so a mixed backfill zip re-sending receipts the
+tool holds adds nothing twice), and a `files[]` row under the member's
+own name (folders flatten; `__MACOSX` forks, dotfiles and folder entries
+make no row). The zip itself gets no row once opened, and every member
+row carries `from_zip` (the zip's name; absent on a file dropped on its
+own). A `needs_month` member cannot be re-sent alone by the page, which
+holds the zip and not the file, so `from_zip` is what tells the page to
+say "take it out of the zip" instead of offering the month picker. A
+member type the page does not take is `rejected` / `unsupported-type`,
+and so is a zip INSIDE the zip (never opened recursively); a member that
+cannot be read (damaged entry, password) is `rejected` / `empty-file`; a
+member name longer than 100 characters is cut, keeping its extension. A
+zip refused WHOLE keeps one row under its own name and nothing in it is
+read: `zip-unreadable` (not a readable zip), `zip-too-many-files` with
+`limit` (its members would take the drop's unpacked total, counted
+across every zip in the drop, past `FOLDER_MAX_FILES`; checked before
+anything is written), or `zip-no-space` (unpacking would take the
+volume below the mailbox's free-disk floor). Per rule 5 the three new
+codes ship a parallel `reason_label` (English prose); the other reasons
+carry none. Only a file the operator dropped is opened. A restart
+mid-drop (item 114) deletes whatever an interrupted pass unpacked from a
+zip still present and unpacks it again; a failure while writing members
+fails the drop as a whole (job `error`, nothing filed).
 
 The reply is `{ok, job_id, n_files}`; the outcome rides the JOB row:
 `GET /jobs/{id}` gains a `result` field (parallel, absent on every
 other job kind) —
 `{files: [{file, status: filed|needs_month|rejected|failed, month?,
-month_source?, batch_id?, reason?, limit?, mixed_months?}], months:
+month_source?, batch_id?, reason?, reason_label?, limit?, mixed_months?,
+from_zip?}], months:
 [{month, label, batch_id?, created_batch, n_files, n_added, issues?,
 error?, has_statement?, rematch?}], n_filed, n_needs_month, n_rejected}`
 (`has_statement` / `rematch` since note #53, section at the end). `n_added < n_files` on
