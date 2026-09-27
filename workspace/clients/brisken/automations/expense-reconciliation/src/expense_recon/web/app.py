@@ -4486,7 +4486,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
-            err = validate_manual_match(run, tx_id, document_id)
+            err = validate_manual_match(run, tx_id, document_id, store.get_settings())
             if err:
                 return _refused(err)
             # R4: an in-run steal is fine (apply_decisions frees the other
