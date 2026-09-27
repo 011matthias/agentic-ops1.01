@@ -11788,6 +11788,26 @@ With the settings write (0113 / 6013 / 8311 false): July 5 receipts move
 statement), waiting 6 -> 1; Expenses waiting rows Jul 11 -> 1, Aug 2 keep
 waiting on 0340 only, Sep 14 lose the three labels. The map's "12 receipts
 stop waiting" is 10 today because Criss worked July since.
+
+**Deployed and written 2026-09-27.** PR #1491 (merge `b6f951b3`), Fly v267
+via `deploy.py` (`/healthz` on the merge). Live after the deploy, row for row
+as predicted: 0 reason codes moved; Aug 0002 / 0033 gained 0340; Sep 0032 /
+0083 dropped 9693; nothing else changed. The owner-approved settings write
+(per-action yes 2026-09-25) followed a read-only readiness check (server
+carries the field; the three cards active with no statement in any month;
+diff = three entries, one field each) and was verified by re-GET (exactly
+three flags, every other field unchanged). After it, again as predicted:
+July 0003 / 0053 / 0063 -> neighbouring, 0004 / 0070 -> no charge on any
+loaded statement, waiting 6 -> 1 (0008), July's 9 waiting Expenses rows now
+read `needs_entity`, Aug 0002 / 0033 wait on 0340 only, Sep's 14 lose the
+three labels; need-charge counts unchanged. Cold SPA drive (own session) of
+July's workbench: "Why: 6 no charge found, 1 statement not loaded yet, 4 next
+or previous month, 2 not a card payment" and "1 receipt waits for a
+statement, 10 receipts have no charge", matching the payload; the Expenses
+tab shows no waiting line and renders the `needs_entity` label. The reason
+words come from the backend's own labels; whether
+`lovable-receipt-waits-prompt.md` was pasted is not established
+(`lovable-bundle-audit.py` checks item 204's signatures).
 ### 221. Charges with nothing behind them say what they are (front 1 of the 2026-09-25 gap-map round) (SHIPPED 2026-09-25, PR #1468; SPA prompt `docs/lovable-chase-honesty-prompt.md` not pasted)
 
 Source: the verified gap map of 2026-09-25 (`.scratch/recon-matching-gaps-2026-09-25.md`,
