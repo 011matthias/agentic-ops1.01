@@ -11731,7 +11731,7 @@ card the same way; whether `<= 1` should be `== 1` is item 173's call to
 reopen, and it would stop remembered cards lending on the 28 seeded
 merchants that carry no observations, so it needs a measurement first.
 
-### 220. Receipts with nothing to land on say what they wait for (front 2 of the 2026-09-25 parallel round; map `.scratch/recon-matching-gaps-2026-09-25.md`)
+### 220. Receipts with nothing to land on say what they wait for (front 2 of the 2026-09-25 parallel round; map `.scratch/recon-matching-gaps-2026-09-25.md`) (SHIPPED 2026-09-28, steps 1-7)
 
 On 2026-09-25 September showed 51 unmatched receipts: 44 read "the charge is
 likely in the previous or next month" and 38 of them were only dated after
@@ -11914,6 +11914,24 @@ holds August's `0033` E A LOCACOES 340 BRL receipt (a pairing made after the
 2026-09-25 backup; vendor disagrees). And the newest SharePoint backup is
 still 2026-09-25T03:35Z although the in-app schedule backs up on every boot;
 cause not measured (the Fly log window held no backup line).
+
+**Step 7 SHIPPED 2026-09-28** (PR number in the Shipped table). A confirmed-private receipt with no
+company is no longer told to "Set the company": `service.private_no_company_review`
+restates its `entity_missing` verdict as `private_no_company` ("A private
+expense needs no company, so no account was picked. If a company should book
+it, set the company, then pick the account."), same `pick` state and
+`category_refused` code, so no box and no count moves. Read time, not an engine
+input: private is resolved at read time and can be undone, a stamped code would
+outlive the ruling, and `recategorize_moved_companies` sweeps only rows showing a
+company. Predicted on fresh GETs (2026-09-27 night, the branch's own function
+over every expense row): Jul 1 row (`0028` Brauhaus Kühler Krug), Aug 0, Sep 1
+(`0024` DB Fernverkehr AG), both `entity_missing` -> `private_no_company`, state
+`pick` -> `pick`. Found on the same read, not this step's: July `0053` / `0067`
+MARTINO SUPERMERCADO show Corporate Services and are not private, yet still carry
+`entity_missing` (the map counted 0 such rows on 2026-09-25); the item-206 sweep
+re-runs them at their next edit or re-match. SPA half
+`docs/lovable-private-no-company-prompt.md` (PT key), not pasted. Front 2's queue
+is empty with this step.
 
 ### 221. Charges with nothing behind them say what they are (front 1 of the 2026-09-25 gap-map round) (SHIPPED 2026-09-25, PR #1468; SPA prompt `docs/lovable-chase-honesty-prompt.md` not pasted)
 
@@ -12675,6 +12693,7 @@ learning store: remembered cards do not reach a trip's list count.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 157 | Item 220 step 7 (front 2): a confirmed-private receipt with no company reads `review.refusal: private_no_company` with its own sentence instead of `entity_missing` "Set the company"; read time, same `pick` state and code, no box or count moves; live Jul 0028 + Sep 0024 | The private badge and the category line gave Criss opposite instructions on the same row | 2026-09-28, PR number in the Shipped table |
 | 156 | Item 220 step 6 + item 211 (front 2): a neighbour receipt whose id the borrowing month already holds is borrowed under its own pool id (`{home run}~{id}`), and the commit's claims re-check, the claim writes, a reviewer's confirm, the neighbour's `settled_by`, `charges_settled_elsewhere` and the image route read it back as (home run, id); the borrowed receipt carries the card its home row resolved; the borrow reaches 3 days before a period that opens on the 1st. | Four live receipts could never be borrowed (August from July: Hostinger 172.61, Konsultancy 15,972.00; September from August: Obsidian 96.00, Zoho Books 576.00), a pick on the home row did not scope the borrow, and a calendar-month export would have lost every receipt printed on the 31st. | PR #1512 |
 | 155 | Item 227: `gpt-5-mini` priced (USD 0.25 / 0.025 cached / 2.00 per 1M), cached input billed at each model's cached rate, and a test that fails on any model the configuration names without a price | Every photo reading was costed at USD 0, about 93% of the real spend (A/B: USD 2.32 at list, tracker USD 0.21) | 2026-09-27, PR #1500, Fly v270 (commit `987e0b52`); costs only calls from the deploy on, no live read possible without an arrival |
 | 154 | Item 223 step 6 (front 4): the intake records an invoice and its payment receipt that one mail delivered, naming one invoice number with one amount, on both files' provenance (`submitted_by.twin_of`); rung 0 of the duplicate ladder starts from it (basis `intake_twin`), re-checked on every read, a reviewer still outranks it | A Stripe-style pair whose vendor spelling, references and text layer all differ reached no duplicate key and counted twice; now the arrival decides it once. Live: no stored file carries the record; the 10 July-September mails the rule would pair already count once | 2026-09-27, PR #1496, deployed with #1500 as Fly v270 (commit `987e0b52`); live: July 21 / August 6 / September 24 duplicate groups, per-row counting, totals and copies all unchanged against a read taken just before the deploy, 0 `intake_twin` groups, 0 `twin_of` rows (as predicted); cold SPA drive rendered September USD 5,241.09 and July USD 31,882.49 |

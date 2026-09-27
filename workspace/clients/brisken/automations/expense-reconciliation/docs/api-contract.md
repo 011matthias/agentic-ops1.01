@@ -8059,3 +8059,20 @@ and the cached part of any prompt bills at its model's cached rate. Figures
 stored before the deploy keep the value they were recorded with.
 
 Tests: `tests/test_llm_cost_item_227.py`.
+
+## A private expense with no company (item 220 step 7, added 2026-09-28)
+
+`expenses[].review.refusal` gains `private_no_company`: a CONFIRMED private
+row (`private: true`, a person to reimburse) that shows no company
+(`legal_entity_id` empty), whose lines the GL engine refused
+`entity_missing`. `review.reason` reads "A private expense needs no company,
+so no account was picked. If a company should book it, set the company, then
+pick the account." `state` stays `"pick"` and `reason_code` stays
+`"category_refused"`, so no box and no count moves.
+
+Read time only (`service.private_no_company_review`, wired in
+`build_expense_view`): the stored categorization keeps `entity_missing`,
+because private is resolved at read time (the row's flag, the private card
+list, the month strip) and can be undone. Undo private and the row asks for
+its company again. A private row that shows a company keeps the engine's
+verdict for that company. Pinned by `tests/test_private_no_company_item220.py`.
