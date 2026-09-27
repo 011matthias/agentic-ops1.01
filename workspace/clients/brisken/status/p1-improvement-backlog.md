@@ -12425,6 +12425,50 @@ look." when none is); Categorized, Ready, a zero Missing receipt image and
 Private become one line of small chips (green with a check, Private grey),
 each keeping its `boxFilter` toggle.
 
+### 232. The Matching page header reads at a glance (notes #99-#106, operator, 2026-09-27 20:28-20:33 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-matching-header-prompt.md`, not pasted)
+
+Eight notes on September's Matching page (`/runs/51a22ad72864`), all on the
+header above the tiles, verbatim: #102 on the intro "51 charges from the bank
+statement, matched against this month's receipts. Confirm or rej…": *"remove
+first 2 sentences here"*; #99 and #103 on "Statement loaded:
+20260904-statements-9693-.pdf, Aug 05, 2026 to Sep 04, 2026, 32 charges…":
+*"this should be compressed to just display the cards 4 ending didgits for
+clarity"* and *"Change this to a dropdown button labelled "View all
+Statements loaded" or something like that"*; #104 on "7 cards have no
+statement for this month: Apple Credit Card - 0113, …": *"change this to a
+dropdown: something like "View cards with no statement for this month""*;
+#105 and #106 on "USD 7,496.60 still open" and "USD 1,467.27 booked without a
+receipt (11 charges)": *"format this so that it is more visible"*; #101 on
+"Showing card 2838" and #100 on "· No statement loaded for this card": *"this
+should also be more evident"*, *"this should be more evident for user to
+see"*.
+
+**Read 2026-09-27 (published SPA source + one `/api/runs/51a22ad72864` read,
+0 writes).** The intro is `wb.subtitle.template`, exactly two sentences, so
+the paragraph goes whole. The statement lines are `StatementLoadedLines` in
+`RunWorkbench.tsx`, one per `statements[]` entry, keyed on the file name. The
+first September statement (the PDF) carries an empty `account_id` and
+`card_key`, but `card_sections[].statements` lists every file under its card
+with `digits` (9693 holds the PDF and one xlsx, 1176 the other xlsx), so the
+card's last four come from data the page already has; a file no section names
+falls back to today's line. The uncovered cards, still-open and
+booked-without-receipt spans are `StatusLine` (`summary.cards_uncovered` 7,
+`unreconciled_by_ccy` USD 7,496.60, `booked_no_receipt_by_ccy` USD 1,467.27,
+`n_booked_no_receipt` 11); the "Showing card" line and the "No statement
+loaded" part are `CardScope.tsx`, shared with the Expenses page. No rendering
+gate stands between the payload and these lines (`safeStatements` only drops
+entries without a `file` string). SPA only. **Prompt:**
+`docs/lovable-matching-header-prompt.md`: intro removed; statements behind a
+"View all N statements loaded" popover, each "Card 9693: Aug 05, 2026 to Sep
+04, 2026, 32 charges" with the file name and upload date on hover; the
+uncovered cards behind an amber "View cards with no statement for this month
+(7)" popover that shows the explanation which today is hover-only; still open
+and booked-without-receipt as bordered chips with the amount bold; "Showing
+card N" as a bold heading with a card icon and an amber "No statement loaded
+for this card" badge beside it when the statement is simply missing.
+Published bundle before the paste (48 chunks): the four new keys absent,
+`wb.subtitle.template` present.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
