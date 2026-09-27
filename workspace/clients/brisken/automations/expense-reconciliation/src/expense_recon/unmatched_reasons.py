@@ -191,6 +191,10 @@ def receipt_reason_code(
     if not keys and receipt.payment_mode and NON_CARD_TENDER.search(receipt.payment_mode):
         return NOT_A_CARD_CHARGE
     if coverage is not None:
+        if coverage.get("no_statement"):
+            # Item 220 step 4: the row's card is one whose statements will
+            # never be loaded; no edge or neighbouring month applies.
+            return NO_CHARGE_ON_ANY_LOADED_STATEMENT
         waits = coverage.get("waits_for") or []
         if waits:
             if set(waits) <= set(coverage.get("never_loaded") or ()):

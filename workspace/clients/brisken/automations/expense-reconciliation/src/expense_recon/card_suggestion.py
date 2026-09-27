@@ -11,11 +11,14 @@ Two facts, both read off what is loaded in ANY month, never guessed:
 
 * **Coverage by date.** A card's statement covers a day when an upload that
   printed that card spans the day (the upload's own first and last charge
-  date, `statements[].period_start/period_end`). One Chase activity export
-  carries every subcard of an account, so an upload that printed one card of
-  a family (`Card.parent`) covers the whole family for its span: an August
-  2838 export covers 0340 even in a month 0340 did not spend. A receipt dated
-  on a day some active card's statements do not cover WAITS for those cards.
+  date, `statements[].period_start/period_end`, together with the period the
+  upload declares for itself, `statement_declared`). A family's subcards
+  (`Card.parent`) are covered by an upload that printed one of their charges,
+  or by one that declares its period (item 220 step 3); a workbook that names
+  no period and printed no 0340 charge says nothing about 0340, because the
+  April 2026 activity CSV of the 2838 account carried no 3876 charge at all.
+  A receipt dated on a day some active card's statements do not cover WAITS
+  for those cards.
 * **The recurring charge.** Every loaded charge within 45 days of the receipt
   whose description carries the vendor's first word and whose amount sits
   within 3% of the receipt's. When all of them are on ONE card, that card is
@@ -34,6 +37,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
 
+from . import statement_declared as _declared
 from .matching.deterministic import _card_keys
 
 WAITS_FOR_STATEMENT = "waits_for_statement"
@@ -69,6 +73,13 @@ class StatementEvidence:
     active: dict[str, str] = field(default_factory=dict)       # key -> label
     periods: dict[str, list[tuple[date, date]]] = field(default_factory=dict)
     charges: list[LoadedCharge] = field(default_factory=list)
+    # Item 220 step 4: active cards whose statements will never be loaded
+    # (`Card.statement_expected` false). Nothing waits for them; kept here
+    # so a label still reads as the card's name.
+    no_statement: dict[str, str] = field(default_factory=dict)  # key -> label
+
+    def label(self, card_key: str) -> str:
+        return self.active.get(card_key) or self.no_statement.get(card_key) or card_key
 
     def covers(self, card_key: str, day: date) -> bool:
         return any(a <= day <= b for a, b in self.periods.get(card_key, ()))
@@ -123,9 +134,17 @@ def statement_evidence(store) -> StatementEvidence:
     from .batch_period import month_from_label
 
     live = effective_cards(store.get_settings(), load_cards())
-    active = {k: c.display_label for k, c in live.items() if c.active}
+    active = {
+        k: c.display_label for k, c in live.items() if c.active and c.statement_expected
+    }
     family = _families(live)
-    out = StatementEvidence(active=active)
+    out = StatementEvidence(
+        active=active,
+        no_statement={
+            k: c.display_label
+            for k, c in live.items() if c.active and not c.statement_expected
+        },
+    )
     for run in store.list_runs():
         if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
             continue
@@ -142,12 +161,16 @@ def statement_evidence(store) -> StatementEvidence:
         identity = {tx.transaction_id: _charge_card_identity(tx, cards) for tx in transactions}
         printed = _printed_by_upload(run)
         for entry in statements:
-            span = _span(entry)
-            if span is None:
+            # Item 220 step 3: the printed span and the span the upload
+            # declares for itself, and the family only on a declaration.
+            declared = _declared.of_entry(entry)
+            spans = [s for s in (_span(entry), declared) if s is not None]
+            if not spans:
                 continue
             for ident in _statement_card_identities(entry, printed, identity, cards):
-                for key in family.get(ident.card_key, {ident.card_key} - {""}):
-                    out.periods.setdefault(key, []).append(span)
+                own = {ident.card_key} - {""}
+                for key in (family.get(ident.card_key, own) if declared else own):
+                    out.periods.setdefault(key, []).extend(spans)
         for tx in transactions:
             if tx.is_credit or not tx.transaction_date:
                 continue
@@ -267,7 +290,7 @@ def suggest_card(receipt, vendor: str, evidence: StatementEvidence | None) -> di
     hits.sort(key=lambda c: c.day)
     return {
         "card_key": key,
-        "label": evidence.active.get(key, key),
+        "label": evidence.label(key),
         "evidence": [
             {
                 "month": c.month,
@@ -335,7 +358,13 @@ def reason_coverage(receipt, source, card_key: str | None = None) -> dict | None
 
     {"cards": [registry keys asked], "waits_for": [labels of those whose
     statements do not cover the date], "never_loaded": [the subset of
-    `waits_for` with no statement loaded in any month]}."""
+    `waits_for` with no statement loaded in any month]}.
+
+    Item 220 step 4: a card whose statements will never be loaded
+    (`Card.statement_expected` false) is never waited for. Without a card it
+    is left out of the set asked; as the row's own card the answer carries
+    `"no_statement": true`, which reads "no charge on any loaded statement"
+    rather than "likely in the neighbouring month"."""
     if source is None:
         return None
     if not card_key and _card_keys(receipt.payment_mode or ""):
@@ -344,9 +373,11 @@ def reason_coverage(receipt, source, card_key: str | None = None) -> dict | None
     if evidence is None:
         return None
     day = receipt.detected_date
+    if card_key and card_key in evidence.no_statement:
+        return {"cards": [card_key], "waits_for": [], "never_loaded": [], "no_statement": True}
     if card_key:
         cards = [card_key]
-        labels = {card_key: evidence.active.get(card_key, card_key)}
+        labels = {card_key: evidence.label(card_key)}
     else:
         cards = sorted(evidence.active)
         labels = dict(evidence.active)

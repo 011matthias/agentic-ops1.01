@@ -122,6 +122,11 @@ def _rows(client, batch_id) -> dict[str, dict]:
 
 
 # July's 2838 family export: charges on 2838 and 3645 only, Jul 1 to Jul 31.
+# Since item 220 step 3 a family export covers a subcard it printed nothing
+# for (0340) only when it declares its period, which a SharePoint-pulled
+# export does in its name; an undeclared one is pinned in
+# `test_statement_declared_item_220.py`.
+JULY_EXPORT_NAME = "Chase2838_2026-07_posted_0701-0731_from-SharePoint.csv"
 JULY_EXPORT = (
     ("2026-07-01", "42.50", "STAPLES", "2838"),
     ("2026-07-05", "2.76", "NETWORK SOLUTIONS", "3645"),
@@ -139,10 +144,10 @@ def test_a_cardless_row_no_statement_covers_waits_for_those_cards(tmp_path, monk
     ]) as client:
         assert client.put("/api/settings", json={"cards": {**FAMILY, **CYCLE}}).status_code == 200
         july = _month(client, "July 2026", 2)
-        _done(client, _statement(client, july, JULY_EXPORT))
+        _done(client, _statement(client, july, JULY_EXPORT, name=JULY_EXPORT_NAME))
         row = _rows(client, july)["Acme Tools"]
         assert row["card"] is None and row["card_source"] == "none"
-        # 0340 printed nothing, and its family's export still covers it.
+        # 0340 printed nothing; the family export declares its period.
         assert row["waits_for_statements"] == ["BCS Chase Visa - 9693"]
         assert row["review"]["reason_code"] == "waits_for_statement"
         assert row["review"]["waits_for_statements"] == ["BCS Chase Visa - 9693"]
@@ -161,7 +166,7 @@ def test_a_covered_date_keeps_needs_entity(tmp_path, monkeypatch):
     ]) as client:
         assert client.put("/api/settings", json={"cards": FAMILY}).status_code == 200
         july = _month(client, "July 2026", 2)
-        _done(client, _statement(client, july, JULY_EXPORT))
+        _done(client, _statement(client, july, JULY_EXPORT, name=JULY_EXPORT_NAME))
         row = _rows(client, july)["Acme Tools"]
         assert "waits_for_statements" not in row
         assert row["review"]["reason_code"] == "needs_entity"
@@ -184,7 +189,7 @@ def test_coverage_is_read_from_any_month(tmp_path, monkeypatch):
         july = _month(client, "July 2026", 1)
         _done(client, _statement(client, july, (
             *JULY_EXPORT, ("2026-08-03", "9.00", "UBER", "3645"),
-        )))
+        ), name="Chase2838_2026-07_posted_0701-0803_from-SharePoint.csv"))
         august = _month(client, "August 2026", 2)
         rows = _rows(client, august)
         assert rows["Early Cafe"]["review"]["reason_code"] == "needs_entity"

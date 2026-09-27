@@ -11764,6 +11764,30 @@ payment); waiting counts 7 / 0 / 46. Read-time only, no re-match.
    `entity_missing` (Jul Brauhaus, Sep DB Fernverkehr).
 Owner decisions pending: item 211 (widen the borrow at the start edge),
 statement_expected on the three dormant cards, the five-name picker.
+
+**Steps 3 + 4 SHIPPED 2026-09-27** (PR number in the Shipped table; the three
+owner decisions above were all YES on 2026-09-25). Step 3: new
+`statement_declared.py`; `statements[].period_declared_start/end` from a
+PDF's Opening/Closing Date and a SharePoint export's posted range
+(`Chase9693_2026-09_posted_0906-0915` = 09-06..09-15; rows 09-04..09-14),
+recorded on attach and re-read, a stored workbook's read off `upload_name`;
+coverage is the union of printed and declared span, and a subcard is covered
+only by an upload that printed one of its charges or declares its period.
+Step 4: `cards[].statement_expected` (default true, stored only when false,
+validated in the settings PUT, and a save that does not mention it keeps a
+stored false so an SPA that does not know it cannot erase it); nothing waits
+for such a card and a receipt on it reads `no_charge_on_any_loaded_statement`.
+Measured on fresh GETs 2026-09-27 before building (model reproduced 27/27
+live `waits_for_statements`): step 3 moves 0 reason codes; its only live
+effect is 4 waiting lists (Aug 0002 Perplexity / 0033 E A LOCACOES gain 0340,
+because `August2026.xlsx` printed no 0340 charge and declares no period;
+Sep 0032 / 0083, dated 09-15, drop 9693). Rule kept as written, not widened
+to month-named workbooks: April's 2838 activity CSV carried no 3876 charge.
+With the settings write (0113 / 6013 / 8311 false): July 5 receipts move
+(0003, 0053, 0063 to neighbouring; 0004, 0070 to no charge on any loaded
+statement), waiting 6 -> 1; Expenses waiting rows Jul 11 -> 1, Aug 2 keep
+waiting on 0340 only, Sep 14 lose the three labels. The map's "12 receipts
+stop waiting" is 10 today because Criss worked July since.
 ### 221. Charges with nothing behind them say what they are (front 1 of the 2026-09-25 gap-map round) (SHIPPED 2026-09-25, PR #1468; SPA prompt `docs/lovable-chase-honesty-prompt.md` not pasted)
 
 Source: the verified gap map of 2026-09-25 (`.scratch/recon-matching-gaps-2026-09-25.md`,
@@ -12188,6 +12212,7 @@ the clean band, right or wrong, before proposing anything.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 151 | Item 220 steps 3 + 4 (front 2): a statement's declared period (`statements[].period_declared_start/end`, PDF Opening/Closing Date, SharePoint export posted range) widens its coverage, a subcard is covered only when printed or declared, and `cards[].statement_expected` false means nothing waits for the card. | Three cards nobody can export (0113, 6013, 8311) kept card-less receipts waiting forever, and one printed 2838 charge vouched for subcards the file never showed. | PR #1491 |
 | 150 | Item 223 step 7 (front 4): `POST /api/runs/{id}/duplicates/reapply`, operator, typed confirm, required boolean `dry_run`; the dry run writes nothing and answers per group what a re-match would keep and which copies change count; a real run is the ordinary re-match (trigger `duplicates_reapply`) as a job carrying the preview and the applied diff | A changed duplicate rule reached a matched month only at its next natural re-match (September's 12 invoice-over-receipt swaps); now the owner can preview a month and order it | 2026-09-27, run on nothing |
 | 149 | Item 223 step 5 (front 4): billing-account keys across months (same reference or digit core, same money, dates 20+ days apart) stored at re-match and at a no-statement receipt add as `duplicate_account_keys`, read by every duplicate reader; `cross_month_copies[]` advisory | Two monthly bills of one amount under one account code (Railway `77H7ITO0`, Rize `5ZK1BCDG`) would have twinned inside a month and one would have left the total; 0 live groups move | 2026-09-27 |
 | 148 | Item 223 step 4 (front 4): `document_kind` in the extraction schema only; the kept copy reads it first; a reminder is never kept and alone reads `reads_as_reminder` | Which copy counts depended on file names and on numbers that call Brazilian slips and OpenAI receipts invoices; A/B 53 of 3,366 stable readings moved, 1 currency (to null), 0 date/total/type/card | 2026-09-27 |

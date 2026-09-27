@@ -91,6 +91,7 @@ from ..cards import (
     card_to_dict,
     cards_from_setting,
     effective_cards,
+    keep_unsent_statement_expected,
     normalize_cards_setting,
     normalize_private_cards_setting,
     private_cards_from_setting,
@@ -3688,8 +3689,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # normalized key). The legacy card_entities/card_accounts maps
         # stay writable unchanged; composition happens at read time.
         if "cards" in body:
+            # Item 220 step 4: a save that does not mention
+            # `statement_expected` keeps the stored false.
+            with open_store() as store:
+                stored_cards = (store.get_settings() or {}).get("cards")
             try:
-                patch["cards"] = normalize_cards_setting(body["cards"])
+                patch["cards"] = keep_unsent_statement_expected(
+                    normalize_cards_setting(body["cards"]),
+                    body["cards"],
+                    stored_cards,
+                )
             except ValueError as exc:
                 return JSONResponse({
                     "error": str(exc), "code": code_of(exc, "invalid_body"),

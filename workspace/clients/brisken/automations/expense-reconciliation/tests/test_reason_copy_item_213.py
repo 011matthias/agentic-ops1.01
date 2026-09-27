@@ -30,6 +30,7 @@ from tests.test_case9_status_c9 import (  # noqa: E402
     CYCLE,
     FAMILY,
     JULY_EXPORT,
+    JULY_EXPORT_NAME,
     _client,
     _done,
     _month,
@@ -51,7 +52,7 @@ def test_one_waiting_card_is_named_in_a_short_line(tmp_path, monkeypatch):
     ]) as client:
         assert client.put("/api/settings", json={"cards": {**FAMILY, **CYCLE}}).status_code == 200
         july = _month(client, "July 2026", 2)
-        _done(client, _statement(client, july, JULY_EXPORT))
+        _done(client, _statement(client, july, JULY_EXPORT, name=JULY_EXPORT_NAME))
         review = _rows(client, july)["Acme Tools"]["review"]
         assert review["reason_code"] == "waits_for_statement"
         assert review["reason"] == (

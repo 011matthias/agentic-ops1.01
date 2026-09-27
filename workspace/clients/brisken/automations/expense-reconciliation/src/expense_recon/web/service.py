@@ -48,6 +48,7 @@ from ..cli import (  # item 105
 from ..coa_provision import apply_to_config as apply_coa_provisioning
 from ..coa_provision import GL_ENTITY_ORGS_KEY, entity_from_settings
 from .. import card_suggestion as _c9  # item 204, case 9 steps 1 and 5
+from .. import statement_declared as _statement_declared  # item 220 step 3
 from ..correspondence import quarantine_correspondence
 from ..error_codes import Refusal, code_of, detail_of, fields_of
 from ..duplicates import (
@@ -12376,8 +12377,13 @@ def build_statement_entry(
     statement_id: str = "",
     attached_month: str = "",
     month_filter: dict | None = None,
+    declared_period: tuple | None = None,
 ) -> dict:
     """One `statements[]` row: what this upload was and what it added.
+
+    `declared_period` (item 220 step 3): (start, end) dates the upload
+    declares for itself, recorded as `period_declared_start/period_end`,
+    absent when None (`statement_declared.for_upload`).
 
     `month_filter` (item 215) is what the attach kept of the file for its
     month and what it left out (`keep_month_charges`). Parallel and ABSENT
@@ -12465,6 +12471,10 @@ def build_statement_entry(
         # so a PDF's charges are absent from them entirely and would have
         # no upload to name.
         "_origins": upload_origins(transactions),
+        # The period the upload declares for itself (item 220 step 3): a
+        # PDF's Opening/Closing Date, a SharePoint export's posted range.
+        # Absent when it declares none.
+        **_statement_declared.entry_fields(declared_period),
     }
 
 
@@ -14872,6 +14882,9 @@ def execute_statement_attach(
             # Item 204: the month it is being attached to, for its advisory.
             attached_month=_c9.attached_month(run),
             month_filter=month_filter,
+            declared_period=_statement_declared.for_upload(
+                Path(run.work_dir) / stmt_name, upload_name or stmt_name
+            ),
         ),
         trigger="statement",
     )
@@ -15171,6 +15184,9 @@ def reread_statements(
                 # Item 204: the month it is being attached to.
                 attached_month=_c9.attached_month(run),
                 month_filter=month_filter,
+                declared_period=_statement_declared.for_upload(
+                    stmt_path, str(entry.get("upload_name") or stored)
+                ),
             )
         )
 
