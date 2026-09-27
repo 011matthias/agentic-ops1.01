@@ -30,6 +30,7 @@ from dataclasses import dataclass, field, replace
 from collections.abc import Iterable, Mapping
 from decimal import Decimal
 
+from ..entity_keys import entities_same
 from .types import Match, MatchOutcome, MatchType, Receipt, Transaction
 
 # A month key in `fx_ecb_monthly_rates` (item 82): the ECB's TIME_PERIOD.
@@ -474,6 +475,12 @@ class MatchingConfig:
     merchant_fx: Mapping[tuple[str, str, str, str], Decimal] = field(
         default_factory=dict
     )
+    # Item 220 step 5: `entity_keys.entity_key_map` of the current settings,
+    # handed in by `rematch_month` like the learned memory above. It feeds
+    # the ENTITY SCOPE only (`pair_in_scope`), never a score, so two spellings
+    # of one company ("Corporate Services", "Brisken Corp Services, LLC") are
+    # one company there. Empty => the exact string compare of before.
+    entity_keys: Mapping[str, str] = field(default_factory=dict)
 
     # ── Card-scoped matching (2026-06-16) ──────────────────────────
     # An expense whose Zoho payment mode names a specific Brisken card only
@@ -1784,13 +1791,18 @@ def pair_in_scope(
     receipt: Receipt,
     tx_keys: set[str],
     scope: set[str] | None,
+    entity_keys: Mapping[str, str] | None = None,
 ) -> bool:
     """Whether a (charge, receipt) pair may be scored at all: a receipt
     that NAMES another legal entity never pairs (an empty entity on either
     side is unscoped), and a receipt scoped to a card (``receipt_card_scope``)
     pairs only with charges on that card (``tx_keys``, the charge's
-    ``_tx_card_keys``)."""
-    if (
+    ``_tx_card_keys``). ``entity_keys`` (``MatchingConfig.entity_keys``)
+    makes two spellings of one company one company (item 220 step 5)."""
+    if entity_keys:
+        if not entities_same(receipt.legal_entity_id, tx.legal_entity_id, entity_keys):
+            return False
+    elif (
         receipt.legal_entity_id
         and tx.legal_entity_id
         and receipt.legal_entity_id != tx.legal_entity_id
@@ -2027,12 +2039,12 @@ def scored_pairs(
             # payment mode names a different card never pairs either.
             if not pair_in_scope(
                 tx, receipt, tx_card_keys[tx.transaction_id],
-                receipt_scope.get(doc),
+                receipt_scope.get(doc), cfg.entity_keys,
             ):
                 if (
                     receipt.card_scope_source == CARD_SCOPE_PICKED
                     and doc in receipt_scope
-                    and pair_in_scope(tx, receipt, tx_card_keys[tx.transaction_id], None)
+                    and pair_in_scope(tx, receipt, tx_card_keys[tx.transaction_id], None, cfg.entity_keys)
                 ):
                     off_card.setdefault(doc, []).append(tx)
                 continue

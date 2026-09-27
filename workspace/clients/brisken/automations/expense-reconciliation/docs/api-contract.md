@@ -7926,3 +7926,39 @@ Front 1's `summary.cards_uncovered[]` (the Publish warning) is unchanged: the
 card still has no statement.
 
 Tests: `tests/test_statement_declared_item_220.py` (20, route-level).
+
+## One company, one key (item 220 step 5, front 2, 2026-09-27)
+
+The app holds two spellings of most companies: the provisioning file's
+("Corporate Services", what cards and charges carry) and the settings
+registry's Zoho legal name ("Brisken Corp Services, LLC"). Every company
+label now resolves through one `entity_key`: the provisioning spelling of the
+label's org when that org has exactly one, otherwise the label itself.
+Keying on the org alone is deliberately NOT done: the live registry gives
+"Brisken Holding, LLC" the org id of "Brisken GmbH", and an org-only key
+would make them one company. No stored value is rewritten; a row keeps the
+spelling it was given.
+
+**`entity_options[]` (settings, `GET /api/cards`, every expense batch).**
+Same type, one name per company (owner yes 2026-09-25): eight names for five
+companies before, five now, each under its key, in the `entity_order` the
+operator set. A batch's list additionally carries, at the back and as
+written, any spelling one of its own rows holds that the list does not
+already offer, so that row's select renders its value instead of a blank.
+Nothing validates a submitted company against this list.
+
+**Entity scope.** The matcher (`MatchingConfig.entity_keys`, handed in by the
+re-match and the folder ingest; scope only, never a score) and the hand-match
+guard (`POST /api/runs/{id}/manual-match`, refusal `entity_differs`) compare
+companies, not spellings. Two different companies still never pair and still
+refuse.
+
+**`entity_mismatch` (re-match result, rides the job's `warning:` stage).**
+Judged by company, and per row: besides the old batch-level sentence (the
+statement's company absent from the whole pool), it names each receipt whose
+company no registered card belongs to ("1 receipt names a company no card
+belongs to, so no charge can pair with it: Moghul Mahal (Brisken GmbH)."). A
+receipt whose company's card merely has no statement loaded is not named;
+that is `waits_for_statements`.
+
+Tests: `tests/test_entity_key_220.py` (8, route-level).

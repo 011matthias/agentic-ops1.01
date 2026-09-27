@@ -11808,6 +11808,36 @@ tab shows no waiting line and renders the `needs_entity` label. The reason
 words come from the backend's own labels; whether
 `lovable-receipt-waits-prompt.md` was pasted is not established
 (`lovable-bundle-audit.py` checks item 204's signatures).
+
+**Step 5 SHIPPED 2026-09-27** (PR number in the Shipped table). New
+`entity_keys.py`: a company label's key is the provisioning spelling of its
+org when that org has exactly one, else the label itself. Not org-only on
+purpose: live settings give "Brisken Holding, LLC" GmbH's org id 696750461
+(Zoho's own Holding org is 813627567 per `context/.../zoho-entity-card-map.md`),
+so an org key would merge two companies. That registry value is a live data
+error for the owner, not fixed here. Wired: the matcher's entity scope
+(`MatchingConfig.entity_keys`, handed in by `rematch_month` and the folder
+ingest, `pair_in_scope` only, no score touched), the hand-match guard, the
+re-match advisory (by company, and per row: a receipt naming a company no card
+belongs to), the picker (`entity_options` five names; a batch keeps a spelling
+its own rows hold, at the back, so a Radix select never renders blank), and
+`tools/recon-match-attribution.py`. Stored values are never rewritten. Memory
+keys: not built, category memory keys on the receipt's company and nothing is
+learned yet (no month published); account maps already resolve through the
+org (`canonical_account_labels`). Measured on the 2026-09-25 03:35Z SharePoint
+backup with the attribution tool, before (origin/main `2a3ce8ed`) and after:
+August 1 of 55 rows moves, `0008` Lovable invoice `entity_mismatch` ->
+`rival_won_greedy` (it reaches its labelled charge, LOVABLE 15.00 on 3645, and
+loses it to `0009`, the receipt copy of the same purchase the labels mark as
+the copy); no match changes, summary identical. July 0 of 82. Takes effect at
+August's next natural re-match; no live re-match. Read-time at deploy:
+`entity_options` 8 -> 5 in settings and `GET /api/cards` (Consulting, Brisken
+Holding LLC, Cloud Services, Corporate Services, Brisken GmbH), July +
+"Brisken Cloud Services, LLC" (Redis row), August + "Brisken Corp Services,
+LLC" (Lovable row), September 5; hand-matching August 0008 to its charge is
+allowed. Not wired, belongs to front 5: `judgment.judge_unmatched`'s raw
+entity compare. Why 0008 and 0009 are not collapsed as copies is front 4's.
+
 ### 221. Charges with nothing behind them say what they are (front 1 of the 2026-09-25 gap-map round) (SHIPPED 2026-09-25, PR #1468; SPA prompt `docs/lovable-chase-honesty-prompt.md` not pasted)
 
 Source: the verified gap map of 2026-09-25 (`.scratch/recon-matching-gaps-2026-09-25.md`,
@@ -12232,6 +12262,7 @@ the clean band, right or wrong, before proposing anything.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 152 | Item 220 step 5 (front 2): one `entity_key` per company (the org's single provisioning spelling, else the label), in the matcher's entity scope, the hand-match guard, the per-row re-match advisory and a five-name picker; stored spellings kept. | A receipt picked as "Brisken Corp Services, LLC" never reached its own "Corporate Services" charge, and the picker offered eight names for five companies. | PR TBD |
 | 151 | Item 220 steps 3 + 4 (front 2): a statement's declared period (`statements[].period_declared_start/end`, PDF Opening/Closing Date, SharePoint export posted range) widens its coverage, a subcard is covered only when printed or declared, and `cards[].statement_expected` false means nothing waits for the card. | Three cards nobody can export (0113, 6013, 8311) kept card-less receipts waiting forever, and one printed 2838 charge vouched for subcards the file never showed. | PR #1491 |
 | 150 | Item 223 step 7 (front 4): `POST /api/runs/{id}/duplicates/reapply`, operator, typed confirm, required boolean `dry_run`; the dry run writes nothing and answers per group what a re-match would keep and which copies change count; a real run is the ordinary re-match (trigger `duplicates_reapply`) as a job carrying the preview and the applied diff | A changed duplicate rule reached a matched month only at its next natural re-match (September's 12 invoice-over-receipt swaps); now the owner can preview a month and order it | 2026-09-27, run on nothing |
 | 149 | Item 223 step 5 (front 4): billing-account keys across months (same reference or digit core, same money, dates 20+ days apart) stored at re-match and at a no-statement receipt add as `duplicate_account_keys`, read by every duplicate reader; `cross_month_copies[]` advisory | Two monthly bills of one amount under one account code (Railway `77H7ITO0`, Rize `5ZK1BCDG`) would have twinned inside a month and one would have left the total; 0 live groups move | 2026-09-27 |

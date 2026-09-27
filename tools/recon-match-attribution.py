@@ -265,6 +265,11 @@ def load_live(
     match_input = [*pool, *borrowed] if borrowed else pool
     memory = MatchMemory.from_db_path(learning) if learning and Path(learning).exists() else None
     match_cfg = build_match_cfg(cfg, Path(run.work_dir), memory) or MatchingConfig()
+    # Item 220 step 5: the company keys `rematch_month` hands in, by the
+    # module's own function. An older tree has neither.
+    with_keys = getattr(service, "match_cfg_with_entity_keys", None)
+    if with_keys is not None:
+        match_cfg = with_keys(match_cfg, store.get_settings())
 
     raw = match_month(transactions, match_input, match_cfg)
     # Item 74 rung 7, as `rematch_month` runs it: once, then one re-match.
@@ -469,7 +474,12 @@ def gate_for(tx, r, cfg, trace) -> str:
         return "amount_band"  # a credit never pairs; nothing a receipt can do
     if r.detected_currency is None:
         return "currency_unknown"
-    if r.legal_entity_id and tx.legal_entity_id and r.legal_entity_id != tx.legal_entity_id:
+    from expense_recon.matching import deterministic as det
+
+    keys = getattr(cfg, "entity_keys", None)
+    if keys and not det.pair_in_scope(tx, r, set(), None, keys):
+        return "entity_mismatch"
+    if not keys and r.legal_entity_id and tx.legal_entity_id and r.legal_entity_id != tx.legal_entity_id:
         return "entity_mismatch"
     sc = trace["scope"].get(r.document_id)
     if sc is not None and not (sc & _tx_card_keys(tx)):
