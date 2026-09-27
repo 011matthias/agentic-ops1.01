@@ -510,6 +510,7 @@ def find_duplicate_receipt_groups(
     receipts: list[Receipt],
     digests: dict[str, str] | None = None,
     account_keys: "frozenset[str] | set[str]" = frozenset(),
+    twins: "dict[str, str] | None" = None,
 ) -> list[tuple[list[str], str | None]]:
     """Every CANDIDATE receipt duplicate group with the key that found it:
     ``(members, None)`` for a vendor/date group, ``(members, "reference")``
@@ -557,6 +558,15 @@ def find_duplicate_receipt_groups(
             continue
         known.add(tuple(sorted(members)))
         out.append((members, BASIS_BODY_TWIN))
+    # Item 223 step 6: the invoice and receipt one mail delivered, recorded
+    # at arrival. Last, and only when no earlier group already holds the
+    # pair: that group's own ladder then starts from the record.
+    by_id = {r.document_id: r for r in receipts}
+    for pair in intake_twin_pairs(twins, by_id):
+        if any(set(pair) <= set(g) for g, _k in out):
+            continue
+        known.add(pair)
+        out.append((list(pair), BASIS_INTAKE_TWIN))
     return out
 
 
@@ -565,6 +575,7 @@ def lending_groups(
     resolutions: dict[str, str] | None = None,
     decisions: "list[ReceiptGroupDecision] | None" = None,
     account_keys: "frozenset[str] | set[str]" = frozenset(),
+    twins: "dict[str, str] | None" = None,
 ) -> list[list[str]]:
     """The groups whose copies lend each other a card: every reference group
     (item 69 round A), then every group the app SHOWS as one document, i.e.
@@ -591,7 +602,7 @@ def lending_groups(
     groups = find_duplicate_receipts_by_reference(receipts, account_keys)
     known = {tuple(g) for g in groups}
     if decisions is None:
-        decisions = decide_receipt_groups(receipts, resolutions=resolutions, account_keys=account_keys)
+        decisions = decide_receipt_groups(receipts, resolutions=resolutions, account_keys=account_keys, twins=twins)
     for d in decisions:
         if d.resolution == "ignore" or d.verdict == VERDICT_DISTINCT:
             continue
@@ -609,6 +620,7 @@ def inherit_card_from_copies(
     card_hints: dict[str, str] | None = None,
     decisions: "list[ReceiptGroupDecision] | None" = None,
     account_keys: "frozenset[str] | set[str]" = frozenset(),
+    twins: "dict[str, str] | None" = None,
 ) -> list[Receipt]:
     """The same list, where every copy of one document that names no card
     carries the card its copies name, and every copy with no legal entity
@@ -663,7 +675,7 @@ def inherit_card_from_copies(
     lent_mode: dict[str, str] = {}
     lent_entity: dict[str, str] = {}
     torn: set[tuple[str, str]] = set()
-    for members in lending_groups(receipts, resolutions, decisions, account_keys):
+    for members in lending_groups(receipts, resolutions, decisions, account_keys, twins):
         if resolutions.get(duplicate_group_id("receipt", members)) == "ignore":  # lends nothing
             continue
         group = [by_id[d] for d in members if d in by_id]
@@ -781,7 +793,7 @@ LADDER_BASES = (
     BASIS_HASH, BASIS_REFERENCE, BASIS_PRINTED_REFERENCE,
     BASIS_DISTINCT_REFERENCE, BASIS_RECEIPT_CARD, BASIS_VENDOR_DATE,
     BASIS_STATEMENT, BASIS_REFERENCE_DIGITS, BASIS_MISREAD_DIGIT,
-    BASIS_BODY_TWIN,
+    BASIS_BODY_TWIN, "intake_twin",  # item 223 step 6 (BASIS_INTAKE_TWIN)
 )
 
 VERDICT_COPY = "copy"
@@ -875,11 +887,20 @@ def _ladder(
     digests: dict[str, str],
     text_of,
     cores: dict[str, frozenset[str]] | None = None,
+    twins: "dict[str, str] | None" = None,
 ) -> tuple[str | None, str | None]:
-    """Rungs 1 to 6 for one candidate group: ``(basis, verdict)``."""
+    """Rungs 0 to 6 for one candidate group: ``(basis, verdict)``."""
     group = [by_id[d] for d in members if d in by_id]
     if len(group) < 2:
         return None, None
+
+    # 0. intake_twin (item 223 step 6): the intake recorded at arrival that
+    # these are the invoice and the receipt of one purchase, delivered by
+    # one mail. The ladder starts from that record while it still holds.
+    if len(group) == 2 and tuple(sorted(r.document_id for r in group)) in set(
+        intake_twin_pairs(twins, by_id)
+    ):
+        return BASIS_INTAKE_TWIN, VERDICT_COPY
 
     # 1. hash: identical bytes.
     group_digests = [digests.get(r.document_id) for r in group]
@@ -976,6 +997,7 @@ def decide_receipt_groups(
     resolutions: dict[str, str] | None = None,
     statement_distinct=None,
     account_keys: "frozenset[str] | set[str]" = frozenset(),
+    twins: "dict[str, str] | None" = None,
 ) -> list[ReceiptGroupDecision]:
     """Every receipt duplicate group with what it is, in the order
     ``find_duplicate_receipt_groups`` lists the candidates (vendor/date,
@@ -997,7 +1019,7 @@ def decide_receipt_groups(
     cores = document_number_cores(receipts, account_keys=account_keys)
     out: list[ReceiptGroupDecision] = []
     copy_sets: set[tuple[str, ...]] = set()
-    for members, _key in find_duplicate_receipt_groups(receipts, digests, account_keys):
+    for members, _key in find_duplicate_receipt_groups(receipts, digests, account_keys, twins):
         gid = duplicate_group_id("receipt", members)
         if _key == BASIS_BODY_TWIN:
             # The body repeats ONE document: its only partner, or partners
@@ -1008,7 +1030,7 @@ def decide_receipt_groups(
                 continue
             basis, tool_verdict = BASIS_BODY_TWIN, VERDICT_COPY
         else:
-            basis, tool_verdict = _ladder(members, by_id, keys, digests, text_of, cores)
+            basis, tool_verdict = _ladder(members, by_id, keys, digests, text_of, cores, twins)
         if gid in restored and tool_verdict == VERDICT_COPY:
             basis, tool_verdict = BASIS_STATEMENT, VERDICT_DISTINCT
         resolution = resolutions.get(gid)
@@ -1373,3 +1395,125 @@ def cross_month_evidence(
         {"document_id": doc, "batch_id": batch_id, "other_document_id": other_doc}
         for doc, batch_id, other_doc in sorted(copies)
     ]
+
+
+# ── Item 223 step 6: the intake decides once ─────────────────────────────
+#
+# A Stripe-style vendor mails a purchase as two attachments of ONE mail, the
+# INVOICE (`Invoice-HMVWDWIL-0034.pdf`) and its RECEIPT
+# (`Receipt-2810-5339-6113.pdf`). Since step 4 the receipt reads the
+# invoice's number too, and every reading says which of the two it is, so at
+# arrival the pair is already known for what it is. The intake records that
+# once, on both parts' provenance (`intake_provenance[doc].twin_of`), and
+# rung 0 of the ladder starts from it instead of re-deriving the pair from
+# vendor spellings, dates and text layers every time the month is read.
+#
+# Predicted before building on the step-4 A/B readings of the 09-25 backup
+# (both passes agreeing) joined to the live mails: ten pairs July to
+# September, every one already a single copy group. Nothing counts
+# differently; the record only makes the group's reason the arrival's.
+
+BASIS_INTAKE_TWIN = "intake_twin"
+TWIN_OF_KEY = "twin_of"
+
+
+def _mail_identity(entry: dict | None) -> tuple | None:
+    """Which mail delivered a stored file: its custody archive, or, on an
+    entry written before item 106 recorded the archive, the arrival stamp and
+    submitter address every file of one mail shares. None for a file no mail
+    delivered (a web upload)."""
+    entry = entry or {}
+    if entry.get("archive"):
+        return ("archive", entry["archive"])
+    if entry.get("received_at") and entry.get("address"):
+        return ("mail", entry["received_at"], entry["address"])
+    return None
+
+
+def _invoice_number_key(receipt: Receipt) -> str | None:
+    n = _NON_ALNUM_UPPER.sub("", (getattr(receipt, "invoice_number", None) or "").upper())
+    return n if len(n) >= _MIN_REFERENCE_LEN else None
+
+
+def _twin_holds(a: Receipt, b: Receipt) -> bool:
+    """The two documents still read as one purchase: one amount and currency,
+    and no two different cards. Re-checked on every read, so a reviewer's
+    edit that splits the amounts hands the pair back to the older rungs."""
+    return _same_money(a, b) and not _cards_conflict([a, b])
+
+
+def intake_twins(
+    receipts: list[Receipt], provenance: "dict[str, dict] | None"
+) -> dict[str, str]:
+    """``document id -> its twin's id`` for every invoice and receipt one mail
+    delivered that name ONE invoice number, both directions.
+
+    Per mail and per invoice number, the pair counts only when it is the
+    whole of it: exactly two documents carry that number, one reads as the
+    invoice and one as the payment receipt (``payment_document_kind``), with
+    one amount and currency and no two different cards. A third document
+    carrying the number, two invoices, or amounts that differ (a part
+    payment) leave the mail to the ladder, as before."""
+    by_mail: dict[tuple, list[Receipt]] = defaultdict(list)
+    for r in receipts:
+        ident = _mail_identity((provenance or {}).get(r.document_id))
+        if ident is not None:
+            by_mail[ident].append(r)
+    out: dict[str, str] = {}
+    for docs in by_mail.values():
+        by_number: dict[str, list[Receipt]] = defaultdict(list)
+        for r in docs:
+            n = _invoice_number_key(r)
+            if n:
+                by_number[n].append(r)
+        for members in by_number.values():
+            if len(members) != 2:
+                continue
+            kinds = {payment_document_kind(r): r for r in members}
+            inv, rec = kinds.get(KIND_INVOICE), kinds.get(KIND_RECEIPT)
+            if inv is None or rec is None or not _twin_holds(inv, rec):
+                continue
+            out[inv.document_id] = rec.document_id
+            out[rec.document_id] = inv.document_id
+    return out
+
+
+def stamp_intake_twins(
+    provenance: "dict[str, dict] | None", receipts: list[Receipt]
+) -> "dict[str, dict] | None":
+    """The same provenance, with ``twin_of`` on both parts of every pair
+    ``intake_twins`` finds among ``receipts`` (the files this arrival
+    created). Entries are copied, never mutated: the intake hands one entry
+    object per file digest. ABSENT on every other entry."""
+    twins = intake_twins(receipts, provenance)
+    if not twins:
+        return provenance
+    return {
+        doc: ({**entry, TWIN_OF_KEY: twins[doc]} if doc in twins else entry)
+        for doc, entry in (provenance or {}).items()
+    }
+
+
+def twin_links(provenance: "dict[str, dict] | None") -> dict[str, str]:
+    """The stored records, ``document id -> its twin``, kept only where both
+    entries name each other (half a record is no record)."""
+    raw = {
+        doc: entry.get(TWIN_OF_KEY)
+        for doc, entry in (provenance or {}).items()
+        if isinstance(entry, dict) and entry.get(TWIN_OF_KEY)
+    }
+    return {a: b for a, b in raw.items() if raw.get(b) == a}
+
+
+def intake_twin_pairs(
+    twins: "dict[str, str] | None", by_id: dict[str, Receipt]
+) -> list[tuple[str, str]]:
+    """Each recorded pair once, sorted, whose two documents are both in the
+    list and still read as one purchase (``_twin_holds``)."""
+    pairs = set()
+    for a, b in (twins or {}).items():
+        if twins.get(b) != a or a not in by_id or b not in by_id:
+            continue
+        if _twin_holds(by_id[a], by_id[b]):
+            pairs.add(tuple(sorted((a, b))))
+    return sorted(pairs)

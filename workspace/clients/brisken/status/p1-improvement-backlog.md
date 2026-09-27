@@ -11955,7 +11955,7 @@ this shape. SPA half (the no-card sentence would be wrong here):
 `docs/lovable-review-cause-prompt.md` gains `merchant_disagrees_waiting`,
 still not pasted.
 
-### 223. Copies and double counting: one number read two ways, the mail body, and the rest of the copies front (gap map 2026-09-25, front 4) (STEPS 1-3 SHIPPED 2026-09-25; STEPS 4, 5, 7 SHIPPED 2026-09-27; step 6 open)
+### 223. Copies and double counting: one number read two ways, the mail body, and the rest of the copies front (gap map 2026-09-25, front 4) (STEPS 1-3 SHIPPED 2026-09-25; STEPS 4, 5, 7 SHIPPED 2026-09-27; STEP 6 SHIPPED 2026-09-27)
 
 The verified gap map's "Copies and duplicates" section and its CRITIC block
 ("which part of a mail is the receipt"). Seven steps were set; three are done.
@@ -12025,10 +12025,31 @@ ordinary re-match (trigger `duplicates_reapply`) as a job whose result carries
 the preview and the applied diff. Refused: no statement, published, a
 re-match in flight, not an expense batch.
 
+**Step 6 (SHIPPED 2026-09-27, Shipped row 152).** When two files ONE mail
+delivered name one invoice number (normalized, 5+ characters), one reads as
+the invoice and one as the payment receipt, with one amount and currency and
+no two different cards, and no third file of that mail carries the number,
+the intake records the pair on both files' provenance
+(`intake_provenance[doc].twin_of`, served as `submitted_by.twin_of`), in the
+add path and in a month a mail creates. Rung 0 of the ladder reads it (basis
+`intake_twin`), re-checked on every read, so a reviewer's edit that splits the
+amounts hands the pair back to the older rungs; "Not a copy" still outranks
+it; a moved receipt drops the record. Predicted before building on the step-4
+A/B readings (both passes agreeing) joined to the live mails (the archive,
+or arrival stamp + address on rows older than the archive key): ten pairs,
+July 1 (H0LHY2WQ-0029, USD 200.00), August 1 (HMVWDWIL-0029, 15.00),
+September 8 (K5WRAWFK-0001, HMVWDWIL-0031 / -0033 / -0034 / -0035 / -0036,
+H0LHY2WQ-0033 / -0035), every one already a single live copy group; the
+counted copy is the charge-held invoice in three (July, August, September
+K5WRAWFK) and the receipt in seven, and item 217's choice is untouched.
+Five more Anthropic mails (890D70BF, 214D91B6, DZ9BH3VA, EF742DD0) read the
+invoice number on one pass of two, so arrival would pair them only
+sometimes; the older rungs already group them. No
+stored file carries the record, so no live row moved. The new case it
+closes: a pair nothing older joins (vendor spelled two ways, different
+references, no text layer) counted twice; the route test pins it at one.
+
 **Open:**
-6. Intake decides once: an Invoice-*.pdf and Receipt-*.pdf naming one
-   invoice number in one mail are recorded at arrival
-   (`intake_provenance.twin_of`).
 - Owner decision per month whether to run step 7's reapply (September's
   invoice-over-receipt swaps; July's 0076 / 0083 / 0054 leave the count).
 
@@ -12232,6 +12253,7 @@ the clean band, right or wrong, before proposing anything.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 152 | Item 223 step 6 (front 4): the intake records an invoice and its payment receipt that one mail delivered, naming one invoice number with one amount, on both files' provenance (`submitted_by.twin_of`); rung 0 of the duplicate ladder starts from it (basis `intake_twin`), re-checked on every read, a reviewer still outranks it | A Stripe-style pair whose vendor spelling, references and text layer all differ reached no duplicate key and counted twice; now the arrival decides it once. Live: no stored file carries the record; the 10 July-September mails the rule would pair already count once | 2026-09-27, PR TBD |
 | 151 | Item 220 steps 3 + 4 (front 2): a statement's declared period (`statements[].period_declared_start/end`, PDF Opening/Closing Date, SharePoint export posted range) widens its coverage, a subcard is covered only when printed or declared, and `cards[].statement_expected` false means nothing waits for the card. | Three cards nobody can export (0113, 6013, 8311) kept card-less receipts waiting forever, and one printed 2838 charge vouched for subcards the file never showed. | PR #1491 |
 | 150 | Item 223 step 7 (front 4): `POST /api/runs/{id}/duplicates/reapply`, operator, typed confirm, required boolean `dry_run`; the dry run writes nothing and answers per group what a re-match would keep and which copies change count; a real run is the ordinary re-match (trigger `duplicates_reapply`) as a job carrying the preview and the applied diff | A changed duplicate rule reached a matched month only at its next natural re-match (September's 12 invoice-over-receipt swaps); now the owner can preview a month and order it | 2026-09-27, run on nothing |
 | 149 | Item 223 step 5 (front 4): billing-account keys across months (same reference or digit core, same money, dates 20+ days apart) stored at re-match and at a no-statement receipt add as `duplicate_account_keys`, read by every duplicate reader; `cross_month_copies[]` advisory | Two monthly bills of one amount under one account code (Railway `77H7ITO0`, Rize `5ZK1BCDG`) would have twinned inside a month and one would have left the total; 0 live groups move | 2026-09-27 |
