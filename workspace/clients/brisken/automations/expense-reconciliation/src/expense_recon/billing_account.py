@@ -197,6 +197,7 @@ def month_evidence(
         inherit_card_from_copies,
         resolve_batch_row_cards,
         settled_outside_map,
+        stored_duplicate_account_keys,
     )
 
     default_entity = (
@@ -212,6 +213,7 @@ def month_evidence(
     receipts = inherit_card_from_copies(
         receipts, resolutions, hints_map,
         duplicate_decisions(run, receipts, resolutions),
+        account_keys=stored_duplicate_account_keys(run),
     )
     copies = decided_copies(
         run, receipts, resolutions, charge_decisions=decisions,
