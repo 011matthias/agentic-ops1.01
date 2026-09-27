@@ -73,5 +73,11 @@ The sentences themselves come from the backend in English, as they already do on
 
 Open the dialog on April 2026 Expenses (`/expenses/0603bb0e6f38`) and press Cancel; do not press Save.
 
-CHECKS_PLACEHOLDER
+1. No What / About / Value table. "Your corrections (2)" lists:
+   - "From now on, ERICK SPORTS receipts go to the company Brisken Holding, LLC. From 1 corrected row: ERICK SPORTS 49.98 BRL 2026-04-01."
+   - "From now on, ERICK SPORTS receipts in Brisken Holding, LLC are filled in as paid with Credit Card - 8311 (Dirk Neumann - Cloud Services). From 1 corrected row: ERICK SPORTS 49.98 BRL 2026-04-01."
+2. "Merchant list (16)" lists 16 sentences starting "Merchant list, …", for example "Merchant list, Americanas: paid with Credit Card Chase Visa - 0340 (Criss Neumann), so its next receipt gets that card. Seen on 1 receipt: americanas sa - 5288 50.45 BRL 2026-04-01." and "Merchant list, MEGA CENTER: paid with Credit Card Chase Visa - 0340 (Criss Neumann) and Credit Card - 2838 (Dirk Neumann - Corp Services), so no card is filled in for it. Seen on 2 receipts: …".
+3. No "Not saved by this button" section on April (every lesson there is saved).
+4. The text "card-" appears nowhere in the dialog. The button reads "Save 18 changes".
+5. PT: headings "Suas correções (2)", "Lista de comerciantes (16)", button "Salvar 18 alterações" (the sentences stay English).
 ````
