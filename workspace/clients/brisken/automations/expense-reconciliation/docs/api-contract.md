@@ -7962,6 +7962,7 @@ receipt whose company's card merely has no statement loaded is not named;
 that is `waits_for_statements`.
 
 Tests: `tests/test_entity_key_220.py` (8, route-level).
+
 ## AI cost figures include the vision model (item 227, 2026-09-27)
 
 No field changes. `summary.llm_cost_usd` (a month's creation) and
