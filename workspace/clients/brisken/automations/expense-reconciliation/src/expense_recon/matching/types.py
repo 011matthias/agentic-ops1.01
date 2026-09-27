@@ -484,6 +484,11 @@ class Receipt:
     detected_time: str | None = None
     invoice_number: str | None = None
     receipt_number: str | None = None
+    # Item 223 step 4 (2026-09-27): what the document calls itself (invoice /
+    # receipt / reminder / statement / other), read in the same extraction
+    # call. None for every receipt read before the field existed; a re-match
+    # reuses stored readings, so only arrivals from the deploy on carry it.
+    document_kind: str | None = None
 
     # Merchant registry (2026-07-29): the short storefront brand for
     # `detected_vendor` with legal suffixes / distributor tails stripped
@@ -575,7 +580,8 @@ class Match:
     # `requires_review` on this pair, beside the prose in `reason`. "" when
     # the pair was not flagged this way (the old snapshots, every clean
     # pair). Values: `deterministic.NO_CARD_RIVAL_REVIEW`,
-    # `deterministic.NO_CARD_VENDOR_REVIEW` (item 204 step 6).
+    # `deterministic.NO_CARD_VENDOR_REVIEW` (item 204 step 6),
+    # `deterministic.EXACT_VENDOR_LOOKALIKE_REVIEW` (item 222 step 6).
     review_code: str = ""
 
 

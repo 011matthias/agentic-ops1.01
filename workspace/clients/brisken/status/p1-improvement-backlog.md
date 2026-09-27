@@ -11914,11 +11914,28 @@ of 20 qualify at its next natural re-match, all unlabelled; July 10 qualify,
 6 labelled right, 0 wrong, all booked so nothing moves). A p >= 0.85 model
 verdict lifting a pair: NO, the click stays (not built).
 
-**Open:** step 6 (candidate-level merchant floor for exact pairs, measured
-first on July + August + the six bundles, shipped only if 0 labelled-right
-pairs move). SPA half: `docs/lovable-review-cause-prompt.md`, not pasted.
+**Step 6 shipped 2026-09-27 (PR #1479, merge `be01b686`, Fly v263): the card-named sibling of D5.**
+`MatchingConfig.exact_vendor_lookalike_guard` (asset key, default on): a
+chosen same-currency EXACT pair whose receipt names a card and whose
+merchant words disagree (`_vendor_score` below 0.5) moves to
+`judgment_required` with `review_code: exact_vendor_disagrees` only when
+ANOTHER receipt of the same total and currency is left unmatched after the
+assignment; it keeps its assignment, as D5 does. `review.cause`
+`merchant_disagrees` with `cause_detail.same_amount_receipt`. Measured
+before and after on a fresh read-only DB copy: July, August and the six
+bundles byte-identical in `tools/recon-match-attribution.py` (July 30 right
+/ 0 wrong, August 6 / 2, bundles 70/95); a direct probe over those plus
+September finds two chosen pairs under 0.5 with a card (July Network
+Solutions 7.98 at 0.46, labelled right; September SendGrid 89.95 at 0.32),
+neither with a same-amount receipt left over, so 0 move. Differential proof:
+one planted 7.98 USD receipt in live July moves exactly Network Solutions to
+review and nothing else. Scorer 76.0, guard PASS, CI accuracy no diff.
+August's two labelled-wrong pairs (`0015` at 0.52, `0025` at 1.00) are not
+this shape. SPA half (the no-card sentence would be wrong here):
+`docs/lovable-review-cause-prompt.md` gains `merchant_disagrees_waiting`,
+still not pasted.
 
-### 223. Copies and double counting: one number read two ways, the mail body, and the rest of the copies front (gap map 2026-09-25, front 4) (STEPS 1-3 SHIPPED 2026-09-25; steps 4-7 open)
+### 223. Copies and double counting: one number read two ways, the mail body, and the rest of the copies front (gap map 2026-09-25, front 4) (STEPS 1-3 SHIPPED 2026-09-25; STEPS 4, 5, 7 SHIPPED 2026-09-27; step 6 open)
 
 The verified gap map's "Copies and duplicates" section and its CRITIC block
 ("which part of a mail is the receipt"). Seven steps were set; three are done.
@@ -11950,22 +11967,50 @@ protocol), and the E A Locações pair is nominated for the first time; August
 1 (Zoho Books 576.00 body); September 4 bodies; the three September OpenAI
 80.12 invoices stay three. Attribution replay (labels, both live months + the six bundles, old vs new tree): no labelled-right pair moved, July gained 4 clean pairs (0053, 0057, 0058, 0068), bundles 70/95 both; it caught `misread_digit` merging ER-00181 #016/#017 (7-ELEVEN 446525 / 446528, two purchases), so a difference in the last two digits no longer counts.
 
-**Open, in order:**
-4. Kind from the document itself: `document_kind` (invoice / receipt /
-   reminder / statement / other) in the extraction response SCHEMA only, A/B
-   twice old vs twice new over the stored receipts before shipping;
-   `kept_member` reads it before the file name; a `reminder` gets a
-   read-time review note (item 186 extended), never a deletion.
-5. Cross-month reference guard: a reference seen in another month of the
-   same company with the SAME total is a billing-account key (Railway
-   `77H7ITO0` 5.00 Jul + Sep, Rize `5ZK1BCDG` 12.99 Jul + Aug); cross-month
-   vendor/date/amount/currency pairs as an advisory (0 live).
+**Step 4 (SHIPPED 2026-09-27).** The extraction returns `document_kind`
+(invoice / receipt / reminder / statement / other), asked in the response
+schema only; the instructions are byte-identical. The kept copy reads it
+first, then the printed numbers, then the file name; a reminder is never kept
+beside the document it chases, and alone it reads `reads_as_reminder` (stays
+counted, quiet once a category is hers). Only arrivals from the deploy on
+carry it (a re-match reuses stored readings), so no live row moved. A/B over
+the 251 stored documents of the 09-25 backup, two passes per arm, cache off,
+USD 2.32 on the client's key (owner approved; the brief's USD 0.02 was wrong,
+see item 227): 53 of 3,366 readings stable in both arms moved (1.6%, against
+about 6.5% pass-to-pass noise); date, total, document_type, card_last4 0;
+currency 1 (August 0053, a Brazilian slip printing "VALOR 6,00" and no
+currency, BRL -> null, which asks a person; owner chose to ship);
+invoice_number 26, 24 of them Stripe files now reading the number they print.
+`document_kind` named all 57 Invoice / Receipt files right in both passes and
+Redis 0070 a reminder; the printed numbers call 33 real receipts invoices
+(NFC-e slips, OpenAI receipts), hence kind first. Fingerprint re-pinned.
+
+**Step 5 (SHIPPED 2026-09-27).** A reference or digit core that another
+month's receipt carries with the same total and currency and a date at least
+20 days away is a billing-account key: inside a month it no longer twins two
+bills. Computed where neighbour months may be read (`rematch_month`, and a
+receipt add on a month with no statement), stored as snapshot
+`duplicate_account_keys`; page views read the stored list and never load
+another month. Same-date matches across months are served as the advisory
+`cross_month_copies[]`. Predicted on the frozen 09-25 payloads: keys
+`77H7ITO0` (July, September) and `5ZK1BCDG` (July, August), 0 groups move,
+0 cross-month copies; April to June were not in the frozen set. Keys move
+only at a month's own next computing write.
+
+**Step 7 (SHIPPED 2026-09-27, run on nothing).** `POST
+/api/runs/{id}/duplicates/reapply` (operator, typed confirm, `dry_run` a
+required boolean): the dry run answers per group what a re-match would keep
+and which copies change count, writing nothing; a real run is the month's
+ordinary re-match (trigger `duplicates_reapply`) as a job whose result carries
+the preview and the applied diff. Refused: no statement, published, a
+re-match in flight, not an expense batch.
+
+**Open:**
 6. Intake decides once: an Invoice-*.pdf and Receipt-*.pdf naming one
    invoice number in one mail are recorded at arrival
    (`intake_provenance.twin_of`).
-7. `POST /api/runs/{id}/duplicates/reapply` (operator, typed confirm): runs
-   the ladder, commits group membership + kept order, re-matches. Build and
-   test it; run it on nothing.
+- Owner decision per month whether to run step 7's reapply (September's
+  invoice-over-receipt swaps; July's 0076 / 0083 / 0054 leave the count).
 
 ### 224. The posting account reads the merchant list as it is now (front 3 of the 2026-09-25 parallel round; map `.scratch/recon-matching-gaps-2026-09-25.md`)
 
@@ -11993,27 +12038,188 @@ is ignored. (4) The model may not land on E500010-10 unless the merchant is
 Zoho (`account_vendor_specific`). (5) A stored suggestion naming a parent or,
 on a non-Zoho row, E500010-10 reads as its refusal at view time.
 
-**Open, in order (the continuation carries the code pointers):**
-6. Line-sum check: `expenses[].line_sum_gap` and a review note when the lines
-   disagree with the total by more than 0.05 (12 / 11 / 12 receipts); mark the
-   export only where the receipt splits across accounts, since only then do
-   the wrong shares change what posts.
-7. Lovable's two list entries: report which entry each live row lands on
-   (12 "Lovable Labs Incorporated" receipts vs the rest) and put the merge to
-   the owner as a settings write; do not re-ask about Lovable's accounts.
-8. Measure step 2 on all 314 charge descriptors under the live list and the
-   write-plan list (every new hit listed), and steps 4-5 per row on the live
-   payloads after deploy (map: 57 rows on E500010-10, 76 + 28 on a parent).
-Owner decisions pending: item 115 (a Zoho-seeded rule deciding a receipt with
-readable lines), merging the Lovable entries, the write plan's uncontested
-rows.
+**Step 6 SHIPPED 2026-09-27** (PR number in the Shipped table): `expenses[].line_sum_gap`
+(lines minus total, signed) and `line_sum_note`, ABSENT within 0.05 and when
+the lines equal the total less the printed tax (net-priced lines, 16 live rows:
+Anthropic, Google); a split receipt with a gap reads review `line_sum_split`
+(a missing category still wins) and its `expenses.csv` rows end `(lines do not
+add up)`. Predicted on the 2026-09-27 payloads: 13 / 9 / 10 rows carry the
+fields, one splits (July Railway 0088, already `pick`), so no review state and
+no count moves. **Item 115 ruling built in the same PR** (owner yes 2026-09-27):
+on a GL month a Zoho-seeded rule leads on a receipt with readable lines, and
+the second read flags `learned_over_line` where the lines disagree; the bucket
+path is unchanged. **Step 7 DONE 2026-09-27**: since v262 every live Lovable
+row (26 receipts, 9 charges) already names "Lovable Labs"; only a receipt whose
+extracted brand reads "Lovable Labs Incorporated" still reached the second
+entry. On the owner's yes, one settings write folded it into "Lovable Labs"
+aliases (34 -> 33 entries, the other 32 verbatim, `needs_account` unchanged at
+Consulting 8 + Corporate Services 23). **Step 8 first half measured**: the
+offline resolver reproduces the server's `merchant` on all 314 charge rows;
+live list 85 exact / 10 fuzzy (9 LOVABLE, 1 WWW.BRAVE.COM) / 2 descriptor
+(MEGA CENTE CONSTR, ZOHO* ZOHO-ONE) / 217 none; the write-plan list 151 / 17 /
+3 / 143 (new descriptor hit: HOSTINGER US INC; "COMPUTER" 15.96 resolves to
+Perplexity AI, which is how Criss booked eight of them).
+
+**Live 2026-09-27 (Fly v264, `bc9daf45`):** the prediction held row for row (13 / 9 / 10 rows carry `line_sum_gap` with the predicted values, no `line_sum_split`, `n_review` 57 / 42 / 62 unchanged); published SPA driven cold on July, no fallback. **Step 8 second half measured:** steps 4-5 (v262) turned 62 live rows (July 19, August 24, September 19) from a pre-filled model suggestion into "pick an account": 27 `account_vendor_specific` (the model had named Zoho ERP for Fireflies, Google, AWS, Trello, Obsidian, ElevenLabs, GitHub), 35 `model_picked_parent` (E500010, E600010-30, E100020 and the like). **Item 216 account map written 2026-09-27 on the owner's yes, the 3+ postings tier only:** 34 accounts on 32 new list entries (readiness 8/8, read back equal); live, 15 receipts and 43 charges now read a rule answer (10 + 43 replaced a suggestion). The 9 two-posting and 3 majority rows, Google Workspace / Cloud, OpenAI / Anthropic / Lovable stay out.
+
+
+### 225. What "Save corrections to memory" shows is not tangible (note #91, operator, 2026-09-25 16:15 UTC) (BACKEND LIVE 2026-09-27, PR #1487, Fly v265; SPA prompt `docs/lovable-memory-plan-sentences-prompt.md` not pasted)
+
+Read off `GET /feedback.jsonl` on 2026-09-27 (92 notes; #91 and #92 were
+the only ones with no item). Verbatim, on April 2026's Expenses view
+(`/expenses/0603bb0e6f38`): *"make sure the corrections displayed to user
+when "Save corrections to memory" button is clicked are tangible, dirk and i
+had trouble understanding it"*. A follow-up to item 163 (note #81, the
+memory journal: `lovable-memory-journal-prompt.md`, published 2026-09-23),
+which made the button say where corrections are saved and made them
+reversible; this note says the list it shows still does not read as
+concrete changes to two people who made them. Not investigated yet: open
+the dialog on April read-only (writes aborted), write down what each line
+says against the correction behind it, and compare with the owner's
+explain-memory-by-example ruling (D4, item 204: "account -> card -> count").
+
+**Read 2026-09-27 (cold drive of the published SPA, 0 writes).** April's
+dialog renders `memory-plan.writes[]` as a What / About / Value table:
+"Company | erick sports | Brisken Holding, LLC" and "Correction | erick sports
+· Brisken Holding, LLC · card_key | card-8311", then "This also updates 16
+merchants in the merchant list." and "Save 2 rules". Against the corrections
+behind it: both rows come from ONE edited receipt (ERICK SPORTS 49.98 BRL,
+2026-04-01, card picked as 8311), and the 16 merchants are the card learner's
+work: 14 learn a card (`card_key_learned`), 2 (MARTINO SUPERMERCADO, MEGA
+CENTER) were seen on 0340 and 2838 and learn none. Three things made it
+untangible: the storage key instead of the vendor as printed, `card_key` /
+`card-8311` instead of "paid with Credit Card - 8311 (Dirk Neumann - Cloud
+Services)", and a count with nothing behind it. The same reply already carried
+`lessons[]` (item 183, what the Publish checklist shows), but its sentences
+said "its card_key reads card-8311" and "Merchant list, X: card card-0340;
+seen on card card-0340", and the 16 card lessons had NO `sources`: the card
+learner reads receipts whose card was observed, a path `_registry_rows` never
+attributed. The button saves exactly the default lessons (`ml.select`), so the
+dialog listing `writes` could also disagree with the save on a month holding a
+conflict or a drift lesson.
+
+**Backend (this item).** Lesson sentences say what the next receipt gets
+("From now on, ERICK SPORTS receipts in Brisken Holding, LLC are filled in as
+paid with Credit Card - 8311 (Dirk Neumann - Cloud Services).", "Merchant
+list, Americanas: paid with Credit Card Chase Visa - 0340 (Criss Neumann), so
+its next receipt gets that card. Seen on N receipts: ..."), cards by their
+Settings label and person, and a card lesson's `sources` hold the receipts
+the learner observed, read from one helper both use
+(`service.registry_card_observations`), so the rows shown are the rows taught.
+Route-level `tests/test_memory_plan_tangible_item_225.py` (3); `regress_check`
+red on all three wires (the observations passed to the lessons, the card map,
+the card naming in the merchant-list sentence). **SPA half:**
+`docs/lovable-memory-plan-sentences-prompt.md` (the dialog lists the lessons it
+saves in two sections plus the ones it does not save, "Save {n} changes").
+Not built: the sentences are English only (as the Publish checklist already
+is); a PT rendering would need structured fields the SPA composes.
+
+**Live 2026-09-27 (PR #1487, merge 672c7ddf, Fly v265, `/healthz` on the
+commit).** April's `memory-plan` (GET): 18 lessons, all 18 saved by the
+button, 0 sentences carrying a `card-` key, every merchant-list lesson with its
+receipts (14 with one, MARTINO SUPERMERCADO and MEGA CENTER with two). The
+published SPA's Publish checklist already renders them (driven cold, April
+Matching, Publish -> Publish anyway -> the checklist, Escape; 0 non-GET
+requests, 2 month reads): "From now on, ERICK SPORTS receipts in Brisken
+Holding, LLC are filled in as paid with Credit Card - 8311 (Dirk Neumann -
+Cloud Services)." The Save dialog still shows the old table until the prompt
+is pasted.
+
+### 226. The Matching page's statement download buttons go (note #92, operator, 2026-09-25 16:23 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-statement-downloads-off-matching-prompt.md`, not pasted)
+
+Verbatim, on April 2026's Matching page (`/runs/0603bb0e6f38`): *"remove
+these statement download buttons"*. The Statements drop-down on that page
+lists each statement file with a Download link (April holds 3 files; August,
+driven 2026-09-27, shows Download on its two workbooks). SPA only, a
+Lovable prompt; item 141 (note #68) removed repeated download buttons on the
+month page and is the precedent for the shape. Check first whether any other
+route still offers the statement file, so removing the link does not leave
+the original unreachable.
+
+**Read 2026-09-27.** The note's anchor is the Downloads row itself
+("DownloadsReconciliation (PDF)Report (Excel)Reconciled CSVStatement
+Chase1176_2026-04_post…"), not the Statements drop-down: since item 141 the
+Matching page's header shows no download (`showDownload={active !==
+"matching"}`), and its statement downloads are item 141's per-workbook
+"Statement {file}" buttons in `SummaryBar`. Driven cold on April the same day
+(0 writes): five buttons in the row, two of them the Chase1176 and Chase9693
+workbooks. The backend has NO route for a statement's raw upload; the only
+statement file it serves is `GET /runs/{id}/statement-categorized.xlsx`
+(her workbook plus the tool's account column, `xlsx` only). After the change
+that file stays reachable from the Expenses page's statements table (April:
+Download on both workbook rows), which is the one place left to get it; the
+CSV statement never had a download. **Prompt:**
+`docs/lovable-statement-downloads-off-matching-prompt.md` (the row keeps
+Reconciliation (PDF), Report (Excel), Reconciled CSV; the `statements` and
+`writebackAvailable` props and the two `sum.dl.statement*` keys go).
+
+**Note #93 (operator, 2026-09-26 23:51 UTC, September Matching
+`/runs/51a22ad72864`, anchor "Downloads ... Statement Chase1176_2026-09_post…"):
+"remove this function to download statements".** The same ask on a second
+month, read off `/feedback.jsonl` on 2026-09-27 after item 225 shipped. The
+prompt above removes the buttons in `SummaryBar` for every month, so it covers
+#93 with no change.
+
+### 227. The app prices every photo reading at zero (found 2026-09-27, item 223 step 4 A/B)
+
+`llm/cost.py` carries no price for `gpt-5-mini`, the vision model every
+photographed receipt and rendered mail body is read with
+(`web/service.py` `VISION_MODEL`), so the cost tracker records those calls at
+USD 0. Measured in the step 4 A/B: four passes over 251 stored documents cost
+USD 2.32 at list price while the tracker said USD 0.21; gpt-5-mini was about
+93% of the spend (1,300-1,440 reasoning tokens per call). Every AI-cost figure
+the app shows under-reports by the vision share, and a brief that sized an
+A/B from the tracker was off by a factor of ten. Fix: add the model's price
+(input, cached input, output incl. reasoning tokens) and a test that every
+model the config can name has one.
+
+### 228. The "Was: …" line under a category goes (note #94, operator, 2026-09-26 23:53 UTC)
+
+Verbatim, on September's Matching page (`/runs/51a22ad72864`), anchor "Was: IT:
+Computer and Internet Expenses (suggested)": *"remove this "was..." line, no
+need for that"*. The line is item 224's `category.stamped.was`
+(`lovable-identity-live-prompt.md`), rendered in the SPA's
+`GlAccountPicker.tsx` (~line 223, keys `category.stamped.*`), so it is live.
+SPA only, a Lovable prompt: drop the "Was" line wherever `stamped.was`
+renders; the backend field can stay (other readers: check the CSV and the PDFs
+before removing it there). Not investigated beyond locating the component.
+
+### 229. The FX judge's reason reads as model prose (note #95, operator, 2026-09-26 23:54 UTC)
+
+Verbatim, on April's Matching page (`/runs/0603bb0e6f38`), anchor "The
+converted amount of 104.00 USD is close to the transaction amount, but the
+vendors ar…": *"ai slop remove or improve"*. The sentence is the FX judge's
+model-written reason (item 222 steps 1-5, prompt v2). To read first: which
+field carries it (`review.reason` vs `review.cause` / `cause_detail`, item
+222's structured cause, whose SPA prompt `lovable-review-cause-prompt.md` is
+not pasted), and whether the pasted cause line would already replace it. If
+the structured cause covers every judged pair, the fix is to stop showing the
+model prose, not to rewrite it.
+
+### 230. Does the receipt-day FX rate settle more pairs? (note #96, operator, 2026-09-26 23:55 UTC)
+
+Verbatim, on April's Matching page, anchor "12.90 EUR x 1.17064 = 15.10 USD ·
+difference +1.02 USD (+6.75%)": *"look if certainty gets significantly
+improved if fx rate from date of receipt is used"*. A measurement question
+(the matching program is closed, so nothing is built without the owner): the
+daily rung (`opentickers_day`, item 167) already reads the CHARGE day, nearest
+day within 4; the note asks for the RECEIPT day. Measure on the labelled
+bundles and the live months, read-only, which pairs' gap and band change when
+the rate is taken on the receipt date, and report the count that crosses into
+the clean band, right or wrong, before proposing anything.
 
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
-| 145 | Item 220 steps 3 + 4 (front 2): a statement's declared period (`statements[].period_declared_start/end`, PDF Opening/Closing Date, SharePoint export posted range) widens its coverage, a subcard is covered only when printed or declared, and `cards[].statement_expected` false means nothing waits for the card. | Three cards nobody can export (0113, 6013, 8311) kept card-less receipts waiting forever, and one printed 2838 charge vouched for subcards the file never showed. | PR #1491 |
-| 144 | Item 224 steps 1-5 (front 3): the grid, the run payload and the reviewer files read the merchant list live (`vendor.display`/`source` + `vendor.stamped`, `merchant {name, match}`, a per-company account decides as a rule with `posting_category.stamped`); a bank-descriptor resolver tier; the close-spelling containment guard; the ZOHO ERP guard (`account_vendor_specific`); stored parent / ZOHO ERP suggestions read as refusals. | The owner's OpenAI and Anthropic accounts reached no row already in a month: 21 receipts (all then post), 46 receiptless charges and 5 matched charges move; the 24 that join a Criss posting all agree. | PR pending |
+| 151 | Item 220 steps 3 + 4 (front 2): a statement's declared period (`statements[].period_declared_start/end`, PDF Opening/Closing Date, SharePoint export posted range) widens its coverage, a subcard is covered only when printed or declared, and `cards[].statement_expected` false means nothing waits for the card. | Three cards nobody can export (0113, 6013, 8311) kept card-less receipts waiting forever, and one printed 2838 charge vouched for subcards the file never showed. | PR #1491 |
+| 150 | Item 223 step 7 (front 4): `POST /api/runs/{id}/duplicates/reapply`, operator, typed confirm, required boolean `dry_run`; the dry run writes nothing and answers per group what a re-match would keep and which copies change count; a real run is the ordinary re-match (trigger `duplicates_reapply`) as a job carrying the preview and the applied diff | A changed duplicate rule reached a matched month only at its next natural re-match (September's 12 invoice-over-receipt swaps); now the owner can preview a month and order it | 2026-09-27, run on nothing |
+| 149 | Item 223 step 5 (front 4): billing-account keys across months (same reference or digit core, same money, dates 20+ days apart) stored at re-match and at a no-statement receipt add as `duplicate_account_keys`, read by every duplicate reader; `cross_month_copies[]` advisory | Two monthly bills of one amount under one account code (Railway `77H7ITO0`, Rize `5ZK1BCDG`) would have twinned inside a month and one would have left the total; 0 live groups move | 2026-09-27 |
+| 148 | Item 223 step 4 (front 4): `document_kind` in the extraction schema only; the kept copy reads it first; a reminder is never kept and alone reads `reads_as_reminder` | Which copy counts depended on file names and on numbers that call Brazilian slips and OpenAI receipts invoices; A/B 53 of 3,366 stable readings moved, 1 currency (to null), 0 date/total/type/card | 2026-09-27 |
+| 147 | Item 225 (note #91): memory-plan lesson sentences say what the next receipt gets ("From now on, ERICK SPORTS receipts ... are filled in as paid with Credit Card - 8311 (Dirk Neumann - Cloud Services)"), a card by its Settings label and person, and a merchant-list card lesson names the receipts the card learner observed (`sources` + "Seen on N receipts"), read through one helper the learner also uses (`registry_card_observations`). SPA half `docs/lovable-memory-plan-sentences-prompt.md` pending | April's Save dialog read "erick sports · Brisken Holding, LLC · card_key -> card-8311" and "This also updates 16 merchants"; Dirk and Matthias could not tell what either meant, and the 16 merchant-list lessons carried no rows at all | PR #1487, live Fly v265 2026-09-27; route-level `tests/test_memory_plan_tangible_item_225.py` (3), `regress_check` red on all three wires |
+| 146 | Item 224 step 6 (front 3): `expenses[].line_sum_gap` / `line_sum_note` when a receipt's lines disagree with its total by more than 0.05 (net-of-tax lines agree); a split receipt with a gap reads review `line_sum_split` and its `expenses.csv` rows end `(lines do not add up)`. Item 115 ruling in the same PR: on a GL month a Zoho-seeded rule leads on a lined receipt, the second read flags `learned_over_line`. | Nothing compared a receipt's lines with its total, so a split receipt's accounts could take shares from misread lines with no flag (live: 13 / 9 / 10 rows disagree, one splits); about 41 unsure receipts take a seeded rule's answer at their next categorization. | PR #1481, live Fly v264 2026-09-27 |
+| 145 | Item 222 step 6 (front 5): `exact_vendor_lookalike_guard`. A card-named EXACT same-currency pair with merchant below 0.5 goes to review (`exact_vendor_disagrees`, cause `merchant_disagrees` + `same_amount_receipt`) when a same-amount receipt is left unmatched; otherwise unchanged | Item 133 rules 1 and 3: no merchant floor alone separates right exact pairs (0.42, 0.46) from the wrong one (0.40); the leftover same-amount receipt does. 0 pairs move on July, August, September and the six bundles; a planted receipt moves exactly the one pair | PR #1479 (merge `be01b686`), Fly v263 2026-09-27; live API on July / August / September unchanged (0 rows carry the code, as predicted), August Matching driven cold (35 of 143 paired, 5 to review) |
+| 144 | Item 224 steps 1-5 (front 3): the grid, the run payload and the reviewer files read the merchant list live (`vendor.display`/`source` + `vendor.stamped`, `merchant {name, match}`, a per-company account decides as a rule with `posting_category.stamped`); a bank-descriptor resolver tier; the close-spelling containment guard; the ZOHO ERP guard (`account_vendor_specific`); stored parent / ZOHO ERP suggestions read as refusals. | The owner's OpenAI and Anthropic accounts reached no row already in a month: 21 receipts (all then post), 46 receiptless charges and 5 matched charges move; the 24 that join a Criss posting all agree. | PR #1477, live Fly v262 2026-09-27 |
 | 143 | Item 223 steps 2-3 (front 4): duplicate rungs `reference_digits` (a shared digit core of reference / invoice_number / receipt_number, merchant identity + amount + date within a day) and `misread_digit` (one digit apart, same day), and a `body_twin` key (a rendered mail body beside the one document it repeats; the body is never kept unless a charge holds it) | One purchase counted twice: July's five slip pairs read two ways (BRL 437.77) plus the E A Locações pair at its next re-match, August's Zoho Books body (USD 576.00), September's four bodies (USD 260.00) | 2026-09-25, PR TBD |
 | 142 | Item 222 steps 1-5 (front 5): the FX judge is handed the tool's rate, card verdict and merchant agreement (prompt v2, cache keyed on it, look-alike pairs with clean evidence skip the model); `review.cause` / `cause_detail`; booked charges not judged and out of `n_review`; PDF payoffs read `payment`; `reverses_transaction_id` | 13 live verdicts guessed their own rate (one tenfold off); every review row read one generic sentence; July counted 13 booked rows as in review; six payoffs read refund | 2026-09-25 |
 | 141 | Item 221 (front 1): charges with nothing behind them say what they are. Charge `reason_code` + `closed_recurring` / `no_receipt_expected`, `already_booked` reads the reviewer verdict, `reason_label` on every charge element; `n_already_posted` counts booked purchases only; `summary.n_cards_uncovered` / `cards_uncovered[]` and the Publish refusal sentence; `receipt_chase` `date_range` / `charge_month` and the mail grouped by charge month; ask age + `overdue_days` + per-holder mark-all; `python -m expense_recon.zoho.booked_report` (read-only, one-cent control) | July's 24 and August's 40 gray charges read "no receipt found" while the gate called them closed; 3 / 4 / 7 cards had nothing loaded behind "0 need a receipt"; 33 chased charges were filed under the wrong month; Zoho already held 11 + 11 open charges | PR #1468 |

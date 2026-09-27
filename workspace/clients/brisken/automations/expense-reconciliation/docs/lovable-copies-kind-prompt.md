@@ -28,6 +28,16 @@ PT
   "wb.dups.basis.misread_digit": "Mesmo cupom, um dígito lido diferente",
   "wb.dups.basis.body_twin": "O e-mail repete a fatura anexada",
 
+Also add one entry next to the existing `mh.rematch.trigger.*` keys, for the
+month's last re-match when an operator re-applied the duplicate rules
+(`last_rematch.trigger` = `duplicates_reapply`; today it prints the raw value):
+
+EN
+  "mh.rematch.trigger.duplicates_reapply": "duplicate rules re-applied",
+
+PT
+  "mh.rematch.trigger.duplicates_reapply": "regras de duplicatas reaplicadas",
+
 Do not change: any other key, the fallback key, the duplicate panel's layout,
 the "Not a copy" / "Same document" controls, which member is shown as kept,
 any API call, the bearer-token auth. No Supabase.

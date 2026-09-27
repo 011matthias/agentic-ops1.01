@@ -45,7 +45,7 @@ absent):
 |---|---|
 | `rival_agrees` | `rival_charges[]`, `rival_receipts[]`, `rival`, `model_p` |
 | `model_doubts` | `model_p`, `model_reasoning` (English, the AI's own sentence) |
-| `merchant_disagrees` | `vendor_pct` |
+| `merchant_disagrees` | `vendor_pct`, `same_amount_receipt` |
 | `no_card_rival` | `rival` |
 | `fx_review_zone` | `gap_pct`, `rate_source`, `model_p` |
 | `probable_date_gap` | `date_gap_days`, `amount_diff` |
@@ -62,6 +62,9 @@ absent):
   "{vendor} {amount} {currency} · {date}" from `rival_charges` (charges) and
   `rival_receipts` (receipts, using `total`). If both lists are absent but
   `rival` is present, print `rival` as is.
+- `merchant_disagrees`: when `same_amount_receipt` is present the receipt
+  DOES name a card, so use `merchant_disagrees_waiting` instead of the
+  no-card sentence and print `same_amount_receipt` as is after it.
 - `model_doubts`: print the sentence, then `model_reasoning` in a muted
   line, verbatim (it is English model text; do not translate it).
 - `probable_date_gap` appears on **Reconciled** rows too: show it as a small
@@ -83,6 +86,9 @@ expx.review.cause.model_doubts
 expx.review.cause.merchant_disagrees
   EN: The receipt names no card and the merchant name does not match ({pct}%).
   PT: O recibo não indica cartão e o nome do comerciante não confere ({pct}%).
+expx.review.cause.merchant_disagrees_waiting
+  EN: The merchant name does not match ({pct}%), and another receipt of the same amount is still unmatched:
+  PT: O nome do comerciante não confere ({pct}%), e outro recibo do mesmo valor continua sem par:
 expx.review.cause.no_card_rival
   EN: The receipt names no card, and a charge on another card also fits.
   PT: O recibo não indica cartão, e uma cobrança em outro cartão também encaixa.

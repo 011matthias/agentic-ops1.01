@@ -251,6 +251,8 @@ def receipt_to_dict(r: Receipt) -> dict:
         "detected_time": r.detected_time,
         "invoice_number": r.invoice_number,
         "receipt_number": r.receipt_number,
+        # Item 223 step 4 (2026-09-27).
+        "document_kind": r.document_kind,
         # Item 87 (2026-09-17).
         "card_key": r.card_key,
     }
@@ -296,6 +298,8 @@ def receipt_from_dict(d: dict) -> Receipt:
         detected_time=d.get("detected_time"),
         invoice_number=d.get("invoice_number"),
         receipt_number=d.get("receipt_number"),
+        # .get keeps pre-2026-09-27 snapshots loadable (no item-223 key).
+        document_kind=d.get("document_kind"),
         # .get keeps pre-2026-09-17 snapshots loadable (no item-87 key).
         card_key=d.get("card_key"),
     )
