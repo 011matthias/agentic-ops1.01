@@ -7962,3 +7962,42 @@ receipt whose company's card merely has no statement loaded is not named;
 that is `waits_for_statements`.
 
 Tests: `tests/test_entity_key_220.py` (8, route-level).
+
+## The intake decides once: `submitted_by.twin_of` and basis `intake_twin` (item 223 step 6, 2026-09-27)
+
+A Stripe-style vendor mails one purchase as two attachments of one mail, the
+invoice and its receipt. When the readings of two files ONE mail delivered
+name one invoice number (normalized, at least 5 characters), one reads as the
+invoice and one as the payment receipt (`document_kind`, then the printed
+numbers, then the file name), they agree on total and currency, name no two
+different cards, and no third file of that mail carries the number, the
+intake records the pair on both files' provenance at arrival.
+
+| Payload | Field |
+|---|---|
+| Expense batch / run (month with no statement) | `expenses[].submitted_by.twin_of` (string, the twin's `document_id`) |
+| Both | `duplicate_groups[].basis` gains the value `intake_twin` |
+
+`twin_of` is ABSENT on every other file, on a web upload, and on every file
+that arrived before this deploy (the record is made once, at arrival, and
+stored in the run snapshot's `intake_provenance`). Parallel, never null.
+
+Rung 0 of the duplicate ladder reads the record: a two-member group whose
+members name each other decides `copy` with basis `intake_twin`, before
+identical bytes. A pair no older key nominates is listed as its own group
+(appended after every older key, so no existing group id moves); a pair an
+older key already holds keeps that group and its id, and only the basis
+changes. Re-checked on every read: once a reviewer's edit gives the two
+different amounts or cards, the record stops deciding and the older rungs
+answer as before. A reviewer's "Not a copy" outranks it like any other rung.
+Which copy counts is unchanged (item 217: the payment receipt over its
+invoice). A receipt moved to another month (`month_move`) drops its
+`twin_of`: the twin stays behind.
+
+Live on the day it shipped: no stored file carries the record. Predicted on
+the step-4 A/B readings (both passes agreeing) joined to the live mails, ten
+pairs July to September would be recorded and every one already sits in a
+single copy group, so nothing counts differently.
+
+Tests: `tests/test_intake_twin_front4_step6.py` (route-level through mail
+intake and the batch payload, plus the rule on readings).

@@ -2206,3 +2206,19 @@ def test_cross_month_copies_is_absent_or_non_empty_never_null(payloads):
             assert entry["batch_id"] != view["run_id"], entry
         seen += 1
     assert seen, "the reconciling month repeats a receipt of the fixture batch"
+
+
+def test_intake_twin_is_a_ladder_basis_and_twin_of_is_a_document_id():
+    """Item 223 step 6: `duplicate_groups[].basis` gains `intake_twin`, and
+    `submitted_by.twin_of` (absent unless recorded) names the twin's
+    `document_id`. The route-level pins are in
+    `tests/test_intake_twin_front4_step6.py`."""
+    from expense_recon.duplicates import (
+        BASIS_INTAKE_TWIN, LADDER_BASES, TWIN_OF_KEY, stamp_intake_twins,
+    )
+
+    assert BASIS_INTAKE_TWIN == "intake_twin" and BASIS_INTAKE_TWIN in LADDER_BASES
+    assert DUPLICATE_BASES <= set(LADDER_BASES)
+    assert TWIN_OF_KEY == "twin_of"
+    prov = {"a.pdf": {"person": "Dirk"}}
+    assert stamp_intake_twins(prov, []) is prov  # nothing recorded, key absent
