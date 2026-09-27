@@ -83,3 +83,22 @@ Protocol: workspace/clients/brisken/automations/expense-reconciliation/docs/PARA
 8. At critical (700k): stop right after step 4's commit and push, then do steps 5, 6 and 7.
 9. When the queue is empty and no new feedback note is open, do not write another prompt: say the loop is done and list what shipped and what waits on the owner or Criss.
 ````
+
+
+## Addendum (after the checkpoint, same session)
+
+- **Lovable prompts, published-bundle audit (2026-09-27):**
+  - 13 prompts that `docs/PROMPT-STATUS.md` still called "not pasted" are live. Their rows were corrected in PR #1494.
+  - Still to paste:
+    - `lovable-attach-month-filter-prompt.md` (item 215)
+    - `lovable-statement-colour-prompt.md` (item 162)
+    - the one `mh.rematch.trigger.duplicates_reapply` line of `lovable-copies-kind-prompt.md` (its three basis labels are live)
+  - All three were handed to the owner in chat.
+- **Feedback note #98 (Settings > Email intake, "add nicolas@expenses.brisken.com to this list"):** DONE on the owner's yes. One PUT of the `intake` group added alias `nicolas` -> "Nicolas Neumann" (the person on card 3876). A whole-settings diff before and after shows only `intake.aliases.nicolas` changed.
+- **Feedback note #97 (September Expenses, the summary / filter area): OPEN, not itemized.** "These filters inside months need to show the postive things ("categorized", "ready") small, and formatted with the obvious intent of enabling distinguishment from the stuff that needs user's attention". It needs an SPA prompt: read the published filter component and the payload counts first, then itemize it in the backlog and write `lovable-*-prompt.md`.
+- Every other note in `/feedback.jsonl` (98 in total) is already cited in the backlog.
+
+**Queue for the next session, in order:**
+1. Note #97: itemize it and write the Lovable prompt.
+2. Item 223 step 6.
+3. Optional: item 227.

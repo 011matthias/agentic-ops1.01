@@ -29,6 +29,7 @@ rate of its own.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 from decimal import Decimal
 from typing import Any
@@ -216,6 +217,35 @@ def _fx_reason(
     if result.reasoning:
         parts.append(result.reasoning)
     return " ".join(parts)
+
+
+_FX_VERDICT = re.compile(
+    r"^FX judgment: likely (?:NOT the same|same) purchase \(p=[0-9.]+\)\."
+)
+_TOOL_CONVERSION = re.compile(
+    r"^[0-9.,]+ \w+ = [0-9.,]+ \w+ at the tool's rate [0-9.]+"
+    r"(?:, [+-]?[0-9.]+% from the charge)?\."
+)
+_AMBIGUOUS_PICK = re.compile(r"^Ambiguous pick \(p=[0-9.]+\)")
+
+
+def without_model_prose(reason: str) -> str:
+    """A judged reason as it is shown: the verdict, p and the tool's own
+    conversion, never the model's words (note #95, owner 2026-09-26: "ai
+    slop remove or improve"). The model's approximate conversion goes too:
+    it is the model's rate, and the tool's rate is printed beside every FX
+    candidate. Stored reasons keep the text; only what is served and
+    printed drops it. Any other reason comes back unchanged."""
+    text = reason or ""
+    verdict = _FX_VERDICT.match(text)
+    if verdict is not None:
+        rest = text[verdict.end():].lstrip()
+        tool = _TOOL_CONVERSION.match(rest)
+        return f"{verdict.group(0)} {tool.group(0)}" if tool else verdict.group(0)
+    pick = _AMBIGUOUS_PICK.match(text)
+    if pick is not None:
+        return f"{pick.group(0)}."
+    return reason
 
 
 def judge_unmatched(

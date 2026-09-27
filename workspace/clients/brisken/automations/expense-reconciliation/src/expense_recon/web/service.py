@@ -497,7 +497,9 @@ def prepare_run(
     )
 
 
-def available_entities(settings: dict | None, extra: str | None = None) -> list[str]:
+def available_entities(
+    settings: dict | None, extra: str | None = None, carried=(),
+) -> list[str]:
     """The legal entities a reviewer can pick, deduped and in the operator's
     own order.
 
@@ -517,9 +519,18 @@ def available_entities(settings: dict | None, extra: str | None = None) -> list[
     anywhere: a name the order no longer matches is ignored, and an entity
     the order never names still appears (at the back), so this list can
     neither hide an entity a charge needs nor go stale into a wrong answer.
+
+    Item 220 step 5 (owner yes 2026-09-25): one name per company. Every
+    label resolves through `entity_keys.entity_key` and the picker offers
+    each company once, under its provisioning spelling where it has one
+    (eight names for five companies before). ``carried`` are the spellings
+    this month's rows hold; one the list does not already offer is kept at
+    the back as written, so a row whose company is the long spelling still
+    renders it instead of a blank select.
     """
     from ..cards import effective_cards
     from ..coa_provision import provisioned_entity_labels
+    from ..entity_keys import company_labels, entity_key_map, norm_entity
 
     s = settings or {}
     opts: set[str] = set(provisioned_entity_labels())
@@ -535,7 +546,13 @@ def available_entities(settings: dict | None, extra: str | None = None) -> list[
         label = str(name).strip()
         if label in opts and label not in ranked:
             ranked.append(label)
-    return ranked + sorted(opts - set(ranked))
+    keys = entity_key_map(s)
+    ranked = company_labels(ranked, keys)
+    first = {norm_entity(k) for k in ranked}
+    rest = sorted(
+        k for k in company_labels(sorted(opts), keys) if norm_entity(k) not in first
+    )
+    return company_labels(ranked + rest, keys, carried)
 
 
 def resolve_entity(form: RunForm, settings: dict | None) -> str:
@@ -1640,7 +1657,8 @@ def bulk_decisions(
 
 
 def validate_manual_match(
-    run: RunRow, transaction_id: str, document_id: str
+    run: RunRow, transaction_id: str, document_id: str,
+    settings: dict | None = None,
 ) -> str | None:
     """Check a hand-made (charge, receipt) pairing against the run snapshot.
 
@@ -1665,8 +1683,17 @@ def validate_manual_match(
     # The matcher's own rule since 2026-09-11: an EMPTY entity on either
     # side is unscoped (a mailed receipt before its card is known, a charge
     # on a card the registry cannot name, item 59); only two NAMED entities
-    # that differ refuse.
-    if (
+    # that differ refuse. Item 220 step 5: "differ" by company, not by
+    # spelling (`entity_keys`), when the caller hands in the settings.
+    from ..entity_keys import entities_same, entity_key_map
+
+    keys = entity_key_map(settings) if settings is not None else None
+    if keys and not entities_same(rec.legal_entity_id, tx.legal_entity_id, keys):
+        return Refusal(
+            "Receipt and charge belong to different legal entities.",
+            code="entity_differs",
+        )
+    if not keys and (
         rec.legal_entity_id
         and tx.legal_entity_id
         and rec.legal_entity_id != tx.legal_entity_id
@@ -2186,6 +2213,7 @@ def ingest_receipts_folder_into_run(
 
     match_memory = _load_match_memory(run.config or {}, work_dir)
     match_cfg = build_match_cfg(run.config or {}, work_dir, match_memory)
+    match_cfg = match_cfg_with_entity_keys(match_cfg, store.get_settings())
     sub = match_month(in_play_tx, available, match_cfg)
 
     _stage("judging")
@@ -3572,6 +3600,7 @@ def build_view(
     # with a receipt picked as 2838) is named on the page, not only the next
     # proposal.
     from ..matching.deterministic import _tx_card_keys, card_evidence, cards_differ
+    from ..matching.judgment import without_model_prose
 
     card_res_view = resolve_batch_row_cards(
         receipts, run.config, field_overrides or {},
@@ -3717,7 +3746,9 @@ def build_view(
                     "match_type": m.match_type.value,
                     "confidence": m.confidence,
                     "score": m.score,
-                    "reason": m.reason,
+                    # Item 229: the verdict and the tool's numbers, never
+                    # the model's own sentence.
+                    "reason": without_model_prose(m.reason),
                     "requires_review": m.requires_review,
                     "is_chosen": m.document_id == held_doc,
                     # PR D — the sub-scores behind `score`, as 0-100 ints for
@@ -9131,7 +9162,10 @@ def build_expense_view(
     # Phase 5 pickers: entities the reviewer can assign (the real entities
     # from the CoA provisioning + the card->entity map + the settings
     # registry, plus this batch's own default), and the curated account list.
-    entity_options = available_entities(settings, default_entity)
+    entity_options = available_entities(
+        settings, default_entity,
+        carried=[e.get("legal_entity_id") for e in expenses],
+    )
 
     # Per-card coverage (PR 3). The charges and states read above, so every
     # charge rolled up has a state that was computed for it.
@@ -15883,6 +15917,10 @@ def rematch_month(
         if learning_db_path is not None else None
     )
     match_cfg = build_match_cfg(cfg, work_dir, match_memory)
+    # Item 220 step 5: two spellings of one company are one company in the
+    # entity scope; read once, reused by the advisory after the commit.
+    entity_settings = store.get_settings()
+    match_cfg = match_cfg_with_entity_keys(match_cfg, entity_settings)
     _stage("matching")
     # R4 advisory read: a receipt another run has already settled is out of
     # the candidate pool before the matcher sees it -- it cannot settle a
@@ -16377,25 +16415,10 @@ def rematch_month(
     # silent 0-match month. Judge against the POOL's actual entities
     # (post-bake, R3: a batch can legitimately mix entities), not just
     # the batch-level default — an entity-less batch has no default and
-    # the old check never fired for it. Loud, never silent.
-    entity_mismatch = None
-    pool_entities = {
-        e for e in ((r.legal_entity_id or "").strip() for r in receipts) if e
-    }
-    stmt_entity = (entity or "").strip()
-    if receipts and stmt_entity and stmt_entity.lower() not in {
-        e.lower() for e in pool_entities
-    }:
-        described = (
-            f"this batch's expenses belong to {sorted(pool_entities)!r}"
-            if pool_entities
-            else "this batch's expenses have no legal entity assigned yet"
-        )
-        entity_mismatch = (
-            f"The statement's card resolves to legal entity {stmt_entity!r} "
-            f"but {described}; nothing will match across entities. Check "
-            "the card / entity mapping."
-        )
+    # the old check never fired for it. Loud, never silent. Item 220 step 5:
+    # judged by company, not spelling, and per row (a receipt naming a
+    # company no card belongs to), in `entity_mismatch_advisory`.
+    entity_mismatch = entity_mismatch_advisory(receipts, entity, entity_settings)
     # Item 76: clean exact pairs confirm themselves, judged against the
     # outcome just committed. After the lock, like every decision write. The
     # match itself is committed already, so a failure here is reported in
@@ -19281,11 +19304,6 @@ REVIEW_CAUSES = (
 _CAUSE_MODEL = re.compile(
     r"FX judgment: likely (NOT the same|same) purchase \(p=([0-9.]+)\)\.\s*"
 )
-_CAUSE_CONVERSION = re.compile(
-    r"^(?:~?[0-9.,]+ \w+ from .*?\(approx rate, review\)\.\s*"
-    r"|[0-9.,]+ \w+ = [0-9.,]+ \w+ at the tool's rate [0-9.]+"
-    r"(?:, [+-]?[0-9.]+% from the charge)?\.\s*)"
-)
 _CAUSE_NO_CARD_RIVAL = re.compile(r"a charge on another card also fits \((.+?)\)")
 _CAUSE_SAME_AMOUNT = re.compile(r"same amount is still unmatched \((.+?)\)\.")
 _CAUSE_RIVAL_TEXT = "another charge or receipt agrees just as cleanly"
@@ -19293,13 +19311,13 @@ _CAUSE_RIVAL_TEXT = "another charge or receipt agrees just as cleanly"
 _CAUSE_RIVAL_NAMED = re.compile(r"agrees just as cleanly: (.+?)\)\.")
 
 
-def _cause_model_verdict(reason: str) -> tuple[str, float, str] | None:
-    """`("not" | "same", p, the model's own sentence)` off a judged reason."""
+def _cause_model_verdict(reason: str) -> tuple[str, float] | None:
+    """`("not" | "same", p)` off a judged reason. The model's own sentence is
+    not carried (item 229, note #95): the served reason no longer holds it."""
     m = _CAUSE_MODEL.search(reason or "")
     if m is None:
         return None
-    rest = _CAUSE_CONVERSION.sub("", reason[m.end():], count=1).strip()
-    return ("not" if m.group(1).startswith("NOT") else "same"), float(m.group(2)), rest
+    return ("not" if m.group(1).startswith("NOT") else "same"), float(m.group(2))
 
 
 def _cause_rivals(row: dict, cand: dict, charges_by_doc: dict) -> dict:
@@ -19376,8 +19394,6 @@ def review_cause_for_row(row: dict, charges_by_doc: dict) -> dict:
         return {"cause": "no_card_rival", "cause_detail": detail}
     if verdict is not None and verdict[0] == "not":
         detail["model_p"] = verdict[1]
-        if verdict[2]:
-            detail["model_reasoning"] = verdict[2]
         return {"cause": "model_doubts", "cause_detail": detail}
     band = fx.get("reference_gap_band")
     if band in ("review", "outside"):
@@ -19714,3 +19730,95 @@ def cross_month_copies_field(run: RunRow, receipts: list[Receipt]) -> dict:
         if isinstance(e, dict) and e.get("document_id") in docs
     ]
     return {"cross_month_copies": entries} if entries else {}
+
+
+# --------------------------------------------------------------------------
+# Item 220 step 5 (front 2): one company, one key
+# --------------------------------------------------------------------------
+# Two spellings of one company ("Corporate Services" on the card and the
+# charge, "Brisken Corp Services, LLC" picked on a receipt) are one company in
+# the matcher's entity scope, the hand-match guard and the re-match advisory.
+# Stored values are never rewritten; `entity_keys.entity_key` resolves them.
+
+
+def match_cfg_with_entity_keys(match_cfg, settings: dict | None):
+    """The run's `MatchingConfig` with the current settings' company keys
+    handed in (`MatchingConfig.entity_keys`, entity scope only, never a
+    score). Unchanged when no label joins another."""
+    from ..entity_keys import entity_key_map
+    from ..matching.deterministic import MatchingConfig
+
+    keys = entity_key_map(settings)
+    if not keys:
+        return match_cfg
+    return replace(match_cfg or MatchingConfig(), entity_keys=keys)
+
+
+def receipts_company_without_card(
+    receipts, settings: dict | None, keys: dict | None = None,
+) -> list:
+    """The receipts naming a company no registered card belongs to, by
+    company key: no statement can carry a charge of theirs, so nothing here
+    can ever pair with them. A receipt with no company is not one of them,
+    and neither is one whose company's card merely has no statement loaded
+    yet (that is `waits_for_statements`, item 220 steps 1 to 4)."""
+    from ..cards import effective_cards
+    from ..entity_keys import entity_key, entity_key_map, norm_entity
+
+    if keys is None:
+        keys = entity_key_map(settings)
+    card_companies = {
+        norm_entity(entity_key(c.entity, keys=keys))
+        for c in effective_cards(settings or {}).values()
+        if c.entity
+    }
+    if not card_companies:
+        return []
+    return [
+        r for r in receipts
+        if (r.legal_entity_id or "").strip()
+        and norm_entity(entity_key(r.legal_entity_id, keys=keys)) not in card_companies
+    ]
+
+
+def entity_mismatch_advisory(
+    receipts, stmt_entity: str | None, settings: dict | None,
+) -> str | None:
+    """The re-match's cross-company warning, judged by company rather than by
+    spelling, and per row: the statement's company missing from the whole
+    pool (the old batch-level check), and each receipt naming a company no
+    card belongs to, by vendor and company. None when neither fires."""
+    from ..entity_keys import entity_key, entity_key_map, norm_entity
+
+    keys = entity_key_map(settings)
+    parts: list[str] = []
+    pool = {
+        e for e in ((r.legal_entity_id or "").strip() for r in receipts) if e
+    }
+    stmt = (stmt_entity or "").strip()
+    if receipts and stmt and norm_entity(entity_key(stmt, keys=keys)) not in {
+        norm_entity(entity_key(e, keys=keys)) for e in pool
+    }:
+        described = (
+            f"this batch's expenses belong to {sorted(pool)!r}"
+            if pool
+            else "this batch's expenses have no legal entity assigned yet"
+        )
+        parts.append(
+            f"The statement's card resolves to legal entity {stmt!r} "
+            f"but {described}; nothing will match across entities. Check "
+            "the card / entity mapping."
+        )
+    rows = receipts_company_without_card(receipts, settings, keys)
+    if rows:
+        named = ", ".join(
+            f"{r.detected_vendor or r.document_id} ({r.legal_entity_id.strip()})"
+            for r in rows
+        )
+        one = len(rows) == 1
+        parts.append(
+            f"{len(rows)} receipt{'' if one else 's'} {'names' if one else 'name'} "
+            "a company no card belongs to, so no charge can pair with "
+            f"{'it' if one else 'them'}: {named}."
+        )
+    return " ".join(parts) or None
