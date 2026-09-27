@@ -12094,6 +12094,20 @@ stored file carries the record, so no live row moved. The new case it
 closes: a pair nothing older joins (vendor spelled two ways, different
 references, no text layer) counted twice; the route test pins it at one.
 
+**The four newer reasons never render (found 2026-09-27, SPA gate).**
+`duplicateReason()` in the SPA's `CompareCopies.tsx` uses
+`wb.dups.basis.<basis>` only for a basis inside its `BASIS_KEYS` set, and the
+published bundle's set is still the first seven (`hash` ... `statement`). So
+`lovable-copies-kind-prompt.md` ("copy only; no logic change") put the
+`reference_digits` / `misread_digit` / `body_twin` labels in the bundle where
+nothing can reach them, and `intake_twin` would join them: 12 live groups
+(July 6 `reference_digits` + 1 `misread_digit`, August 1 and September 4
+`body_twin`, API read 2026-09-27) read "Decided by the tool". **Prompt:**
+`docs/lovable-duplicate-reasons-gate-prompt.md` adds the four names to the set
+(and the `intake_twin` key only if the copies-kind paste has not). Lesson for
+label-only prompts: grep the component that renders the key for a gate before
+calling a prompt copy-only.
+
 **Open:**
 - Owner decision per month whether to run step 7's reapply (September's
   invoice-over-receipt swaps; July's 0076 / 0083 / 0054 leave the count).
