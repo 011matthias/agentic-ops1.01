@@ -268,6 +268,7 @@ from . import decision_history as dh  # item 104
 from .service import charge_category_key  # item 104
 from ..billing_account import build_account_index  # item 204 step 4
 from ..billing_account import request_scope as account_request_scope
+from .service import receipt_source_ref  # item 220 step 6
 
 log = logging.getLogger("expense_recon.web")
 
@@ -4638,6 +4639,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # old behaviour exactly, so nothing that works today changes.
         with open_store() as store:
             run = store.get_run(run_id)
+            # Item 220 step 6: a receipt this month borrowed is served from
+            # the month it lives in, under the id it has there, so a pool id
+            # (`borrowed_pool_id`) shows the right file and never a receipt
+            # of this month's own that shares the id.
+            home = None
+            if run is not None:
+                home_run_id, home_doc = receipt_source_ref(run, document_id)
+                if home_run_id != run.run_id:
+                    home = store.get_run(home_run_id)
+            if home is not None:
+                run, document_id = home, home_doc
         if run is None:
             return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
         work_dir = Path(run.work_dir)
