@@ -10882,6 +10882,8 @@ month end) drew two foreign receipts into review against other vendors'
 charges in May and June and paired nothing right; details under item 220.
 Reopen the wider form only if a card-cycle month shows a receipt paid across
 its opening that the cycle overlap misses.
+**Owner decision 2026-09-27: keep it narrowed** (asked with the two wrong May / June
+proposals laid out; the calendar-month form is the one that stays live).
 
 ### 212. A receipt settled by a neighbour month converts at the reference rate, not at the charge's amount (found 2026-09-25, building item 204 step 3)
 
