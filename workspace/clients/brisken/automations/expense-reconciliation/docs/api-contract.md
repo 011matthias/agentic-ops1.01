@@ -994,7 +994,7 @@ readable plausible date is `needs_month` and NOT ingested; the optional
 form field `month` ("YYYY-MM") is the operator override and files every
 file in that call (`month_source: "operator"`).
 
-**Zips (item 232, 2026-09-27).** A `.zip` dropped here is opened on the
+**Zips (item 237, 2026-09-27).** A `.zip` dropped here is opened on the
 server and every member files on its own row, exactly as if its files
 had been dropped one by one: its own month verdict, the destination
 month's content dedupe (so a mixed backfill zip re-sending receipts the

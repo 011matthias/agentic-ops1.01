@@ -12425,7 +12425,66 @@ look." when none is); Categorized, Ready, a zero Missing receipt image and
 Private become one line of small chips (green with a check, Private grey),
 each keeping its `boxFilter` toggle.
 
-### 232. The Receipts page takes a .zip and files each receipt in it by its own month (owner directive 2026-09-27) (BACKEND BUILT 2026-09-27; SPA prompt `docs/lovable-receipts-drop-zip-prompt.md` not pasted)
+### 232. The Matching page's two opening sentences go (note #102, operator, 2026-09-27 20:29 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-matching-header-prompt.md` §1a, not pasted)
+
+Verbatim, on September's Matching page (`/runs/51a22ad72864`), anchor "51
+charges from the bank statement, matched against this month's receipts.
+Confirm or rej…": *"remove first 2 sentences here"*. The paragraph is exactly
+those two sentences, SPA-owned (`wb.subtitle.template`, rendered once in
+`RunWorkbench.tsx`), so the whole `<p>` goes and nothing replaces it.
+
+### 233. Loaded statements fold behind one button and read by their card's last four digits (notes #99 and #103, operator, 2026-09-27 20:28 / 20:30 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-matching-header-prompt.md` §1b-1c, not pasted)
+
+Verbatim, both on the anchor "Statement loaded:
+20260904-statements-9693-.pdf, Aug 05, 2026 to Sep 04, 2026, 32 charges…":
+*"this should be compressed to just display the cards 4 ending didgits for
+clarity"* (#99) and *"Change this to a dropdown button labelled "View all
+Statements loaded" or something like that"* (#103).
+
+**Read 2026-09-27.** The lines are `StatementLoadedLines` (SPA,
+`wb.statement.loaded`), one per `statements[]` entry. The upload carries no
+card for a PDF (September's `20260904-statements-9693-.pdf` has `card_key` ""
+and `account_id` ""), but `coverage[].statements` lists each upload's `file`
+under the card(s) its charges belong to (`service.py`
+`_statement_card_identities`, the backend's own attribution): live, card-9693
+holds the PDF and the 9693 export, card-1176 the 1176 export. So the join is
+SPA-side over served fields, no backend change. **Interpretation, ours:** each
+line keeps its period and charge count after the digits, because September
+has two 9693 statements and "9693" twice would not tell them apart; the file
+name moves to the line's tooltip. A file no coverage entry names falls back to
+its name. Seen, not changed: with a card picked, `CardScope`'s grey line still
+lists that card's statement files (`cardScope.statement.loaded`).
+
+### 234. The card being shown, and a card with no statement, stand out (notes #101 and #100, operator, 2026-09-27 20:29 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-matching-header-prompt.md` §2, not pasted)
+
+Verbatim: on "Showing card 2838", *"this should also be more evident"*
+(#101); on "· No statement loaded for this card", *"this should be more
+evident for user to see"* (#100). Both are `CardScope.tsx` (SPA), which the
+Expenses page shares. The card name becomes a blue box with a card icon; a
+`not_loaded` card gets an amber "No statement loaded for this card" box on the
+same line with its "Add this card's statement" button beside it (moved from
+the grey line, so it never shows twice). `not_recorded` and
+statement-on-account lines are unchanged: the notes named only the missing
+statement. Live: card-2838 and its subcards 3645 / 3876 read `not_loaded` on
+September.
+
+### 235. The status line: cards with no statement behind a button, the open amounts boxed and bold (notes #104, #105 and #106, operator, 2026-09-27 20:31-20:33 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-matching-header-prompt.md` §3, not pasted)
+
+Verbatim: on "7 cards have no statement for this month: Apple Credit Card -
+0113, Credit Card - 2838, C…", *"change this to a dropdown: something like
+"View cards with no statement for this month" or something like that"*
+(#104); on "USD 7,496.60 still open", *"format this so that it is more
+visible"* (#105); on "USD 1,467.27 booked without a receipt (11 charges)",
+*"format this so its more visible"* (#106). All three are `StatusLine` in
+`RunWorkbench.tsx` (SPA; `summary.cards_uncovered`,
+`summary.unreconciled_by_ccy`, `summary.booked_no_receipt_by_ccy`, live
+September 7 cards / USD 7,496.60 / USD 1,467.27 over 11 charges). The card
+list becomes an amber outline button opening a popover (the not-counted
+explanation, then the cards); each amount becomes an amber box with the amount
+in bold and its label after it (two new label-only keys, since the amount
+leads in EN and PT alike).
+
+### 237. The Receipts page takes a .zip and files each receipt in it by its own month (owner directive 2026-09-27) (BACKEND BUILT 2026-09-27; SPA prompt `docs/lovable-receipts-drop-zip-prompt.md` not pasted)
 
 **Why.** On 2026-09-27 a cardholder mailed a 13 MB zip of 108 receipt PDFs
 spanning January to September. Mail never opens a zip (by design), and the

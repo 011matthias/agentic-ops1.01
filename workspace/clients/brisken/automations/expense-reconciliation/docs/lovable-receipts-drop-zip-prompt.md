@@ -1,7 +1,7 @@
-# Lovable prompt: the Receipts page takes a .zip (item 232)
+# Lovable prompt: the Receipts page takes a .zip (item 237)
 
 > **NOT YET APPLIED.** The backend half is live first: `POST /api/receipts`
-> opens a dropped zip and files each member on its own row (item 232). Until
+> opens a dropped zip and files each member on its own row (item 237). Until
 > this is pasted the page never sends a zip: its file picker accepts only
 > `image/*,application/pdf`, and the same file-name filter drops a zip from
 > the picked or dragged list before upload (bundle read 2026-09-27,
