@@ -11894,6 +11894,25 @@ natural re-match. Read-time: a borrowed receipt's image under the borrowing
 month's run id now serves the home month's file (four referenced today: June
 `0038`, July `0008`, September `0001` / `0003`), where it used to 404.
 
+**Step 6 deployed 2026-09-27.** PR #1512 (merge `dc20372f`) is live in Fly v272
+(`fc8db9cc`, a sibling's deploy of #1514, which carries it; this session's own
+`deploy.py` run was stopped before it released, because it had built the
+older `1fa8bf67` and releasing it would have rolled #1514 back). Live after,
+as predicted: each of the four referenced borrowed receipts (September `0001` /
+`0003` from August, June `0038` from July, July `0008` from June) returns its
+image through the BORROWING month, 200 with the same bytes as through its home
+month, where it returned 404 before; no row's pairing moved and no payload
+carries `document_id` yet (every stored `receipt_sources` predates the code).
+Cold SPA drive of September's Matching page (own browser, the run read once and
+replayed, writes aborted: 0), identical before and after: no error boundary,
+11 "August 2026" badges, the OpenAI rows present; the page requests no receipt
+image, so the image route's gain is proven by the API probe, not by a render.
+Found while driving, not this change's: September's OPENAI 81.12 charge now
+holds August's `0033` E A LOCACOES 340 BRL receipt (a pairing made after the
+2026-09-25 backup; vendor disagrees). And the newest SharePoint backup is
+still 2026-09-25T03:35Z although the in-app schedule backs up on every boot;
+cause not measured (the Fly log window held no backup line).
+
 ### 221. Charges with nothing behind them say what they are (front 1 of the 2026-09-25 gap-map round) (SHIPPED 2026-09-25, PR #1468; SPA prompt `docs/lovable-chase-honesty-prompt.md` not pasted)
 
 Source: the verified gap map of 2026-09-25 (`.scratch/recon-matching-gaps-2026-09-25.md`,
