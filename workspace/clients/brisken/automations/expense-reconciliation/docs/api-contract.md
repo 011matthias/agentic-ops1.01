@@ -2162,13 +2162,21 @@ month's next re-match. One receipt still settles exactly one charge.
 ### The id collision, stated
 
 Receipt ids are position-prefixed per batch (`0000__a.jpg`), so two
-different receipts can share an id across batches. The month's own copy
-wins and the colliding neighbour receipt is simply not borrowed. This bites
-harder than it does on trips because neighbouring months are ingested the
-same way: July and August shared four ids on 2026-09-15, all
-`NNNN__rendered-body.pdf`. Offering two receipts under one id would corrupt
-the matcher's consumption set and the view's lookup, which is worse than a
-narrower pool.
+different receipts can share an id across batches: July and August shared
+four `NNNN__rendered-body.pdf` ids on 2026-09-15. Since item 220 step 6
+(2026-09-27) the colliding neighbour receipt is borrowed under its own pool
+id, `{home run id}~{its id}` (`borrowed_pool_id`), and that is the id
+`rows[].chosen_document_id`, `candidates[].document_id` and the
+`receipt_sources` key carry. Its `receipt_sources` entry, and so `from_batch`
+and `settled_by`, add `document_id`: the id the receipt has in its home month.
+ABSENT on every other borrowed receipt, whose pool id is its own id. The claim
+is written on (home run, home id), so the home month's `settled_by` reads as
+before, and `GET /api/runs/{borrowing run}/receipts/{pool id}/image` serves the
+home month's file (any borrowed receipt's id does, since the same change).
+
+Item 211 (same PR): a period that opens on the 1st, a calendar-month export,
+borrows receipts printed up to 3 days before it (`ADJACENT_START_EDGE_DAYS`,
+`adjacent_borrow_window`); a card-cycle period is not widened.
 
 ## Report totals are formed in Decimal (added 2026-09-15, item 65)
 

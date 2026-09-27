@@ -10874,6 +10874,15 @@ so every day added offers the matcher more neighbour receipts and more chances
 of a wrong pairing. **Needs an owner decision:** widen the window, or accept
 that such a receipt stays unpaired and is matched by hand. Not built.
 
+**2026-09-27: shipped narrowed**, with item 220 step 6 (PR number in the
+Shipped table). The three days apply only to a statement period that opens on
+the 1st. Measured on the 2026-09-25 backup, the approved `lo - 3 days` on the
+Chase-cycle months (which open on the 30th or 31st and already reach over the
+month end) drew two foreign receipts into review against other vendors'
+charges in May and June and paired nothing right; details under item 220.
+Reopen the wider form only if a card-cycle month shows a receipt paid across
+its opening that the cycle overlap misses.
+
 ### 212. A receipt settled by a neighbour month converts at the reference rate, not at the charge's amount (found 2026-09-25, building item 204 step 3)
 
 Item 204 step 3 made the card, company and person of a receipt follow the
@@ -11853,6 +11862,38 @@ row's company select reads "Brisken Corp Services, LLC", Moghul Mahal reads
 matcher half reaches August at its next natural re-match; the guard half was
 proven by the route test, not by a live hand match (a write on Criss's month).
 
+**Step 6 + item 211 SHIPPED 2026-09-27** (PR number in the Shipped table).
+Measured first on the 2026-09-25 03:35Z SharePoint backup (still the newest
+two days later), neighbour receipt by neighbour receipt: 4 were dropped only
+for a colliding id (August from July: `0002` Hostinger 172.61 USD, `0003`
+Konsultancy 15,972.00 EUR; September from August: `0005` Obsidian 96.00 USD,
+`0006` Zoho Books 576.00 USD), 7 sat in the three days before a period (May 1,
+June 1, August 4, September 1), and no live claim collided. The commit's
+re-check merged claims across source months by id alone, so a neighbour's
+claim on `NNNN__x` could downgrade the borrowing month's own `NNNN__x` pairing;
+latent, 0 today. Built: `borrowed_pool_id(home run, id)` (`{run}~{id}`) for a
+colliding receipt, whose `receipt_sources` entry keeps `document_id`;
+`receipt_source_ref` returns (home run, id) and feeds the commit re-check and
+the claim writes (both keyed on the pair now), `sync_claim_for_decision`,
+`charges_settled_elsewhere` and the image route (a borrowed id is served from
+its home month, under its home id); `from_batch` / `settled_by` carry
+`document_id` for such a receipt only; the borrowed receipt carries its home
+row's resolved card (`bake_card_scope` over the home month's
+`resolve_batch_row_cards`). Item 211 in the form the owner approved (`lo - 3
+days`) was measured and NOT shipped as such: on the Chase-cycle months it
+offered only wrong neighbours, both into review (May: April's Fenix 117.79 BRL
+against Passaguai Cibo e Vino 23.49 USD; June: May's Anthropic 99.95 EUR
+against TST*Cheers Beacon Hill 120 USD), and gained nothing right. Shipped
+narrowed: the three days apply only to a period that opens on the 1st, the
+calendar-month export item 211 describes, and the arrival trigger reads the
+same window (`adjacent_borrow_window`). Attribution replay, origin/main vs the
+branch, on July, August, September, June and May: 0 of 270 own receipts move
+and no charge changes its pairing; the four collision receipts join the August
+and September pools and pair nothing. Takes effect at each month's next
+natural re-match. Read-time: a borrowed receipt's image under the borrowing
+month's run id now serves the home month's file (four referenced today: June
+`0038`, July `0008`, September `0001` / `0003`), where it used to 404.
+
 ### 221. Charges with nothing behind them say what they are (front 1 of the 2026-09-25 gap-map round) (SHIPPED 2026-09-25, PR #1468; SPA prompt `docs/lovable-chase-honesty-prompt.md` not pasted)
 
 Source: the verified gap map of 2026-09-25 (`.scratch/recon-matching-gaps-2026-09-25.md`,
@@ -12488,6 +12529,7 @@ leads in EN and PT alike).
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 156 | Item 220 step 6 + item 211 (front 2): a neighbour receipt whose id the borrowing month already holds is borrowed under its own pool id (`{home run}~{id}`), and the commit's claims re-check, the claim writes, a reviewer's confirm, the neighbour's `settled_by`, `charges_settled_elsewhere` and the image route read it back as (home run, id); the borrowed receipt carries the card its home row resolved; the borrow reaches 3 days before a period that opens on the 1st. | Four live receipts could never be borrowed (August from July: Hostinger 172.61, Konsultancy 15,972.00; September from August: Obsidian 96.00, Zoho Books 576.00), a pick on the home row did not scope the borrow, and a calendar-month export would have lost every receipt printed on the 31st. | PR #1512 |
 | 155 | Item 227: `gpt-5-mini` priced (USD 0.25 / 0.025 cached / 2.00 per 1M), cached input billed at each model's cached rate, and a test that fails on any model the configuration names without a price | Every photo reading was costed at USD 0, about 93% of the real spend (A/B: USD 2.32 at list, tracker USD 0.21) | 2026-09-27, PR #1500, Fly v270 (commit `987e0b52`); costs only calls from the deploy on, no live read possible without an arrival |
 | 154 | Item 223 step 6 (front 4): the intake records an invoice and its payment receipt that one mail delivered, naming one invoice number with one amount, on both files' provenance (`submitted_by.twin_of`); rung 0 of the duplicate ladder starts from it (basis `intake_twin`), re-checked on every read, a reviewer still outranks it | A Stripe-style pair whose vendor spelling, references and text layer all differ reached no duplicate key and counted twice; now the arrival decides it once. Live: no stored file carries the record; the 10 July-September mails the rule would pair already count once | 2026-09-27, PR #1496, deployed with #1500 as Fly v270 (commit `987e0b52`); live: July 21 / August 6 / September 24 duplicate groups, per-row counting, totals and copies all unchanged against a read taken just before the deploy, 0 `intake_twin` groups, 0 `twin_of` rows (as predicted); cold SPA drive rendered September USD 5,241.09 and July USD 31,882.49 |
 | 153 | Item 229 (note #95): a judged reason is served and printed without the model's own words or its approximate rate (`without_model_prose`): the Matching row's cause line, its expanded candidates, the Reconciled CSV and the Excel notes read the verdict, p and the tool's conversion. Item 228's prompt `docs/lovable-was-line-off-prompt.md` written (SPA only, not pasted). | April's Matching page printed the model's sentence under 12 rows, one of them wrong on the rate (104.00 USD vs the tool's 109.83) and on the card; the owner called it slop. | PR #1497 |
