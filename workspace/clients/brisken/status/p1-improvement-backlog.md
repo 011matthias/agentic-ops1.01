@@ -12525,6 +12525,28 @@ explanation, then the cards); each amount becomes an amber box with the amount
 in bold and its label after it (two new label-only keys, since the amount
 leads in EN and PT alike).
 
+### 236. The months list shows the picked card's own figures (owner, 2026-09-27, in session)
+
+Verbatim, on `/months` with 2838 picked: *"remove that number"* (item 193's
+needs-category count beside each chip) and *"the 'Receipts', 'Needs
+Category', 'Set Aside' rows in the Months' rows needs to adjust automatically
+to only display the number of the Receipts, Expenses that need category, and
+expenses set aside under the card chosen in filter by user in that month."*
+Ruling in the same exchange: an account counts only its own (2838 without
+3876 / 3645 / 0340), as item 193 did. The table's three columns were
+whole-month totals under every pick, so 2838's chip read 11 over rows adding
+to 80.
+
+Backend (PR pending): `receipt_months[].n_set_aside` and
+`no_card.months[].n_set_aside` on `GET /api/cards/status`, card and no-card
+totals, and `set_aside[].card_section` on the month payload. A set-aside file
+files under the card its own reading resolves to (the unheld-receipt chain),
+else No card. Receipts and Needs category already had per-card month figures.
+SPA half `docs/lovable-months-card-figures-prompt.md` (NOT PASTED): chip
+numbers off, the table reads the picked card's month entry, captions reworded.
+Route-level `tests/test_months_card_figures_item_236.py` (5), 3 of them red
+with the set-aside card stamping disabled.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |

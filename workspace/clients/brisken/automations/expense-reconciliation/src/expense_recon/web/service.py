@@ -10343,20 +10343,34 @@ def receipt_card_counts(view: dict) -> dict[str, dict[str, int]]:
     And `n_needs_category` (item 193): the rows in the NEEDS CATEGORY box
     (`"uncategorized"` in `expenses[].boxes`), the set `summary.n_uncategorized`
     counts, so a month's cards plus its no-card section add up to the months
-    list's Needs category column."""
+    list's Needs category column.
+
+    And `n_set_aside` (item 236): the files the quarantine still holds back
+    (`set_aside[]` not restored, the set `summary.n_set_aside` counts), each
+    under its `card_section`, so the same sum holds for the Set aside column.
+    A card whose only file this month is a set-aside one gets a key here too,
+    with `n_expenses` 0."""
     counts: dict[str, dict[str, int]] = {}
+
+    def _entry(key: str) -> dict[str, int]:
+        return counts.setdefault(key, {
+            "n_expenses": 0, "n_without_charge": 0, "n_needs_category": 0,
+            "n_set_aside": 0,
+        })
+
     for expense in view.get("expenses") or []:
         if expense.get("counts_in_total") is False:
             continue
-        key = str(expense.get("card_section") or "")
-        entry = counts.setdefault(
-            key, {"n_expenses": 0, "n_without_charge": 0, "n_needs_category": 0},
-        )
+        entry = _entry(str(expense.get("card_section") or ""))
         entry["n_expenses"] += 1
         if expense.get("without_charge"):
             entry["n_without_charge"] += 1
         if "uncategorized" in (expense.get("boxes") or []):
             entry["n_needs_category"] += 1
+    for held_back in view.get("set_aside") or []:
+        if held_back.get("restored"):
+            continue
+        _entry(str(held_back.get("card_section") or ""))["n_set_aside"] += 1
     return counts
 
 
@@ -10440,6 +10454,14 @@ def build_card_status(
     needing a category, all months. `n_needs_category` on each receipt month,
     each card (its own, not its subcards': picking 2838 shows 2838's rows) and
     `no_card`.
+
+    Item 236 (owner 2026-09-27: with a card picked, the months list's
+    Receipts, Needs category and Set aside "need to adjust automatically to
+    only display" that card's, per month) adds the third figure: each receipt
+    month and `no_card.months[]` entry carries `n_set_aside`, with
+    `n_expenses` and `n_needs_category` the other two columns, a card
+    counting only its own as in item 193. Totals `n_set_aside` on each card
+    and on `no_card`.
     """
     from ..output._pdf_common import _add_money
 
@@ -10576,6 +10598,7 @@ def build_card_status(
                 "n_expenses": int(figures.get("n_expenses") or 0),
                 "n_without_charge": int(figures.get("n_without_charge") or 0),
                 "n_needs_category": int(figures.get("n_needs_category") or 0),
+                "n_set_aside": int(figures.get("n_set_aside") or 0),
             }
             if key:
                 entry["statement"] = key in stated
@@ -10615,6 +10638,7 @@ def build_card_status(
         slot["n_needs_category"] = sum(
             m["n_needs_category"] for m in receipt_months
         )
+        slot["n_set_aside"] = sum(m["n_set_aside"] for m in receipt_months)
         cards.append(slot)
 
     months.sort(
@@ -10658,6 +10682,7 @@ def build_card_status(
             "n_needs_category": sum(
                 m["n_needs_category"] for m in no_card_months
             ),
+            "n_set_aside": sum(m["n_set_aside"] for m in no_card_months),
         },
         "unreadable": unreadable,
         # Rendered verbatim as the page's footnote, so it is prose for
@@ -11148,6 +11173,17 @@ def attach_expense_card_tabs(
         sec["n_expenses"] = n_total
         sec["totals_by_ccy"] = _per_ccy(sums_total)
     view["card_sections"] = sections
+    # Item 236: a file the quarantine set aside is held by no charge, so it
+    # files where an unheld receipt does (`card_sections`): under the card
+    # its own reading resolves to. A legacy entry kept no reading and has no
+    # `document_id`, so it reads "", the no-card section, as does a file
+    # whose reading names no card.
+    set_aside_cards = report_receipt_cards(
+        set_aside_receipts(run.snapshot or {}), run.config, field_overrides
+    )
+    for entry in view.get("set_aside") or []:
+        doc = str(entry.get("document_id") or "")
+        entry["card_section"] = (set_aside_cards.get(doc) or ("", ""))[0]
     return view
 
 
@@ -13775,6 +13811,16 @@ def set_aside_entries(snapshot: dict) -> list[dict]:
     if stored is not None:
         return [dict(e) for e in stored]
     return _derive_legacy_set_aside(snapshot.get("parse_errors", []))
+
+
+def set_aside_receipts(snapshot: dict) -> "list[Receipt]":
+    """The readings the set-aside entries kept, one per entry that has one
+    (a legacy entry has none), restored ones included."""
+    return [
+        receipt_from_dict(e["receipt"])
+        for e in set_aside_entries(snapshot)
+        if isinstance(e.get("receipt"), dict)
+    ]
 
 
 def _set_aside_document_id(entry: dict) -> dict:

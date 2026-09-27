@@ -139,6 +139,8 @@ def test_a_month_with_only_receipts_on_a_card_is_named(client):
         # Item 192's parallel fields: no statement yet, so no charge either.
         "n_without_charge": 1,
         "statement": False,
+        # Item 236: nothing was set aside.
+        "n_set_aside": 0,
     }]
     assert card["months"] == [], "the charge side is unchanged"
     assert card["never_loaded"] is True, (
@@ -191,5 +193,5 @@ def test_a_month_the_receipt_count_fails_on_keeps_its_charges(client):
     assert [m["run_id"] for m in payload["months"]] == [september]
     assert payload["no_card"] == {
         "months": [], "n_expenses": 0, "n_without_charge": 0,
-        "n_needs_category": 0,
+        "n_needs_category": 0, "n_set_aside": 0,
     }
