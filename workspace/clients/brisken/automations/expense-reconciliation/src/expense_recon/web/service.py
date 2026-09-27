@@ -8590,6 +8590,7 @@ def build_expense_view(
             ),
             split_lines_gap=lines_gap if len(posting_parts) > 1 else None,
         )
+        review = private_no_company_review(review, res)
         # Build 4 / item 218: a bill asks nothing of the card side, so its
         # review is out of `n_review` whatever the card checks would say.
         row_bill = res.get("payment_path") == _pp.PATH_BILL
@@ -19939,3 +19940,42 @@ def stored_intake_twins(run: RunRow) -> dict[str, str]:
     from the snapshot only; a month whose mail predates the record has
     none, and its groups are decided by the older rungs exactly as before."""
     return twin_links((run.snapshot or {}).get("intake_provenance"))
+
+
+# Item 220 step 7: a confirmed private row with no company. The boxes and the
+# entity ask already exempt such a row (a private expense needs no company),
+# while the engine, which reads only the stored company, refused its lines
+# `entity_missing` and the row said "Set the company". Read at view time
+# because private is resolved at read time (the row's own flag, the private
+# card list, the month strip) and can be undone; a stamped code would outlive
+# the ruling it came from, and the company sweep only looks for
+# `entity_missing` (`recategorize_moved_companies`).
+PRIVATE_NO_COMPANY = "private_no_company"
+PRIVATE_NO_COMPANY_TEXT = (
+    "A private expense needs no company, so no account was picked. If a "
+    "company should book it, set the company, then pick the account."
+)
+
+
+def private_no_company_review(review: dict, res: dict) -> dict:
+    """The row's verdict, with an `entity_missing` refusal on a CONFIRMED
+    private row that shows no company restated as `private_no_company`.
+
+    Same `pick` state and `category_refused` code, so no box and no count
+    moves: only the refusal and its sentence change. `res` is the row's card
+    resolution; its `private` is already a confirmation (a flag with no
+    person to reimburse is never private there). A row that shows a company
+    keeps its verdict, since the engine answers for that company."""
+    from ..categorize import ENTITY_MISSING
+
+    if (
+        review.get("reason_code") == "category_refused"
+        and review.get("refusal") == ENTITY_MISSING
+        and res.get("private")
+        and not str(res.get("entity") or "").strip()
+    ):
+        return {
+            **review, "reason": PRIVATE_NO_COMPANY_TEXT,
+            "refusal": PRIVATE_NO_COMPANY,
+        }
+    return review
