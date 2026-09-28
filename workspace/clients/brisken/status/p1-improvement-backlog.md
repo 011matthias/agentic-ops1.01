@@ -12810,7 +12810,7 @@ keeps reading and `/healthz` says `key_set: false`.
 `fly.toml [env]` plus the `GEMINI_API_KEY` Fly secret (`docs/operating.md`,
 "Switch the receipt reader").
 
-### 240. Gemini re-reads the stored receipts, preview first, then apply (owner 2026-09-28: "Preview, then apply") (BUILT 2026-09-28: route + local measurement; production dry run and the owner's per-month yes still to come)
+### 240. Gemini re-reads the stored receipts, preview first, then apply (owner 2026-09-28: "Preview, then apply") (route LIVE Fly v277, not yet run on a month; production dry run and the owner's per-month yes still to come)
 
 Item 239 made Gemini read every receipt that ARRIVES; the stored ones kept
 OpenAI's reading, and nothing read them again. `POST /api/runs/{id}/receipts/reread`
@@ -12868,7 +12868,7 @@ amount the Chase card paid (Gemini right); FENIX 117.79 on 04-27 to 500.90 on
 04-02 matches the printed NFC-e (Gemini right).
 
 **Open.** One long local run of all months stopped silently after July; per
-month every run is clean, and production runs one month per job. Next: deploy,
+month every run is clean, and production runs one month per job. Next (live v277):
 dry run per month on production, the owner's list in plain language, apply
 month by month after his yes.
 
