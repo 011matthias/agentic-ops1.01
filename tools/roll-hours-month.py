@@ -147,6 +147,15 @@ def roll(book: Path, dest: Path, year: int, month: int, dry_run: bool) -> int:
     if dry_run:
         print(f"DRY RUN: would write {dest}")
         return 0
+    # Land on the expense-recon tab, resolved by TABLE name not title (June's
+    # is "Timesheet"). Without this the new month opens on whichever tab was
+    # cleared last, which was OneAssessment (owner flagged it 2026-09-28).
+    for i, ws in enumerate(wb.worksheets):
+        if "HoursLog" in ws.tables:
+            for j, other in enumerate(wb.worksheets):
+                other.sheet_view.tabSelected = j == i
+            wb.active = i
+            break
     wb.save(dest)
     print(f"wrote {dest}")
     return 0
