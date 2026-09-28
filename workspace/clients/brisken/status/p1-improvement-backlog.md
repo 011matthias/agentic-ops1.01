@@ -12706,7 +12706,7 @@ learning store: remembered cards do not reach a trip's list count.
 
 **LIVE 2026-09-28** (PR #1526, merge `7e5dd03c`, `deploy.py`, healthz on that commit). Read after the deploy: all 7 months reconcile on all three columns, cards plus No card against the list (September 70 / 38 / 4, August 49 / 19 / 0, July 67 / 27 / 2); a cold drive of `/months` shows the same and, with item 236's published SPA, each card's own figures. First list read after the deploy 1.2 s (the kept body being built).
 
-### 239. Gemini reads receipts, switched off until it is measured (Dirk 2026-09-27; owner 2026-09-28: "Build, test, then switch") (STEP 1 BUILT 2026-09-28, PR #1533, switch OFF)
+### 239. Gemini reads receipts, switched off until it is measured (Dirk 2026-09-27; owner 2026-09-28: "Build, test, then switch") (STEP 1 SHIPPED 2026-09-28, PR #1533; STEP 2 MEASURED: Gemini wins on both paths; STEP 3 switch `all` in fly.toml, waits on the Fly secret + a deploy)
 
 Dirk asked for Google's Gemini to read receipts ("the top notch model for that
 kind of work") and supplied a key on a billed project (AI Studio project
@@ -12757,11 +12757,52 @@ it), so the only difference between the arms is the provider. Everything else
   in `cli._build_llm_client` turns the switched-on tests red, the Receipts drop among them; catching
   nothing in place of `ReaderUnavailable` turns the 6 fallback cases red.
 
-**Step 2 (next): the A/B.** Item 223 step 4's harness and its two stored
+**Step 2 as planned:** Item 223 step 4's harness and its two stored
 current-prompt passes over the 251 documents of the 2026-09-25 backup are the
 OpenAI arm; Gemini passes through the same `extract_receipt`, cache off, same
 card list, scored per field and per path (text layer / picture / rendered mail
 body), disagreements adjudicated against the document itself.
+
+**Step 2 MEASURED 2026-09-28.** Same 251 documents (131 text-layer PDFs, 104
+scanned PDFs and rendered mail bodies, 16 photos; inputs rebuilt from the
+09-25 backup and identical to item 223's by file, routing, hash and page
+count), same prompt (gated on the stored passes' fingerprint), cache off.
+OpenAI = item 223's two current-prompt passes; Gemini 3.8 Flash two passes
+(0 errors, USD 1.98 + 1.84 list); Gemini 3.1 Pro one pass over the 39
+disputed documents (USD 1.16). Stable readings agree on 1,685 of 1,757
+key-field readings (96%). Stability is comparable (Gemini steadier on
+text-PDF invoice numbers: OpenAI moved 19, Gemini 0). The 46 stable
+disagreements went to four blind checkers (readings labelled A/B, the tool's
+own field rules, the document as the readers saw it):
+
+| Where the readers disagreed | Gemini right | OpenAI right | both fine | both wrong | unreadable |
+|---|---|---|---|---|---|
+| date, total, currency, card, tax, document type (21) | 15 | 3 | 0 | 2 | 1 |
+| document kind (13) | 2 | 5 | 6 | 0 | 0 |
+| merchant name (12) | 5 | 1 | 6 | 0 | 0 |
+
+What Gemini got right that changes a screen: two AWS bills and an AT&T bill
+OpenAI typed statement / other (a real receipt set aside); four invoices where
+OpenAI named Brisken, the customer, as the merchant; a US `08/03/2026` read as
+8 March; a date taken from the forward instead of the invoice; tipped totals
+(45.00 not 41.60) and 6,00 not 6,60; card `7696` invented from a Google billing
+ID. Gemini's misses are on faded Brazilian card slips (a digit read wrong
+twice, one full date invented where only the month is legible) and a lean to
+`document_kind: invoice` for charge confirmations and NFC-e till receipts
+(which copy of a pair is kept; amounts unchanged). By path: text-layer PDFs
+Gemini 8, OpenAI 0 (merchant included); pictures Gemini 14, OpenAI 9. Pro
+sided with Flash on 26 of the 31 decided items, so its 3-4x price buys
+nothing here. Invoice-number spacing (`HMVWDWIL 0029` vs `HMVWDWIL0029`: the
+PDF prints a hidden separator) and Gemini's receipt number in `reference` on
+payment receipts do not move a duplicate key: `reference_key` compares
+alphanumerics and `reference_keys` reads all three number fields. Cost at list:
+USD 0.0076 per document against OpenAI's 0.0023, about USD 0.60 a month at
+80 receipts. Harness: `.scratch/ab239/` in the item worktree (not committed).
+
+**Step 3.** `fly.toml [env]` `EXPENSE_RECON_GEMINI_READS = "all"` (model
+default `gemini-3.8-flash`, Google's default thinking). Live only once the
+Fly secret `GEMINI_API_KEY` is set and the app is deployed; until then OpenAI
+keeps reading and `/healthz` says `key_set: false`.
 
 **Step 3: switch on** where step 2 says Gemini is right more often, by
 `fly.toml [env]` plus the `GEMINI_API_KEY` Fly secret (`docs/operating.md`,
@@ -12771,6 +12812,7 @@ body), disagreements adjudicated against the document itself.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 159 | Item 239 steps 2-3: blind A/B on the 251 stored documents, Gemini 3.8 Flash right 15 to 3 on date / total / currency / card / tax / type and 8 to 0 on text-layer PDFs; `fly.toml` switches `EXPENSE_RECON_GEMINI_READS = "all"` (live once the `GEMINI_API_KEY` secret is set) | Receipts set aside as statements, Brisken named as its own supplier and misread dates stop at the reader | 2026-09-28, PR #1534 |
 | 158 | Item 239 step 1: Gemini can read receipts (`llm/gemini.py`), switched by `EXPENSE_RECON_GEMINI_READS` = `images` / `all`, OFF by default; same prompt, fences, schema and cache as OpenAI; retries then falls back to OpenAI; priced; `healthz.receipt_reader` | Dirk asked for the reader research ranks best on photographed receipts; building it switched off lets it be measured on Brisken's own receipts before Criss sees a single reading from it | 2026-09-28, PR #1533 |
 | 157 | Item 220 step 7 (front 2): a confirmed-private receipt with no company reads `review.refusal: private_no_company` with its own sentence instead of `entity_missing` "Set the company"; read time, same `pick` state and code, no box or count moves; live Jul 0028 + Sep 0024 | The private badge and the category line gave Criss opposite instructions on the same row | 2026-09-28, PR #1525 |
 | 156 | Item 220 step 6 + item 211 (front 2): a neighbour receipt whose id the borrowing month already holds is borrowed under its own pool id (`{home run}~{id}`), and the commit's claims re-check, the claim writes, a reviewer's confirm, the neighbour's `settled_by`, `charges_settled_elsewhere` and the image route read it back as (home run, id); the borrowed receipt carries the card its home row resolved; the borrow reaches 3 days before a period that opens on the 1st. | Four live receipts could never be borrowed (August from July: Hostinger 172.61, Konsultancy 15,972.00; September from August: Obsidian 96.00, Zoho Books 576.00), a pick on the home row did not scope the borrow, and a calendar-month export would have lost every receipt printed on the 31st. | PR #1512 |
