@@ -7095,11 +7095,18 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                      "code": "reread_dry_run_required"},
                     status_code=400,
                 )
+            skip = body.get("skip", [])
+            if not isinstance(skip, list) or not all(isinstance(d, str) for d in skip):
+                return JSONResponse(
+                    {"error": "skip is a list of document ids to leave as they are",
+                     "code": "reread_skip_invalid"},
+                    status_code=400,
+                )
             job_id = uuid.uuid4().hex[:12]
             store.create_job(job_id, None, _now_iso())
         background.add_task(
             run_reread_job, app.state.db_path, app.state.learning_db_path,
-            job_id, run_id, _expense_view, dry_run=dry_run,
+            job_id, run_id, _expense_view, dry_run=dry_run, skip=skip,
         )
         return JSONResponse({"ok": True, "dry_run": dry_run, "job_id": job_id})
 

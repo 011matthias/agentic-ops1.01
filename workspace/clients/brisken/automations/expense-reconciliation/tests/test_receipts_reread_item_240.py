@@ -301,6 +301,9 @@ def test_apply_writes_the_reading_and_the_reviewer_edit_stays_on_top(client, mon
 
 
 def test_fields_the_ab_does_not_back_are_compared_not_written(client, monkeypatch):
+    monkeypatch.setitem(FIRST, "Lovable", _ext(
+        date="2026-08-30", total="15.00", vendor="Lovable Labs Incorporated",
+        document_kind="receipt"))
     batch_id, reader = _month(client, monkeypatch)
     _second_reading(
         reader,
@@ -397,6 +400,43 @@ def test_an_expense_the_reviewer_deleted_is_not_read_again(client, monkeypatch):
     out = _result(client, batch_id, dry_run=True)
     assert out["readings"]["n_read"] == 1, "only the expense still in her month"
     assert out["readings"]["changes"] == []
+
+
+def test_a_date_in_another_year_is_held_not_taken(client, monkeypatch):
+    batch_id, reader = _month(client, monkeypatch)
+    _second_reading(reader, Lovable=_ext(date="2024-08-30", total="15.00",
+                                         vendor="Lovable Labs Incorporated"))
+    out = _result(client, batch_id, dry_run=False)
+    assert out["written"] == []
+    (held,) = out["readings"]["held"]
+    assert held["field"] == "date" and held["why"] == "other_year"
+    assert (held["before"], held["after"]) == ("2026-08-30", "2024-08-30")
+
+
+def test_the_operator_can_leave_named_receipts_as_they_are(client, monkeypatch):
+    batch_id, reader = _month(client, monkeypatch)
+    lovable = _row(_grid(client, batch_id), "Lovable")["document_id"]
+    _second_reading(
+        reader,
+        Lovable=_ext(date="2026-08-29", total="15.00", vendor="Lovable Labs Incorporated"),
+        GitHub=_ext(date="2026-08-12", total="99.00", vendor="GitHub, Inc.", vendor_clean="GitHub"),
+    )
+    job = _done(client, _reread(client, batch_id, confirm=LABEL, dry_run=False, skip=[lovable]))
+    out = job["result"]
+    assert [s["why"] for s in out["readings"]["skipped"]] == ["operator_skip"]
+    assert len(out["written"]) == 1 and "GitHub" in out["written"][0]
+    assert _row(_grid(client, batch_id), "Lovable")["date"] == "2026-08-30"
+    r = _reread(client, batch_id, confirm=LABEL, dry_run=True, skip="all")
+    assert r.status_code == 400 and r.json()["code"] == "reread_skip_invalid"
+
+
+def test_the_dry_run_separates_what_any_rematch_would_change(client, monkeypatch):
+    batch_id, reader = _month(client, monkeypatch)
+    _second_reading(reader)
+    effects = _result(client, batch_id, dry_run=True)["consequences"]
+    alone = effects["rematch_alone"]
+    assert set(alone) >= {"pairs", "confirmed", "expenses", "duplicates"}
+    assert effects["pairs"]["changed"] == [], "nothing read differently, nothing the re-read moves"
 
 
 def test_one_merchant_written_two_ways_is_not_a_change(client, monkeypatch):

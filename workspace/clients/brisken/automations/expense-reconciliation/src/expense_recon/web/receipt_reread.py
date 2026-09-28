@@ -214,19 +214,31 @@ def _vendor_shown(r: Receipt) -> str | None:
     return r.detected_vendor or r.vendor_clean
 
 
-def merge_reading(stored: Receipt, new: Receipt) -> tuple[Receipt, dict, bool]:
+def merge_reading(
+    stored: Receipt, new: Receipt, *, label_year: int | None = None,
+    held: list | None = None,
+) -> tuple[Receipt, dict, bool]:
     """(merged receipt, {field: {before, after}}, recategorize?).
 
     `stored` is the extraction baseline (the reading before any reviewer
     edit), `new` the arrival-shaped re-read. Only TAKEN_FIELDS move; every
-    other field is the stored one."""
+    other field is the stored one. A new date in a year that is neither the
+    stored reading's nor the batch's is not taken (April's San Paolo slip
+    prints 21/04/2026 and was read as 2024); it is appended to `held`."""
     kw: dict = {}
     changes: dict[str, dict] = {}
 
     def moved(name: str, before, after) -> None:
         changes[name] = {"before": _show(before), "after": _show(after)}
 
-    if new.detected_date is not None and new.detected_date != stored.detected_date:
+    years = {y for y in (label_year, stored.detected_date and stored.detected_date.year) if y}
+    if (new.detected_date is not None and new.detected_date != stored.detected_date
+            and years and new.detected_date.year not in years):
+        if held is not None:
+            held.append({"field": "date", "why": "other_year",
+                         "before": _show(stored.detected_date and stored.detected_date.isoformat()),
+                         "after": new.detected_date.isoformat()})
+    elif new.detected_date is not None and new.detected_date != stored.detected_date:
         kw["detected_date"] = new.detected_date
         moved("date", stored.detected_date and stored.detected_date.isoformat(),
               new.detected_date.isoformat())
@@ -282,6 +294,8 @@ def not_taken_differences(stored: Receipt, new: Receipt) -> list[str]:
         "receipt_number": (stored.receipt_number, new.receipt_number),
     }
     for name, (a, b) in pairs.items():
+        if name == "document_kind" and not a:
+            continue  # read before item 223 step 4 added the field
         if _alnum(a) != _alnum(b):
             out.append(name)
     return out
@@ -302,6 +316,7 @@ class ReadPlan:
     changes: list[dict] = field(default_factory=list)
     reads_as_non_receipt: list[dict] = field(default_factory=list)
     skipped: list[dict] = field(default_factory=list)
+    held: list[dict] = field(default_factory=list)
     not_taken: dict[str, int] = field(default_factory=dict)
     unchanged: int = 0
     # document id -> the stored reading the plan was made against, so a
@@ -317,6 +332,7 @@ class ReadPlan:
             "changes": self.changes,
             "reads_as_non_receipt": self.reads_as_non_receipt,
             "skipped": self.skipped,
+            "held": self.held,
             "not_taken": {k: self.not_taken.get(k, 0) for k in NOT_TAKEN_FIELDS},
         }
 
@@ -363,7 +379,7 @@ def _arrival_shape(parsed: Receipt, stored: Receipt) -> Receipt:
 
 def plan_reread(
     store: RunStore, run, *, llm_client, learning_db_path: "Path | None",
-    workers: int = READ_WORKERS,
+    workers: int = READ_WORKERS, skip: frozenset[str] = frozenset(),
 ) -> ReadPlan:
     """Read every stored receipt of the month again and decide, per field,
     what a commit would write. Writes nothing (the extraction cache warms)."""
@@ -402,6 +418,12 @@ def plan_reread(
         )
         waiting.append((e, stored))
     targets = pool + [s for _e, s in waiting]
+    for r in [t for t in targets if t.document_id in skip]:
+        # The operator left this one out (a faded slip she reads better).
+        plan.skipped.append({"document_id": r.document_id,
+                             "display": r.receipt_name or _display_name(r.document_id),
+                             "why": "operator_skip"})
+    targets = [t for t in targets if t.document_id not in skip]
     for r in targets:
         plan.seen[r.document_id] = _fingerprint(r)
 
@@ -451,6 +473,7 @@ def plan_reread(
     for doc in order:
         stored, new = by_doc[doc], read[doc]
         display = stored.receipt_name or _display_name(doc)
+        held: list = []
         for name in not_taken_differences(stored, new):
             plan.not_taken[name] = plan.not_taken.get(name, 0) + 1
         new_is_purchase = new.document_type not in NON_RECEIPT_LABELS
@@ -459,7 +482,9 @@ def plan_reread(
             if not new_is_purchase:
                 plan.unchanged += 1
                 continue
-            merged, changes, _recat = merge_reading(stored, new)
+            merged, changes, _recat = merge_reading(
+                stored, new, label_year=label_month and label_month[0], held=held)
+            plan.held += [{"document_id": doc, "display": display, **h} for h in held]
             merged = replace(merged, document_type=new.document_type or "receipt")
             plan.restores[doc] = merged
             plan.changes.append(elsewhere({
@@ -474,7 +499,9 @@ def plan_reread(
                 "reads_as": new.document_type,
             })
             continue
-        merged, changes, recat = merge_reading(stored, new)
+        merged, changes, recat = merge_reading(
+            stored, new, label_year=label_month and label_month[0], held=held)
+        plan.held += [{"document_id": doc, "display": display, **h} for h in held]
         if not changes:
             plan.unchanged += 1
             continue
@@ -711,13 +738,44 @@ def shadow_preview(
     db_path: Path, learning_db_path: "Path | None", run_id: str, plan: ReadPlan,
     view_of: ViewOf, *, llm_client,
 ) -> dict:
-    """The consequences of committing `plan`, measured on a throwaway copy
-    of the database: the copy is committed and re-matched exactly as the
-    month would be, then deleted. The month itself is only read."""
+    """The consequences of committing `plan`, measured on throwaway copies of
+    the database (then deleted; the month itself is only read).
+
+    Two copies, because a re-match on its own already moves things: a rule
+    that changed since the month's last re-match (item 223's kept copy, a
+    confirmation it no longer reaches) lands at ANY next re-match. Copy A is
+    only re-matched; copy B gets the readings and is re-matched. `A -> B` is
+    what the re-read itself changes (the top-level keys); `now -> A` is what
+    any re-match of this month would change today (`rematch_alone`)."""
     with RunStore(db_path) as store:
         run = store.get_run(run_id)
         before_view = view_of(store, run)
         before = month_state(store, run)
+
+    def alone(shadow: RunStore):
+        rematch = None
+        if has_statement(shadow.get_run(run_id)):
+            rematch = rematch_after_change(
+                shadow, run_id, learning_db_path=learning_db_path, trigger=TRIGGER)
+        return rematch
+
+    def reread(shadow: RunStore):
+        return commit_plan(
+            shadow, run_id, plan, _now(), llm_client=llm_client,
+            learning_db_path=learning_db_path,
+        ).get("rematch")
+
+    a_view, a_state, _a = _on_copy(db_path, run_id, view_of, alone)
+    b_view, b_state, b_rematch = _on_copy(db_path, run_id, view_of, reread)
+    out = consequences(a_view, a_state, b_view, b_state, plan)
+    out["rematch_error"] = (b_rematch or {}).get("error")
+    out["rematch_alone"] = consequences(
+        before_view, before, a_view, a_state, ReadPlan(reader={}))
+    return out
+
+
+def _on_copy(db_path: Path, run_id: str, view_of: ViewOf, fn):
+    """(view, state, fn's answer) after running `fn` on a throwaway copy."""
     tmp = Path(tempfile.mkdtemp(prefix="reread240-"))
     try:
         shadow_path = tmp / "shadow.sqlite"
@@ -729,18 +787,11 @@ def shadow_preview(
             dst.close()
             src.close()
         with RunStore(shadow_path) as shadow:
-            commit = commit_plan(
-                shadow, run_id, plan, _now(), llm_client=llm_client,
-                learning_db_path=learning_db_path,
-            )
-            after_run = shadow.get_run(run_id)
-            after_view = view_of(shadow, after_run)
-            after = month_state(shadow, after_run)
+            answer = fn(shadow)
+            run = shadow.get_run(run_id)
+            return view_of(shadow, run), month_state(shadow, run), answer
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-    out = consequences(before_view, before, after_view, after, plan)
-    out["rematch_error"] = (commit.get("rematch") or {}).get("error")
-    return out
 
 
 # ── The job ─────────────────────────────────────────────────────────────
@@ -748,7 +799,7 @@ def shadow_preview(
 
 def run_reread_job(
     db_path: Path, learning_db_path: "Path | None", job_id: str, run_id: str,
-    view_of: ViewOf, *, dry_run: bool,
+    view_of: ViewOf, *, dry_run: bool, skip: list[str] | None = None,
 ) -> None:
     """Read the month again, then either measure the plan on a copy (dry
     run) or commit it to the month (real run). A refusal lands as the job's
@@ -774,7 +825,8 @@ def run_reread_job(
         _stage("reading")
         with RunStore(db_path) as store:
             plan = plan_reread(store, run, llm_client=llm_client,
-                               learning_db_path=learning_db_path)
+                               learning_db_path=learning_db_path,
+                               skip=frozenset(skip or ()))
         readings = plan.report()
         if dry_run:
             _stage("previewing")
