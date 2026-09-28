@@ -7055,4 +7055,52 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
         return JSONResponse({"ok": True, "dry_run": False, "job_id": job_id})
 
+    @app.post("/api/runs/{run_id}/receipts/reread")
+    def reread_receipts(
+        run_id: str, background: BackgroundTasks,
+        payload: dict | None = Body(None),
+    ):
+        """Item 240: read a month's stored receipts again with the reader new
+        ones get (Gemini since item 239) and take the fields that reader is
+        the better witness for. Body `{confirm, dry_run}`: the caller repeats
+        the month's label (or run id) even for a dry run, and `dry_run` must
+        be a JSON boolean. Both answer a job id to poll: the dry run reads
+        every file and measures the result on a throwaway copy of the
+        database, writing nothing to the month; the real run writes the
+        readings and re-matches the month. Operator only; the SPA offers no
+        control for it."""
+        from .receipt_reread import confirm_refusal, reread_refusal, run_reread_job
+
+        body = payload if isinstance(payload, dict) else {}
+        confirm = str(body.get("confirm", "")).strip()
+        dry_run = body.get("dry_run")
+        with open_store() as store:
+            run = store.get_run(run_id)
+            refused = reread_refusal(run)
+            if refused is not None:
+                return JSONResponse(
+                    {"error": refused.message, "code": refused.code},
+                    status_code=404 if refused.code == "run_not_found" else 409,
+                )
+            unconfirmed = confirm_refusal(run, confirm)
+            if unconfirmed is not None:
+                return JSONResponse(
+                    {"error": unconfirmed.message, "code": unconfirmed.code},
+                    status_code=400,
+                )
+            if not isinstance(dry_run, bool):
+                return JSONResponse(
+                    {"error": "dry_run is required: true to preview, false "
+                              "to write the readings",
+                     "code": "reread_dry_run_required"},
+                    status_code=400,
+                )
+            job_id = uuid.uuid4().hex[:12]
+            store.create_job(job_id, None, _now_iso())
+        background.add_task(
+            run_reread_job, app.state.db_path, app.state.learning_db_path,
+            job_id, run_id, _expense_view, dry_run=dry_run,
+        )
+        return JSONResponse({"ok": True, "dry_run": dry_run, "job_id": job_id})
+
     return app
