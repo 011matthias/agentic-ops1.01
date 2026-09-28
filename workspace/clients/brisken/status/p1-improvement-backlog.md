@@ -12494,7 +12494,7 @@ fill the days before the provider's history from the ECB's own daily series
 `pick()` prefers), then let each month take it at its next natural re-match.
 Nothing is built.
 
-### 231. A month's done counts go small; what needs a look stays big (note #97, operator, 2026-09-27 19:39 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-quiet-done-tiles-prompt.md`, not pasted)
+### 231. A month's done counts go small; what needs a look stays big (note #97, operator, 2026-09-27 19:39 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-quiet-done-tiles-prompt.md`; PUBLISHED (published-bundle read 2026-09-28: live))
 
 Verbatim, on September's Expenses page (`/expenses/51a22ad72864`), anchor
 "Review by exception. Ready rows can go out as is; the others need a look.":
@@ -12520,7 +12520,7 @@ look." when none is); Categorized, Ready, a zero Missing receipt image and
 Private become one line of small chips (green with a check, Private grey),
 each keeping its `boxFilter` toggle.
 
-### 232. The Matching page's two opening sentences go (note #102, operator, 2026-09-27 20:29 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-matching-header-prompt.md` §1a, not pasted)
+### 232. The Matching page's two opening sentences go (note #102, operator, 2026-09-27 20:29 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-matching-header-prompt.md` §1a; PUBLISHED (published-bundle read 2026-09-28: live))
 
 Verbatim, on September's Matching page (`/runs/51a22ad72864`), anchor "51
 charges from the bank statement, matched against this month's receipts.
@@ -12528,7 +12528,7 @@ Confirm or rej…": *"remove first 2 sentences here"*. The paragraph is exactly
 those two sentences, SPA-owned (`wb.subtitle.template`, rendered once in
 `RunWorkbench.tsx`), so the whole `<p>` goes and nothing replaces it.
 
-### 233. Loaded statements fold behind one button and read by their card's last four digits (notes #99 and #103, operator, 2026-09-27 20:28 / 20:30 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-matching-header-prompt.md` §1b-1c, not pasted)
+### 233. Loaded statements fold behind one button and read by their card's last four digits (notes #99 and #103, operator, 2026-09-27 20:28 / 20:30 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-matching-header-prompt.md` §1b-1c; PUBLISHED (published-bundle read 2026-09-28: live))
 
 Verbatim, both on the anchor "Statement loaded:
 20260904-statements-9693-.pdf, Aug 05, 2026 to Sep 04, 2026, 32 charges…":
@@ -12550,7 +12550,7 @@ name moves to the line's tooltip. A file no coverage entry names falls back to
 its name. Seen, not changed: with a card picked, `CardScope`'s grey line still
 lists that card's statement files (`cardScope.statement.loaded`).
 
-### 234. The card being shown, and a card with no statement, stand out (notes #101 and #100, operator, 2026-09-27 20:29 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-matching-header-prompt.md` §2, not pasted)
+### 234. The card being shown, and a card with no statement, stand out (notes #101 and #100, operator, 2026-09-27 20:29 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-matching-header-prompt.md` §2; PUBLISHED (published-bundle read 2026-09-28: live))
 
 Verbatim: on "Showing card 2838", *"this should also be more evident"*
 (#101); on "· No statement loaded for this card", *"this should be more
@@ -12563,7 +12563,7 @@ statement-on-account lines are unchanged: the notes named only the missing
 statement. Live: card-2838 and its subcards 3645 / 3876 read `not_loaded` on
 September.
 
-### 235. The status line: cards with no statement behind a button, the open amounts boxed and bold (notes #104, #105 and #106, operator, 2026-09-27 20:31-20:33 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-matching-header-prompt.md` §3, not pasted)
+### 235. The status line: cards with no statement behind a button, the open amounts boxed and bold (notes #104, #105 and #106, operator, 2026-09-27 20:31-20:33 UTC) (PROMPT WRITTEN 2026-09-27: `docs/lovable-matching-header-prompt.md` §3; PUBLISHED (published-bundle read 2026-09-28: live))
 
 Verbatim: on "7 cards have no statement for this month: Apple Credit Card -
 0113, Credit Card - 2838, C…", *"change this to a dropdown: something like
@@ -12875,6 +12875,39 @@ month by month after his yes.
 Tests `tests/test_receipts_reread_item_240.py` (14, route-level). Regress:
 handing the real run to the job as a dry run (`app.py`) turns 5 red; writing
 the stored reading back instead of the merged one turns 2 red.
+
+### 241. The statements toggle under a month's tabs becomes a real button (note #107, operator, 2026-09-28 00:27 UTC) (PROMPT WRITTEN 2026-09-28: `docs/lovable-statements-button-totals-prompt.md` §1, not pasted)
+
+Verbatim, on August's Expenses page (`/expenses/074a7b8905d7`), anchor "4
+statements ˅ Statements Every statement file this month has taken, oldest
+first.": *"make this an actual button"*.
+
+**Read 2026-09-28.** The toggle is `StatementSummary` in the SPA's
+`StatementPanels.tsx`, rendered by `MonthHeader` on both the Expenses and the
+Matching page. It already is a `<button>`, styled as dotted-underlined grey
+text with a "˅" / "›" character, which is why it reads as a sentence. Live
+August (GET only): 4 statements, one carrying an advisory, so the toggle is
+amber and starts open. The prompt makes it an outline `Button` with a
+document icon and a turning chevron, the look item 233 gave the Matching
+page's "View all statements loaded" button; no new key, same label, same
+behaviour. **Seen, not changed:** the Matching page shows both this header
+toggle and item 233's button, and they list the same statement files. The
+note did not ask for either to go, so both stay; one of them could.
+
+### 242. The Totals tile's currency amounts read as large as the counts beside them (note #108, operator, 2026-09-28 00:27 UTC) (PROMPT WRITTEN 2026-09-28: `docs/lovable-statements-button-totals-prompt.md` §2, not pasted)
+
+Verbatim, on August's Expenses page, anchor "Totals": *"need the actual
+number "tabs" to be larger"*.
+
+**Read 2026-09-28.** The "tabs" are the per-currency pills in the Totals
+`Tile` (`ExpensesReviewGrid.tsx`, one per `totals_by_ccy` entry), set in
+`text-xs` inside a tile whose default number size is `text-2xl`: since item
+231 put Expenses and Totals alone in the first row, the Expenses count reads
+at 24 px and the money beside it at 12 px. Live August: BRL 1,853.98, EUR
+851.07, USD 1,574.95; the widest live amount is July's USD 31,882.49. The
+prompt sets the pills to `text-xl font-semibold` with the currency code small
+and grey in front; the lines under them (unreadable amounts, copies set
+aside, bills) stay small.
 
 ## Shipped (loop history)
 
