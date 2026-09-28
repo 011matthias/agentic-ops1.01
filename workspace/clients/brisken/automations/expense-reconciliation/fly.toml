@@ -37,6 +37,13 @@ primary_region = "fra"
   # answered from the store — deterministic and free. Delete the file to
   # force fresh readings; prompt/schema edits invalidate it automatically.
   EXPENSE_RECON_EXTRACTION_CACHE = "/data/extraction-cache.sqlite"
+  # Item 239 (2026-09-28, owner: build, test, switch where it wins): Gemini
+  # 3.8 Flash reads every receipt (text-layer PDFs and pictures); categories
+  # and judgments stay on OpenAI. It won the blind A/B on the 251 stored
+  # documents on both paths. The key is the Fly secret GEMINI_API_KEY; until
+  # it is set OpenAI keeps reading and /healthz shows key_set false. Any
+  # reading Gemini cannot give falls back to OpenAI. Off: remove this line.
+  EXPENSE_RECON_GEMINI_READS = "all"
 
 [http_service]
   internal_port = 8080
