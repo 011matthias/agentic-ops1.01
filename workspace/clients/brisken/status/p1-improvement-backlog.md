@@ -12810,10 +12810,77 @@ keeps reading and `/healthz` says `key_set: false`.
 `fly.toml [env]` plus the `GEMINI_API_KEY` Fly secret (`docs/operating.md`,
 "Switch the receipt reader").
 
+### 240. Gemini re-reads the stored receipts, preview first, then apply (owner 2026-09-28: "Preview, then apply") (BUILT 2026-09-28: route + local measurement; production dry run and the owner's per-month yes still to come)
+
+Item 239 made Gemini read every receipt that ARRIVES; the stored ones kept
+OpenAI's reading, and nothing read them again. `POST /api/runs/{id}/receipts/reread`
+(`web/receipt_reread.py`), operator only, typed confirm, required boolean
+`dry_run`, optional `skip` list; both modes are jobs (a month takes minutes).
+Each stored file is read through the arrival's own path (month's card list and
+reader, statement and correspondence rules, remembered corrections, card gate,
+card company) and merged field by field.
+
+**What a re-read takes, decided by measurement.** Item 239's two Gemini passes
+disagree with each other on 0 of 251 dates, totals, currencies and cards (tax 1,
+type 1), so one pass is enough and the dry run's cached readings are exactly
+what the real run writes. Taken: date, total, currency, tax, document type,
+card, and a merchant that is a DIFFERENT merchant (containment test: keeps all
+5 adjudicated merchant wins, drops 4 of 6 cosmetic rewrites). Not taken,
+counted only: `document_kind` (OpenAI won 5-2) and the three number fields
+(never adjudicated; they key the duplicate ladder; 59 of 251 documents would
+have changed their number set). Line items and categories stay; a receipt
+whose merchant or company moves is categorized again. A blank never blanks a
+stored value except the card. A new date in a year that is neither the stored
+one's nor the batch's is held (April's San Paolo slip prints 21/04/2026,
+Gemini read 2024). Deleted or moved-away expenses are not read.
+
+**Where it writes.** `extracted_receipts` + `receipts` in the snapshot, a
+"read again {date}: {fields} changed" note, a `receipts_reread` record, then
+the ordinary re-match (trigger `receipts_reread`, pinned). Never the
+reviewer's tables, so edits, picks, rulings and confirmations stay on top and
+nothing reaches Publish's learners. A set-aside page read as a purchase joins
+the month (`restored_by: "reread"`); an expense read as a statement is listed
+and left.
+
+**The dry run** commits the plan to two throwaway copies of the database: one
+only re-matched, one read and re-matched. `consequences` is the re-read's own
+effect; `rematch_alone` is what any re-match of the month would change today.
+
+**Local measurement 2026-09-28** (backup `20260928T085642Z`, all seven months,
+about USD 2.70 of Gemini reads):
+
+| Month | Read | Changed | Re-read's own effect on pairs | Any re-match alone |
+|---|---|---|---|---|
+| January | 1 | 1 (Parada date 01-04 to 07-04, flagged outside the month) | none | none |
+| April | 35 | 10 (+1 held) | 15 to 18 (4 new, 1 lost); 1 tool-confirmed pair's total moves (80.34 to 80.00), stays confirmed | none |
+| May | 21 | 2 | none | none |
+| June | 25 | 5 | none | none |
+| July | 84 | 25 (19 cards, 17 of them blank to 3876), 2 set-aside mail bodies join, 1 read as a non-receipt | 45 to 46 | 41 to 45; 2 tool confirmations reopen (kept copy switches, item 217) |
+| August | 55 | 10 | 36 to 38 | 35 to 36; 3 tool confirmations reopen (same cause) |
+| September | 99 | 5 | none | none |
+
+Against item 239's adjudicated items the plan takes 8 of Gemini's resolvable
+wins, needs no change on 4 (stored value already Gemini's), and overwrites 3
+of OpenAI's, all on two faded Brazilian slips (RECANTO DO SABOR 08-24 to 08-29
+and 138.91 to 138.93; ZE Normandie blank to 2026-07-05): those are what `skip`
+is for. April checked by eye: MEGA CENTER BRL 1,358.00 to USD 295.50 is the DCC
+amount the Chase card paid (Gemini right); FENIX 117.79 on 04-27 to 500.90 on
+04-02 matches the printed NFC-e (Gemini right).
+
+**Open.** One long local run of all months stopped silently after July; per
+month every run is clean, and production runs one month per job. Next: deploy,
+dry run per month on production, the owner's list in plain language, apply
+month by month after his yes.
+
+Tests `tests/test_receipts_reread_item_240.py` (14, route-level). Regress:
+handing the real run to the job as a dry run (`app.py`) turns 5 red; writing
+the stored reading back instead of the merged one turns 2 red.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 160 | Item 240: `POST /api/runs/{id}/receipts/reread` reads a month's stored receipts again through the arrival's path and takes date, total, currency, tax, type, card and a different merchant (one Gemini pass: 0 of 251 key fields moved between passes); dry run on two throwaway database copies separates the re-read's own effect from any re-match's; `skip`, other-year dates held | Receipts stored before item 239 keep OpenAI's misreadings (April MEGA CENTER in BRL where the card paid USD, FENIX 117.79 for 500.90) until read again; local run over all seven months: 58 receipts change, 7 charges newly paired and 1 unpaired | 2026-09-28, PR pending |
 | 159 | Item 239 steps 2-3: blind A/B on the 251 stored documents, Gemini 3.8 Flash right 15 to 3 on date / total / currency / card / tax / type and 8 to 0 on text-layer PDFs; `fly.toml` switches `EXPENSE_RECON_GEMINI_READS = "all"` (live once the `GEMINI_API_KEY` secret is set) | Receipts set aside as statements, Brisken named as its own supplier and misread dates stop at the reader | 2026-09-28, PR #1534 |
 | 158 | Item 239 step 1: Gemini can read receipts (`llm/gemini.py`), switched by `EXPENSE_RECON_GEMINI_READS` = `images` / `all`, OFF by default; same prompt, fences, schema and cache as OpenAI; retries then falls back to OpenAI; priced; `healthz.receipt_reader` | Dirk asked for the reader research ranks best on photographed receipts; building it switched off lets it be measured on Brisken's own receipts before Criss sees a single reading from it | 2026-09-28, PR #1533 |
 | 157 | Item 220 step 7 (front 2): a confirmed-private receipt with no company reads `review.refusal: private_no_company` with its own sentence instead of `entity_missing` "Set the company"; read time, same `pick` state and code, no box or count moves; live Jul 0028 + Sep 0024 | The private badge and the category line gave Criss opposite instructions on the same row | 2026-09-28, PR #1525 |

@@ -8163,9 +8163,11 @@ until this route reads them again, through the same path an arrival takes
 correspondence rules, remembered corrections, the card gate, the card's
 company).
 
-Body: `{"confirm": "<month label or run id>", "dry_run": true|false}`. Both
-are required, for a dry run too. Both answer `{"ok": true, "dry_run": ...,
-"job_id": "..."}`; poll `GET /jobs/{job_id}`.
+Body: `{"confirm": "<month label or run id>", "dry_run": true|false,
+"skip": ["<document_id>", ...]}`. `confirm` and `dry_run` are required, for a
+dry run too; `skip` (optional) names receipts to leave exactly as they are
+(listed under `skipped` with `why: "operator_skip"`). Both answer
+`{"ok": true, "dry_run": ..., "job_id": "..."}`; poll `GET /jobs/{job_id}`.
 
 | Refusal | Status | `code` |
 |---|---|---|
@@ -8173,6 +8175,7 @@ are required, for a dry run too. Both answer `{"ok": true, "dry_run": ...,
 | not an expense batch / published / a re-match running or owed / no receipts | 409 | `not_an_expense_batch` / `month_published` / `rematch_running` / `reread_no_receipts` |
 | confirm missing or wrong | 400 | `reread_confirm_required` / `reread_confirm_mismatch` |
 | `dry_run` not a JSON boolean | 400 | `reread_dry_run_required` |
+| `skip` not a list of strings | 400 | `reread_skip_invalid` |
 | no reader configured (job error) | job `error` | `reread_no_reader` |
 
 **What a re-read may change.** Decided by item 239's blind A/B: date, total,
@@ -8197,10 +8200,12 @@ Job `result` (both modes):
 | `readings.n_read` / `n_changed` / `n_unchanged` | files read; receipts with at least one field moving; the rest |
 | `readings.changes[]` | `{document_id, display, where: "expense" \| "set_aside", changes: {field: {before, after}}}`; values are strings or `null`. A set-aside page now read as a purchase adds `set_aside_reason` and `joins_month: true`; a new date outside the batch's month adds `new_date_outside_month: true` (absent otherwise). A re-read never moves a receipt to another month |
 | `readings.reads_as_non_receipt[]` | `{document_id, display, reads_as}`: an expense the new reader calls a statement or report page; listed and left exactly as it is |
-| `readings.skipped[]` | `{document_id, display, why: "no_file" \| "unreadable"}` |
-| `readings.not_taken` | `{document_kind, reference, invoice_number, receipt_number}`: how many receipts read those differently |
+| `readings.skipped[]` | `{document_id, display, why: "no_file" \| "unreadable" \| "operator_skip"}` |
+| `readings.held[]` | `{document_id, display, field: "date", why: "other_year", before, after}`: a new date in a year that is neither the stored reading's nor the batch's, not taken |
+| `readings.not_taken` | `{document_kind, reference, invoice_number, receipt_number}`: how many receipts read those differently (`document_kind` only where the stored reading has one) |
 | `consequences` (dry run) / `applied` (real run) | `pairs {n_before, n_after, changed[{transaction_id, before, after}]}`; `confirmed[]` (`{transaction_id, document_id, decided_by, reading_moves, after{status, document_id}}`: a confirmed match whose receipt's date, total or currency moves, or that is no longer confirmed after); `expenses[]` (`{document_id, fields[], before, after}` over vendor, date, total, currency, category, zoho_account, entity of the Expenses view); `duplicates` (the item 223 step 7 `layer_diff`, totals included) |
 | `consequences.rematch_error` | the throwaway copy's re-match error, else `null` |
+| `consequences.rematch_alone` | same shape as `consequences`: what ANY re-match of this month would change today (rules changed since its last one). The top-level `consequences` diff a copy that was only re-matched against a copy that got the readings and was re-matched, so they show the re-read's own effect. The real run's `applied` is both together |
 | `written[]` / `joined[]` / `gone[]` / `rematch` (real run) | receipts whose reading was written; set-aside pages that joined; documents changed by someone between the read and the write (left alone); the re-match's own answer |
 | `cost_usd` | model spend of the job, when the app tracks it |
 
