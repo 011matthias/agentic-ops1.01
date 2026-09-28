@@ -12706,7 +12706,7 @@ learning store: remembered cards do not reach a trip's list count.
 
 **LIVE 2026-09-28** (PR #1526, merge `7e5dd03c`, `deploy.py`, healthz on that commit). Read after the deploy: all 7 months reconcile on all three columns, cards plus No card against the list (September 70 / 38 / 4, August 49 / 19 / 0, July 67 / 27 / 2); a cold drive of `/months` shows the same and, with item 236's published SPA, each card's own figures. First list read after the deploy 1.2 s (the kept body being built).
 
-### 239. Gemini reads receipts, switched off until it is measured (Dirk 2026-09-27; owner 2026-09-28: "Build, test, then switch") (STEP 1 SHIPPED 2026-09-28, PR #1533; STEP 2 MEASURED: Gemini wins on both paths; STEP 3 switch `all` in fly.toml, waits on the Fly secret + a deploy)
+### 239. Gemini reads receipts, switched off until it is measured (Dirk 2026-09-27; owner 2026-09-28: "Build, test, then switch") (LIVE 2026-09-28: PRs #1533 + #1534, Fly v276 on `222cb158`; Gemini 3.8 Flash reads every receipt)
 
 Dirk asked for Google's Gemini to read receipts ("the top notch model for that
 kind of work") and supplied a key on a billed project (AI Studio project
@@ -12798,6 +12798,8 @@ payment receipts do not move a duplicate key: `reference_key` compares
 alphanumerics and `reference_keys` reads all three number fields. Cost at list:
 USD 0.0076 per document against OpenAI's 0.0023, about USD 0.60 a month at
 80 receipts. Harness: `.scratch/ab239/` in the item worktree (not committed).
+
+**LIVE 2026-09-28** (Fly v276, commit `222cb158`, `deploy.py` VERIFIED). The key went in as the Fly secret `GEMINI_API_KEY` through `flyctl secrets import` on stdin (never on a command line), staged and applied by the deploy. `/healthz` read after the deploy: `receipt_reader` = gemini / `gemini-3.8-flash` / reads `all` / `key_set: true`. Cold read-only drive of `expenses.brisken.com` (every non-GET but login aborted): `/months` renders all seven months, no failure text. An in-VM read of a synthetic receipt through the deployed builder was refused by the auto-mode classifier (production exec) and not pursued; the first real arrival is the next behaviour proof (the log names any receipt Gemini could not read and OpenAI read instead). Nothing stored was re-read.
 
 **Step 3.** `fly.toml [env]` `EXPENSE_RECON_GEMINI_READS = "all"` (model
 default `gemini-3.8-flash`, Google's default thinking). Live only once the
