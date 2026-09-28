@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-28 | Expense-Recon Item 239 Gemini Reader | client-dev | [Mini-Checkpoint-2](docs/2026-09-28%20-%20Expense-Recon%20Item%20239%20Gemini%20Reader/Mini-Checkpoint-2.md) |
 | 2026-09-28 | Expense-Recon Item 239 Gemini Reader | client-dev | [Mini-Checkpoint-1](docs/2026-09-28%20-%20Expense-Recon%20Item%20239%20Gemini%20Reader/Mini-Checkpoint-1.md) |
 | 2026-09-28 | Expense-Recon Front 2 Step 7 Private No Company | client-dev | [Mini-Checkpoint-1](docs/2026-09-28%20-%20Expense-Recon%20Front%202%20Step%207%20Private%20No%20Company/Mini-Checkpoint-1.md) |
 | 2026-09-28 | Expense-Recon Front 2 Adjacent Borrow | client-dev | [→](docs/2026-09-28%20-%20Expense-Recon%20Front%202%20Adjacent%20Borrow/Checkpoint.md) |
