@@ -533,7 +533,8 @@ one event to the month's snapshot (`rematch_log`, capped at 50):
 folder), `cards`, `master_data`, `set_aside`, `trip`, and since item 112
 `adjacent_receipts` (a neighbouring month's arrival), and since item 223 step 7
 `duplicates_reapply` (the operator re-applying the duplicate rules to a
-matched month, see the last section). Since item 103 the four
+matched month, see the last section), and since item 240 `receipts_reread`
+(the operator reading a month's stored receipts again). Since item 103 the four
 counts are the effective ones the month's page shows at that moment (see "The
 four charge counters count the effective verdict"), not the raw outcome the
 matcher produced. Oldest first. The
@@ -8152,3 +8153,62 @@ caller needs; the block never carries the key.
 A reading Gemini cannot give (outage after two retries, a refused or cut
 answer, JSON the parser rejects) is read by OpenAI instead, so `reads` says
 who reads first, not who read every receipt.
+
+## Read a month's stored receipts again: `POST /api/runs/{run_id}/receipts/reread` (item 240, added 2026-09-28)
+
+Operator only; the SPA offers no control for it. Item 239 made Gemini read
+every receipt that arrives; the ones already stored keep their first reading
+until this route reads them again, through the same path an arrival takes
+(the month's own card list and reader, the arrival's statement and
+correspondence rules, remembered corrections, the card gate, the card's
+company).
+
+Body: `{"confirm": "<month label or run id>", "dry_run": true|false}`. Both
+are required, for a dry run too. Both answer `{"ok": true, "dry_run": ...,
+"job_id": "..."}`; poll `GET /jobs/{job_id}`.
+
+| Refusal | Status | `code` |
+|---|---|---|
+| no such run | 404 | `run_not_found` |
+| not an expense batch / published / a re-match running or owed / no receipts | 409 | `not_an_expense_batch` / `month_published` / `rematch_running` / `reread_no_receipts` |
+| confirm missing or wrong | 400 | `reread_confirm_required` / `reread_confirm_mismatch` |
+| `dry_run` not a JSON boolean | 400 | `reread_dry_run_required` |
+| no reader configured (job error) | job `error` | `reread_no_reader` |
+
+**What a re-read may change.** Decided by item 239's blind A/B: date, total,
+currency, tax (with its label), document type, the card (`card_last4`), and
+the merchant when it names a different merchant (one name containing the
+other, alphanumerics only, is the same merchant). A blank reading never
+blanks a stored date, total, currency, merchant or tax; a blank card does
+replace a stored one. `document_kind`, `reference`, `invoice_number` and
+`receipt_number` are compared and counted, never written. Line items and
+their categories stay; a receipt whose merchant or company moves is
+categorized again. Readings are written to the snapshot's
+`extracted_receipts` and `receipts`, never to the reviewer's tables, so every
+field edit, category pick, duplicate ruling, set-aside restore and match
+decision stays on top, and nothing a re-read writes is a correction a Publish
+learns from.
+
+Job `result` (both modes):
+
+| Path | Meaning |
+|---|---|
+| `readings.reader` | `{provider, model, ...}` that answered first |
+| `readings.n_read` / `n_changed` / `n_unchanged` | files read; receipts with at least one field moving; the rest |
+| `readings.changes[]` | `{document_id, display, where: "expense" \| "set_aside", changes: {field: {before, after}}}`; values are strings or `null`. A set-aside page now read as a purchase adds `set_aside_reason` and `joins_month: true`; a new date outside the batch's month adds `new_date_outside_month: true` (absent otherwise). A re-read never moves a receipt to another month |
+| `readings.reads_as_non_receipt[]` | `{document_id, display, reads_as}`: an expense the new reader calls a statement or report page; listed and left exactly as it is |
+| `readings.skipped[]` | `{document_id, display, why: "no_file" \| "unreadable"}` |
+| `readings.not_taken` | `{document_kind, reference, invoice_number, receipt_number}`: how many receipts read those differently |
+| `consequences` (dry run) / `applied` (real run) | `pairs {n_before, n_after, changed[{transaction_id, before, after}]}`; `confirmed[]` (`{transaction_id, document_id, decided_by, reading_moves, after{status, document_id}}`: a confirmed match whose receipt's date, total or currency moves, or that is no longer confirmed after); `expenses[]` (`{document_id, fields[], before, after}` over vendor, date, total, currency, category, zoho_account, entity of the Expenses view); `duplicates` (the item 223 step 7 `layer_diff`, totals included) |
+| `consequences.rematch_error` | the throwaway copy's re-match error, else `null` |
+| `written[]` / `joined[]` / `gone[]` / `rematch` (real run) | receipts whose reading was written; set-aside pages that joined; documents changed by someone between the read and the write (left alone); the re-match's own answer |
+| `cost_usd` | model spend of the job, when the app tracks it |
+
+The dry run writes nothing to the month: it commits the plan to a throwaway
+copy of the database, re-matches the copy, diffs, and deletes it. Its reads
+warm the extraction cache, which is what makes a real run right after it read
+the same answers. The real run writes the readings (each changed receipt's
+`data_quality_note` gains "read again YYYY-MM-DD: {fields} changed"), marks a
+joined set-aside entry `restored_by: "reread"`, appends a `receipts_reread`
+record to the snapshot, and re-matches the month with trigger
+`receipts_reread`. Tests: `tests/test_receipts_reread_item_240.py`.

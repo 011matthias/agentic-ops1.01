@@ -374,6 +374,31 @@ def test_an_expense_read_as_a_statement_is_listed_and_left(client, monkeypatch):
     assert _row(_grid(client, batch_id), "GitHub")["vendor"]["raw"] == "Brisken LLC"
 
 
+def test_a_new_date_in_another_month_is_flagged_not_moved(client, monkeypatch):
+    batch_id, reader = _month(client, monkeypatch)
+    _second_reading(reader, Lovable=_ext(date="2026-07-30", total="15.00",
+                                         vendor="Lovable Labs Incorporated"))
+    out = _result(client, batch_id, dry_run=True)
+    (change,) = out["readings"]["changes"]
+    assert change["new_date_outside_month"] is True
+    _second_reading(reader, Lovable=_ext(date="2026-08-29", total="15.00",
+                                         vendor="Lovable Labs Incorporated"))
+    (inside,) = _result(client, batch_id, dry_run=True)["readings"]["changes"]
+    assert "new_date_outside_month" not in inside, "absent, never false"
+
+
+def test_an_expense_the_reviewer_deleted_is_not_read_again(client, monkeypatch):
+    batch_id, reader = _month(client, monkeypatch, attach=False)
+    github = _row(_grid(client, batch_id), "GitHub")["document_id"]
+    deleted = client.delete(f"/api/runs/{batch_id}/expenses/{github}")
+    assert deleted.status_code == 200, deleted.text
+    _second_reading(reader, GitHub=_ext(date="2026-08-12", total="99.00",
+                                        vendor="GitHub, Inc.", vendor_clean="GitHub"))
+    out = _result(client, batch_id, dry_run=True)
+    assert out["readings"]["n_read"] == 1, "only the expense still in her month"
+    assert out["readings"]["changes"] == []
+
+
 def test_one_merchant_written_two_ways_is_not_a_change(client, monkeypatch):
     batch_id, reader = _month(client, monkeypatch)
     _second_reading(reader, Lovable=_ext(date="2026-08-30", total="15.00",

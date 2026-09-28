@@ -67,6 +67,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from ..batch_period import month_from_label
 from ..cli import NON_RECEIPT_LABELS
 from ..matching.types import Receipt
 from .duplicate_reapply import duplicate_layer, layer_diff, rematch_running
@@ -375,7 +376,16 @@ def plan_reread(
     snapshot = run.snapshot or {}
     plan = ReadPlan(reader=reader_of(llm_client))
 
-    pool = [r for r in baseline_receipts(run) if "~" not in r.document_id]
+    # An expense the reviewer deleted (or moved to another month) is gone
+    # from her month, so it is neither read nor listed.
+    deleted = {
+        e["document_id"] for e in store.get_expense_edits(run.run_id)
+        if e.get("op") == "delete"
+    }
+    pool = [
+        r for r in baseline_receipts(run)
+        if "~" not in r.document_id and r.document_id not in deleted
+    ]
     waiting: list[tuple[dict, Receipt]] = []
     for e in set_aside_entries(snapshot):
         if e.get("restored"):
@@ -426,6 +436,18 @@ def plan_reread(
     read = dict(zip(order, batch))
 
     waiting_docs = {s.document_id: (e, s) for e, s in waiting}
+    label_month = month_from_label(run.label)
+
+    def elsewhere(change: dict, receipt: Receipt) -> dict:
+        # A re-read never moves a receipt to another month; one whose new
+        # date lies outside this batch's month says so (January 2026 exists
+        # only because a July slip was read as 2026-01-04).
+        d = receipt.detected_date
+        if ("date" in change["changes"] and d is not None and label_month
+                and (d.year, d.month) != label_month):
+            change["new_date_outside_month"] = True
+        return change
+
     for doc in order:
         stored, new = by_doc[doc], read[doc]
         display = stored.receipt_name or _display_name(doc)
@@ -440,11 +462,11 @@ def plan_reread(
             merged, changes, _recat = merge_reading(stored, new)
             merged = replace(merged, document_type=new.document_type or "receipt")
             plan.restores[doc] = merged
-            plan.changes.append({
+            plan.changes.append(elsewhere({
                 "document_id": doc, "display": display, "where": "set_aside",
                 "set_aside_reason": entry.get("reason") or "other",
                 "joins_month": True, "changes": changes,
-            })
+            }, merged))
             continue
         if not new_is_purchase and stored.document_type not in NON_RECEIPT_LABELS:
             plan.reads_as_non_receipt.append({
@@ -459,10 +481,10 @@ def plan_reread(
         plan.merged[doc] = merged
         if recat:
             plan.recategorize.add(doc)
-        plan.changes.append({
+        plan.changes.append(elsewhere({
             "document_id": doc, "display": display, "where": "expense",
             "changes": changes,
-        })
+        }, merged))
     return plan
 
 
