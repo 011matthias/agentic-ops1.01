@@ -266,3 +266,24 @@ The first is an owner decision tied to the October arrangement, not a task.
 
 Related: `docs/if-it-is-down.md`, `docs/backup-and-restore.md`,
 `docs/screen-field-map.md`, `docs/api-contract.md`.
+
+## Switch the receipt reader (item 239)
+
+OpenAI reads every receipt unless the environment says otherwise. To have
+Google's Gemini read them:
+
+1. Set the key as a Fly secret (never in `fly.toml`, never in git). It lives
+   in the gitignored `workspace/clients/brisken/context/.env` as
+   `BRISKEN_GEMINI_API_KEY`:
+   `flyctl secrets set GEMINI_API_KEY=... -a brisken-expense-recon --stage`
+2. Add to `fly.toml [env]`: `EXPENSE_RECON_GEMINI_READS = "images"` (photos,
+   scanned PDFs, rendered mail bodies) or `"all"` (also PDFs with a text
+   layer). Optional: `EXPENSE_RECON_GEMINI_MODEL` (default
+   `gemini-3.8-flash`), `EXPENSE_RECON_GEMINI_THINKING` (`low` / `high`).
+3. Merge, deploy with `deploy.py`, then read `/healthz`: `receipt_reader`
+   must name the model, the reads and `key_set: true`.
+
+Off again: remove the env line (or set it to `off`) and deploy. Nothing
+already read is re-read either way; a document read by one provider stays
+cached under that provider's model. The logs name every receipt Gemini could
+not read and OpenAI read instead.

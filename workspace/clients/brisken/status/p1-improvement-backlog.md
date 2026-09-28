@@ -12706,10 +12706,72 @@ learning store: remembered cards do not reach a trip's list count.
 
 **LIVE 2026-09-28** (PR #1526, merge `7e5dd03c`, `deploy.py`, healthz on that commit). Read after the deploy: all 7 months reconcile on all three columns, cards plus No card against the list (September 70 / 38 / 4, August 49 / 19 / 0, July 67 / 27 / 2); a cold drive of `/months` shows the same and, with item 236's published SPA, each card's own figures. First list read after the deploy 1.2 s (the kept body being built).
 
+### 239. Gemini reads receipts, switched off until it is measured (Dirk 2026-09-27; owner 2026-09-28: "Build, test, then switch") (STEP 1 BUILT 2026-09-28, PR #1533, switch OFF)
+
+Dirk asked for Google's Gemini to read receipts ("the top notch model for that
+kind of work") and supplied a key on a billed project (AI Studio project
+`1Expense`, Tier 1 Prepay; key in the gitignored `context/.env` as
+`BRISKEN_GEMINI_API_KEY`; owner ruling 2026-09-28: no rotation). Research the
+day before: Gemini leads on photographed and degraded receipts in every
+independent test that pairs it with a GPT-5-family model, and is near parity
+on clean PDFs; nothing had tested these models on Brisken's receipts. 210 of
+the 224 July-September receipts are PDFs, and a PDF with a text layer is read
+as TEXT by `gpt-4o-mini`, never by the vision model, so "the reader" is two
+readers. Owner chose: build it switched off, run both on the stored receipts,
+switch on where Gemini wins.
+
+**Step 1, built.** `llm/gemini.py` `GeminiReader` is the one network call
+(REST `generateContent`, stdlib HTTP, no new dependency). `OpenAIClient.
+extract_receipt` hands a read to it when `receipt_reader.takes()` covers the
+read, with the SAME system rule, instructions, untrusted-data fences, card
+list and schema (the prompt text is byte-identical to OpenAI's; a test pins
+it), so the only difference between the arms is the provider. Everything else
+(categories, FX and ambiguity judgments) stays on OpenAI.
+- Switch: `cfg["llm"]["receipt_reader"]` or, for the hosted app,
+  `EXPENSE_RECON_GEMINI_READS` = `images` (photos, scanned PDFs, rendered mail
+  bodies) or `all` (also text-layer PDFs); anything else = off. Optional
+  `EXPENSE_RECON_GEMINI_MODEL` (default `gemini-3.8-flash`) and
+  `EXPENSE_RECON_GEMINI_THINKING`. Key from `GEMINI_API_KEY`, sent in the
+  `x-goog-api-key` header, never the URL (Google's 404 page echoed a `?key=`
+  URL into a scratch file on 2026-09-27). Switched on with no key = warns and
+  OpenAI keeps reading.
+- Fail-open: 429/5xx and transport errors retry twice (2 s, 6 s); after that,
+  or on a refused, cut (`finishReason` not STOP) or unparseable answer, the
+  document is read by OpenAI and the log names both. No receipt stalls on the
+  second provider.
+- Structured output uses `generationConfig.responseFormat.text` with
+  `mimeType: "APPLICATION_JSON"` (probed live on 3.8 Flash and 3.1 Pro: the
+  lower-case MIME is a 400; `responseSchema` / `responseJsonSchema` are
+  deprecated). Temperature left at Google's default (its Gemini 3 guidance).
+- Cache: readings key on the model id, so Gemini's sit beside OpenAI's; a
+  switch re-reads nothing already stored (a re-match reuses stored readings).
+- Cost: `gemini-3.8-flash` 0.75 / 3.75, `gemini-3.1-pro-preview` 2.00 / 12.00,
+  `gemini-3.5-flash-lite` 0.30 / 2.50 USD per 1M (pricing page dated
+  2026-09-24; 3.8 Flash doubles from 2027-01-01); thinking tokens count as
+  output.
+- `/healthz` gains `receipt_reader` (`{"reads": "off"}`, or provider, model,
+  reads, `key_set`; never the key). `expense-recon doctor` reports the reader.
+- Tests `tests/test_gemini_reader_item_239.py` (26), including a Receipts drop
+  of three photos through `route_dropped_receipts` read by Gemini with zero
+  OpenAI extraction calls. Regress: unwiring `client.receipt_reader = reader`
+  in `cli._build_llm_client` turns the switched-on tests red, the Receipts drop among them; catching
+  nothing in place of `ReaderUnavailable` turns the 6 fallback cases red.
+
+**Step 2 (next): the A/B.** Item 223 step 4's harness and its two stored
+current-prompt passes over the 251 documents of the 2026-09-25 backup are the
+OpenAI arm; Gemini passes through the same `extract_receipt`, cache off, same
+card list, scored per field and per path (text layer / picture / rendered mail
+body), disagreements adjudicated against the document itself.
+
+**Step 3: switch on** where step 2 says Gemini is right more often, by
+`fly.toml [env]` plus the `GEMINI_API_KEY` Fly secret (`docs/operating.md`,
+"Switch the receipt reader").
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 158 | Item 239 step 1: Gemini can read receipts (`llm/gemini.py`), switched by `EXPENSE_RECON_GEMINI_READS` = `images` / `all`, OFF by default; same prompt, fences, schema and cache as OpenAI; retries then falls back to OpenAI; priced; `healthz.receipt_reader` | Dirk asked for the reader research ranks best on photographed receipts; building it switched off lets it be measured on Brisken's own receipts before Criss sees a single reading from it | 2026-09-28, PR #1533 |
 | 157 | Item 220 step 7 (front 2): a confirmed-private receipt with no company reads `review.refusal: private_no_company` with its own sentence instead of `entity_missing` "Set the company"; read time, same `pick` state and code, no box or count moves; live Jul 0028 + Sep 0024 | The private badge and the category line gave Criss opposite instructions on the same row | 2026-09-28, PR #1525 |
 | 156 | Item 220 step 6 + item 211 (front 2): a neighbour receipt whose id the borrowing month already holds is borrowed under its own pool id (`{home run}~{id}`), and the commit's claims re-check, the claim writes, a reviewer's confirm, the neighbour's `settled_by`, `charges_settled_elsewhere` and the image route read it back as (home run, id); the borrowed receipt carries the card its home row resolved; the borrow reaches 3 days before a period that opens on the 1st. | Four live receipts could never be borrowed (August from July: Hostinger 172.61, Konsultancy 15,972.00; September from August: Obsidian 96.00, Zoho Books 576.00), a pick on the home row did not scope the borrow, and a calendar-month export would have lost every receipt printed on the 31st. | PR #1512 |
 | 155 | Item 227: `gpt-5-mini` priced (USD 0.25 / 0.025 cached / 2.00 per 1M), cached input billed at each model's cached rate, and a test that fails on any model the configuration names without a price | Every photo reading was costed at USD 0, about 93% of the real spend (A/B: USD 2.32 at list, tracker USD 0.21) | 2026-09-27, PR #1500, Fly v270 (commit `987e0b52`); costs only calls from the deploy on, no live read possible without an arrival |

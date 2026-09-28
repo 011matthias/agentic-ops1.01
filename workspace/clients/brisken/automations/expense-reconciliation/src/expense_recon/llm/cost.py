@@ -27,6 +27,14 @@ _PRICING_PER_MILLION: dict[str, tuple[Decimal, Decimal]] = {
     # until now, so the tracker recorded about 93% of the real spend at 0.
     # Output includes the reasoning tokens (1,300-1,440 per receipt read).
     "gpt-5-mini": (Decimal("0.250"), Decimal("2.000")),
+    # Item 239 (2026-09-28): Gemini as the receipt reader. Paid tier, prompts
+    # up to 200k tokens, read 2026-09-27 from
+    # https://ai.google.dev/gemini-api/docs/pricing (page dated 2026-09-24).
+    # Images and PDF pages bill at the input rate; output includes thinking
+    # tokens. 3.8 Flash doubles to 1.50 / 7.50 from 2027-01-01.
+    "gemini-3.8-flash": (Decimal("0.750"), Decimal("3.750")),
+    "gemini-3.1-pro-preview": (Decimal("2.000"), Decimal("12.000")),
+    "gemini-3.5-flash-lite": (Decimal("0.300"), Decimal("2.500")),
 }
 
 # Cached input, USD per 1M tokens: the part of `prompt_tokens` the provider

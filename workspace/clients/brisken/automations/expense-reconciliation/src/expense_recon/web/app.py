@@ -1603,6 +1603,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         Null when nothing is provisioned. Never fails the probe.
         """
         from ..category_vocabulary import chart_coverage
+        from ..llm.gemini import receipt_reader_status
         from .intake_mail import disk_snapshot
 
         try:
@@ -1614,6 +1615,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             "server": machine.snapshot(),
             "disk": disk_snapshot(data_root_path),
             "coa_chart": coa_chart,
+            # Item 239: which provider reads receipts (never the key).
+            "receipt_reader": receipt_reader_status(),
         })
 
     # ── The client-failure probe (backlog item 50) ──────────────────────
