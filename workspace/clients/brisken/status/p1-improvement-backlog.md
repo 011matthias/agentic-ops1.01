@@ -12810,7 +12810,7 @@ keeps reading and `/healthz` says `key_set: false`.
 `fly.toml [env]` plus the `GEMINI_API_KEY` Fly secret (`docs/operating.md`,
 "Switch the receipt reader").
 
-### 240. Gemini re-reads the stored receipts, preview first, then apply (owner 2026-09-28: "Preview, then apply") (route LIVE Fly v277, not yet run on a month; production dry run and the owner's per-month yes still to come)
+### 240. Gemini re-reads the stored receipts, preview first, then apply (owner 2026-09-28: "Preview, then apply") (APPLIED 2026-09-28 to all seven months after the owner's per-month yes, 5 receipts skipped)
 
 Item 239 made Gemini read every receipt that ARRIVES; the stored ones kept
 OpenAI's reading, and nothing read them again. `POST /api/runs/{id}/receipts/reread`
@@ -12872,6 +12872,31 @@ month every run is clean, and production runs one month per job. Next (live v277
 dry run per month on production, the owner's list in plain language, apply
 month by month after his yes.
 
+**Applied 2026-09-28, all seven months** (production dry run per month, the
+owner's list, his per-month yes "apply with the proposed skips", then the real
+run). Every real reading was identical to its dry run (cache hits, USD 0.003
+for the seven real runs; the dry runs cost USD 2.88), `gone` empty everywhere,
+no human confirmation touched, cold read-only SPA drive renders the new values
+(April JAQUEIRA ONLINE, August A VIDA E BELA / Jose Cicero, July AT&T Online
+Services) and not the skipped one (BOULANGERIE JACQUES).
+
+| Month | Written | Skipped (why) | Pairs | Also |
+|---|---|---|---|---|
+| January | 1 | | 0 | stray copy of July's Parada receipt redated 01-04 to 07-04, flagged outside the month |
+| May | 2 | | 17 | MARTINHO to MARINHO (scan says MARINHO) |
+| June | 5 | | 19 | 4 cards blank to 3876, 1 to 3645 |
+| April | 10 | MEGA CENTER 04-11 (card paid 125.88 of the 129.11 bill; re-read unpairs USD 25.16) | 15 to 19 | Fenix page holds two purchases, both readings wrong, blended re-read taken; Espetinho 80.34 to 80.00 = slip, stays confirmed |
+| July | 20 + 2 joined | Enchilada, Brauhaus Kuehler Krug (slip prints wallet card 1672, re-read unpairs USD 34.39 / 53.80); ZE Normandie (date invented 07-05, ticket shows only "05/26") | 41 to 46 | AT&T USD 129.36 and a 2nd AWS copy join; 2 tool confirmations back to review; BRL 2,869.66 to 2,444.69 (item 217 copies) |
+| August | 9 | RECANTO DO SABOR (item 239 ruled the stored 08-24 / 138.91 right) | 35 to 38 | Google billing IDs stored as cards 2544/9129 cleared; 3 tool confirmations back to review |
+| September | 7 | | 19 | Caspari 41.60 to 45.00 and Chili's 22.60 to 27.57 (tips, the card amounts); girocard 6481/4817 written |
+
+Repeatability: fresh Gemini reads are not fully repeatable. Against the
+morning's local run 3 receipts read differently in production (Fenix 500.90 on
+04-02 became 500.93 on 04-04, San Paolo's 2024 misreading did not recur, ZE
+Normandie gained a total and merchant), although item 239's two passes agreed
+on 0 of 251. The cache is what makes a real run match its dry run; a dry run
+older than a cache purge is not a preview. Finding filed as item 243.
+
 Tests `tests/test_receipts_reread_item_240.py` (14, route-level). Regress:
 handing the real run to the job as a dry run (`app.py`) turns 5 red; writing
 the stored reading back instead of the merged one turns 2 red.
@@ -12908,6 +12933,24 @@ at 24 px and the money beside it at 12 px. Live August: BRL 1,853.98, EUR
 prompt sets the pills to `text-xl font-semibold` with the currency code small
 and grey in front; the lines under them (unreadable amounts, copies set
 aside, bills) stay small.
+
+### 243. A card number printed on a slip that is not one of Brisken's cards blocks the pairing (found 2026-09-28 in item 240's dry runs, NOT BUILT)
+
+Since item 239 Gemini reads every arriving receipt with the prompt that asks
+for the card only when it is on the month's list. OpenAI kept to that; Gemini
+returns whatever last four the slip prints. Seen in item 240's production dry
+runs: two Karlsruhe dinners and a Normandie bakery print `1672` (a phone-wallet
+number; the charges sit on Chase 2838), two German girocard slips print 6481 and
+4817, and OpenAI itself had stored Google Workspace billing-ID digits as cards
+2544 / 9129. With `1672` written, the card gate refused both Karlsruhe pairs
+(USD 34.39, 53.80); item 240 skipped them, but the same reading reaches any NEW
+arrival paid through a wallet, silently unpaired.
+
+Direction, not decided: a card that is not on the month's list counts as no
+card for the gate (kept for display, so a girocard stays visible as not a
+Brisken card), or the reader drops it the way OpenAI did. Measure first: how
+many live receipts carry an unlisted card, and how many of those have a charge
+the gate refused.
 
 ## Shipped (loop history)
 
