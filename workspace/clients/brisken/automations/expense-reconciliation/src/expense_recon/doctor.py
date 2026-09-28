@@ -377,6 +377,28 @@ def _check_llm(report: _Report, cfg: dict) -> None:
     model = llm.get("model", "gpt-4o-mini")
     vision = llm.get("vision_model") or model
     report.ok("llm", f"model {model!r}, vision {vision!r}")
+    _check_receipt_reader(report, llm)
+
+
+def _check_receipt_reader(report: _Report, llm: dict) -> None:
+    """Item 239: say which provider reads receipts, and whether it can."""
+    from .llm.gemini import DEFAULT_GEMINI_MODEL, DEFAULT_KEY_ENV, READS, reader_block
+
+    block = reader_block(llm)
+    if not block:
+        report.ok("reader", "receipts are read by OpenAI (Gemini reader off)")
+        return
+    provider = block.get("provider", "gemini")
+    reads = str(block.get("reads", "images")).strip().lower()
+    if provider != "gemini" or reads not in READS:
+        report.fail("reader", f"receipt_reader {provider!r} / reads {reads!r} not supported")
+        return
+    key_env = block.get("api_key_env") or DEFAULT_KEY_ENV
+    model = block.get("model") or DEFAULT_GEMINI_MODEL
+    if not os.environ.get(key_env):
+        report.fail("reader", f"Gemini reads {reads} but {key_env!r} is not set; OpenAI keeps reading")
+    else:
+        report.ok("reader", f"Gemini {model!r} reads {reads}; {key_env} is set (not validated)")
 
 
 def _check_accounts_config(report: _Report, cfg: dict, config_dir: Path) -> None:

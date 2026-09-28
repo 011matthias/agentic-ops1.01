@@ -110,6 +110,7 @@ from .ingest.statement_xlsx import parse_statement_xlsx_tolerant
 from .llm.client import LLMClient, OpenAIClient
 from .llm.cost import CostTracker
 from .llm.extraction_cache import ExtractionCache
+from .llm.gemini import receipt_reader_from_config
 from .merchant_registry import MerchantRegistry, drop_unvouched_remembered_cards
 from .matching.deterministic import MatchingConfig, match_month
 from .matching.judgment import judge_ambiguous, judge_fx_match, judge_unmatched
@@ -1788,6 +1789,17 @@ def _build_llm_client(cfg: dict) -> tuple[LLMClient | None, CostTracker | None]:
     if cache_path:
         client.extraction_cache = ExtractionCache(Path(cache_path))
         logger.info("extraction cache: %s", cache_path)
+
+    # Item 239: Gemini reads receipts when `llm.receipt_reader` or the
+    # EXPENSE_RECON_GEMINI_READS switch says so; off otherwise, and every
+    # other call stays on OpenAI either way. Attribute, like the cache.
+    try:
+        reader = receipt_reader_from_config(llm_cfg)
+    except ValueError as exc:
+        raise ConfigError(f"config.llm.receipt_reader: {exc}") from exc
+    if reader is not None:
+        client.receipt_reader = reader
+        logger.info("receipt reader: %s", reader.describe())
 
     return client, tracker
 

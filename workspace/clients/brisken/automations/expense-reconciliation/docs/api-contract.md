@@ -8133,3 +8133,22 @@ The done job's `result`:
 
 A send that cannot start (another send running, no Zoho login) ends the job
 as `error` with a plain sentence. Tests: `tests/test_web_zoho_send.py`.
+
+## Which provider reads receipts: `healthz.receipt_reader` (item 239, added 2026-09-28)
+
+Receipts can be read by Google's Gemini instead of OpenAI (switched by the
+environment, off by default). `/healthz` says which, so a switch is provable
+from outside without reading a receipt. `status` is still the only field a
+caller needs; the block never carries the key.
+
+| Path | Element | Meaning |
+|---|---|---|
+| `receipt_reader.reads` | string | `"off"` (OpenAI reads everything), `"images"` (Gemini reads photos, scanned PDFs and rendered mail bodies; PDFs with a text layer stay on OpenAI) or `"all"` |
+| `receipt_reader.provider` | string | `"gemini"`; absent when off |
+| `receipt_reader.model` | string | the Gemini model reading, e.g. `"gemini-3.8-flash"`; absent when off |
+| `receipt_reader.key_set` | boolean | whether the app holds a Gemini key; `false` with `reads` on means OpenAI is still reading every receipt; absent when off |
+| `receipt_reader.thinking_level` | string | present only when a thinking level is set |
+
+A reading Gemini cannot give (outage after two retries, a refused or cut
+answer, JSON the parser rejects) is read by OpenAI instead, so `reads` says
+who reads first, not who read every receipt.

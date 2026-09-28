@@ -29,6 +29,7 @@ from typing import Protocol
 from ..untrusted import UNTRUSTED_SYSTEM, data_block, new_nonce
 from .cost import CostTracker, TokenUsage
 from .extraction_cache import ExtractionCache, extraction_cache_key, prompt_fingerprint
+from .gemini import ReaderUnavailable
 
 logger = logging.getLogger("expense_recon")
 
@@ -864,6 +865,10 @@ class OpenAIClient:
         self.known_cards = [
             d for d in (str(c).strip() for c in (known_cards or [])) if d
         ]
+        # Item 239: an optional second provider for the receipt READING only
+        # (`llm.gemini.GeminiReader`). None = OpenAI reads everything, exactly
+        # as before. Set by the builder, like the extraction cache.
+        self.receipt_reader = None
 
     def classify_line_items(
         self,
@@ -1063,8 +1068,38 @@ class OpenAIClient:
         if (images is None) == (text is None):
             raise ValueError("extract_receipt needs exactly one of images= or text=")
 
-        model = self.model if text is not None else self.vision_model
+        # Item 239: when a second reader is switched on for this kind of read,
+        # it answers first; if it cannot (outage after retries, a refused or
+        # cut answer, JSON the parser rejects), OpenAI reads the document, so
+        # a receipt is never lost to the second provider having a bad minute.
+        reader = getattr(self, "receipt_reader", None)
+        if reader is not None and reader.takes(is_text=text is not None):
+            try:
+                return self._extract_receipt(
+                    file_name=file_name, images=images, text=text,
+                    model=reader.model, reader=reader,
+                )
+            except ReaderUnavailable as exc:
+                logger.warning(
+                    "receipt reader %s could not read %s (%s); reading it with OpenAI",
+                    reader.model, file_name, exc,
+                )
 
+        return self._extract_receipt(
+            file_name=file_name, images=images, text=text,
+            model=self.model if text is not None else self.vision_model,
+            reader=None,
+        )
+
+    def _extract_receipt(
+        self,
+        *,
+        file_name: str,
+        images: list[tuple[bytes, str]] | None,
+        text: str | None,
+        model: str,
+        reader=None,
+    ) -> ExtractedReceipt:
         # Same photo, same answer: identical document content (under the same
         # model + prompt fingerprint) is answered from the raw-payload cache
         # instead of the API. The payload is re-parsed live below, so parser
@@ -1109,7 +1144,26 @@ class OpenAIClient:
             # have its tail read as instructions (untrusted.data_block).
             content: object = instructions + "\n" + _EXTRACT_TEXT_INTRO + data_block(
                 text, kind="PDF text layer", nonce=nonce)
-        else:
+        if reader is not None:
+            # Item 239: the SAME system rule, instructions, fences and schema,
+            # sent to the second reader; only the transport differs.
+            result = reader.read(
+                system=UNTRUSTED_SYSTEM,
+                prompt_text=content if text is not None else instructions,
+                images=images,
+                schema=_EXTRACT_SCHEMA,
+            )
+            self.cost_tracker.record(TokenUsage.from_counts(
+                model, result.input_tokens, result.output_tokens, result.cached_tokens))
+            raw_payload = result.payload
+            try:
+                extraction = _extraction_from_payload(json.loads(raw_payload))
+            except (ValueError, TypeError, AttributeError) as exc:
+                raise ReaderUnavailable(f"unparseable answer: {exc}") from exc
+            if cache is not None and cache_key is not None:
+                cache.put(cache_key, raw_payload, model=model, file_name=file_name)
+            return extraction
+        if text is None:
             import base64
 
             parts: list[dict] = [{"type": "text", "text": instructions}]
