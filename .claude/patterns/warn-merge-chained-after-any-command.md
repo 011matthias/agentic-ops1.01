@@ -1,6 +1,6 @@
 ---
 name: warn-merge-chained-after-any-command
-enabled: true
+enabled: false
 event: bash
 action: warn
 message: Run 'gh pr merge' as its own Bash call. no-auto-commit-gate reads CI once, before the whole command runs, so any wait chained ahead of the merge (a --watch, a poll script, an if on its exit code) is invisible to it and a PR about to go green takes a permission stop.
