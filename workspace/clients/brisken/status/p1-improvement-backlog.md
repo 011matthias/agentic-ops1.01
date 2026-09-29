@@ -12901,7 +12901,7 @@ Tests `tests/test_receipts_reread_item_240.py` (14, route-level). Regress:
 handing the real run to the job as a dry run (`app.py`) turns 5 red; writing
 the stored reading back instead of the merged one turns 2 red.
 
-### 241. The statements toggle under a month's tabs becomes a real button (note #107, operator, 2026-09-28 00:27 UTC) (PROMPT WRITTEN 2026-09-28: `docs/lovable-statements-button-totals-prompt.md` §1, not pasted)
+### 241. The statements toggle under a month's tabs becomes a real button (note #107, operator, 2026-09-28 00:27 UTC) (PROMPT WRITTEN 2026-09-28: `docs/lovable-statements-button-totals-prompt.md` §1; PUBLISHED (published-bundle read 2026-09-30: live))
 
 Verbatim, on August's Expenses page (`/expenses/074a7b8905d7`), anchor "4
 statements ˅ Statements Every statement file this month has taken, oldest
@@ -12919,7 +12919,7 @@ behaviour. **Seen, not changed:** the Matching page shows both this header
 toggle and item 233's button, and they list the same statement files. The
 note did not ask for either to go, so both stay; one of them could.
 
-### 242. The Totals tile's currency amounts read as large as the counts beside them (note #108, operator, 2026-09-28 00:27 UTC) (PROMPT WRITTEN 2026-09-28: `docs/lovable-statements-button-totals-prompt.md` §2, not pasted)
+### 242. The Totals tile's currency amounts read as large as the counts beside them (note #108, operator, 2026-09-28 00:27 UTC) (PROMPT WRITTEN 2026-09-28: `docs/lovable-statements-button-totals-prompt.md` §2; PUBLISHED (published-bundle read 2026-09-30: live))
 
 Verbatim, on August's Expenses page, anchor "Totals": *"need the actual
 number "tabs" to be larger"*.
