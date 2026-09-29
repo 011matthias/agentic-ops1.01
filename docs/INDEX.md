@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-29 | Expense-Recon Notes 109-110 | client-dev | [Mini-Checkpoint-1](docs/2026-09-29%20-%20Expense-Recon%20Notes%20109-110/Mini-Checkpoint-1.md) |
 | 2026-09-29 | Expense-Recon Item 243 Card Register | client-dev | [Mini-Checkpoint-1](docs/2026-09-29%20-%20Expense-Recon%20Item%20243%20Card%20Register/Mini-Checkpoint-1.md) |
 | 2026-09-28 | Expense-Recon Item 239 Gemini Reader | client-dev | [→](docs/2026-09-28%20-%20Expense-Recon%20Item%20239%20Gemini%20Reader/Checkpoint.md) |
 | 2026-09-28 | Expense-Recon Item 240 Applied | client-dev | [Mini-Checkpoint-1](docs/2026-09-28%20-%20Expense-Recon%20Item%20240%20Applied/Mini-Checkpoint-1.md) |
