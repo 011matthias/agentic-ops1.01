@@ -4,10 +4,11 @@ workstream: p1-expense-reconciliation
 group: ""
 spec: p1
 state: active
-updated: 2026-09-28
+updated: 2026-09-29
 ---
 
 # Brisken / Expense Reconciliation (p1)
+**2026-09-29: feedback notes #109 and #110 itemized as backlog items 244-245, one SPA prompt, not pasted.** #109: the `/months` header tabs scroll sideways behind a hidden scrollbar (PT clips "Comparar" and "Configurações", EN "Settings"); the prompt gives them their own wrapping row. #110 asked what "Paid by bank transfer" does: it moves a receipt to Bills (out of the card side and the total, into `bills.csv`, nothing posts), and a card-paid receipt moved there by mistake returns once its statement charge is matched to it, now pinned by a route test. The prompt adds a tooltip saying so. `docs/lovable-nav-no-scroll-bill-tip-prompt.md`, one new key; both halves proven on a scratch SPA clone against the live API, 0 writes.
 **2026-09-28: feedback notes #107 and #108 itemized as backlog items 241-242, one SPA prompt, not pasted (PR #1541).** Both on August's Expenses page and SPA only: the "4 statements" toggle under a month's tabs becomes an outline button (icon, turning chevron, amber edge when a statement carries an advisory), and the Totals tile's currency amounts go from 12 px to 20 px bold beside the 24 px Expenses count. `docs/lovable-statements-button-totals-prompt.md`; no backend change, no new key. Same PR: items 231 and 232-235 marked PUBLISHED in PROMPT-STATUS (their keys are in the published bundle; the unpublished `receipts_reread` key is not, as the control).
 
 **2026-09-27 (night): the Receipts page opens a dropped zip (backlog item 237, owner directive), backend live `fc8db9cc` (PR #1514), SPA prompt `docs/lovable-receipts-drop-zip-prompt.md` NOT pasted.** Each member files by its own printed month with that month's content dedupe and a `from_zip` row; a zip refused whole reads `zip-unreadable` / `zip-too-many-files` / `zip-no-space` with a `reason_label`. Trigger: Nicolas mailed a 108-PDF zip spanning Jan-Sep (held `held_body_only`: mail never opens a zip, empty body); 105 of its PDFs are byte-identical to live rows, 3 are missing (two August BENCH receipts, one LinkedIn invoice) and he was emailed to send those three. The month upload also opens zips but files the whole zip into one month, so a mixed zip must never go there. Until the prompt is pasted the page filters zips out client-side.
