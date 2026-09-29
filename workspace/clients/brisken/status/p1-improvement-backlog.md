@@ -12934,28 +12934,43 @@ prompt sets the pills to `text-xl font-semibold` with the currency code small
 and grey in front; the lines under them (unreadable amounts, copies set
 aside, bills) stay small.
 
-### 243. A card number printed on a slip that is not one of Brisken's cards blocks the pairing (found 2026-09-28 in item 240's dry runs, NOT BUILT)
+### 243. The corporate card's second number (1672) no longer costs a receipt its charge (owner 2026-09-28: "register-aware check + add 1672"; Criss adds the number in Settings) (BUILT 2026-09-29, see Shipped)
 
-Since item 239 Gemini reads every arriving receipt with the prompt that asks
-for the card only when it is on the month's list. OpenAI kept to that; Gemini
-returns whatever last four the slip prints. Seen in item 240's production dry
-runs: two Karlsruhe dinners and a Normandie bakery print `1672` (a phone-wallet
-number; the charges sit on Chase 2838), two German girocard slips print 6481 and
-4817, and OpenAI itself had stored Google Workspace billing-ID digits as cards
-2544 / 9129. With `1672` written, the card gate refused both Karlsruhe pairs
-(USD 34.39, 53.80); item 240 skipped them, but the same reading reaches any NEW
-arrival paid through a wallet, silently unpaired.
+Found in item 240's July dry run: two Karlsruhe dinners (EUR 30.00, 47.00;
+charges USD 34.39, 53.80 on 2838) print `...1672`. That is the corporate
+card's own plastic number, not a wallet number as first written here: the
+statement marks its charges 2838 (`cards.py`, one card with several digit
+identities; Zoho names it "CorpServ 2838/1672"). The FX uniqueness gate
+compares PRINTED digits only (item 137 kept it on the evidence it was
+calibrated on: 14 of 14 absent-card coincidences wrong, 0 of 55 true pairs
+lost), so 1672 against 2838 read as a card absent from the statement and both
+true pairs were demoted. Item 240 skipped them.
 
-Direction, not decided: a card that is not on the month's list counts as no
-card for the gate (kept for display, so a girocard stays visible as not a
-Brisken card), or the reader drops it the way OpenAI did. Measure first: how
-many live receipts carry an unlisted card, and how many of those have a charge
-the gate refused.
+Measured live 2026-09-28 (the card lands in `payment_hint`; `card_ending` is
+blind to it, proven on the two girocard rows): 2 receipts carry a number no
+Brisken card has, both German girocards (6481, 4817) with no Chase charge.
+Nothing is wrongly unpaired today; the risk was the next slip printing 1672.
+The live register lists 2838 as that card's only number.
+
+Fix, as the owner chose over "ignore every non-Brisken card" (which would let
+a girocard pair with an unrelated Chase charge through conversion): the print
+read through the card register is still printed evidence. `_card_score` adds
+the register card's numbers when the card was resolved FROM the print
+(`card_scope_source` "hint") and the printed digits are one of its numbers. A
+hint word ("Visa"), a pick and a remembered card stay out, as item 137 left
+them; a girocard is still demoted. Takes effect once Criss adds 1672 to the
+2838 card in Settings > Cards, at each month's next re-match.
+
+Tests `tests/test_card_register_gate_item_243.py` (9), through `match_month`
+(the gate's caller) and the web register. Regress: dropping the register
+digits turns the 1672 pair red; letting a digit-less hint word in turns the
+hint-word case red.
 
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 161 | Item 243: the card score reads a printed number through the card register when the register resolved the card from that print, so "...1672" agrees with a 2838 charge once 1672 is on the 2838 card; hint words, picks, remembered cards and unregistered cards (girocards) unchanged | Item 240's July dry run: the FX gate demoted two true Karlsruhe pairs (USD 34.39, 53.80) for printing the corporate card's plastic number; every future slip printing 1672 would have missed its charge | 2026-09-29, PR (this item) |
 | 160 | Item 240: `POST /api/runs/{id}/receipts/reread` reads a month's stored receipts again through the arrival's path and takes date, total, currency, tax, type, card and a different merchant (one Gemini pass: 0 of 251 key fields moved between passes); dry run on two throwaway database copies separates the re-read's own effect from any re-match's; `skip`, other-year dates held | Receipts stored before item 239 keep OpenAI's misreadings (April MEGA CENTER in BRL where the card paid USD, FENIX 117.79 for 500.90) until read again; local run over all seven months: 58 receipts change, 7 charges newly paired and 1 unpaired | 2026-09-28, PR #1538 |
 | 159 | Item 239 steps 2-3: blind A/B on the 251 stored documents, Gemini 3.8 Flash right 15 to 3 on date / total / currency / card / tax / type and 8 to 0 on text-layer PDFs; `fly.toml` switches `EXPENSE_RECON_GEMINI_READS = "all"` (live once the `GEMINI_API_KEY` secret is set) | Receipts set aside as statements, Brisken named as its own supplier and misread dates stop at the reader | 2026-09-28, PR #1534 |
 | 158 | Item 239 step 1: Gemini can read receipts (`llm/gemini.py`), switched by `EXPENSE_RECON_GEMINI_READS` = `images` / `all`, OFF by default; same prompt, fences, schema and cache as OpenAI; retries then falls back to OpenAI; priced; `healthz.receipt_reader` | Dirk asked for the reader research ranks best on photographed receipts; building it switched off lets it be measured on Brisken's own receipts before Criss sees a single reading from it | 2026-09-28, PR #1533 |
