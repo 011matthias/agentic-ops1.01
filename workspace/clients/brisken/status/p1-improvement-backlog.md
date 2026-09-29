@@ -12966,6 +12966,62 @@ Tests `tests/test_card_register_gate_item_243.py` (9), through `match_month`
 digits turns the 1672 pair red; letting a digit-less hint word in turns the
 hint-word case red.
 
+### 244. The main menu's tabs never scroll sideways (note #109, operator, 2026-09-29 13:48 UTC) (PROMPT WRITTEN 2026-09-29: `docs/lovable-nav-no-scroll-bill-tip-prompt.md` §1, not pasted)
+
+Verbatim, on `/months`, just under the right end of the header tabs: *"make
+this a non scroll tab bar, because people without side scroll on their mouse
+cant scroll"*.
+
+**Measured 2026-09-29** (live SPA, headless Chrome, read-only): the tabs sit
+in the logo's 56 px row inside a `nav` with `overflow-x-auto` and a hidden
+scrollbar (`DashboardHeader.tsx`). PT shows 724 of 905 px at 1600 and 2500 px
+wide, cutting off "Comparar" and "Configurações"; EN cuts off "Settings"
+(688 of 727 px); at 1280 px PT loses "Configurações". The 2xl tagline and
+"Signed in as" take the room. The prompt moves the tabs to their own row
+under the logo, `flex-wrap`, no overflow, with `title` / `aria-label` on each
+tab for the icon-only width. Proven on a scratch clone of the SPA with the
+prompt's code, run locally against the live API (0 writes): PT and EN at 800,
+900, 1280, 1600 and 2500 px, all eight tabs on one row below the logo,
+nothing clipped.
+
+### 245. What "Paid by bank transfer" does (note #110, operator, 2026-09-29 14:04 UTC) (ANSWERED 2026-09-29; tooltip in `docs/lovable-nav-no-scroll-bill-tip-prompt.md` §2, not pasted)
+
+Verbatim, on August's Expenses page, the "Paga por transferência bancária"
+button of row `0002__rendered-body.pdf`: *"what happens to expenses when user
+clicks on this?"*
+
+**Answer (item 218's bills path, read from the code and pinned by a test).**
+One click, no confirmation, one `PUT payment_path = "bill"`: the receipt
+moves to the month's Bills section, out of the card counts, the boxes, the
+card strip, the month's total, `expenses.csv`, the Zoho journal and the month
+report's listing, and into `bills.csv` for Criss to book by hand in Zoho.
+Nothing posts, nothing re-matches, the category is untouched. "Move to the
+card queue" in the Bills section undoes it. The button shows on every open
+receipt with no card, no private flag and no charge, whether or not the
+document suggests a bank payment.
+
+**The row the note sits on is card-paid:** Perplexity AI USD 25.00,
+2026-08-20, waiting for the Chase Visa 0340 statement, and the only August
+row that shows the button. A click there would take a subscription out of
+the card queue. It comes back by itself once the 0340 charge is matched to
+it: the re-match still sees a bill, and
+`payment_path.month_paths` gives a row a statement charge holds `card` /
+`statement` over a person's move. New test
+`test_a_card_receipt_moved_to_bills_by_mistake_returns_when_its_charge_arrives`
+(`tests/test_bills_path_218.py`) moves a receipt to Bills, attaches its
+statement and asserts the charge holds it, the row reads card / statement and
+the total counts it; regress: disabling the held check in `month_paths` turns
+it red. The `held_by_charge` rule inside `resolve_payment_path` is never
+exercised live (`month_paths` passes False and checks the hold itself), so
+mutating that one proves nothing.
+
+The prompt adds a tooltip saying this on the button (new key
+`expx.bills.moveToBill.tip`, EN + PT), proven on the same scratch clone:
+focus opens it in both languages. **Seen, not changed:** the button could
+show only when the row carries a bank-payment signal (`bill_suggestion`);
+that would hide it from the Perplexity row, and also from a bank-paid invoice
+the reader found no signal on. Owner call.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |

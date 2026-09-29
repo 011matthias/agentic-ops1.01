@@ -475,6 +475,34 @@ def test_a_row_a_charge_holds_cannot_move_to_bills(client, monkeypatch):
     assert resp.json()["code"] == "invalid_payment_path"
 
 
+def test_a_card_receipt_moved_to_bills_by_mistake_returns_when_its_charge_arrives(
+    client, monkeypatch
+):
+    """Note #110 (owner, 2026-09-29): what does "Paid by bank transfer" do?
+    The button shows on every open card-less row, so it can be clicked on a
+    receipt a card did pay (August's Perplexity USD 25.00 waiting for 0340).
+    The re-match still sees the receipt, and a charge that holds it outranks
+    the person's move (rule 1), so the statement pulls it back to the card."""
+    _patch_ocr(monkeypatch, _extraction("2026-07-01", "42.50", "USD", "Staples TEST"))
+    assert client.put("/api/settings", json={"cards": FAMILY}).status_code == 200
+    batch_id = _month(client, "July 2026", [("staples.jpg", JPG + b"s")])
+    staples = _rows(_grid(client, batch_id))["Staples TEST"]
+    assert _put_path(client, batch_id, staples["document_id"], "bill").status_code == 200
+    grid = _grid(client, batch_id)
+    _assert_bill(_rows(grid)["Staples TEST"], "person")
+    assert grid["summary"]["n_bills"] == 1 and grid["summary"]["n_expenses"] == 0
+
+    _statement(client, batch_id, (("2026-07-01", "42.50", "STAPLES", "2838"),))
+    grid = _grid(client, batch_id)
+    row = _rows(grid)["Staples TEST"]
+    assert row.get("transaction_id"), "the charge found the receipt despite the move"
+    assert row["payment_path"] == "card" and row["payment_path_source"] == "statement"
+    assert "counts_in_total" not in row
+    assert grid["summary"]["n_bills"] == 0 and grid["summary"]["n_expenses"] == 1
+    assert grid["summary"]["totals_by_ccy"] == {"USD": "42.50"}
+    _assert_invariant(grid["summary"])
+
+
 # ── 5. the item-62 disposition ──────────────────────────────────────────
 
 
