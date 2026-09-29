@@ -153,6 +153,16 @@ def _card_score(tx: Transaction, receipt: Receipt) -> float:
     """
     tx_keys = _tx_card_keys(tx)
     rec_keys = _card_keys(receipt.payment_mode)
+    # Item 243 (owner 2026-09-28): the print read through the card register
+    # is still printed evidence. A slip showing the plastic's "1672" names
+    # the card whose statement marks it "2838"; the register's card, resolved
+    # from that very print (`card_scope_source` "hint"), carries both. Only
+    # when the printed digits are one of that card's numbers: a hint WORD
+    # ("Visa" assigned to a card) prints none, and a pick or a remembered
+    # card is not the print, so all three stay out of this score.
+    scope = set(receipt.card_scope_keys or ())
+    if receipt.card_scope_source == "hint" and rec_keys & scope:
+        rec_keys = rec_keys | scope
     if not tx_keys or not rec_keys:
         return 0.5
     return 1.0 if (tx_keys & rec_keys) else 0.0
