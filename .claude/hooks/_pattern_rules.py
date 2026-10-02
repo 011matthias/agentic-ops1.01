@@ -43,9 +43,12 @@ condition must match (AND):
 
 Fields per event: bash `command` (normalized by _shell.py); file `file_path`,
 `new_text` (Write content / Edit new_string), `old_text`; prompt `user_prompt`;
-stop `final_text`. Prompt and stop text have code and short quoted spans
-stripped first (stop-b1-gate's strip_code) so a rule never fires on its own
-trigger phrase quoted as an example.
+stop `final_text`, `final_text_raw`. Prompt and stop text have code and short
+quoted spans stripped first (stop-b1-gate's strip_code) so a rule never fires
+on its own trigger phrase quoted as an example. `final_text_raw` is the same
+closing text UNSTRIPPED, for a `not_regex_match` exemption whose evidence
+lives in a code span: a file name written in backticks, as house style names
+every file, is gone from `final_text`.
 
 Quoting: single quotes keep backslashes literal ('\\s' is regex \\s). Unquoted
 values are literal too. Double quotes unescape only \\\\ and \\".
@@ -64,7 +67,7 @@ EVENT_FIELDS = {
     "bash": ("command",),
     "file": ("file_path", "new_text", "old_text"),
     "prompt": ("user_prompt",),
-    "stop": ("final_text",),
+    "stop": ("final_text", "final_text_raw"),
 }
 # `pattern:` shorthand matches this field.
 DEFAULT_FIELD = {
