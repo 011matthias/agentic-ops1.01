@@ -55,7 +55,7 @@ The owner asked whether Criss's past Zoho bookings are a sound way to set up the
 | `workspace/clients/brisken/context/drafts/account-map-questions-to-dirk.md` | revised, then deleted after the send | the email (gitignored) |
 | `workspace/clients/brisken/context/comms-log.md` | appended 2026-09-28 entry | sent message verbatim (gitignored) |
 | `workspace/clients/brisken/status/p1-expense-reconciliation.md` | top paragraph | send + pattern finding |
-| `docs/friction-register.md`, `docs/friction-register-archive.md` | 82 resolved rows archived | register size advisory |
+| `docs/friction-register.md` | one agent-deferred row | the 82-row archive the size advisory asked for landed with #1554 the same day |
 
 ---
 
