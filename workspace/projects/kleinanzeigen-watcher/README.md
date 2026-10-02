@@ -13,7 +13,11 @@ first: the whole Schlafzimmer category in Karlsruhe, plus a "180x200" search
 across all categories. The size test runs in the script, not in
 Kleinanzeigen's search box, so "180 × 200", "1,80 x 2,00", "180/200", "180er"
 and "1,80 m breit" all count. Sellers who give the size only in the full
-description get one fetch of their ad page. Mattresses, toppers, linen, bed
+description get one fetch of their ad page. The bed must also have storage
+(`require_storage`): Bettkasten, Schubladen, Stauraum, hochklappbar and the
+like, read from the card or else the ad page; "ohne Bettkasten" and a
+nightstand's drawer do not count, and a bed that never mentions storage stays
+quiet. Mattresses, toppers, linen, bed
 frames for other sizes, wardrobes and "Suche ..." ads stay quiet.
 
 The first cycle only learns what is already listed and sends one push linking

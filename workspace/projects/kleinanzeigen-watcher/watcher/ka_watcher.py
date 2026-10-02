@@ -127,6 +127,7 @@ def load_config(path: Path = CONFIG_PATH) -> dict:
     cfg["match"].setdefault("width_cm", 180)
     cfg["match"].setdefault("length_cm", 200)
     cfg["match"].setdefault("price_max", None)
+    cfg["match"].setdefault("require_storage", False)
     cfg.setdefault("alert_priority", 5)
     cfg.setdefault("browse_url", BASE)
     return cfg
@@ -247,11 +248,57 @@ def bed_verdict(title: str, text: str = "") -> str:
     return "unclear"
 
 
-def decide_from_card(ad: dict, width: int, length: int) -> tuple[str | None, str]:
+# Storage in or under the bed (owner requirement 2026-10-02: "die Betten
+# sollten auch Stauraum haben"). A drawer only counts when it is not a
+# nightstand's or dresser's, the usual extras in a bedroom ad.
+# Whole words, so the push reads "Bettkasten", not the stem that matched.
+STORAGE_RE = re.compile(
+    r"\w*(?:stauraum|bettk(?:ä|ae|a)st|schubl(?:a|ä)de|schubk(?:ä|ae|a)st|stauf(?:a|ä)ch"
+    r"|aufbewahrung|hochklappbar|hebemechanismus|gasdruck|funktionsbett|storage)\w*",
+    re.I,
+)
+STORAGE_NEGATION_RE = re.compile(r"\b(?:ohne|kein\w*)\s+(?:\S+\s+){0,2}$", re.I)
+DRAWER_OWNER_RE = re.compile(r"nacht(?:tisch|schr(?:a|ä)nk|konsole|k(?:ä|ae)stchen)|kommode|schrank|regal",
+                             re.I)
+
+
+def storage_verdict(text: str) -> tuple[str, str]:
+    """('yes' | 'no' | 'unknown', the words that decided it)."""
+    text = text or ""
+    negated = ""
+    for m in STORAGE_RE.finditer(text):
+        before = text[max(0, m.start() - 40):m.start()]
+        if STORAGE_NEGATION_RE.search(before):
+            negated = negated or m.group(0)
+            continue
+        word = m.group(0).lower()
+        if "schub" in word and not word.startswith("bett"):
+            owner = None
+            # The word itself counts too: "Nachttischschublade".
+            for owner in DRAWER_OWNER_RE.finditer(before + m.group(0)):
+                pass
+            # "2 Nachttische mit Schublade": the drawer is the nightstand's.
+            # "Kommode und Bett mit Schubladen": a bed sits in between.
+            if owner and not BED_RE.search((before + m.group(0))[owner.end():]):
+                continue
+        return "yes", m.group(0)
+    return ("no", "ohne " + negated) if negated else ("unknown", "")
+
+
+def _field(ad, key: str) -> str:
+    try:
+        return ad[key] or ""
+    except (KeyError, IndexError):
+        return ""
+
+
+def decide_from_card(ad: dict, width: int, length: int,
+                     storage: bool = False) -> tuple[str | None, str]:
     """(verdict, evidence) from the search card alone; None = read the ad page."""
     if WANTED_RE.search(ad["title"] or ""):
         return "wanted", ""
-    bed = bed_verdict(ad["title"], ad.get("snippet", ""))
+    card_text = ad["title"] + "\n" + _field(ad, "snippet")
+    bed = bed_verdict(ad["title"], _field(ad, "snippet"))
     if bed == "not_bed":
         return "not_bed", ""
     v, ev = size_verdict(ad["title"], width, length)
@@ -260,20 +307,36 @@ def decide_from_card(ad: dict, width: int, length: int) -> tuple[str | None, str
         # there is the answer, whatever the description goes on to list.
         return "other_size", ev
     if v != "match":
-        v, ev = size_verdict(ad["title"] + "\n" + ad.get("snippet", ""), width, length)
+        v, ev = size_verdict(card_text, width, length)
         if v != "match":
             return None, ""
+    if storage:
+        s, sev = storage_verdict(card_text)
+        if s == "no":
+            return "no_storage", sev
+        if s == "unknown":
+            return None, ""
+        ev += f", Stauraum ({sev})"
     return "match", ev + (" (Titel nennt kein Bett)" if bed == "unclear" else "")
 
 
-def decide_from_detail(ad: dict, description: str, width: int, length: int) -> tuple[str, str]:
+def decide_from_detail(ad: dict, description: str, width: int, length: int,
+                       storage: bool = False) -> tuple[str, str]:
     bed = bed_verdict(ad["title"], description)
     if bed == "not_bed":
         return "not_bed", ""
-    v, ev = size_verdict(ad["title"] + "\n" + description, width, length)
-    if v == "match":
-        return "match", ev + " (aus der Beschreibung)"
-    return ("other_size" if v == "other" else "unknown_size"), ev
+    full = ad["title"] + "\n" + description
+    v, ev = size_verdict(full, width, length)
+    if v != "match":
+        return ("other_size" if v == "other" else "unknown_size"), ev
+    if size_verdict(ad["title"] + "\n" + _field(ad, "snippet"), width, length)[0] != "match":
+        ev += " (aus der Beschreibung)"
+    if storage:
+        s, sev = storage_verdict(full)
+        if s != "yes":
+            return ("no_storage" if s == "no" else "storage_unknown"), sev
+        ev += f", Stauraum ({sev})"
+    return "match", ev
 
 
 def price_eur(price_text: str) -> float | None:
@@ -441,8 +504,8 @@ def set_backoff(con: sqlite3.Connection, why: str) -> None:
 def alert_text(ad: sqlite3.Row | dict) -> tuple[str, str]:
     line1 = " · ".join(p for p in (ad["price_text"] or "Preis ?", ad["plz_ort"], ad["posted_text"]) if p)
     lines = [line1]
-    if ad["evidence"] and ad["evidence"].split(" ")[0] not in (ad["title"] or ""):
-        lines.append(f"Maß: {ad['evidence']}")
+    if ad["evidence"]:
+        lines.append(f"Passt: {ad['evidence']}")
     if ad["snippet"]:
         lines.append(ad["snippet"][:200])
     return ad["title"] or "Bett", "\n".join(lines)
@@ -478,6 +541,7 @@ def run_cycle(client: httpx.Client, con: sqlite3.Connection, cfg: dict, env: dic
     commit = (lambda: None) if dry_run else con.commit
     width, length = cfg["match"]["width_cm"], cfg["match"]["length_cm"]
     price_max = cfg["match"].get("price_max")
+    storage = bool(cfg["match"].get("require_storage"))
     now = utcnow()
     meta_set(con, "last_cycle", iso(now))
 
@@ -519,7 +583,7 @@ def run_cycle(client: httpx.Client, con: sqlite3.Connection, cfg: dict, env: dic
                  c["plz_ort"], c["posted_text"], c["image"], c["snippet"], iso(now), int(seeding)))
             if cur.rowcount:
                 new_ids.append(c["id"])
-                verdict, ev = decide_from_card(c, width, length)
+                verdict, ev = decide_from_card(c, width, length, storage)
                 if verdict is None and seeding:
                     # Already listed before the watcher started: the start-up
                     # push links the full list, so no ad page is fetched.
@@ -550,7 +614,7 @@ def run_cycle(client: httpx.Client, con: sqlite3.Connection, cfg: dict, env: dic
             except httpx.HTTPError:
                 continue
             else:
-                verdict, ev = decide_from_detail(ad, parse_detail(page), width, length)
+                verdict, ev = decide_from_detail(ad, parse_detail(page), width, length, storage)
             fetched += 1
             con.execute("UPDATE ads SET verdict = ?, evidence = ?, detail_fetched_at = ? WHERE id = ?",
                         (verdict, ev, iso(utcnow()), ad["id"]))
@@ -669,6 +733,7 @@ def main() -> int:
         m = cfg["match"]
         print("Bett:", bed_verdict(args.check, args.check))
         print("Maß:", size_verdict(args.check, m["width_cm"], m["length_cm"]))
+        print("Stauraum:", storage_verdict(args.check))
         return 0
     if args.status:
         print_status(db_connect(), env)
