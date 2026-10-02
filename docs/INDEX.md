@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-02 | Brisken September Month End And Invoice | client-dev | [→](docs/2026-10-02%20-%20Brisken%20September%20Month%20End%20And%20Invoice/Checkpoint.md) |
 | 2026-10-02 | Brisken Recon Dirk Account Questions Sent | client-dev | [→](docs/2026-10-02%20-%20Brisken%20Recon%20Dirk%20Account%20Questions%20Sent/Checkpoint.md) |
 | 2026-10-02 | Expense-Recon Notes 109-110 | client-dev | [→](docs/2026-10-02%20-%20Expense-Recon%20Notes%20109-110/Checkpoint.md) |
 | 2026-10-02 | Brisken Recon Categorization Rescore | client-dev | [→](docs/2026-10-02%20-%20Brisken%20Recon%20Categorization%20Rescore/Checkpoint.md) |
