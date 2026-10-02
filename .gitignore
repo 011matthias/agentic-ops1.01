@@ -160,3 +160,7 @@ docs/optimize/*/logs/
 # Vinted watcher: accumulated market DB + session state (machine-local), ntfy topic
 workspace/projects/vinted-reselling/data/
 workspace/projects/vinted-reselling/context/.env
+
+# Kleinanzeigen bed watcher: seen-ads DB + log (machine-local), ntfy topic
+workspace/projects/kleinanzeigen-watcher/data/
+workspace/projects/kleinanzeigen-watcher/context/.env

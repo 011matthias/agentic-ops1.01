@@ -1,0 +1,32 @@
+# Kleinanzeigen watcher: what to watch and what counts as a hit.
+#
+# Each feed is page 1 of a Kleinanzeigen search, newest first. The watcher
+# reads every feed once per cycle (every 5 minutes) and alerts on ads it has
+# never seen that pass the match rules below.
+#
+# Location 9186 is the city of Karlsruhe itself (its districts carry ids
+# 9187-9198 in ad URLs: Durlach, Neureut, Muehlburg, ...). To widen to a
+# radius, append r<km> to the l-segment, e.g. c81l9186r10 for 10 km.
+
+feeds:
+  # The whole bedroom category in Karlsruhe. Catches every new bed however
+  # the seller words it ("1,80 x 2,00", "180er", "1,80 m breit"), because the
+  # size test runs here, not in Kleinanzeigen's search engine.
+  - name: schlafzimmer-karlsruhe
+    url: https://www.kleinanzeigen.de/s-schlafzimmer/karlsruhe/c81l9186
+  # Any category, keyword 180x200: catches a bed filed outside Schlafzimmer.
+  - name: 180x200-karlsruhe-alle
+    url: https://www.kleinanzeigen.de/s-karlsruhe/180x200/k0l9186
+
+match:
+  width_cm: 180
+  length_cm: 200
+  # null = no price limit. A number drops ads priced above it (EUR).
+  price_max: null
+
+# Opened by the start-up push, so the beds that were already listed before
+# the watcher started are one tap away.
+browse_url: https://www.kleinanzeigen.de/s-karlsruhe/bett-180x200/k0l9186
+
+# ntfy priority for a hit: 5 = urgent (rings through), 4 = high.
+alert_priority: 5
