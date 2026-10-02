@@ -12,6 +12,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-10-02 | Expense-Recon Notes 109-110 | client-dev | [→](docs/2026-10-02%20-%20Expense-Recon%20Notes%20109-110/Checkpoint.md) |
+| 2026-10-02 | Brisken Recon Categorization Rescore | client-dev | [→](docs/2026-10-02%20-%20Brisken%20Recon%20Categorization%20Rescore/Checkpoint.md) |
 | 2026-09-29 | Expense-Recon Notes 109-110 | client-dev | [Mini-Checkpoint-1](docs/2026-09-29%20-%20Expense-Recon%20Notes%20109-110/Mini-Checkpoint-1.md) |
 | 2026-09-29 | Expense-Recon Item 243 Card Register | client-dev | [Mini-Checkpoint-1](docs/2026-09-29%20-%20Expense-Recon%20Item%20243%20Card%20Register/Mini-Checkpoint-1.md) |
 | 2026-09-28 | Expense-Recon Item 239 Gemini Reader | client-dev | [→](docs/2026-09-28%20-%20Expense-Recon%20Item%20239%20Gemini%20Reader/Checkpoint.md) |
@@ -749,6 +750,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## Brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-02 | Recon Months Per-Card Figures | client-dev | [→](docs/2026-10-02%20-%20Recon%20Months%20Per-Card%20Figures/Checkpoint.md) |
 | 2026-09-25 | Brisken P1 Continuation Prompts For Items 206 207 And 180 181 183 172 | client-dev | [→](docs/2026-09-25%20-%20Brisken%20P1%20Continuation%20Prompts%20For%20Items%20206%20207%20And%20180%20181%20183%20172/Checkpoint.md) |
 | 2026-09-25 | Brisken P1 July To September On Zoho Accounts | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20P1%20July%20To%20September%20On%20Zoho%20Accounts/Mini-Checkpoint-1.md) |
 | 2026-09-16 | Expense-Recon Item 74 | client-dev | [Mini-Checkpoint-2](docs/2026-09-16%20-%20Expense-Recon%20Item%2074/Mini-Checkpoint-2.md) |
