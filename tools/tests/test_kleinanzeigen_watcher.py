@@ -102,6 +102,49 @@ def test_bed_verdict(kw, title, expected):
     assert kw.bed_verdict(title) == expected
 
 
+# --------------------------------------------------------------- storage
+
+@pytest.mark.parametrize("text", [
+    "Boxspringbett 180x200 mit Bettkasten",
+    "Bett 180x200 mit 2 Bettkästen",
+    "Polsterbett mit Stauraum",
+    "Stauraumbett 180x200",
+    "Bett mit 4 Schubladen",
+    "Kommode und Bett mit Schubladen",
+    "Lattenrost hochklappbar, darunter viel Platz",
+    "Bett mit Hebemechanismus",
+    "Bett mit Bettschubladen",
+])
+def test_storage_found(kw, text):
+    assert kw.storage_verdict(text)[0] == "yes"
+
+
+def test_storage_evidence_is_the_whole_word(kw):
+    assert kw.storage_verdict("Bett mit 2 Bettkästen")[1] == "Bettkästen"
+    assert kw.storage_verdict("Stauraumbett 180x200")[1] == "Stauraumbett"
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Boxspringbett 180x200 ohne Bettkasten", "no"),
+    ("Bett, kein Stauraum vorhanden", "no"),
+    ("Bett 180x200 inkl. 2 Nachttische mit Schublade", "unknown"),
+    ("Bett 180x200, Nachttischschublade klemmt", "unknown"),
+    ("Bett 180x200 aus Massivholz", "unknown"),
+])
+def test_storage_absent_or_unsaid(kw, text, expected):
+    assert kw.storage_verdict(text)[0] == expected
+
+
+def test_storage_rule_on_the_card(kw):
+    with_box = {"title": "Boxspringbett 180x200 mit Bettkasten", "snippet": ""}
+    without = {"title": "Boxspringbett 180x200 ohne Bettkasten", "snippet": ""}
+    unsaid = {"title": "Boxspringbett 180x200", "snippet": "Guter Zustand"}
+    assert kw.decide_from_card(with_box, 180, 200, storage=True)[0] == "match"
+    assert kw.decide_from_card(without, 180, 200, storage=True)[0] == "no_storage"
+    assert kw.decide_from_card(unsaid, 180, 200, storage=True)[0] is None   # read its page
+    assert kw.decide_from_card(unsaid, 180, 200, storage=False)[0] == "match"
+
+
 def test_wanted_ads_never_alert(kw):
     ad = {"title": "Suche Boxspringbett 180x200", "snippet": ""}
     assert kw.decide_from_card(ad, 180, 200)[0] == "wanted"
@@ -138,7 +181,7 @@ FEED_A = "https://www.kleinanzeigen.de/s-schlafzimmer/karlsruhe/c81l9186"
 FEED_B = "https://www.kleinanzeigen.de/s-karlsruhe/180x200/k0l9186"
 CFG = {
     "feeds": [{"name": "a", "url": FEED_A}, {"name": "b", "url": FEED_B}],
-    "match": {"width_cm": 180, "length_cm": 200, "price_max": None},
+    "match": {"width_cm": 180, "length_cm": 200, "price_max": None, "require_storage": True},
     "alert_priority": 5,
     "browse_url": "https://www.kleinanzeigen.de/s-karlsruhe/bett-180x200/k0l9186",
 }
@@ -170,8 +213,8 @@ class Site:
     """Kleinanzeigen + ntfy.sh behind one MockTransport."""
 
     def __init__(self):
-        self.feeds = {FEED_A: page(card(1, "Boxspringbett 180x200"), card(2, "Lattenrost")),
-                      FEED_B: page(card(1, "Boxspringbett 180x200"))}
+        self.feeds = {FEED_A: page(card(1, "Boxspringbett 180x200 mit Bettkasten"), card(2, "Lattenrost")),
+                      FEED_B: page(card(1, "Boxspringbett 180x200 mit Bettkasten"))}
         self.details: dict[int, str] = {}
         self.feed_status = 200
         self.ntfy_status = 200
@@ -227,43 +270,52 @@ def test_new_hits_push_once_and_only_hits(kw, con):
     site = Site()
     site.cycle(kw, con)
     site.feeds[FEED_A] = page(
-        card(11, "Boxspringbett 180x200", "Gut erhalten"),
+        card(11, "Boxspringbett 180x200 mit Bettkasten", "Gut erhalten"),
         card(12, "Bett mit Lattenrost", "Schönes Bett, wenig benutzt.", "40 €"),
-        card(13, "Ikea Malm Bett 140x200cm"),
+        card(13, "Ikea Malm Bett 140x200cm mit Bettkasten"),
         card(14, "Matratze für Boxspringbett 180x200"),
-        card(15, "Suche Bett 180x200"),
+        card(15, "Suche Bett 180x200 mit Stauraum"),
         card(16, "Bett Hemnes", "Gebraucht"),
-        card(1, "Boxspringbett 180x200"),
+        card(17, "Boxspringbett 180x200 ohne Bettkasten"),
+        card(18, "Polsterbett 180x200", "Guter Zustand"),
+        card(19, "Massivholzbett 180x200", "Buche"),
+        card(1, "Boxspringbett 180x200 mit Bettkasten"),
         card(2, "Lattenrost"),
     )
-    site.details = {12: detail("Verkaufe ein Bett.\nDas Bett ist ca. 2,00 m lang, 1,80 m breit."),
-                    16: detail("Ikea Hemnes in 140x200, ohne Matratze.")}
+    site.details = {12: detail("Verkaufe ein Bett.\nDas Bett ist ca. 2,00 m lang, 1,80 m breit.\n"
+                               "Darunter zwei Schubladen."),
+                    16: detail("Ikea Hemnes in 140x200, ohne Matratze."),
+                    18: detail("Polsterbett mit großem Bettkasten, Gasdruckfedern."),
+                    19: detail("Massivholzbett Buche, dazu 2 Nachttische mit Schublade.")}
     assert site.cycle(kw, con) == 0
 
     pushed = {p["click"].rsplit("/", 1)[1].split("-")[0]: p for p in site.ad_pushes()}
-    assert set(pushed) == {"11", "12"}
-    # Only the beds with no size on the card had their page read.
-    assert sorted(site.detail_hits) == [12, 16]
+    assert set(pushed) == {"11", "12", "18"}
+    # Only beds whose card left the size or the storage open had their page
+    # read; "ohne Bettkasten" (17) is decided on the card.
+    assert sorted(site.detail_hits) == [12, 16, 18, 19]
     twelve = pushed["12"]
     assert twelve["priority"] == 5
     assert "40 €" in twelve["message"] and "180 breit" in twelve["message"]
+    assert "Stauraum (Schubladen)" in twelve["message"]
+    assert "Stauraum (Bettkasten)" in pushed["18"]["message"]
     assert twelve["attach"] == "https://img.kleinanzeigen.de/x/12.jpg"
     assert twelve["actions"][0]["url"] == twelve["click"]
 
     site.cycle(kw, con)
-    assert len(site.ad_pushes()) == 2                  # nothing pushed twice
+    assert len(site.ad_pushes()) == 3                  # nothing pushed twice
 
 
 def test_failed_push_is_retried_next_cycle(kw, con):
     site = Site()
     site.cycle(kw, con)
-    site.feeds[FEED_A] = page(card(21, "Polsterbett 1,80 x 2,00"))
+    site.feeds[FEED_A] = page(card(21, "Polsterbett 1,80 x 2,00 mit Stauraum"))
     site.ntfy_status = 429
     site.cycle(kw, con)
     assert site.ad_pushes() == []
     site.ntfy_status = 200
     site.cycle(kw, con)
-    assert [p["title"] for p in site.ad_pushes()] == ["Polsterbett 1,80 x 2,00"]
+    assert [p["title"] for p in site.ad_pushes()] == ["Polsterbett 1,80 x 2,00 mit Stauraum"]
 
 
 def test_block_backs_off_then_warns_then_recovers(kw, con):

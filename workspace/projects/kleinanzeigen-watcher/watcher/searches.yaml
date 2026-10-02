@@ -23,6 +23,10 @@ match:
   length_cm: 200
   # null = no price limit. A number drops ads priced above it (EUR).
   price_max: null
+  # Only beds with storage (Bettkasten, Schubladen, Stauraum, hochklappbar,
+  # ...). An ad whose card does not say gets its full page read; an ad that
+  # never mentions storage, or says "ohne Bettkasten", stays quiet.
+  require_storage: true
 
 # Opened by the start-up push, so the beds that were already listed before
 # the watcher started are one tap away.
