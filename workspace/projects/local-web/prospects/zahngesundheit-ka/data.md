@@ -11,7 +11,7 @@ Demo channel: Lovable one-pager (owner decision 2026-10-05). Prompt:
 | Former web brand | „Zahngesundheit Karlsruhe“ (zahngesundheit-karlsruhe.de) | Google-indexed Impressum title |
 | Address | Rintheimer Str. 8, 76131 Karlsruhe | Das Örtliche, onlinestreet |
 | Phone | 0721 60 70 07 | Das Örtliche |
-| Sprechzeiten | TBD: photograph the practice sign | no reliable source (one directory lists Sa/So 10 bis 12, likely the Notdienst) |
+| Sprechzeiten | TBD: photograph the practice sign | none published: golocal, meinestadt, Das Örtliche, arzt-auskunft, portal-der-zahnmedizin re-checked 2026-10-05; 11880 lists only Sa/So 10 bis 12, likely the Notdienst |
 | Logo | TBD: photograph the practice sign | none online |
 
 ## Web presence observed 2026-10-05

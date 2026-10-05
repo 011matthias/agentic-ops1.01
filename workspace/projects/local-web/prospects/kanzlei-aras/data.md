@@ -17,3 +17,11 @@ demo and letter use "Rechtsanwaltskanzlei Aras".
 Web presence 2026-10-05 (checked three times, last 13:57 with a phone user
 agent): http://ra-aras.de answers HTTP 500 with "WordPress › Fehler"; https
 shows a certificate for a different host (shared hoster).
+
+Demo: https://screenshot-magic-8642.lovable.app/ (checked 2026-10-05: noindex, banner, no third-party requests; html lang was "en").
+Letter built 2026-10-05 (QR verified), delivery pending.
+
+Opening hours: published nowhere (ra.de, golocal-type directories checked 2026-10-05).
+Address flag: rechtecheck.de lists Kriegsstraße 216 (entry self-marked "nicht verifiziert"),
+cylex search metadata Wikingerstr. 10; ra.de and the three sources above say
+Ludwig-Erhard-Allee 20. Check the mailbox name plate on delivery.
