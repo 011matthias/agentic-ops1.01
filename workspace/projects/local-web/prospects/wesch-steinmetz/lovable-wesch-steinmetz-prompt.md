@@ -36,3 +36,19 @@ Baue eine einseitige, mobile-first Demo-Website (Deutsch, Sie-Form) für einen t
 - Keine Gedankenstriche (— oder --) im Text. Nutze Kommas, Doppelpunkte oder neue Sätze.
 - Barrierearm: Kontrast WCAG AA, große Schrift (viele Besucher sind älter), echte Buttons und Links, gut tippbare Flächen am Handy.
 - Gestaltung: hell, warm, Naturstein-Töne (Sandstein, Granitgrau), eine gedeckte Akzentfarbe, viel Weißraum. Telefonnummer und Anfahrt sind das Wichtigste.
+
+
+## Runde 2 (2026-10-05): Änderungsprompt für das bestehende Projekt
+
+Überarbeite die bestehende Seite. Ändere nur diese Punkte:
+
+1. Banner ganz oben, Text ersetzen durch: „Entwurf von UnpauseAI für Natursteine Kurt Wesch, keine offizielle Website. Fragen dazu: 0151 68437142, auch per WhatsApp“. „0151 68437142“ verlinkt auf tel:+4915168437142, „WhatsApp“ auf https://wa.me/4915168437142. Schrift kleiner als jetzt, auf 390 px Breite höchstens zwei Zeilen.
+2. Ersetze die drei Platzhalterflächen bei Grabzeichen und die Platzhalterfläche bei Haus und Garten durch Fotos von der bisherigen Website des Betriebs. Die Bilder sind klein (120 × 200 Pixel): Zeige sie in Originalgröße als kleine Galerie, drei nebeneinander, nicht hochskalieren, nicht beschneiden, loading="lazy". Darunter jeweils klein: „Fotos von der bisherigen Website“. Diese Website des Betriebs ist die einzige erlaubte externe Bildquelle.
+   - Klassische Formen (alt „Grabmal, klassische Form“): https://www.wesch-natursteine.de/Bilder/Grabzeichen/klassisch/IMG_0199.jpg, https://www.wesch-natursteine.de/Bilder/Grabzeichen/klassisch/IMG_0141.jpg, https://www.wesch-natursteine.de/Bilder/Grabzeichen/klassisch/IMG_0137.jpg
+   - Naturbelassene Steine (alt „Grabmal aus naturbelassenem Stein“): https://www.wesch-natursteine.de/Bilder/Grabzeichen/naturbelassen/IMG_0198_2.jpg, https://www.wesch-natursteine.de/Bilder/Grabzeichen/naturbelassen/IMG_0196_2.jpg, https://www.wesch-natursteine.de/Bilder/Grabzeichen/naturbelassen/IMG_0197.jpg
+   - Moderne Formen (alt „Grabmal, moderne Form“): https://www.wesch-natursteine.de/Bilder/Grabzeichen/modern/IMG_0066.jpg, https://www.wesch-natursteine.de/Bilder/Grabzeichen/modern/IMG_0140.jpg, https://www.wesch-natursteine.de/Bilder/Grabzeichen/modern/IMG_0139.jpg
+   - Haus und Garten (alt „Natursteinarbeit für Haus und Garten“): https://www.wesch-natursteine.de/Bilder/sonstige/IMG_0143.jpg, https://www.wesch-natursteine.de/Bilder/sonstige/IMG_0161.jpg, https://www.wesch-natursteine.de/Bilder/sonstige/IMG_0154.jpg
+3. Entferne bei Besuch und Anfahrt den Block „Öffnungszeiten [Öffnungszeiten folgen]“ ersatzlos.
+4. Footer: „Entwurf erstellt von Matthias Neumann, UnpauseAI, Karlsruhe · Telefon und WhatsApp: +49 151 68437142 · admin@unpauseai.com“, Telefon als tel:-Link, E-Mail als mailto:-Link. Entferne den Impressum-Link, der ins Leere führt.
+
+Alle bisherigen Regeln gelten weiter: noindex, keine Google Fonts, kein Tracking, keine Gedankenstriche, nichts erfinden, würdevoller Ton.

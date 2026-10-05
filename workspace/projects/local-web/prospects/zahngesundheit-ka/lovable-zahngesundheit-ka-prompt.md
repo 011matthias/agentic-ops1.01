@@ -25,3 +25,16 @@ Baue eine einseitige, mobile-first Demo-Website (Deutsch, Sie-Form) für eine Za
 - Keine Gedankenstriche (— oder --) im Text. Nutze Kommas, Doppelpunkte oder neue Sätze.
 - Barrierearm: Kontrast WCAG AA, echte Buttons und Links, sinnvolle Überschriften-Hierarchie, gut tippbare Flächen am Handy.
 - Gestaltung: ruhig, hell, vertrauenswürdig, warm statt klinisch kalt. Eine Akzentfarbe (gedecktes Petrol oder Blau), viel Weißraum, große Schrift.
+
+
+## Runde 2 (2026-10-05): Änderungsprompt für das bestehende Projekt
+
+Überarbeite die bestehende Seite. Ändere nur diese Punkte:
+
+1. Banner ganz oben, Text ersetzen durch: „Entwurf von UnpauseAI für die Praxis Dr. Schuster & Dr. Gramlich, keine offizielle Website. Fragen dazu: 0151 68437142, auch per WhatsApp“. „0151 68437142“ verlinkt auf tel:+4915168437142, „WhatsApp“ auf https://wa.me/4915168437142. Auf 390 px Breite höchstens zwei Zeilen.
+2. Kopfzeile am Handy: Die Wortmarke wird abgeschnitten („Dr. Schuster & Dr. Gra…“). Zeige am Handy „Schuster & Gramlich“ ohne Auslassungspunkte, notfalls zweizeilig.
+3. Praxis: unter „Dr. Susanne Schuster“ klein „Zahnärztin“, unter „Dr. Oliver Gramlich“ klein „Zahnarzt“.
+4. Sprechzeiten: Ersetze die fünf Zeilen „[Sprechzeiten folgen]“ durch einen Satz: „Sprechzeiten erfragen Sie bitte telefonisch unter 0721 60 70 07.“ Die Nummer als tel:-Link (tel:+49721607007).
+5. Footer: „Entwurf erstellt von Matthias Neumann, UnpauseAI, Karlsruhe · Telefon und WhatsApp: +49 151 68437142 · admin@unpauseai.com“, Telefon als tel:-Link, E-Mail als mailto:-Link. Entferne den Impressum-Link, der ins Leere führt.
+
+Alle bisherigen Regeln gelten weiter: noindex, keine Google Fonts, kein Tracking, keine Gedankenstriche, nichts erfinden, keine Patientenstimmen.

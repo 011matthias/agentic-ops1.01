@@ -30,3 +30,14 @@ Baue eine einseitige, mobile-first Demo-Website (Deutsch, Sie-Form) für eine Ha
 - Keine Gedankenstriche (— oder --) im Text. Nutze Kommas, Doppelpunkte oder neue Sätze.
 - Barrierearm: Kontrast WCAG AA, echte Buttons und Links, sinnvolle Überschriften-Hierarchie, gut tippbare Flächen am Handy.
 - Gestaltung: freundlich, hell, nahbar, eine Akzentfarbe (warmes Grün oder gedecktes Blau), viel Weißraum, große Schrift. Die Sprechzeiten und der Termin-Button sind das Wichtigste auf der Seite.
+
+
+## Runde 2 (2026-10-05): Änderungsprompt für das bestehende Projekt
+
+Überarbeite die bestehende Seite. Ändere nur diese Punkte:
+
+1. Banner ganz oben, Text ersetzen durch: „Entwurf von UnpauseAI für die Hausarztpraxis Dr. Lenk, keine offizielle Website. Fragen dazu: 0151 68437142, auch per WhatsApp“. „0151 68437142“ verlinkt auf tel:+4915168437142, „WhatsApp“ auf https://wa.me/4915168437142. Auf 390 px Breite höchstens zwei Zeilen.
+2. Die Hauptüberschrift „Hausarztpraxis Dr. Lenk“ läuft am Handy rechts aus dem Bild, das letzte „s“ von „Hausarztpraxis“ wird abgeschnitten. Setze sie am Handy so groß, dass „Hausarztpraxis“ auf 360 px Bildschirmbreite vollständig in eine Zeile passt, ohne Silbentrennung.
+3. Footer: „Entwurf erstellt von Matthias Neumann, UnpauseAI, Karlsruhe · Telefon und WhatsApp: +49 151 68437142 · admin@unpauseai.com“, Telefon als tel:-Link, E-Mail als mailto:-Link. Entferne den Impressum-Link, der ins Leere führt.
+
+Alles andere bleibt, auch der Bereich „Urlaub und Vertretung“ (der Brief erwähnt ihn). Alle bisherigen Regeln gelten weiter: noindex, keine Google Fonts, kein Tracking, keine Gedankenstriche, nichts erfinden.
