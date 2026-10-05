@@ -754,6 +754,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## Brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-05 | Brisken Lovable Rebuild + Access Model | client-dev | [→](docs/2026-10-05%20-%20Brisken%20Lovable%20Rebuild%20%2B%20Access%20Model/Checkpoint.md) |
 | 2026-10-02 | Recon Months Per-Card Figures | client-dev | [→](docs/2026-10-02%20-%20Recon%20Months%20Per-Card%20Figures/Checkpoint.md) |
 | 2026-09-25 | Brisken P1 Continuation Prompts For Items 206 207 And 180 181 183 172 | client-dev | [→](docs/2026-09-25%20-%20Brisken%20P1%20Continuation%20Prompts%20For%20Items%20206%20207%20And%20180%20181%20183%20172/Checkpoint.md) |
 | 2026-09-25 | Brisken P1 July To September On Zoho Accounts | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20P1%20July%20To%20September%20On%20Zoho%20Accounts/Mini-Checkpoint-1.md) |
