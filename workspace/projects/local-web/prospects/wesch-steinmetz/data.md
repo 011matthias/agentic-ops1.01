@@ -13,3 +13,10 @@ and service lists as quoted in the prompt. Opening hours: not published.
 Web presence 2026-10-05: no viewport meta (desktop-only layout), file
 Last-Modified 2018, phone number only on the Kontakt subpage, no contact
 form.
+
+Demo: https://pixel-perfect-replicator-794.lovable.app/ (checked 2026-10-05: noindex, banner, no third-party requests).
+Letter built 2026-10-05 (QR verified), delivery pending.
+
+Opening hours: not published (golocal, meinestadt checked 2026-10-05);
+oeffnungszeitenbuch.de shows Mo-Fr 8-16, unconfirmed and likely a directory default.
+Photos on the current site are 120x200 thumbnails with no larger originals online.

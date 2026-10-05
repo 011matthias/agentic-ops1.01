@@ -17,3 +17,9 @@ directory source; lawyer advertising rules make it a poor demo claim anyway).
 Web presence 2026-10-05: dr-wo.de and www.dr-wo.de redirect to https and
 answer "404 Not Found"; kanzlei.dr-wo.de (the OSM link) presents a
 certificate for a different host, then 404.
+
+Demo: https://pixel-perfect-vision-421.lovable.app/ (checked 2026-10-05: noindex, banner, no third-party requests).
+Letter built 2026-10-05 (QR verified), delivery pending.
+
+Bürozeiten: published nowhere (Das Örtliche, Gelbe Seiten, kennstdueinen checked 2026-10-05).
+Gelbe Seiten also lists kanzlei@dr-wo.de; the demo uses mediation@dr-wo.de.
