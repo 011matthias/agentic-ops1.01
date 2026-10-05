@@ -28,3 +28,14 @@ Baue eine einseitige, mobile-first Demo-Website (Deutsch, Sie-Form) für eine An
 - Keine Gedankenstriche (— oder --) im Text. Nutze Kommas, Doppelpunkte oder neue Sätze.
 - Barrierearm: Kontrast WCAG AA, echte Buttons und Links, sinnvolle Überschriften-Hierarchie, gut tippbare Flächen am Handy.
 - Gestaltung: seriös, ruhig, hell, eine Akzentfarbe (gedecktes Dunkelgrün oder Marineblau), viel Weißraum, klare Typografie.
+
+
+## Runde 2 (2026-10-05): Änderungsprompt für das bestehende Projekt
+
+Überarbeite die bestehende Seite. Ändere nur diese Punkte:
+
+1. Banner ganz oben, Text ersetzen durch: „Entwurf von UnpauseAI für die Kanzlei Dr. Wo, keine offizielle Website. Fragen dazu: 0151 68437142, auch per WhatsApp“. „0151 68437142“ verlinkt auf tel:+4915168437142, „WhatsApp“ auf https://wa.me/4915168437142. Auf 390 px Breite höchstens zwei Zeilen.
+2. Entferne im Abschnitt Kontakt und Anfahrt den Block „Bürozeiten [Bürozeiten folgen]“ ersatzlos.
+3. Footer: „Entwurf erstellt von Matthias Neumann, UnpauseAI, Karlsruhe · Telefon und WhatsApp: +49 151 68437142 · admin@unpauseai.com“, Telefon als tel:-Link, E-Mail als mailto:-Link. Entferne „Impressum [Impressum-URL UnpauseAI]“ komplett.
+
+Alle bisherigen Regeln gelten weiter: noindex, keine Google Fonts, kein Tracking, keine Gedankenstriche, nichts erfinden.
