@@ -9462,6 +9462,22 @@ one-card month has no sections, but its rows still carry `card_section`);
 ~2.2 s (seven month views built per call); a per-run cache keyed on the month's
 `updated_at` is the fix if the strip's load is felt.
 
+**2026-10-07 SHIPPED: the per-run cache (owner report: the months page's card
+filter tab "taking way too long to load").** Each run's `receipt_card_counts`
+is now kept in `app.state.receipt_card_counts_cache`, keyed on that run's own
+inputs (`snapshot`, decisions, category overrides, field overrides, edits,
+duplicate resolutions) plus the two inputs shared by every run in one build
+(the settings/registry dict, the card-memory file's own SQLite write
+counter), so a write to month X no longer rebuilds month Y's Expenses-page
+view. **Not** the month's `updated_at` string as first sketched above: every
+timestamp in this store is stamped to the SECOND (`_now_iso`), so a cache
+keyed on it is wrong by construction for a create-then-edit inside one real
+second (`test_card_status_memo.py::test_an_edit_inside_a_month_is_read_fresh`
+caught exactly this on the first pass, serving stale counts). Content
+equality has no such window. Tests `tests/test_card_status_per_run_cache.py`
+(regress-checked: both red with the cache hit disabled); full card-status +
+`test_month_updated_at.py` family (79 tests) green.
+
 **SPA half:** `docs/lovable-card-scope-carries-into-month-prompt.md`. The
 selection lives in the URL (`?card=<key>`, `none` for no card) on `/months`,
 `/expenses/{id}` and `/runs/{id}`; a scope line replaces the strip on both
