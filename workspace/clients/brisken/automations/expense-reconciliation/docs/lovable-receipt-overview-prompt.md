@@ -25,9 +25,14 @@ table sits in an `overflow-x-auto` box that item 247's `fit-tables` measures
 against, so once 247 is pasted the table turns into labelled cards on a narrow
 screen like every other table. Paste after 247 or before it, either order works.
 
-**Backend gate.** Needs `GET /api/receipts/overview` (PR for item 248). It
-must be deployed before this is published, or the Receipts tab shows its
-error line. Field list: `docs/api-contract.md` "The receipt overview".
+**Backend gate: met.** `GET /api/receipts/overview` is LIVE (PR #1587, Fly on
+`501edf7d`, 2026-10-07; first live read 363 receipts in 2.5 s). Field list:
+`docs/api-contract.md` "The receipt overview".
+
+**Two pastes, in order.** The whole change is about 49 KB, so it is split
+where each half still builds: part 1 adds the packages, the API type and the
+text keys (nothing renders them yet); part 2 adds the table and wires the
+page. Paste part 2 only after Lovable has finished part 1.
 
 **Proven before handing over** (SPA `6ed5015` scratch clone + this exact code,
 node-server build, against a LOCAL copy of the 2026-10-07 08:19 backup, zero
@@ -40,12 +45,12 @@ the viewer opens a receipt; the Emails tab still holds the mail log; filters
 survive a reload; no page-level sideways scroll at 400 px; nothing in the table cut off; all nine default
 columns fit at 1440 px; zero non-GET requests. `tsc --noEmit` clean.
 
-## Paste this into Lovable
+## Paste this into Lovable: part 1 of 2
 
 ````
-Rename the "Email intake" page to "Receipt overview" and give it a receipt
-table built with TanStack Table. Make exactly these changes; the code below is
-final, copy it as written.
+Part 1 of 2 for the new "Receipt overview" page (it replaces "Email intake").
+This part only adds packages, an API function and text keys; nothing renders
+them yet, and no screen changes. Copy the code exactly as written.
 
 1. Dependencies: add "@tanstack/react-table": "8.21.3" and
    "@tanstack/match-sorter-utils": "8.19.4" to package.json dependencies
@@ -123,7 +128,167 @@ export function getReceiptOverview() {
 }
 ```
 
-3. Create src/components/ReceiptOverviewTable.tsx with exactly this content:
+3. src/lib/i18n.tsx: add these keys to the English dictionary (after
+   "mail.desc"):
+
+```ts
+  // Receipt overview (the page formerly called Email intake)
+  "rov.title": "Receipt overview",
+  "rov.desc": "Every receipt in the tool, wherever it came from. Search, filter and open any of them.",
+  "rov.tab.receipts": "Receipts",
+  "rov.tab.emails": "Emails",
+  "rov.all": "All",
+  "rov.search": "Search vendor, file, subject, sender...",
+  "rov.clear": "Clear",
+  "rov.reset": "Reset filters",
+  "rov.refresh": "Refresh",
+  "rov.columns": "Columns",
+  "rov.columns.show": "Show columns",
+  "rov.error": "The receipt list could not be loaded.",
+  "rov.empty": "No receipts in the tool yet.",
+  "rov.noMatch": "No receipt matches these filters.",
+  "rov.count.all": "{n} receipts",
+  "rov.count.filtered": "{n} of {total} receipts",
+  "rov.perPage": "Rows per page",
+  "rov.page": "Page {n} of {total}",
+  "rov.prev": "Previous page",
+  "rov.next": "Next page",
+  "rov.from": "From",
+  "rov.to": "To",
+  "rov.min": "Min",
+  "rov.max": "Max",
+  "rov.nSelected": "{n} selected",
+  "rov.filterColumn": "Filter {column}",
+  "rov.filterText": "Type to filter...",
+  "rov.fuzzyHint": "Close matches count: \"anthr pbc\" finds Anthropic, PBC.",
+  "rov.received.stored": "Uploaded: the time the file was stored",
+  "rov.file.emailText": "Email text",
+  "rov.col.received": "Received",
+  "rov.col.source": "Source",
+  "rov.col.file": "File",
+  "rov.col.type": "File type",
+  "rov.col.subject": "Subject",
+  "rov.col.vendor": "Vendor",
+  "rov.col.receiptDate": "Receipt date",
+  "rov.col.amount": "Amount",
+  "rov.col.currency": "Currency",
+  "rov.col.status": "Status",
+  "rov.col.month": "Month",
+  "rov.col.submittedBy": "Sent by",
+  "rov.col.review": "Review",
+  "rov.col.card": "Card",
+  "rov.col.person": "Company / person",
+  "rov.col.category": "Account",
+  "rov.col.reference": "Reference",
+  "rov.col.note": "Note",
+  "rov.source.email": "Email",
+  "rov.source.upload": "Upload",
+  "rov.type.email_body": "Email text",
+  "rov.type.other": "Other",
+  "rov.review.ready": "Ready",
+  "rov.review.check": "Needs a look",
+  "rov.review.pick": "Pick a match",
+  "rov.status.matched": "Matched to a charge",
+  "rov.status.waiting_for_statement": "Waiting for statement",
+  "rov.status.no_charge": "No matching charge",
+  "rov.status.duplicate": "Duplicate copy",
+  "rov.status.private": "Private",
+  "rov.status.bill": "Paid by transfer",
+  "rov.status.settled_outside": "Settled outside the card",
+  "rov.status.set_aside": "Set aside (not a receipt)",
+  "rov.status.waiting_for_month": "Waiting for its month",
+  "rov.status.held": "Held",
+  "rov.status.processing": "Being read",
+  "rov.status.removed": "Removed",
+  "rov.status.dismissed": "Dismissed",
+```
+
+   and these to the Portuguese dictionary (after its "mail.desc"):
+
+```ts
+  // Receipt overview
+  "rov.title": "Visão geral dos recibos",
+  "rov.desc": "Todos os recibos da ferramenta, venham de onde vierem. Pesquise, filtre e abra qualquer um.",
+  "rov.tab.receipts": "Recibos",
+  "rov.tab.emails": "Emails",
+  "rov.all": "Todos",
+  "rov.search": "Pesquisar fornecedor, arquivo, assunto...",
+  "rov.clear": "Limpar",
+  "rov.reset": "Limpar filtros",
+  "rov.refresh": "Atualizar",
+  "rov.columns": "Colunas",
+  "rov.columns.show": "Mostrar colunas",
+  "rov.error": "Não foi possível carregar a lista de recibos.",
+  "rov.empty": "Ainda não há recibos na ferramenta.",
+  "rov.noMatch": "Nenhum recibo corresponde a estes filtros.",
+  "rov.count.all": "{n} recibos",
+  "rov.count.filtered": "{n} de {total} recibos",
+  "rov.perPage": "Linhas por página",
+  "rov.page": "Página {n} de {total}",
+  "rov.prev": "Página anterior",
+  "rov.next": "Próxima página",
+  "rov.from": "De",
+  "rov.to": "Até",
+  "rov.min": "Mín.",
+  "rov.max": "Máx.",
+  "rov.nSelected": "{n} selecionados",
+  "rov.filterColumn": "Filtrar {column}",
+  "rov.filterText": "Digite para filtrar...",
+  "rov.fuzzyHint": "Aproximações contam: \"anthr pbc\" encontra Anthropic, PBC.",
+  "rov.received.stored": "Enviado: quando o arquivo foi guardado",
+  "rov.file.emailText": "Texto do email",
+  "rov.col.received": "Recebido",
+  "rov.col.source": "Origem",
+  "rov.col.file": "Arquivo",
+  "rov.col.type": "Tipo de arquivo",
+  "rov.col.subject": "Assunto",
+  "rov.col.vendor": "Fornecedor",
+  "rov.col.receiptDate": "Data do recibo",
+  "rov.col.amount": "Valor",
+  "rov.col.currency": "Moeda",
+  "rov.col.status": "Status",
+  "rov.col.month": "Mês",
+  "rov.col.submittedBy": "Enviado por",
+  "rov.col.review": "Revisão",
+  "rov.col.card": "Cartão",
+  "rov.col.person": "Empresa / pessoa",
+  "rov.col.category": "Conta",
+  "rov.col.reference": "Referência",
+  "rov.col.note": "Nota",
+  "rov.source.email": "Email",
+  "rov.source.upload": "Upload",
+  "rov.type.email_body": "Texto do email",
+  "rov.type.other": "Outro",
+  "rov.review.ready": "Pronto",
+  "rov.review.check": "Precisa de atenção",
+  "rov.review.pick": "Escolher par",
+  "rov.status.matched": "Ligado a uma cobrança",
+  "rov.status.waiting_for_statement": "Aguardando extrato",
+  "rov.status.no_charge": "Sem cobrança correspondente",
+  "rov.status.duplicate": "Cópia duplicada",
+  "rov.status.private": "Particular",
+  "rov.status.bill": "Pago por transferência",
+  "rov.status.settled_outside": "Liquidado fora do cartão",
+  "rov.status.set_aside": "Separado (não é recibo)",
+  "rov.status.waiting_for_month": "Aguardando o mês",
+  "rov.status.held": "Retido",
+  "rov.status.processing": "Em leitura",
+  "rov.status.removed": "Removido",
+  "rov.status.dismissed": "Descartado",
+```
+
+Do not change any screen in this step.
+````
+
+## Paste this into Lovable: part 2 of 2
+
+````
+Part 2 of 2: rename the "Email intake" page to "Receipt overview" and give it
+a receipt table built with TanStack Table. Part 1 already added the packages,
+getReceiptOverview() in src/lib/api.ts and the "rov.*" text keys. Make exactly
+these changes; the code below is final, copy it as written.
+
+1. Create src/components/ReceiptOverviewTable.tsx with exactly this content:
 
 ```tsx
 import { useEffect, useMemo, useState } from "react";
@@ -1198,7 +1363,7 @@ function FilterControl({ column, t }: { column: Column<Row, unknown>; t: T }) {
 }
 ```
 
-4. src/components/InboundLogScreen.tsx:
+2. src/components/InboundLogScreen.tsx:
    - import { ReceiptOverviewTable } from "./ReceiptOverviewTable";
    - import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
    - In InboundLogScreen's return: the <main> becomes
@@ -1268,162 +1433,13 @@ function FilterControl({ column, t }: { column: Column<Row, unknown>; t: T }) {
    );
 ```
 
-5. src/components/DashboardHeader.tsx: the "/inbound" nav item's label becomes
+3. src/components/DashboardHeader.tsx: the "/inbound" nav item's label becomes
    t("rov.title") (was t("mail.title")). Keep the Mail icon and the /inbound
    route path.
 
-6. src/routes/inbound.tsx head: title "Receipt overview · Brisken Expense
+4. src/routes/inbound.tsx head: title "Receipt overview · Brisken Expense
    Reconciliation", og:title "Receipt overview · Brisken", both descriptions
    "Every receipt in the tool, wherever it came from."
-
-7. src/lib/i18n.tsx: add these keys to the English dictionary (after
-   "mail.desc"):
-
-```ts
-  // Receipt overview (the page formerly called Email intake)
-  "rov.title": "Receipt overview",
-  "rov.desc": "Every receipt in the tool, wherever it came from. Search, filter and open any of them.",
-  "rov.tab.receipts": "Receipts",
-  "rov.tab.emails": "Emails",
-  "rov.all": "All",
-  "rov.search": "Search vendor, file, subject, sender...",
-  "rov.clear": "Clear",
-  "rov.reset": "Reset filters",
-  "rov.refresh": "Refresh",
-  "rov.columns": "Columns",
-  "rov.columns.show": "Show columns",
-  "rov.error": "The receipt list could not be loaded.",
-  "rov.empty": "No receipts in the tool yet.",
-  "rov.noMatch": "No receipt matches these filters.",
-  "rov.count.all": "{n} receipts",
-  "rov.count.filtered": "{n} of {total} receipts",
-  "rov.perPage": "Rows per page",
-  "rov.page": "Page {n} of {total}",
-  "rov.prev": "Previous page",
-  "rov.next": "Next page",
-  "rov.from": "From",
-  "rov.to": "To",
-  "rov.min": "Min",
-  "rov.max": "Max",
-  "rov.nSelected": "{n} selected",
-  "rov.filterColumn": "Filter {column}",
-  "rov.filterText": "Type to filter...",
-  "rov.fuzzyHint": "Close matches count: \"anthr pbc\" finds Anthropic, PBC.",
-  "rov.received.stored": "Uploaded: the time the file was stored",
-  "rov.file.emailText": "Email text",
-  "rov.col.received": "Received",
-  "rov.col.source": "Source",
-  "rov.col.file": "File",
-  "rov.col.type": "File type",
-  "rov.col.subject": "Subject",
-  "rov.col.vendor": "Vendor",
-  "rov.col.receiptDate": "Receipt date",
-  "rov.col.amount": "Amount",
-  "rov.col.currency": "Currency",
-  "rov.col.status": "Status",
-  "rov.col.month": "Month",
-  "rov.col.submittedBy": "Sent by",
-  "rov.col.review": "Review",
-  "rov.col.card": "Card",
-  "rov.col.person": "Company / person",
-  "rov.col.category": "Account",
-  "rov.col.reference": "Reference",
-  "rov.col.note": "Note",
-  "rov.source.email": "Email",
-  "rov.source.upload": "Upload",
-  "rov.type.email_body": "Email text",
-  "rov.type.other": "Other",
-  "rov.review.ready": "Ready",
-  "rov.review.check": "Needs a look",
-  "rov.review.pick": "Pick a match",
-  "rov.status.matched": "Matched to a charge",
-  "rov.status.waiting_for_statement": "Waiting for statement",
-  "rov.status.no_charge": "No matching charge",
-  "rov.status.duplicate": "Duplicate copy",
-  "rov.status.private": "Private",
-  "rov.status.bill": "Paid by transfer",
-  "rov.status.settled_outside": "Settled outside the card",
-  "rov.status.set_aside": "Set aside (not a receipt)",
-  "rov.status.waiting_for_month": "Waiting for its month",
-  "rov.status.held": "Held",
-  "rov.status.processing": "Being read",
-  "rov.status.removed": "Removed",
-  "rov.status.dismissed": "Dismissed",
-```
-
-   and these to the Portuguese dictionary (after its "mail.desc"):
-
-```ts
-  // Receipt overview
-  "rov.title": "Visão geral dos recibos",
-  "rov.desc": "Todos os recibos da ferramenta, venham de onde vierem. Pesquise, filtre e abra qualquer um.",
-  "rov.tab.receipts": "Recibos",
-  "rov.tab.emails": "Emails",
-  "rov.all": "Todos",
-  "rov.search": "Pesquisar fornecedor, arquivo, assunto...",
-  "rov.clear": "Limpar",
-  "rov.reset": "Limpar filtros",
-  "rov.refresh": "Atualizar",
-  "rov.columns": "Colunas",
-  "rov.columns.show": "Mostrar colunas",
-  "rov.error": "Não foi possível carregar a lista de recibos.",
-  "rov.empty": "Ainda não há recibos na ferramenta.",
-  "rov.noMatch": "Nenhum recibo corresponde a estes filtros.",
-  "rov.count.all": "{n} recibos",
-  "rov.count.filtered": "{n} de {total} recibos",
-  "rov.perPage": "Linhas por página",
-  "rov.page": "Página {n} de {total}",
-  "rov.prev": "Página anterior",
-  "rov.next": "Próxima página",
-  "rov.from": "De",
-  "rov.to": "Até",
-  "rov.min": "Mín.",
-  "rov.max": "Máx.",
-  "rov.nSelected": "{n} selecionados",
-  "rov.filterColumn": "Filtrar {column}",
-  "rov.filterText": "Digite para filtrar...",
-  "rov.fuzzyHint": "Aproximações contam: \"anthr pbc\" encontra Anthropic, PBC.",
-  "rov.received.stored": "Enviado: quando o arquivo foi guardado",
-  "rov.file.emailText": "Texto do email",
-  "rov.col.received": "Recebido",
-  "rov.col.source": "Origem",
-  "rov.col.file": "Arquivo",
-  "rov.col.type": "Tipo de arquivo",
-  "rov.col.subject": "Assunto",
-  "rov.col.vendor": "Fornecedor",
-  "rov.col.receiptDate": "Data do recibo",
-  "rov.col.amount": "Valor",
-  "rov.col.currency": "Moeda",
-  "rov.col.status": "Status",
-  "rov.col.month": "Mês",
-  "rov.col.submittedBy": "Enviado por",
-  "rov.col.review": "Revisão",
-  "rov.col.card": "Cartão",
-  "rov.col.person": "Empresa / pessoa",
-  "rov.col.category": "Conta",
-  "rov.col.reference": "Referência",
-  "rov.col.note": "Nota",
-  "rov.source.email": "Email",
-  "rov.source.upload": "Upload",
-  "rov.type.email_body": "Texto do email",
-  "rov.type.other": "Outro",
-  "rov.review.ready": "Pronto",
-  "rov.review.check": "Precisa de atenção",
-  "rov.review.pick": "Escolher par",
-  "rov.status.matched": "Ligado a uma cobrança",
-  "rov.status.waiting_for_statement": "Aguardando extrato",
-  "rov.status.no_charge": "Sem cobrança correspondente",
-  "rov.status.duplicate": "Cópia duplicada",
-  "rov.status.private": "Particular",
-  "rov.status.bill": "Pago por transferência",
-  "rov.status.settled_outside": "Liquidado fora do cartão",
-  "rov.status.set_aside": "Separado (não é recibo)",
-  "rov.status.waiting_for_month": "Aguardando o mês",
-  "rov.status.held": "Retido",
-  "rov.status.processing": "Em leitura",
-  "rov.status.removed": "Removido",
-  "rov.status.dismissed": "Descartado",
-```
 
 Do not change any other screen. Do not change the mail log's behaviour.
 ````
