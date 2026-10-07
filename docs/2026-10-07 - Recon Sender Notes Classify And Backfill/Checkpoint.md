@@ -21,7 +21,7 @@ Built sender-note classification for the expense recon (item 250): notes from tr
 5. `resolve_batch_row_cards` entity order in `service.py`: override > `sender_note_entity` > card > batch/learned > none; `entity_source = "sender_note"`.
 6. Three owner rulings (do not re-litigate): (a) company — "note always wins" over the card (Criss's equal override pick still wins on read); (b) split — "own account, never split", books whole in Corporate Services on an N/A-allocation account; (c) account — "decide when clear" (model >= 0.85, source NOTE, origin person, never learned).
 7. 35 tests in `test_sender_note_250.py`; Lovable prompt handed: `docs/lovable-sender-note-classify-prompt.md`.
-8. Shipped: PR #1589, deployed to Fly.
+8. Shipped: PR #1589, Fly `27ab0ec4`; recorded live in PR #1591.
 
 ### Items 252-254 — Backfill existing months; two correctness fixes from dry runs
 9. `sender_note_backfill.py` (684 lines): route `POST /api/runs/{id}/sender-notes/apply {confirm, dry_run}`; `archives_by_document` re-reads notes from mail archives for pre-item-155 receipts; `plan_backfill` applies trust filter, stamps, re-categorizes; `commit_plan` writes under batch lock with REMATCH_PENDING on company moves.
@@ -92,7 +92,7 @@ Built sender-note classification for the expense recon (item 250): notes from tr
 | `docs/lovable-sender-note-classify-prompt.md` | Created | SPA prompt for item 250 badge/label changes |
 | `docs/lovable-sender-notes-trigger-prompt.md` | Created | SPA prompt for `mh.rematch.trigger.sender_notes` i18n |
 
-PRs: #1589 (item 250), #1604 (item 252 backfill route), #1606 (item 253 pair-by-card), #1608 (item 254 names_account), #1609 (backlog + status updates). Fly versions: `fc8db9cc` (250), `ca8a2cea` (253), `4887af16` (254).
+PRs (all merged): #1589 (item 250), #1591 (record 250 live), #1604 (item 252 backfill route), #1606 (item 253 pair by card), #1608 (item 254 names_account), #1609 (record 252-254 live). Fly: `27ab0ec4` (250), `ca8a2cea` (253), `4887af16` (254).
 
 ---
 
