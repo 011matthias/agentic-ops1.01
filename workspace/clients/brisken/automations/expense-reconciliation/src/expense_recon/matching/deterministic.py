@@ -26,6 +26,7 @@ if TYPE_CHECKING:  # annotations only; the body imports Path itself
 
 import difflib
 import re
+from functools import lru_cache
 from dataclasses import dataclass, field, replace
 from collections.abc import Iterable, Mapping
 from decimal import Decimal
@@ -68,6 +69,7 @@ def _is_reference_token(token: str) -> bool:
     return len(token) >= 4 and sum(ch.isdigit() for ch in token) >= 3
 
 
+@lru_cache(maxsize=1 << 14)  # once per charge x receipt pair; see vendor_similarity
 def strip_reference_tokens(s: str | None) -> str:
     """The merchant words of a bank description, normalized, with its
     reference-shaped tokens taken out (item X1, 2026-09-18).
@@ -168,6 +170,21 @@ def _card_score(tx: Transaction, receipt: Receipt) -> float:
     return 1.0 if (tx_keys & rec_keys) else 0.0
 
 
+@lru_cache(maxsize=1 << 16)
+def _token_ratio(a: str, b: str) -> float:
+    """`difflib` ratio of two normalized words, memoized: a month re-scores
+    the same word pairs thousands of times (see `vendor_similarity`)."""
+    return difflib.SequenceMatcher(None, a, b).ratio()
+
+
+# Memoized (2026-10-07, "removing duplicates takes way too long"): every
+# duplicate click re-matches the month, and `match_one` scores the vendor of
+# EVERY charge x receipt pair before its date and amount gates. Live September
+# made 26,163 calls over 3,710 distinct string pairs, and the two passes of a
+# re-match (item 74) repeat them all: 7 of the 14 s a "Delete this copy" took.
+# The result is a pure function of the two strings, so caching cannot move a
+# score; the bounds keep a long-lived process to ~25 MB at worst.
+@lru_cache(maxsize=1 << 15)
 def vendor_similarity(stmt_vendor: str | None, receipt_vendor: str | None) -> float:
     """Fuzzy similarity in [0,1] between a statement vendor string and a
     receipt's detected vendor (ANNEALING A3 / 3.9).
@@ -191,9 +208,7 @@ def vendor_similarity(stmt_vendor: str | None, receipt_vendor: str | None) -> fl
         ).ratio()
     total = 0.0
     for st in s_tokens:
-        total += max(
-            difflib.SequenceMatcher(None, st, rt).ratio() for rt in r_tokens
-        )
+        total += max(_token_ratio(st, rt) for rt in r_tokens)
     return total / len(s_tokens)
 
 
