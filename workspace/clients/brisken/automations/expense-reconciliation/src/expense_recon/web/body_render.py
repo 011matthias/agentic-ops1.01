@@ -210,9 +210,11 @@ def render_body_pdf(
 # actually holding. `operator_note` cuts a body at the forward boundary and
 # returns what the person wrote above it.
 #
-# DISPLAY ONLY (rule_untrusted_inbound). Mail text is data, never
-# instruction: this string chooses no entity, category, cost center, card
-# or recipient, is handed to no model, and is read by a human who decides.
+# Shown as written, and never an instruction (rule_untrusted_inbound): it
+# selects no recipient, cost center or card. Since item 246 (owner
+# 2026-10-07) a note from one of OUR senders also classifies the receipt's
+# company and account; that reading lives in `sender_note` and starts at
+# `intake_mail.trusted_sender_notes`, never here.
 #
 # The boundary rule was derived from the live archive (92 stored .eml,
 # scanned in-machine read-only 2026-09-19), not guessed. Three shapes occur

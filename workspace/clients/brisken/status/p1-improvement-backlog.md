@@ -13022,6 +13022,64 @@ show only when the row carries a bank-payment signal (`bill_suggestion`);
 that would hide it from the Perplexity row, and also from a bank-paid invoice
 the reader found no signal on. Owner call.
 
+### 246. The sender's note classifies the receipt: company, split, account (owner directive 2026-10-07: "expense recon must be able to use email content (notes left by receipt sender) to help classify receipts (categorization, legal entity, etc.)") (BUILT 2026-10-07, branch `client/brisken/p1-recon-mail-note-classify`; SPA prompt `docs/lovable-sender-note-classify-prompt.md`, not pasted)
+
+Reverses item 155's "display only, must never route" for OUR senders.
+
+**Measured first (read-only, 2026-10-07).** 148 archived mails, 72 carry a
+note (the shipped `operator_note` cutter over `GET /api/inbound/{archive}/body`).
+Behind them, 89 live receipt rows: the note's company AGREES with the tool's
+on 40, FILLS a row with none on 5 (all `waits_for_statement`), CONTRADICTS
+the card or a person's pick on 17, says SPLIT on 5, names no company on 25
+(14 of those are only Criss's signature, "Cristiane Cavalcanti / Finance
+Manager"). Every noted mail came from dirk.neumann@brisken.com,
+dirk_.neumann@icloud.com, cristiane.cavalcanti@brisken.com, ap@brisken.com
+or dirk.neumann@gtgroup.com. Where Criss had booked a contradicted one
+(Typora "BCS", Hostinger "BTS"), she kept the card's company and used the
+note for the account ("COGS - Other Infra and IT Costs for Cloud Business").
+
+**Owner rulings, 2026-10-07 (three questions, after a walkthrough of how
+cards tie a charge to a company's books):**
+
+1. Company: **"note always wins"**, over the paying card; only Criss's own
+   pick on the row beats it. Accepted knowingly: a card-paid row can move to
+   a company whose Zoho chart does not hold that card.
+2. Split: **"own account, never split"**: a note that says split books the
+   whole amount in Corporate Services, on one of its own accounts with
+   allocation rule "N/A" (the `CorpServ | ...` family on Dirk's marked chart),
+   not on a shared account Zoho allocates onward. The tool still never splits.
+3. Account: **"decide when clear"**: a note whose words name one account of
+   the company's chart decides it; anything less clear decides nothing.
+
+**Built.** `sender_note.py` (pure: company vocabulary BCS / BTS / CorpServ,
+split words, signature cut, `CORPSERV_UNSPLIT_CODES`, `stamp_sender_notes`);
+`intake_mail.trusted_sender_notes` (our address, no `untrusted_instructions`,
+something left after the signature); three new receipt fields, serialized,
+stamped at BOTH arrival paths after the card stamp (`_add_receipts_locked`,
+`generate_expenses` via `execute_expense_batch`); `resolve_batch_row_cards`
+tier override > sender_note > card (`entity_source: "sender_note"`);
+categorizer tier `_note_accounts` above the merchant list on GL months
+(`classify_by_note`, note fenced as data, decides at confidence >= 0.85,
+same guards as any model answer, split offered only the unsplit codes),
+source `NOTE`, origin person, coarse `posting_category.source: "note"`,
+never overwritten by `live_registry_accounts`. Nothing writes to the override
+tables, so nothing a note decides is learned at Publish (2026-09-24 ruling).
+Contract: `docs/api-contract.md` "What our senders' notes decide".
+
+**Proof.** `tests/test_sender_note_246.py` (35) + the mail-creates-month case
+in `test_intake_mail.py`; item 155's differential is now
+`test_a_strangers_note_decides_nothing`. Regressed at all four wiring points
+(`tools/regress_check.py`: both arrival stamps, the row tier, the account
+tier): each goes red under the mutation and green again.
+
+**Not done, on purpose.** Receipts already in a month carry no note fields
+(read at arrival only), so the deploy changes no existing row; applying the
+rulings to the 89 would be a write to Criss's months. Bucket months
+(April-June) get the company tier but not the account tier. A card ending in
+a note ("2838", "Personal card") decides nothing. The 17 rows whose company
+the note would move post with the card's paid-through account in another
+company's books, exactly as a person's company pick on a card row does today.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |

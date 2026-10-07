@@ -2944,7 +2944,11 @@ def _coarse_source_join(joined: str | None) -> str:
         if not tok:
             continue
         origin = origin_of_source_value(tok)
-        if origin == ORIGIN_PERSON:
+        if tok.upper() == ClassificationSource.NOTE.value:
+            # Item 246: a person's answer too, but the sender's in the mail,
+            # not the reviewer's on the row; the screen says which.
+            coarse = "note"
+        elif origin == ORIGIN_PERSON:
             coarse = "override"
         elif origin == ORIGIN_RULE:
             coarse = tok.lower()  # REGISTRY -> registry, LEARNED -> learned
@@ -6602,6 +6606,16 @@ def execute_expense_batch(
     exception propagates). The mail-intake materializer uses it to
     re-check that no competing batch for the same month landed while the
     OCR ran — this function itself stays policy-free."""
+    # Item 246: a month the mail itself creates classifies by the senders'
+    # notes exactly as a receipt added to an open month does.
+    sender_notes = None
+    if prepared.intake_provenance:
+        from .intake_mail import IntakeConfig, trusted_sender_notes
+
+        sender_notes = trusted_sender_notes(
+            prepared.intake_provenance,
+            IntakeConfig.from_settings(store.get_settings()),
+        )
     try:
         result = generate_expenses(
             prepared.cfg,
@@ -6610,6 +6624,7 @@ def execute_expense_batch(
             on_stage=on_stage,
             expense_memory=prepared.expense_memory,
             registry=prepared.registry,
+            sender_notes=sender_notes,
         )
     except ConfigError as exc:
         raise RunInputError(
@@ -7133,9 +7148,11 @@ def resolve_batch_row_cards(
     `receipts` are the POST-overlay pool (edits applied), so the entity
     fallback step reads what the reviewer sees; the override step reads
     `field_overrides` directly so an explicit edit is labeled as such.
-    `entity_source` is override | card | batch | learned | none — "learned"
-    meaning the stamped value differs from the batch default (memory or an
-    earlier card stamp), so the UI can say why without guessing.
+    `entity_source` is override | sender_note | card | batch | learned | none
+    — "learned" meaning the stamped value differs from the batch default
+    (memory or an earlier card stamp), so the UI can say why without
+    guessing; "sender_note" (item 246) the company one of our senders named
+    in the note above the forward, which outranks the card.
 
     `person` / `person_source` (backlog item 40): who the expense belongs
     to, resolved as the LAST link of the SAME card chain — the resolved
@@ -7367,6 +7384,11 @@ def resolve_batch_row_cards(
         override = fields.get("legal_entity", "")
         if override.strip():
             entity, source = override.strip(), "override"
+        elif (r.sender_note_entity or "").strip():
+            # Item 246 (owner 2026-10-07: "note always wins"): the company the
+            # sender's own note names outranks the paying card. Only the
+            # reviewer's pick above beats it.
+            entity, source = r.sender_note_entity.strip(), "sender_note"
         elif card is not None and card.entity:
             entity, source = card.entity, "card"
         elif (r.legal_entity_id or "").strip():
@@ -14734,6 +14756,18 @@ def _add_receipts_locked(
 
         new_receipts = stamp_card_entities(
             new_receipts, _batch_cards(cfg), _batch_card_hints(cfg)
+        )
+        # Item 246: the note one of our senders typed above the forward,
+        # AFTER the card (the note's company outranks it) and before the
+        # categorizer, which picks the company's chart off the stamp.
+        from ..sender_note import stamp_sender_notes
+        from .intake_mail import IntakeConfig, trusted_sender_notes
+
+        new_receipts = stamp_sender_notes(
+            new_receipts,
+            trusted_sender_notes(
+                new_provenance, IntakeConfig.from_settings(store.get_settings())
+            ),
         )
         learned = (
             MerchantCategoryLookup.from_db_path(learning_db_path)

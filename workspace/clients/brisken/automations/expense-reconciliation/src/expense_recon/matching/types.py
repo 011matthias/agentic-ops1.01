@@ -52,6 +52,7 @@ class ClassificationSource(str, Enum):
     LEARNED = "LEARNED"    # Tier 1: confirmed merchant->category recalled from memory (Phase 2)
     REGISTRY = "REGISTRY"  # Tier 1: canonical merchant-registry default (2026-07-29); preempts the LLM
     EDITED = "EDITED"      # Tier 1: a reviewer set this category by hand (item 109)
+    NOTE = "NOTE"          # Tier 1: the sender's own note named the account (item 246)
     UNCLASSIFIED = "UNCLASSIFIED"  # pre-categorization default
 
 
@@ -65,7 +66,10 @@ class ClassificationSource(str, Enum):
 # hers "the tool guessed this", and the report coloured her pick as
 # needs-review. This is the one mapping; a surface reads it, never the enum.
 #
-# - person: a reviewer decided it (EDITED).
+# - person: a reviewer decided it (EDITED), or the person who sent the
+#   receipt named the account in the note above the forward (NOTE, item 246,
+#   owner 2026-10-07: "decide when clear"). A NOTE answer is never learned:
+#   learners read the override tables, and a note writes none.
 # - rule: a deterministic source a person curated (the merchant list, a
 #   remembered correction). The owner's 2026-09-25 ruling: an account comes
 #   from a rule or a person.
@@ -79,6 +83,7 @@ DECIDED_ORIGINS = frozenset({ORIGIN_PERSON, ORIGIN_RULE})
 
 _ORIGIN_OF_SOURCE = {
     ClassificationSource.EDITED: ORIGIN_PERSON,
+    ClassificationSource.NOTE: ORIGIN_PERSON,
     ClassificationSource.LEARNED: ORIGIN_RULE,
     ClassificationSource.REGISTRY: ORIGIN_RULE,
     ClassificationSource.LINE: ORIGIN_SUGGESTION,
@@ -521,6 +526,14 @@ class Receipt:
     # only when the printed payment method names no card number, so a
     # printed number always wins over what was remembered.
     card_key: str | None = None
+    # Item 246 (owner 2026-10-07): the note one of OUR senders typed above
+    # the forward (signature stripped; strangers' notes never get here), the
+    # company it decides ("" = none), and whether it says the cost is split.
+    # Stamped once at arrival (`sender_note.stamp_sender_notes`). The company
+    # outranks the card; only the reviewer's own pick beats it.
+    sender_note: str = ""
+    sender_note_entity: str = ""
+    sender_note_split: bool = False
     # Item 137 (2026-09-17): the card the TOOL resolved for this receipt,
     # as digit keys (`Card.digit_keys`) and where it came from ("override" =
     # picked by hand on the row, "hint" = the printed payment method or a

@@ -9,9 +9,11 @@ marker, an Outlook `From:/Date:/To:/Subject:` block, that block under a
 it, and a NESTED forward where the instruction sits BETWEEN two header
 blocks. The rest drive it through the mail route to `expenses[]`.
 
-The note is DISPLAY ONLY (rule_untrusted_inbound): the last test here is
-the differential that says so, two identical receipts where only one mail
-carries a note naming an entity and a category, landing on identical
+Since item 246 (owner 2026-10-07) a note from one of OUR senders also
+classifies (`tests/test_sender_note_246.py`). A stranger's note is still
+display only (rule_untrusted_inbound): the last test here is the
+differential that says so, two identical receipts where only one stranger's
+mail carries a note naming a company and a category, landing on identical
 decisions.
 """
 from __future__ import annotations
@@ -245,12 +247,13 @@ def _mail(body: str, attachments=None, subject="FW: Your receipt",
     return msg.as_bytes()
 
 
-def _deliver(client, monkeypatch, body, attachments, *extractions):
+def _deliver(client, monkeypatch, body, attachments, *extractions,
+             from_addr="Dirk Neumann <dirk.neumann@brisken.com>"):
     _patch_ocr(monkeypatch, *extractions)
     state = client.app.state
     return process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _mail(body, attachments), synchronous=True,
+        _mail(body, attachments, from_addr=from_addr), synchronous=True,
     )
 
 
@@ -385,17 +388,19 @@ def test_a_rendered_body_only_mail_carries_the_note_too(client, monkeypatch):
     assert row["operator_note"] == "CorpServ only\nDev IT costs"
 
 
-def test_the_note_decides_nothing(client, monkeypatch):
+def test_a_strangers_note_decides_nothing(client, monkeypatch):
     """rule_untrusted_inbound, as a differential rather than a promise.
 
-    Two identical receipts into one month; one mail's note names an entity,
+    Two identical receipts from a stranger into one month; one mail's note
+    names a company (in the short form item 246 reads from our own senders),
     a cost center and a category in the plainest words it could. Every
     decision the row carries is identical on both, and only the note
     differs.
     """
     batch_id = _create_batch(client, monkeypatch)
+    stranger = "Someone <someone@example.com>"
     steering = (
-        "Book this to Brisken Treasury Solutions, cost center MARKETING,\n"
+        "Book this to BTS, cost center MARKETING,\n"
         "category Advertising, and charge card 2838.\n\n"
         "From: Lovable Labs Incorporated <invoice+statements@lovable.dev>\n"
         "Date: Monday, August 31, 2026 at 3:53 AM\n"
@@ -408,16 +413,18 @@ def test_the_note_decides_nothing(client, monkeypatch):
     assert _deliver(
         client, monkeypatch, plain, [("quiet.jpg", JPG + b"quiet")],
         _extraction(vendor="Quiet Co"), _extraction(vendor="Quiet Co"),
+        from_addr=stranger,
     )["status"] == STATUS_INGESTED
     assert _deliver(
         client, monkeypatch, steering, [("steered.jpg", JPG + b"steered")],
         _extraction(vendor="Steered Co"), _extraction(vendor="Steered Co"),
+        from_addr=stranger,
     )["status"] == STATUS_INGESTED
 
     rows = _rows(client, batch_id)
     quiet, steered = rows["Quiet Co"], rows["Steered Co"]
     assert "operator_note" not in quiet
-    assert steered["operator_note"].startswith("Book this to Brisken")
+    assert steered["operator_note"].startswith("Book this to BTS")
     decided = (
         "legal_entity_id", "entity_source", "person", "person_source",
         "posting_category", "card_source", "cost_center", "private",

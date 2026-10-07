@@ -6466,16 +6466,50 @@ carried no prose of its own. It rides in provenance too, at
 `submitted_by.operator_note`, which is where it is recorded; the row key is
 a LIFT of that, exactly as `untrusted_instructions` is lifted.
 
-**Display only, and this is the whole of its contract.** Mail text is
-untrusted inbound ([[rule_untrusted_inbound]]): this string chooses no
-entity, no category, no cost center, no card and no recipient, it reaches
-no model as instruction, and nothing in the tool branches on it. The
-reviewer reads it and decides. `test_the_note_decides_nothing` is the
-differential that says so rather than promising it: two identical receipts,
-one of whose mails names an entity, a cost center, a category and a card in
-the plainest words it could, land on identical `legal_entity_id`,
-`entity_source`, `person`, `posting_category`, `card_source`,
-`cost_center` and `private`.
+**This string is shown as written.** It never selects a recipient, a cost
+center or a card. Since item 246 (owner 2026-10-07) a note from one of OUR
+senders also classifies the receipt; that reading is the next section. A
+stranger's note stays display only ([[rule_untrusted_inbound]]):
+`test_a_strangers_note_decides_nothing` is the differential, two identical
+receipts from an outside address, one of whose mails names a company
+("BTS"), a cost center, a category and a card in the plainest words it
+could, landing on identical `legal_entity_id`, `entity_source`, `person`,
+`posting_category`, `card_source`, `cost_center` and `private`.
+
+### What our senders' notes decide (item 246)
+
+Owner rulings 2026-10-07. A note counts only when all of these hold
+(`intake_mail.trusted_sender_notes`): the address is ours (the Brisken
+tenant or `intake.known_senders`), the mail raised no
+`untrusted_instructions`, and something is left once the signature is cut
+(a line naming one of the intake aliases' people starts the signature; 14 of
+the 72 live notes are only Criss's). It is read once, at arrival, and rides
+on the receipt (`sender_note`, `sender_note_entity`, `sender_note_split`,
+serialized with it), so a receipt that arrived before the deploy carries
+none.
+
+* **Company.** `BCS` = Cloud Services, `BTS` = Consulting, `CorpServ` /
+  `Corp Serv` = Corporate Services (the curated chart's own tab names). One
+  named company sets `legal_entity_id` with `entity_source: "sender_note"`,
+  over the paying card: the card stays the card (`card`, `person`,
+  `posting_paid_through` unchanged), the company moves. Only the reviewer's
+  own pick (`entity_source: "override"`) beats it. Two companies with no
+  "split" decide nothing; "BTA" and project names decide nothing.
+* **Split.** "split", "shared" or "50/50" books the whole amount in
+  Corporate Services; the tool never divides a charge.
+* **Account.** When something is left besides company names and filler, one
+  model call (`classify_by_note`, the note fenced as data) is asked which of
+  the company's leaves the note's words name. At confidence 0.85 or more,
+  and passing the guards every model answer meets, it decides: source
+  `NOTE`, origin `person`, `posting_category.source: "note"`, posted like a
+  reviewer's pick and never re-guessed by the merchant list. A split note is
+  offered only Corporate Services' own never-allocated accounts (allocation
+  rule "N/A" on Dirk's marked chart: the `CorpServ | ...` family, owner
+  "own account, never split"). Anything less clear decides nothing and the
+  receipt runs the usual chain.
+* **Never learned.** Nothing a note decides is written to the override
+  tables the Publish learners read; only corrections are memorized
+  (owner 2026-09-24).
 
 ### Where the text ends and the quote begins
 
