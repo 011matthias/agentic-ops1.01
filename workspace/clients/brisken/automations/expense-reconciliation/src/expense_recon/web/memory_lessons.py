@@ -41,6 +41,7 @@ from ..learning import (
     learn_from_expense_run,
     merge_taught,
     normalize_vendor,
+    one_rule_per_merchant,
 )
 from ..learning.capture import category_key
 from ..merchant_identity import identity_key
@@ -76,6 +77,16 @@ class Lesson:
     default_keep: bool
     owner_gated: bool = False
     conflict_group: str = ""
+    # Item 246: what the lesson does to the rule memory holds today.
+    # `effect` is "new" (no rule yet), "replaces" (`replaces` names the old
+    # values it overwrites), "same" (memory already holds it; saving counts
+    # one more confirmation) or "adds" (an FX sample, a new merchant-list
+    # spelling: added beside what is there). `already_saved` marks a lesson
+    # THIS month's own un-undone save wrote and memory still holds as is:
+    # it starts unticked and a save skips it.
+    effect: str = "new"
+    replaces: list = field(default_factory=list)
+    already_saved: bool = False
     # Not served: what applying the lesson needs.
     writes: list = field(default_factory=list)
     merchant: str = ""
@@ -92,6 +103,9 @@ class Lesson:
             "default_keep": self.default_keep,
             "owner_gated": self.owner_gated,
             "conflict_group": self.conflict_group,
+            "effect": self.effect,
+            "replaces": self.replaces,
+            "already_saved": self.already_saved,
         }
 
 
@@ -122,6 +136,19 @@ class LessonContext:
     # merchant-list card learner reads (`registry_card_observations`).
     cards: dict = field(default_factory=dict)
     card_seen: dict = field(default_factory=dict)
+    # Item 246: memory as it stands before this save. `stored` maps
+    # `(table, key tuple)` to the stored row (as `LearningStore.read_row`
+    # gives it); `stored_categories` is every category rule, for
+    # `one_rule_per_merchant`; `saved_ids` the lesson ids this month's own
+    # un-undone saves wrote.
+    stored: dict = field(default_factory=dict)
+    stored_categories: list = field(default_factory=list)
+    saved_ids: set = field(default_factory=set)
+
+    def expand(self, writes: list) -> list:
+        """The writes a save actually makes for `writes`: each category write
+        also replaces the other spellings' rules (item 246)."""
+        return one_rule_per_merchant(writes, self.stored_categories, self.identity)
 
 
 # ── describing ──────────────────────────────────────────────────────────
@@ -217,6 +244,132 @@ _FIELD_PHRASE = {
     "vendor": "named {}",
     "tax_label": "with the tax line {}",
 }
+
+
+# ── what a lesson does to the rule memory holds (item 246) ──────────────
+
+
+def _value_after(w, before: dict | None):
+    """The value one upsert leaves in its row, read the way the store's SQL
+    applies it (a kept half stays as stored)."""
+    if w.table == "merchant_category":
+        stored = before or {}
+        category = stored.get("category") if w.kwargs.get("keep_category") else w.args[2]
+        account = stored.get("zoho_account") if w.kwargs.get("keep_account") else w.args[3]
+        return (category or None, account or None)
+    if w.table == "merchant_entity":
+        return w.args[1] or None
+    if w.table == "field_correction":
+        return w.args[3] or None
+    return None
+
+
+def _value_stored(table: str, row: dict):
+    if table == "merchant_category":
+        return (row.get("category") or None, row.get("zoho_account") or None)
+    if table == "merchant_entity":
+        return row.get("legal_entity_id") or None
+    if table == "field_correction":
+        return row.get("value") or None
+    return None
+
+
+def _old_text(ctx: LessonContext, table: str, key: tuple, row: dict) -> str:
+    """The rule being replaced, as the next receipt would have read it."""
+    if table == "merchant_category":
+        _company_name, org = _company(ctx, key[0])
+        return _value_text(row.get("category"), row.get("zoho_account"), org)
+    if table == "merchant_entity":
+        return f"the company {row.get('legal_entity_id') or ''}".strip()
+    if table == "field_correction":
+        value = row.get("value") or ""
+        return _card_text(ctx, value) if key[2] == "card_key" else value
+    return ""
+
+
+def _writes_effect(ctx: LessonContext, writes: list) -> tuple[str, list[dict]]:
+    """`(effect, replaces)` for learning writes, read against memory as it
+    stands: every row the save would change and what it holds now."""
+    replaces: list[dict] = []
+    new = adds = False
+    seen: set = set()
+    for w in ctx.expand(writes):
+        ident = (w.table, w.key, w.is_delete)
+        if ident in seen:
+            continue
+        seen.add(ident)
+        before = ctx.stored.get((w.table, w.key))
+        if w.is_delete:
+            if before is not None:
+                replaces.append({
+                    "table": w.table, "key": w.key_dict, "removed": True,
+                    "value": (f"the rule saved as {w.key[1]} "
+                              f"({_old_text(ctx, w.table, w.key, before)})"),
+                })
+            continue
+        if before is None:
+            new = True
+        elif w.table == "merchant_fx":
+            adds = True
+        elif w.table in ("merchant_category", "merchant_entity", "field_correction"):
+            if _value_stored(w.table, before) != _value_after(w, before):
+                replaces.append({
+                    "table": w.table, "key": w.key_dict, "removed": False,
+                    "value": _old_text(ctx, w.table, w.key, before),
+                })
+    if replaces:
+        return "replaces", replaces
+    if adds:
+        return "adds", replaces
+    return ("new" if new else "same"), replaces
+
+
+_REGISTRY_FIELDS = (("category", "category"), ("zoho_account", "account"),
+                    ("cost_center", "cost center"), ("card_key", "card"))
+
+
+def _registry_effect(before: dict | None, after: dict | None) -> tuple[str, list[dict]]:
+    """`(effect, replaces)` for one merchant-list entry: a value the entry
+    already held that the save changes is replaced; spellings and cards seen
+    are added beside what is there."""
+    if not before:
+        return "new", []
+    b, a = before or {}, after or {}
+    replaces: list[dict] = []
+    for fld, label in _REGISTRY_FIELDS:
+        if b.get(fld) and a.get(fld) != b.get(fld):
+            replaces.append({"table": REGISTRY, "key": {"field": fld},
+                             "removed": False, "value": f"{label} {b.get(fld)}"})
+    accounts_b, accounts_a = b.get("accounts") or {}, a.get("accounts") or {}
+    for company in sorted(accounts_b):
+        if accounts_a.get(company) != accounts_b[company]:
+            replaces.append({"table": REGISTRY, "key": {"field": "accounts", "company": company},
+                             "removed": False,
+                             "value": f"account in {company} {accounts_b[company]}"})
+    return ("replaces", replaces) if replaces else ("adds", [])
+
+
+def _settle(lsn: Lesson, effect: str, replaces: list[dict], ctx: LessonContext) -> Lesson:
+    """Stamp a lesson with its effect, say it in its sentence, and hold back
+    one this month already saved."""
+    lsn.effect, lsn.replaces = effect, replaces
+    text, held = lsn.description, ""
+    if text.endswith(_HELD):
+        text, held = text[: -len(_HELD)], _HELD
+    if replaces:
+        text += " Replaces " + "; ".join(r["value"] for r in replaces) + "."
+    if (lsn.id in ctx.saved_ids and effect in ("same", "adds")
+            and lsn.kind == KIND_CORRECTION and lsn.table != REGISTRY):
+        lsn.already_saved = True
+        lsn.default_keep = False
+        text += " Already saved from this month."
+    elif effect == "same":
+        text += " Memory already holds this."
+    lsn.description = text + held
+    return lsn
+
+
+_HELD = " Held for the owner: never written from a checklist."
 
 
 # ── attributing a learning row to the rows that taught it ───────────────
@@ -401,7 +554,7 @@ def _drift_lessons(ctx: LessonContext, cat_groups: dict) -> tuple[list[Lesson], 
             )
             sources = [_row_source(ctx, d, ln) for d, ln in rows]
             booked = len({d for d, _ln in rows})
-            lessons.append(Lesson(
+            lesson = Lesson(
                 id=f"{group}:{code}",
                 kind=KIND_DRIFT,
                 table=REGISTRY,
@@ -419,7 +572,13 @@ def _drift_lessons(ctx: LessonContext, cat_groups: dict) -> tuple[list[Lesson], 
                 writes=rec.writes,
                 merchant=merchant,
                 rows=rows,
-            ))
+            )
+            _effect, replaced = _writes_effect(ctx, rec.writes)
+            lessons.append(_settle(lesson, "replaces", [{
+                "table": REGISTRY, "key": {"field": "accounts", "company": label},
+                "removed": False,
+                "value": f"account in {company} {_account_text(decided_code, org)}",
+            }] + replaced, ctx))
     return lessons, folded
 
 
@@ -440,7 +599,7 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
             sources = [_row_source(ctx, d, ln) for (d, ln), _v in cat_groups.get(key, [])]
         else:
             sources = [_row_source(ctx, d) for d in field_src.get((table, key), [])]
-        lessons.append(Lesson(
+        lessons.append(_settle(Lesson(
             id=lesson_id(table, key),
             kind=KIND_CORRECTION,
             table=table,
@@ -450,7 +609,7 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
             sources=sources,
             default_keep=True,
             writes=writes,
-        ))
+        ), *_writes_effect(ctx, writes), ctx))
 
     # 2) Merchant-list entries, one lesson per merchant the save changes.
     after = ctx.merchants_after if ctx.merchants_after is not None else ctx.merchants_before
@@ -473,7 +632,7 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
                 if doc not in taken
             ]
         held = " Held for the owner: never written from a checklist." if gated else ""
-        lessons.append(Lesson(
+        lessons.append(_settle(Lesson(
             id=lesson_id(REGISTRY, (merchant,)),
             kind=KIND_CORRECTION,
             table=REGISTRY,
@@ -484,7 +643,7 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
             default_keep=not gated,
             owner_gated=gated,
             merchant=merchant,
-        ))
+        ), *_registry_effect(b, a), ctx))
 
     # 3) Conflicts, one UNTICKED lesson per candidate value.
     for key, members in cat_groups.items():
@@ -501,7 +660,7 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
                 identity=ctx.identity,
             )
             sources = [_row_source(ctx, d, ln) for d, ln in rows]
-            lessons.append(Lesson(
+            lessons.append(_settle(Lesson(
                 id=f"conflict:{group}:{value[0] or ''}|{value[1] or ''}",
                 kind=KIND_CONFLICT,
                 table="merchant_category",
@@ -513,7 +672,7 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
                 conflict_group=group,
                 writes=rec.writes,
                 rows=rows,
-            ))
+            ), *_writes_effect(ctx, rec.writes), ctx))
 
     from .service import registry_category_groups
 
@@ -534,7 +693,7 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
                 continue
             sources = [_row_source(ctx, d, ln) for d, ln in rows]
             held = " Held for the owner: never written from a checklist." if gated else ""
-            lessons.append(Lesson(
+            lessons.append(_settle(Lesson(
                 id=f"conflict:{group}:{value[0] or ''}|{value[1] or ''}",
                 kind=KIND_CONFLICT,
                 table=REGISTRY,
@@ -548,7 +707,8 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
                 conflict_group=group,
                 merchant=merchant,
                 rows=rows,
-            ))
+            ), *_registry_effect(ctx.merchants_before.get(merchant),
+                                 candidate.get(merchant)), ctx))
     return lessons + drift
 
 
@@ -644,4 +804,7 @@ def apply_selection(ctx: LessonContext, lessons: list[Lesson], kept_ids) -> dict
         if not n_written:
             unresolved.append(group)
         writes.extend(rec.writes)
-    return {"writes": writes, "merchants": merchants, "unresolved_conflicts": unresolved}
+    # Item 246: a category write replaces the case's other spellings, the
+    # same expansion every lesson's `replaces` was read from.
+    return {"writes": ctx.expand(writes), "merchants": merchants,
+            "unresolved_conflicts": unresolved}
