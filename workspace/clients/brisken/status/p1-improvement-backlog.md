@@ -13123,7 +13123,7 @@ side-scroll, ellipsis / line-clamp / self-clip, and a header control hidden
 by stacking; each check was shown to fire on the baseline before its fix
 was trusted (self-clip caught "Chase Visa | 9693 | Cloud Expenses" cut in a
 select; the header check caught Memory's select-all hidden at 360-768 px).
-### 248. Email intake becomes Receipt overview: every receipt, every source, filterable (Dirk, 2026-10-07, relayed by the owner) (BACKEND BUILT 2026-10-07; SPA prompt `docs/lovable-receipt-overview-prompt.md` not pasted)
+### 248. Email intake becomes Receipt overview: every receipt, every source, filterable (Dirk, 2026-10-07, relayed by the owner) (BACKEND LIVE 2026-10-07: PR #1587, Fly on `501edf7d`; SPA prompt `docs/lovable-receipt-overview-prompt.md` not pasted)
 
 Owner, relaying Dirk: *"dirk wants users to be able to see and filter. Lets do
 this in email intake tab. Rename email intake to Receipt overview; make sure
@@ -13181,10 +13181,71 @@ out of the arrival duplicate key, or require the receipt-bearing part (a PDF,
 or the body for a body-only mail) to match. The Receipt overview now shows
 such mails as "Duplicate copy" with the subject they were matched to.
 
+### 250. The sender's note classifies the receipt: company, split, account (owner directive 2026-10-07: "expense recon must be able to use email content (notes left by receipt sender) to help classify receipts (categorization, legal entity, etc.)") (LIVE 2026-10-07: PR #1589, Fly on `27ab0ec4`, `/healthz` commit verified by deploy.py, cold SPA drive of October renders, read-only; SPA prompt `docs/lovable-sender-note-classify-prompt.md`, not pasted)
+
+Reverses item 155's "display only, must never route" for OUR senders.
+
+**Measured first (read-only, 2026-10-07).** 148 archived mails, 72 carry a
+note (the shipped `operator_note` cutter over `GET /api/inbound/{archive}/body`).
+Behind them, 89 live receipt rows: the note's company AGREES with the tool's
+on 40, FILLS a row with none on 5 (all `waits_for_statement`), CONTRADICTS
+the card or a person's pick on 17, says SPLIT on 5, names no company on 25
+(14 of those are only Criss's signature, "Cristiane Cavalcanti / Finance
+Manager"). Every noted mail came from dirk.neumann@brisken.com,
+dirk_.neumann@icloud.com, cristiane.cavalcanti@brisken.com, ap@brisken.com
+or dirk.neumann@gtgroup.com. Where Criss had booked a contradicted one
+(Typora "BCS", Hostinger "BTS"), she kept the card's company and used the
+note for the account ("COGS - Other Infra and IT Costs for Cloud Business").
+
+**Owner rulings, 2026-10-07 (three questions, after a walkthrough of how
+cards tie a charge to a company's books):**
+
+1. Company: **"note always wins"**, over the paying card; only Criss's own
+   pick on the row beats it. Accepted knowingly: a card-paid row can move to
+   a company whose Zoho chart does not hold that card.
+2. Split: **"own account, never split"**: a note that says split books the
+   whole amount in Corporate Services, on one of its own accounts with
+   allocation rule "N/A" (the `CorpServ | ...` family on Dirk's marked chart),
+   not on a shared account Zoho allocates onward. The tool still never splits.
+3. Account: **"decide when clear"**: a note whose words name one account of
+   the company's chart decides it; anything less clear decides nothing.
+
+**Built.** `sender_note.py` (pure: company vocabulary BCS / BTS / CorpServ,
+split words, signature cut, `CORPSERV_UNSPLIT_CODES`, `stamp_sender_notes`);
+`intake_mail.trusted_sender_notes` (our address, no `untrusted_instructions`,
+something left after the signature); three new receipt fields, serialized,
+stamped at BOTH arrival paths after the card stamp (`_add_receipts_locked`,
+`generate_expenses` via `execute_expense_batch`); `resolve_batch_row_cards`
+tier override > sender_note > card (`entity_source: "sender_note"`);
+categorizer tier `_note_accounts` above the merchant list on GL months
+(`classify_by_note`, note fenced as data, decides at confidence >= 0.85,
+same guards as any model answer, split offered only the unsplit codes),
+source `NOTE`, origin person, coarse `posting_category.source: "note"`,
+never overwritten by `live_registry_accounts`. Nothing writes to the override
+tables, so nothing a note decides is learned at Publish (2026-09-24 ruling).
+Contract: `docs/api-contract.md` "What our senders' notes decide".
+
+**Proof.** `tests/test_sender_note_250.py` (35) + the mail-creates-month case
+in `test_intake_mail.py`; item 155's differential is now
+`test_a_strangers_note_decides_nothing`. Regressed at all four wiring points
+(`tools/regress_check.py`: both arrival stamps, the row tier, the account
+tier): each goes red under the mutation and green again.
+
+**Not done, on purpose.** Receipts already in a month carry no note fields
+(read at arrival only), so the deploy changes no existing row; applying the
+rulings to the 89 would be a write to Criss's months. Bucket months
+(April-June) get the company tier but not the account tier. A card ending in
+a note ("2838", "Personal card") decides nothing. The 17 rows whose company
+the note would move post with the card's paid-through account in another
+company's books, exactly as a person's company pick on a card row does today.
+
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 165 | Fix (no item), follow-up to 163: `DELETE /api/runs/{id}/expenses/{doc}?views=1` and `POST /api/runs/{id}/duplicates/resolve?views=1` reply with `views.batch` / `views.run`, equal to the two page GETs at that moment; no flag, no change. SPA half `docs/lovable-duplicate-click-reply-views-prompt.md` (cache the reply, no refetch), handed to the owner, not pasted | After a duplicate click the page refetched the month twice and showed the old row until both landed. Local, September, click until the grid holds the new month: Delete 3.96 / 4.41 -> 3.83 / 3.71 s, Not a copy 3.68 / 4.48 -> 3.13 / 3.70 s; one screen update instead of two, and Not a copy refreshes the reconciliation line it left stale | 2026-10-07, PR #1590, Fly v284 (commit `0541288a`); live GET /api/runs + /api/expense-batches for September and October hash-identical before/after (baseline stable across two reads), page driven cold (read-only); the `views` reply itself not exercised live (it needs a write on Criss's month) |
+| 164 | Item 248: `GET /api/receipts/overview`, every receipt the tool holds in one list (months, trips, set-aside files, and mail that never became or is no longer an expense), statuses read off each month's own verdicts, memoized under the card key plus the mail archive's; SPA prompt with the TanStack Table v8 page | Dirk 2026-10-07: users could not see or filter receipts; the Email intake page listed mails only, so uploads never appeared. Live after deploy (one read-only GET): 363 receipts, 184 email / 179 upload, every row with an arrival date, 2.5 s; published SPA unchanged until the paste, cold drive 0 writes | 2026-10-07, PR #1587, Fly on `501edf7d` |
 | 163 | Fix (no item): a duplicate click's re-match memoizes its vendor work. `vendor_similarity`, its word-pair ratio and `strip_reference_tokens` are `lru_cache`d (pure, bounded ~25 MB); `MerchantRegistry.resolve` memoizes per instance; `_distinctive` cached on its tokens. No output moves | Owner 2026-10-07: "removing duplicates takes way too long to load". "Delete this copy" and "Not a copy" re-match the month inside the request; on September (216 charges x 112 receipts since the 10-05 statement) the matcher scored 26,163 vendor pairs for 3,710 distinct ones, twice per re-match, and the registry resolved 700 times for 274 names. Local A/B on the 10-07 backup: Delete this copy 3.88 -> 1.75 s, Not a copy 5.28 -> 2.73 s, payloads byte-identical | 2026-10-07, PR #1583, Fly v281 (commit `5ae5905d`); live September duplicate layer, totals and vendors identical before/after, page driven cold (read-only); the click itself not timed live (it is a write on Criss's month) |
 | 162 | Fix (no item): the card roll-up lets the first coverage row name a card that only receipts had opened, so a receipt-only newest month no longer blanks `card_key`, label, digits and `known` | Owner 2026-10-07: the 2838 account filter went away. October (created 10-01, receipts, no statement) was read first and blanked every card it holds a receipt on, so the item 191 tree linked nothing (`subcards` [] everywhere) and 2838, 3645, 3876, 9693, 1176 read as not in Settings; live after: 2838 opens 3876 / 3645 / 0340, no figure moved | 2026-10-07, PR #1575, Fly v279 (commit `7a4e0b0e`); driven cold, read-only |
 | 161 | Item 243: the card score reads a printed number through the card register when the register resolved the card from that print, so "...1672" agrees with a 2838 charge once 1672 is on the 2838 card; hint words, picks, remembered cards and unregistered cards (girocards) unchanged | Item 240's July dry run: the FX gate demoted two true Karlsruhe pairs (USD 34.39, 53.80) for printing the corporate card's plastic number; every future slip printing 1672 would have missed its charge | 2026-09-29, PR (this item) |

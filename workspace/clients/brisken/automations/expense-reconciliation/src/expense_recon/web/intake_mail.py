@@ -1286,8 +1286,9 @@ def _provenance_entry(person: dict, received_at: str, arch: Path | None) -> dict
     # Item 155: the sender's own prose above the forward - the filing
     # instruction that exists nowhere in the attached PDF. Parallel and
     # ABSENT when the mail carried none (56 of the 86 readable live
-    # bodies), never "". DISPLAY ONLY (rule_untrusted_inbound): it is
-    # shown to the reviewer and routes nothing.
+    # bodies), never "". Shown to the reviewer as written. Since item 250
+    # (owner 2026-10-07) a note from one of OUR senders also classifies;
+    # that reading goes through `trusted_sender_notes`, never this record.
     #
     # Recorded for a RENDERED body-only mail too, deliberately. The
     # caution against double-recording guards against a second copy of
@@ -1300,6 +1301,46 @@ def _provenance_entry(person: dict, received_at: str, arch: Path | None) -> dict
     if note:
         entry["operator_note"] = note
     return entry
+
+
+def trusted_sender_notes(
+    provenance: dict | None, cfg: "IntakeConfig",
+) -> dict[str, str]:
+    """`{document_id: note}` for the notes allowed to classify (item 250).
+
+    Owner 2026-10-07: a note from one of our own senders classifies the
+    receipt (company, and the account when the note names one clearly). The
+    filter is the whole of that boundary, so it is deny-by-default:
+
+    - the address is ours (`is_known_sender`: the Brisken tenant or
+      `intake.known_senders`). A stranger's note stays display-only, exactly
+      as item 155 left every note. From is forgeable, so this is the same
+      courtesy boundary the ack and the auto-render use, not a security one:
+      a forged note can move a receipt's company and account, which the
+      reviewer sees labelled "from the sender's note" and can change.
+    - the mail carried no agent-directed text (`untrusted_instructions`): a
+      mail that tried to steer the tool decides nothing.
+    - the note is not only the sender's signature (`strip_signature`, cut at
+      a line naming one of the intake aliases' people).
+
+    Keyed by the provenance's own keys, which are the stored file names and
+    so the receipts' document ids."""
+    from ..sender_note import strip_signature
+
+    names = tuple(sorted({str(v) for v in (cfg.aliases or {}).values() if v}))
+    out: dict[str, str] = {}
+    for doc_id, entry in (provenance or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        note = str(entry.get("operator_note") or "").strip()
+        if not note or entry.get("untrusted_instructions"):
+            continue
+        if not is_known_sender(str(entry.get("address") or ""), cfg):
+            continue
+        note = strip_signature(note, names)
+        if note:
+            out[str(doc_id)] = note
+    return out
 
 
 def _archive_operator_note(arch: Path | None) -> str:

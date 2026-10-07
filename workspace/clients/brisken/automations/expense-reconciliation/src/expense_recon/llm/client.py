@@ -261,6 +261,19 @@ class LLMClient(Protocol):
         absent or all vague. `merchant_profile` as above."""
         ...
 
+    def classify_by_note(
+        self,
+        note: str,
+        vendor: str,
+        total: Decimal,
+        categories: list[str],
+    ) -> ClassificationResult:
+        """Item 250: the account the sender's own note names, or null. The
+        note is fenced as data; the categorizer acts on the answer only at
+        high confidence. Optional: the categorizer skips a client without
+        it."""
+        ...
+
     def judge_fx_match(
         self,
         *,
@@ -364,6 +377,30 @@ Vendor: {vendor}
 Total: {total}
 {accounts_block}{profile_block}
 Return a single JSON object with: category (one of the listed names or null), confidence (number), reasoning (string), zoho_account (copy the exact label of the single best-matching GL account from the account list above, or null if no account list was given or none clearly fits).
+"""
+
+# Item 250 (owner 2026-10-07, "decide when clear"): the colleague who sent the
+# receipt often says what it is ("IT subscriptions", "Marketing", "Travel
+# (Matthias)"). The note is evidence about THIS receipt, fenced as data like
+# every third-party text; the rules below are ours.
+_NOTE_PROMPT_TEMPLATE = """You file one business expense into an account, using the note the colleague who sent the receipt wrote about it.
+
+Accounts (pick exactly one, or null):
+{categories_block}
+
+Vendor: {vendor}
+Total: {total}
+
+{note_block}
+
+Rules:
+- Pick the account that the note's own words name or plainly describe (for example "IT subscriptions", "Marketing", "Travel").
+- A company name (BCS, BTS, CorpServ), a project, a product or a person's name says nothing about the account. When the note names no kind of cost, answer null with confidence 0.
+- Use the vendor only to choose between accounts the note's words already point to. Never pick an account the note does not support.
+- Confidence: 0.9 or more only when the note's words name one listed account; lower whenever you had to interpret.
+- Reasoning is one short sentence quoting the note words you followed.
+
+Return a single JSON object with: category (the exact label of one listed account, or null), confidence (number), reasoning (string), zoho_account (the same label as category, or null).
 """
 
 
@@ -970,6 +1007,44 @@ class OpenAIClient:
             reasoning=str(payload.get("reasoning", "")),
         )
 
+    def classify_by_note(
+        self,
+        note: str,
+        vendor: str,
+        total: Decimal,
+        categories: list[str],
+    ) -> ClassificationResult:
+        nonce = new_nonce()
+        prompt = _NOTE_PROMPT_TEMPLATE.format(
+            categories_block="\n".join(f"  - {c}" for c in categories),
+            vendor=data_block(vendor, kind="vendor name", nonce=nonce),
+            total=total,
+            note_block=data_block(note, kind="the sender's note", nonce=nonce),
+        )
+        response = self._client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "system", "content": UNTRUSTED_SYSTEM},
+                      {"role": "user", "content": prompt}],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "note_classification",
+                    "schema": _VENDOR_SCHEMA,
+                    "strict": True,
+                },
+            },
+            temperature=0,
+        )
+        self._record_usage(response)
+
+        payload = json.loads(response.choices[0].message.content or "{}")
+        return ClassificationResult(
+            category=_opt_label(payload.get("category")),
+            zoho_account=_opt_label(payload.get("zoho_account")),
+            confidence=float(payload.get("confidence", 0.0)),
+            reasoning=str(payload.get("reasoning", "")),
+        )
+
     def judge_fx_match(
         self,
         *,
@@ -1397,8 +1472,14 @@ class MockLLMClient:
         ambiguous_responses: list[AmbiguousJudgmentResult] | None = None,
         extraction_responses: list[ExtractedReceipt] | None = None,
         cost_tracker: CostTracker | None = None,
+        note_responses: list[ClassificationResult] | None = None,
     ):
         self._queue = list(responses or [])
+        # Item 250: answers for `classify_by_note`, kept apart from the
+        # classify queue so a note never consumes a line or vendor answer.
+        # Empty = the note names no account (null, confidence 0).
+        self._note_queue = list(note_responses or [])
+        self.notes_seen: list[tuple[str, tuple[str, ...]]] = []
         self._fx_queue = list(fx_responses or [])
         self._ambiguous_queue = list(ambiguous_responses or [])
         self._extraction_queue = list(extraction_responses or [])
@@ -1462,6 +1543,20 @@ class MockLLMClient:
                 return queued[0] if queued else _review_result("empty queue entry")
             return queued
         return _default_for_vendor(vendor, categories)
+
+    def classify_by_note(
+        self,
+        note: str,
+        vendor: str,
+        total: Decimal,
+        categories: list[str],
+    ) -> ClassificationResult:
+        self.calls.append(("classify_by_note", (note, vendor, total)))
+        self.notes_seen.append((note, tuple(categories)))
+        self.cost_tracker.record(self._per_call_cost)
+        if self._note_queue:
+            return self._note_queue.pop(0)
+        return _review_result("the note names no account")
 
     def judge_fx_match(
         self,
