@@ -13240,7 +13240,9 @@ the note would move post with the card's paid-through account in another
 company's books, exactly as a person's company pick on a card row does today.
 
 
-### 251. The senders' notes reach the receipts already in a month (owner 2026-10-07: "change existing rows, reread if need be") (BUILT 2026-10-07, not yet run live)
+### 251. The date decides the month (notes #114 and #117, 2026-10-07; owner ruling the same day) (BACKEND LIVE 2026-10-07: PR #1594, Fly on `2af1531c`, merged as "248" while a sibling's Receipt overview took 248; swap guard in the follow-up PR; SPA prompt `docs/lovable-date-moves-month-prompt.md` not pasted)
+
+### 252. The senders' notes reach the receipts already in a month (owner 2026-10-07: "change existing rows, reread if need be") (BUILT 2026-10-07, not yet run live)
 
 Item 250 reads the note at arrival only, so its deploy changed no row already
 in a month. `POST /api/runs/{run_id}/sender-notes/apply` (body `{confirm,
@@ -13272,7 +13274,7 @@ card's charge, the same as a person's company pick.
 **Never learned.** Nothing goes into the override tables, so Criss's own
 picks stay on top and a Publish learns nothing from a note.
 
-**Proof.** `tests/test_sender_note_backfill_251.py` (15, all through the
+**Proof.** `tests/test_sender_note_backfill_252.py` (15, all through the
 route), regressed with `tools/regress_check.py` at the stamp and at the
 archive re-read: each goes red under the mutation and green again.
 
@@ -13284,6 +13286,7 @@ not pasted); until then the month history prints the raw value.
 
 
 ### 248. The date decides the month (notes #114 and #117, 2026-10-07; owner ruling the same day) (BUILT 2026-10-07; SPA prompt `docs/lovable-date-moves-month-prompt.md` not pasted)
+
 
 Criss, 08:55 UTC, January: *"Esta expense está no mes errado."* Operator,
 09:14 UTC, same row: *"this receipt appear in the month of january 2026, yet
@@ -13338,12 +13341,33 @@ rows sit outside their date's month, all machine-read: 2 outside the window
 deploy exactly the first two show "Move to"; nothing moves until someone
 changes a date or clicks.
 
+**Live after the deploy (`2af1531c`, GET only + a replayed SPA drive).**
+January: `n_month_moves` 1, the Parada row offers July (`batch_id`
+`50622baec444`). July: `n_month_moves` 2, Crossmedia -> March, and one the
+morning read did not have: `0027__2026-07-05__ZE__NORMANDIE_SEINE__ZE_7240457.jpg`
+(EUR 6.60), dateless at 09:15 UTC and TYPED as `2026-05-07` (with card and
+company) before 10:22 UTC, so offered May under the old rule too. The file
+name says 5 July: a day-first "05/07" in the browser's own date picker, which
+follows the browser's locale and not the app's, stores 7 May. The SPA drive
+(published bundle, payloads replayed, 0 writes) read "Move to July 2026" on
+the January page; the same drive before the deploy read none, and with an
+offer injected into the replayed payload read it, so the probe sees offers.
+
+**Swap guard (owner ruling 2026-10-07, after the NORMANDIE row).** A TYPED
+date whose month differs, but which falls in the batch's own month with day
+and month exchanged (day 1-12), is held: `move_held.held: "day_month_swap"`
+with `date` and `swap`, the row keeps its offer. A typed date is now offered
+whenever its month differs (`month_move_for_row(date_is_human=True)`), so a
+held swap in a neighbour month still has its one click; read dates keep the
+window rule. The NORMANDIE row itself is Criss's edit and is left as it is.
+
 **Not built.** Note #118 (record details like who/when must be read-only, the
 payment date editable): the date the row shows IS the editable expense date;
 whether the row's metadata is editable in the SPA was not checked. Note #115
 (old categories on the January row) is a different cause, not looked at.
 
-**Tests:** `tests/test_date_decides_month_item_248.py` (10, route-level) +
+**Tests:** `tests/test_date_decides_month_item_251.py` (14, route-level, 4 for
+the swap guard, both its wiring points regressed red) +
 `test_receipts_reread_item_240.py` (2 added, 1 extended) +
 `test_month_move.py` (offer tests rewritten for read dates);
 `test_neighbour_rematch_item_112.py` now proves August's neighbour re-match

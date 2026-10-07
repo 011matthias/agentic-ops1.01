@@ -1,4 +1,4 @@
-"""Item 251 (owner 2026-10-07: "change existing rows, reread if need be"):
+"""Item 252 (owner 2026-10-07: "change existing rows, reread if need be"):
 apply item 250's rulings to the receipts already in a month.
 
 `POST /api/runs/{run_id}/sender-notes/apply` reads each mailed receipt's note

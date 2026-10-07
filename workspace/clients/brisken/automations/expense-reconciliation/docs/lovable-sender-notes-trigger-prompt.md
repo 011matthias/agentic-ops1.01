@@ -2,7 +2,7 @@ Background: the month history shows the month's last re-match with a short
 label for what caused it (`last_rematch.trigger`, keys `mh.rematch.trigger.*`).
 The backend has a new cause, `sender_notes`: an operator applied the notes our
 senders typed above their forwarded receipts to a month's stored receipts, and
-a receipt's company moved (backlog item 251). Today the page would print the
+a receipt's company moved (backlog item 252). Today the page would print the
 raw value `sender_notes`.
 
 Add one entry next to the existing `mh.rematch.trigger.*` keys:

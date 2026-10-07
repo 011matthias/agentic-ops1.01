@@ -1269,7 +1269,7 @@ def test_month_move_and_printed_identifiers_are_absent_or_typed(
 
     The module fixtures carry no offer and no identifier, so they pin the
     absent half; a January month holding a slip read as an April date pins
-    the present half (item 248: a TYPED April date moves the slip instead)."""
+    the present half (item 251: a TYPED April date moves the slip instead)."""
     import re
 
     for view in payloads["expense_batch"]:
@@ -1713,7 +1713,7 @@ REMATCH_TRIGGERS_PIN = {
     "month_move",
     "duplicates_reapply",  # item 223 step 7: the operator's re-apply route
     "receipts_reread",  # item 240: the operator's re-read of stored receipts
-    "sender_notes",  # item 251: our senders' notes applied to stored receipts
+    "sender_notes",  # item 252: our senders' notes applied to stored receipts
 }
 
 

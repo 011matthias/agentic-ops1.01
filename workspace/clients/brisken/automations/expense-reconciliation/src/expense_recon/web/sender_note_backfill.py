@@ -1,5 +1,5 @@
 """Apply our senders' notes to the receipts already in a month (backlog item
-251, owner 2026-10-07: "change existing rows, reread if need be").
+252, owner 2026-10-07: "change existing rows, reread if need be").
 
 Item 250 reads the note one of our senders typed above a forwarded receipt
 when the receipt ARRIVES, so a receipt already in a month carries no note
@@ -243,7 +243,7 @@ def find_notes(run, data_root: Path, *, skip_docs: frozenset[str] = frozenset())
         if arch is None:
             out.skipped.append({"document_id": doc, "why": "archive_missing"})
             continue
-        note = _archive_operator_note(arch)  # item 251: the note, read again
+        note = _archive_operator_note(arch)  # item 252: the note, read again
         if not note:
             continue
         patch: dict = {"operator_note": note}
@@ -679,6 +679,6 @@ def run_backfill_job(
             store.set_job_status(job_id, JOB_ERROR, error=f"{exc.code}: {exc.message}",
                                  updated_at=_now())
     except Exception as exc:  # noqa: BLE001 - surface any failure to the poller
-        log.exception("item 251: applying the senders' notes failed on %s", run_id)
+        log.exception("item 252: applying the senders' notes failed on %s", run_id)
         with RunStore(db_path) as store:
             store.set_job_status(job_id, JOB_ERROR, error=str(exc), updated_at=_now())

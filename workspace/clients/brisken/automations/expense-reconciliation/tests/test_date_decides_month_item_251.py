@@ -1,4 +1,4 @@
-"""The date decides the month (backlog item 248, owner 2026-10-07).
+"""The date decides the month (backlog item 251, owner 2026-10-07).
 
 Owner, verbatim: "the baseline data on the dates that is extracted from
 receipts is the foundation for how the receipts get sent to months. So if
@@ -37,7 +37,7 @@ from expense_recon.web.app import create_app  # noqa: E402
 from expense_recon.web.store import RunStore  # noqa: E402
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
-JPG = b"\xff\xd8\xff\xe0item248-staples-slip"
+JPG = b"\xff\xd8\xff\xe0item251-staples-slip"
 DOC_ID = "0000__a.jpg"
 JANUARY = "January 2026"
 FEBRUARY = "February 2026"
@@ -214,6 +214,47 @@ def test_a_future_date_moves_nothing(client, monkeypatch):
     (row,) = _rows(client, batch)
     assert row["date"] == later.isoformat()
     assert set(_months(client)) == {label}
+
+
+def test_a_day_month_swap_is_held_not_moved(client, monkeypatch):
+    """Owner 2026-10-07: July's NORMANDIE SEINE toll (file 2026-07-05) was
+    typed as 2026-05-07. Read day-first it is 5 July, this month, so the
+    typed date is kept and the move waits for a click."""
+    july = _slip_in(client, monkeypatch, label="July 2026", day="2026-07-05")
+    reply = _put_date(client, july, "2026-05-07")
+    assert "moved" not in reply
+    assert reply["move_held"] == {
+        "held": "day_month_swap", "month": "2026-05", "label": "May 2026",
+        "date": "2026-05-07", "swap": "2026-07-05",
+    }
+    (row,) = _rows(client, july)
+    assert row["date"] == "2026-05-07"
+    assert row["month_move"] == {"month": "2026-05", "label": "May 2026"}
+    assert set(_months(client)) == {"July 2026"}
+
+
+def test_a_held_swap_in_the_neighbour_month_still_offers_the_move(
+    client, monkeypatch
+):
+    """2026-08-07 typed in July (swap = 8 July) sits inside the item-25
+    window, where a READ date gets no offer; a typed one still here was held,
+    so it keeps its one click."""
+    july = _slip_in(client, monkeypatch, label="July 2026", day="2026-07-08")
+    reply = _put_date(client, july, "2026-08-07")
+    assert reply["move_held"]["held"] == "day_month_swap"
+    (row,) = _rows(client, july)
+    assert row["month_move"]["month"] == "2026-08"
+
+
+def test_a_day_past_twelve_has_no_swap_and_moves(client, monkeypatch):
+    july = _slip_in(client, monkeypatch, label="July 2026", day="2026-07-05")
+    assert _put_date(client, july, "2026-05-13")["moved"]["label"] == "May 2026"
+
+
+def test_a_swap_into_a_third_month_moves(client, monkeypatch):
+    """2026-06-03 swaps to 6 March, which is not July either: moved as typed."""
+    july = _slip_in(client, monkeypatch, label="July 2026", day="2026-07-05")
+    assert _put_date(client, july, "2026-06-03")["moved"]["label"] == "June 2026"
 
 
 def test_a_published_month_holds_the_move(client, monkeypatch):

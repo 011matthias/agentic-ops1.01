@@ -11,6 +11,9 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-07 | Recon Sender Notes Classify | client-dev | [Mini-Checkpoint-1](docs/2026-10-07%20-%20Recon%20Sender%20Notes%20Classify/Mini-Checkpoint-1.md) |
+| 2026-10-07 | Brisken Recon Duplicate Click Speed | client-dev | [→](docs/2026-10-07%20-%20Brisken%20Recon%20Duplicate%20Click%20Speed/Checkpoint.md) |
+| 2026-10-07 | Brisken Recon Receipt Overview | client-dev | [→](docs/2026-10-07%20-%20Brisken%20Recon%20Receipt%20Overview/Checkpoint.md) |
 | 2026-10-07 | Recon Responsive Full Visibility | client-dev | [→](docs/2026-10-07%20-%20Recon%20Responsive%20Full%20Visibility/Checkpoint.md) |
 | 2026-10-07 | Recon Save Memory Ticks | client-dev | [→](docs/2026-10-07%20-%20Recon%20Save%20Memory%20Ticks/Checkpoint.md) |
 | 2026-10-07 | Brisken Recon Subcard Filter Restored | client-dev | [→](docs/2026-10-07%20-%20Brisken%20Recon%20Subcard%20Filter%20Restored/Checkpoint.md) |
@@ -784,4 +787,5 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## warme-wimmer
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-07 | WW W1-06 Messeformular Zapier to n8n | client-dev | [→](docs/2026-10-07%20-%20WW%20W1-06%20Messeformular%20Zapier%20to%20n8n/Checkpoint.md) |
 | 2026-10-07 | Waerme Wimmer Takeover | client-dev | [→](docs/2026-10-07%20-%20Waerme%20Wimmer%20Takeover/Checkpoint.md) |
