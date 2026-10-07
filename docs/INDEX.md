@@ -512,6 +512,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-07 | Zapier MCP Connector Setup | system-infra | [→](docs/2026-10-07%20-%20Zapier%20MCP%20Connector%20Setup/Checkpoint.md) |
 | 2026-10-05 | Handyvertrag HIGH Verlaengerung | misc | [→](docs/2026-10-05%20-%20Handyvertrag%20HIGH%20Verlaengerung/Checkpoint.md) |
 | 2026-09-24 | BAfoeG Antrag und Nachzahlung | misc | [→](docs/2026-09-24%20-%20BAfoeG%20Antrag%20und%20Nachzahlung/Checkpoint.md) |
 | 2026-09-24 | KIT Radar und tmbstud-l Austragung | misc | [→](docs/2026-09-24%20-%20KIT%20Radar%20und%20tmbstud-l%20Austragung/Checkpoint.md) |
