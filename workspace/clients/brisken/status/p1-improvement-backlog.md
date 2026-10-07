@@ -13022,7 +13022,7 @@ show only when the row carries a bank-payment signal (`bill_suggestion`);
 that would hide it from the Perplexity row, and also from a bank-paid invoice
 the reader found no signal on. Owner call.
 
-### 246. "Save corrections to memory" saves what is ticked, and a save overwrites the rule for that case (owner, 2026-10-07, in session) (BUILT 2026-10-07; SPA prompt `docs/lovable-save-memory-ticks-prompt.md` not pasted)
+### 246. "Save corrections to memory" saves what is ticked, and a save overwrites the rule for that case (owner, 2026-10-07, in session) (BACKEND LIVE 2026-10-07: PR #1580, Fly v280 on `68beb63a`; SPA prompt `docs/lovable-save-memory-ticks-prompt.md` not pasted)
 
 Owner, verbatim: *"save to memory function should not be all or nothing.
 users should have the chance to adjust precisely what changes in each line
@@ -13069,7 +13069,60 @@ OpenAI / Anthropic / Lovable merchant-list writes stay held for the owner
 Regressed at four wiring points with `tools/regress_check.py`, each green ->
 red -> green: the button's `**lesson_lists`, `ctx.expand` in
 `apply_selection`, the already-saved skip in `commit_month_memory`, the
-kept-half fill in `one_rule_per_merchant`.
+kept-half fill in `one_rule_per_merchant`. Full module suite 4181 passed,
+2 skipped.
+
+**Live 2026-10-07 (Fly v280), checked with 0 writes.** Every month's
+`memory-plan` read before and after the deploy: writes and lesson ids equal
+on six months; May gained 2 deletes (the new behavior: Lovable Labs
+Incorporated and Railway Corporation rules, same category, account carried
+over, written only at May's next save) after edits made there since the
+morning read; July only grew (new receipts). A malformed `keep` on a fake run
+answers 400 `invalid_body`, the well-formed control 404, so the new parser
+serves. Consumer: a headless drive of the published Save dialog on May, every
+non-GET aborted (none attempted), renders "Replaces the rule saved as railway
+corporation". The published dialog still shows "Not saved by this button"
+until the prompt is pasted.
+
+### 247. Every page fits the screen, nothing cut off (owner 2026-10-07: "all pages to successfully adapt to users screen size and maintain 100% visability of all the content") (PROMPT WRITTEN 2026-10-07: `docs/lovable-responsive-full-visibility-prompt.md`, not pasted)
+
+The owner started it in Lovable the same morning (`aef936db`, `0ac4b07a`).
+The first of those two commits is **already published** (live bundle read
+2026-10-07: `overflow-x-clip` 5 hits in the ExpensesReviewGrid chunk, the
+second commit's `px-3` main classes absent), and it made things worse on
+the month screens: the review grid sits in a `<fieldset>`, whose minimum
+width is its content (~1,700 px), and the new `overflow-x-clip` on `<main>`
+cuts the excess off with no way to reach it. At 1280 px Legal entity, Paid
+through, Receipt and Actions are simply not on screen.
+
+**Measured** (local build of SPA `0ac4b07` against a local API over the
+2026-10-06 20:40 UTC SharePoint backup, headless Chrome, every non-GET
+aborted): 21 routes x EN/PT x 7 widths (360-1920), each in its default
+state, every filter tile / tab in turn, everything expanded, and the
+receipt + compare-copies dialogs open = 1,379 views. Before: 7,664 clipped,
+1,053 past the screen edge, 1,705 truncated, 445 behind a sideways scroll,
+page wider than the screen in 102 views (counts capped at 40 per kind per
+view). After the prompt's code: zero in every kind.
+
+**What the prompt does.** (1) `src/lib/fit-tables.ts`: every table, shadcn
+or plain, shows as a table while whole words fit and becomes labelled cards
+(`data-stacked`, `td[data-label]`) when they do not; header cells holding a
+control stay as a strip. (2) Buttons and select triggers wrap their label;
+a caller's `h-7` becomes `min-h-7` (`heightAsMinimum`). (3) `truncate` ->
+`break-words` app-wide, `wrap-anywhere` only for file names: `wrap-anywhere`
+on ordinary text let the grid squeeze the account column to one letter at
+1024 px ("CO GS - Oth er"), a readability failure the measurements did not
+see and the screenshots did. (4) The clip removed, fieldset `min-w-0`,
+toolbars / Settings tabs / Memory header wrap, header shows EN/PT, tagline,
+"Signed in as" and tab names at every width, Compare copies puts field names
+above the values below 640 px.
+
+Instrument (scratch, not committed): `measure.js` flags text or a control
+past the viewport, cut by an overflow-hidden/clip ancestor, behind an inner
+side-scroll, ellipsis / line-clamp / self-clip, and a header control hidden
+by stacking; each check was shown to fire on the baseline before its fix
+was trusted (self-clip caught "Chase Visa | 9693 | Cloud Expenses" cut in a
+select; the header check caught Memory's select-all hidden at 360-768 px).
 
 ### 248. The date decides the month (notes #114 and #117, 2026-10-07; owner ruling the same day) (BUILT 2026-10-07; SPA prompt `docs/lovable-date-moves-month-prompt.md` not pasted)
 
@@ -13143,6 +13196,7 @@ PUT's `if date_changed`, the add's `if payload.get("date")`, the re-read's
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 163 | Fix (no item): a duplicate click's re-match memoizes its vendor work. `vendor_similarity`, its word-pair ratio and `strip_reference_tokens` are `lru_cache`d (pure, bounded ~25 MB); `MerchantRegistry.resolve` memoizes per instance; `_distinctive` cached on its tokens. No output moves | Owner 2026-10-07: "removing duplicates takes way too long to load". "Delete this copy" and "Not a copy" re-match the month inside the request; on September (216 charges x 112 receipts since the 10-05 statement) the matcher scored 26,163 vendor pairs for 3,710 distinct ones, twice per re-match, and the registry resolved 700 times for 274 names. Local A/B on the 10-07 backup: Delete this copy 3.88 -> 1.75 s, Not a copy 5.28 -> 2.73 s, payloads byte-identical | 2026-10-07, PR #1583, Fly v281 (commit `5ae5905d`); live September duplicate layer, totals and vendors identical before/after, page driven cold (read-only); the click itself not timed live (it is a write on Criss's month) |
 | 162 | Fix (no item): the card roll-up lets the first coverage row name a card that only receipts had opened, so a receipt-only newest month no longer blanks `card_key`, label, digits and `known` | Owner 2026-10-07: the 2838 account filter went away. October (created 10-01, receipts, no statement) was read first and blanked every card it holds a receipt on, so the item 191 tree linked nothing (`subcards` [] everywhere) and 2838, 3645, 3876, 9693, 1176 read as not in Settings; live after: 2838 opens 3876 / 3645 / 0340, no figure moved | 2026-10-07, PR #1575, Fly v279 (commit `7a4e0b0e`); driven cold, read-only |
 | 161 | Item 243: the card score reads a printed number through the card register when the register resolved the card from that print, so "...1672" agrees with a 2838 charge once 1672 is on the 2838 card; hint words, picks, remembered cards and unregistered cards (girocards) unchanged | Item 240's July dry run: the FX gate demoted two true Karlsruhe pairs (USD 34.39, 53.80) for printing the corporate card's plastic number; every future slip printing 1672 would have missed its charge | 2026-09-29, PR (this item) |
 | 160 | Item 240: `POST /api/runs/{id}/receipts/reread` reads a month's stored receipts again through the arrival's path and takes date, total, currency, tax, type, card and a different merchant (one Gemini pass: 0 of 251 key fields moved between passes); dry run on two throwaway database copies separates the re-read's own effect from any re-match's; `skip`, other-year dates held | Receipts stored before item 239 keep OpenAI's misreadings (April MEGA CENTER in BRL where the card paid USD, FENIX 117.79 for 500.90) until read again; local run over all seven months: 58 receipts change, 7 charges newly paired and 1 unpaired | 2026-09-28, PR #1538 |
