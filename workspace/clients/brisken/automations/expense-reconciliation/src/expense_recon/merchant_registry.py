@@ -110,6 +110,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass, replace
+from functools import lru_cache
 
 from rapidfuzz import fuzz
 
@@ -206,12 +207,20 @@ def _is_generic_word(t: str) -> bool:
 def _distinctive(tokens: list[str]) -> list[str]:
     """The words that can identify a merchant: not a joining word, a legal
     form ("Inc", "Ltda"), a generic word, a single letter or a bare number."""
-    return [
+    return list(_distinctive_words(tuple(tokens)))
+
+
+# The fuzzy tier asks this of the same registry names for every receipt it
+# resolves: 127k calls in one re-match of September (2026-10-07). Every word
+# list it reads is a frozenset, so the answer depends on the tokens alone.
+@lru_cache(maxsize=1 << 14)
+def _distinctive_words(tokens: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(
         t for t in tokens
         if len(t) > 1 and not t.isdigit()
         and t not in _STOPWORDS and t not in _LEGAL_SUFFIXES
         and not _is_generic_word(t)
-    ]
+    )
 
 
 def _key_words(tokens: list[str]) -> list[str]:
@@ -524,6 +533,12 @@ class MerchantRegistry:
         self._candidates: list[tuple[str, str, str, list[str]]] = []
         # canonical -> the lead key word of its own name (front 3 step 3)
         self._lead: dict[str, str] = {}
+        # (vendor_clean, vendor_raw) -> `resolve`'s answer. Safe because the
+        # registry never changes after construction and MerchantMatch is
+        # frozen; one re-match asks 700 times for 274 names (2026-10-07).
+        self._resolved: dict[
+            tuple[str | None, str | None], MerchantMatch | None
+        ] = {}
 
         # Deterministic ordering: sort by canonical so a first-wins result on
         # any normalized-key or fuzzy-score collision is stable across runs.
@@ -598,6 +613,14 @@ class MerchantRegistry:
         the earlier probe (vendor_clean before raw) wins within a tier."""
         if not self._entries:
             return None
+        key = (vendor_clean, vendor_raw)
+        if key not in self._resolved:
+            self._resolved[key] = self._resolve(vendor_clean, vendor_raw)
+        return self._resolved[key]
+
+    def _resolve(
+        self, vendor_clean: str | None, vendor_raw: str | None
+    ) -> MerchantMatch | None:
         probes = self._probe_pairs(vendor_clean, vendor_raw)
         if not probes:
             return None

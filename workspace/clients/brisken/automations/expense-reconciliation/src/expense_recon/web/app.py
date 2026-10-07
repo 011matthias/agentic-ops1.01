@@ -2099,6 +2099,24 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 
         return _start_background_run(background, prepared, intake.label)
 
+    def _lesson_lists(payload) -> dict | JSONResponse:
+        """`keep` / `skip` from a save's body: the ticked lesson ids (from
+        `GET .../memory-plan` `lessons[].id`), or ids dropped from the
+        defaults. Neither keeps the defaults. One parser for Publish and the
+        Save button (item 246), so the two cannot read ticks differently."""
+        lists: dict = {}
+        for name in ("keep", "skip"):
+            raw = payload.get(name) if isinstance(payload, dict) else None
+            if raw is None:
+                continue
+            if not isinstance(raw, list) or not all(isinstance(x, str) for x in raw):
+                return JSONResponse({
+                    "error": f"{name} must be a list of lesson ids",
+                    "code": "invalid_body",
+                }, status_code=400)
+            lists[name] = raw
+        return lists
+
     # ── Publish / unpublish a reviewed run (drives the intake status the
     # dashboard and the dev-side notifier read).
     @app.post("/api/runs/{run_id}/publish")
@@ -2114,17 +2132,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # `skip` drops ids from the defaults instead. Neither keeps today's
         # behaviour: corrections saved, conflicts and owner-gated merchants
         # not. Zero ticked still publishes.
-        lesson_lists: dict = {}
-        for name in ("keep", "skip"):
-            raw = payload.get(name) if isinstance(payload, dict) else None
-            if raw is None:
-                continue
-            if not isinstance(raw, list) or not all(isinstance(x, str) for x in raw):
-                return JSONResponse({
-                    "error": f"{name} must be a list of lesson ids",
-                    "code": "invalid_body",
-                }, status_code=400)
-            lesson_lists[name] = raw
+        lesson_lists = _lesson_lists(payload)
+        if isinstance(lesson_lists, JSONResponse):
+            return lesson_lists
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
@@ -6792,11 +6802,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse(jsonable_encoder(result))
 
     @app.post("/api/runs/{run_id}/commit-memory")
-    def post_commit_memory(run_id: str):
+    def post_commit_memory(run_id: str, payload: dict | None = Body(None)):
         # Explicit finalize: fold THIS run's confirmed decisions into the
         # durable learning store so next month consults them (Phase 2).
         # Expense batches (Phase 6) branch inside commit_to_memory: the
         # field/edit overlays teach entity mappings + field corrections.
+        # Item 246: the body takes the same `keep` / `skip` lesson ids as
+        # Publish, so a person saves exactly the lines they ticked; no body
+        # saves the defaults, as before.
+        lesson_lists = _lesson_lists(payload)
+        if isinstance(lesson_lists, JSONResponse):
+            return lesson_lists
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
@@ -6809,13 +6825,20 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             saved = commit_month_memory(
                 store, run, app.state.learning_db_path, _now_iso(),
                 trigger=MEMORY_TRIGGER_BUTTON, only_if_changed=False,
+                **lesson_lists,
             )
         # Item 163: the id of the journal entry this save wrote, so the
         # caller can undo exactly this save rather than "the last one".
-        return JSONResponse({
-            "ok": True, "learned": saved["learned"],
+        # Item 246: `saved` / `reason` say whether anything was written, and
+        # `lessons` which ids went where (kept, skipped, already saved).
+        body = {
+            "ok": True, "saved": saved["saved"], "learned": saved["learned"],
             "journal_id": saved.get("journal_id"),
-        })
+            "lessons": saved["learned"].get("lessons"),
+        }
+        if saved.get("reason"):
+            body["reason"] = saved["reason"]
+        return JSONResponse(body)
 
     @app.get("/runs/{run_id}/report.xlsx")
     def download_report(run_id: str):

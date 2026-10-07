@@ -13022,6 +13022,107 @@ show only when the row carries a bank-payment signal (`bill_suggestion`);
 that would hide it from the Perplexity row, and also from a bank-paid invoice
 the reader found no signal on. Owner call.
 
+### 246. "Save corrections to memory" saves what is ticked, and a save overwrites the rule for that case (owner, 2026-10-07, in session) (BACKEND LIVE 2026-10-07: PR #1580, Fly v280 on `68beb63a`; SPA prompt `docs/lovable-save-memory-ticks-prompt.md` not pasted)
+
+Owner, verbatim: *"save to memory function should not be all or nothing.
+users should have the chance to adjust precisely what changes in each line
+item they want saved to memory"*, then *"also make sure that when 'save to
+memory' is clicked that the existing rule for that case is overwritten"*.
+
+**What was already there.** Item 183A cut every save into lessons (one per
+remembered fact, stable id, sentence, rows, default tick) and the Publish
+checklist ticks them. The Save button's route took no body, so that path was
+all or nothing.
+
+**Built (backend).**
+1. `POST /api/runs/{id}/commit-memory` takes the same `keep` / `skip` ids as
+   Publish, through one parser (`_lesson_lists`). No body saves the defaults,
+   so the published SPA behaves as before.
+2. Each lesson says what it does to the rule memory holds: `effect` (`new` /
+   `replaces` / `same` / `adds`), `replaces[]` (the old values it
+   overwrites), and its sentence ends "Replaces <old>." A lesson this month's
+   own un-undone save wrote, still held as saved, is `already_saved`: it
+   starts unticked and no save writes it again (before, every click counted
+   the same correction once more). A correction changed since is not
+   `already_saved` and overwrites. A click with nothing left answers
+   `nothing_to_save` and journals no empty save.
+3. **The overwrite gap that was real.** The store was already latest-wins
+   per key, but recall folds every spelling of one merchant in one company
+   into one identity and, when those spellings' rules disagree, folds none:
+   each keeps answering for itself. So a save under `staples` left an older
+   person rule under `staples inc` filing every receipt spelled that way,
+   and the Memory page still showed it. `learning.one_rule_per_merchant` now
+   makes each category write delete the case's other-spelling rules (journaled,
+   so the undo brings them back), carrying over the half the save did not
+   name (`keep_category` / `keep_account`, person over seeded). When those
+   rules disagree on that half, nothing says which to keep, and the write is
+   left as before. Live today (2026-10-07 read): 1 merchant has two spellings
+   (Anthropic, Corporate Services: the person rule `anthropic` over the seeded
+   `antropic`), so this bites at the next save there, not retroactively.
+
+**Unchanged by owner rulings:** a merchant with decided accounts
+(`accounts_locked`, item 219) is changed only by ticking its drift lesson;
+OpenAI / Anthropic / Lovable merchant-list writes stay held for the owner
+(2026-09-18); FX samples accumulate (a learned mean, never a single rule).
+
+**Tests:** `tests/test_save_memory_ticks_item_246.py`, 11 route-level.
+Regressed at four wiring points with `tools/regress_check.py`, each green ->
+red -> green: the button's `**lesson_lists`, `ctx.expand` in
+`apply_selection`, the already-saved skip in `commit_month_memory`, the
+kept-half fill in `one_rule_per_merchant`. Full module suite 4181 passed,
+2 skipped.
+
+**Live 2026-10-07 (Fly v280), checked with 0 writes.** Every month's
+`memory-plan` read before and after the deploy: writes and lesson ids equal
+on six months; May gained 2 deletes (the new behavior: Lovable Labs
+Incorporated and Railway Corporation rules, same category, account carried
+over, written only at May's next save) after edits made there since the
+morning read; July only grew (new receipts). A malformed `keep` on a fake run
+answers 400 `invalid_body`, the well-formed control 404, so the new parser
+serves. Consumer: a headless drive of the published Save dialog on May, every
+non-GET aborted (none attempted), renders "Replaces the rule saved as railway
+corporation". The published dialog still shows "Not saved by this button"
+until the prompt is pasted.
+
+### 247. Every page fits the screen, nothing cut off (owner 2026-10-07: "all pages to successfully adapt to users screen size and maintain 100% visability of all the content") (PROMPT WRITTEN 2026-10-07: `docs/lovable-responsive-full-visibility-prompt.md`, not pasted)
+
+The owner started it in Lovable the same morning (`aef936db`, `0ac4b07a`).
+The first of those two commits is **already published** (live bundle read
+2026-10-07: `overflow-x-clip` 5 hits in the ExpensesReviewGrid chunk, the
+second commit's `px-3` main classes absent), and it made things worse on
+the month screens: the review grid sits in a `<fieldset>`, whose minimum
+width is its content (~1,700 px), and the new `overflow-x-clip` on `<main>`
+cuts the excess off with no way to reach it. At 1280 px Legal entity, Paid
+through, Receipt and Actions are simply not on screen.
+
+**Measured** (local build of SPA `0ac4b07` against a local API over the
+2026-10-06 20:40 UTC SharePoint backup, headless Chrome, every non-GET
+aborted): 21 routes x EN/PT x 7 widths (360-1920), each in its default
+state, every filter tile / tab in turn, everything expanded, and the
+receipt + compare-copies dialogs open = 1,379 views. Before: 7,664 clipped,
+1,053 past the screen edge, 1,705 truncated, 445 behind a sideways scroll,
+page wider than the screen in 102 views (counts capped at 40 per kind per
+view). After the prompt's code: zero in every kind.
+
+**What the prompt does.** (1) `src/lib/fit-tables.ts`: every table, shadcn
+or plain, shows as a table while whole words fit and becomes labelled cards
+(`data-stacked`, `td[data-label]`) when they do not; header cells holding a
+control stay as a strip. (2) Buttons and select triggers wrap their label;
+a caller's `h-7` becomes `min-h-7` (`heightAsMinimum`). (3) `truncate` ->
+`break-words` app-wide, `wrap-anywhere` only for file names: `wrap-anywhere`
+on ordinary text let the grid squeeze the account column to one letter at
+1024 px ("CO GS - Oth er"), a readability failure the measurements did not
+see and the screenshots did. (4) The clip removed, fieldset `min-w-0`,
+toolbars / Settings tabs / Memory header wrap, header shows EN/PT, tagline,
+"Signed in as" and tab names at every width, Compare copies puts field names
+above the values below 640 px.
+
+Instrument (scratch, not committed): `measure.js` flags text or a control
+past the viewport, cut by an overflow-hidden/clip ancestor, behind an inner
+side-scroll, ellipsis / line-clamp / self-clip, and a header control hidden
+by stacking; each check was shown to fire on the baseline before its fix
+was trusted (self-clip caught "Chase Visa | 9693 | Cloud Expenses" cut in a
+select; the header check caught Memory's select-all hidden at 360-768 px).
 ### 248. Email intake becomes Receipt overview: every receipt, every source, filterable (Dirk, 2026-10-07, relayed by the owner) (BACKEND BUILT 2026-10-07; SPA prompt `docs/lovable-receipt-overview-prompt.md` not pasted)
 
 Owner, relaying Dirk: *"dirk wants users to be able to see and filter. Lets do
