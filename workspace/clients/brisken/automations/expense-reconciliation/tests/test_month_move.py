@@ -8,10 +8,11 @@ nothing else looks at where the row lives.
 
 Pinned here through the HTTP routes:
 
-1. A reviewer-typed date outside the batch's window offers the move
-   (`expenses[].month_move`, `summary.n_month_moves`); a machine reading
-   outside the window stays item 25's `date_outside_period` question, and a
-   typed date inside the window offers nothing.
+1. A date outside the batch's window offers the move
+   (`expenses[].month_move`, `summary.n_month_moves`). Since item 247 a
+   machine reading counts like a typed date, and a typed date moves the
+   receipt on the edit itself (`test_date_decides_month_item_247.py`), so the
+   offer is what a row nobody touched shows.
 2. `POST .../expenses/{id}/move` files the receipt into its month, creating
    the month when it does not exist, carrying the reading, the file and the
    edits, and leaving the source row as a soft delete.
@@ -144,42 +145,37 @@ def _misfiled_january(client, monkeypatch, *more, **extra):
 
 
 # --- 1. the offer -------------------------------------------------------
+# Item 247 changed who gets one: a date the machine read counts like a typed
+# one, and a typed date no longer waits for a click (it moves on the edit,
+# `test_date_decides_month_item_247.py`). The offer is what a row nobody
+# touched shows when its date lies outside the batch's window.
 
 
-def test_a_typed_date_in_another_month_offers_the_move(client, monkeypatch):
-    january = _misfiled_january(client, monkeypatch)
-    row = _expense(client, january)
-    assert "month_move" not in row
-    assert _view(client, january)["summary"]["n_month_moves"] == 0
-
-    _put(client, january, "date", "2026-04-15")
+def test_a_reading_outside_the_window_offers_the_move(client, monkeypatch):
+    january = _misfiled_january(client, monkeypatch, day="2026-04-15")
     row = _expense(client, january)
     assert row["month_move"] == {"month": "2026-04", "label": APRIL}
     assert _view(client, january)["summary"]["n_month_moves"] == 1
-    # The typed date is still believed: the offer is not a review state.
-    assert row["review"].get("reason_code") != "date_outside_period"
+    # Offered, never moved on read: the row is still January's, and item
+    # 25's question stays beside the offer.
+    assert row["review"]["reason_code"] == "date_outside_period"
 
 
-def test_a_typed_date_inside_the_window_offers_nothing(client, monkeypatch):
-    january = _misfiled_january(client, monkeypatch)
-    _put(client, january, "date", "2026-02-03")  # a neighbour month
+def test_a_reading_inside_the_window_offers_nothing(client, monkeypatch):
+    january = _misfiled_january(client, monkeypatch, day="2026-02-03")
     assert "month_move" not in _expense(client, january)
     assert _view(client, january)["summary"]["n_month_moves"] == 0
 
 
-def test_a_machine_reading_outside_the_window_is_flagged_not_moved(
-    client, monkeypatch
-):
-    january = _misfiled_january(client, monkeypatch, day="2026-04-15")
-    row = _expense(client, january)
-    assert "month_move" not in row
-    assert row["review"]["reason_code"] == "date_outside_period"
+def test_a_reading_in_the_batch_month_offers_nothing(client, monkeypatch):
+    january = _misfiled_january(client, monkeypatch)
+    assert "month_move" not in _expense(client, january)
+    assert _view(client, january)["summary"]["n_month_moves"] == 0
 
 
 def test_the_offer_names_the_month_it_would_join(client, monkeypatch):
-    january = _misfiled_january(client, monkeypatch)
+    january = _misfiled_january(client, monkeypatch, day="2026-04-15")
     april = _month(client, APRIL)
-    _put(client, january, "date", "2026-04-15")
     assert _expense(client, january)["month_move"] == {
         "month": "2026-04", "label": APRIL, "batch_id": april,
     }
@@ -189,8 +185,9 @@ def test_the_offer_names_the_month_it_would_join(client, monkeypatch):
 
 
 def test_the_move_creates_the_month_and_carries_the_receipt(client, monkeypatch):
-    january = _misfiled_january(client, monkeypatch, time="23:56")
-    _put(client, january, "date", "2026-04-15")
+    january = _misfiled_january(
+        client, monkeypatch, day="2026-04-15", time="23:56",
+    )
     _put(client, january, "vendor", "Staples Inc")
     _put(client, january, "category", OFFICE)
 
@@ -207,7 +204,7 @@ def test_the_move_creates_the_month_and_carries_the_receipt(client, monkeypatch)
     moved = _expense(client, april, out["document_id"])
     assert moved is not None
     assert moved["date"] == "2026-04-15"
-    assert "date" in moved["edited_fields"]
+    assert "vendor" in moved["edited_fields"]
     assert moved["vendor"]["display"] == "Staples Inc"
     assert moved["posting_category"]["category"] == OFFICE
     assert moved["time"] == "23:56"
@@ -233,9 +230,8 @@ def test_the_move_creates_the_month_and_carries_the_receipt(client, monkeypatch)
 
 
 def test_the_move_joins_an_existing_month(client, monkeypatch):
-    january = _misfiled_january(client, monkeypatch)
+    january = _misfiled_january(client, monkeypatch, day="2026-04-15")
     april = _month(client, APRIL)
-    _put(client, january, "date", "2026-04-15")
 
     out = _move(client, january).json()
     assert out["created_batch"] is False
@@ -250,12 +246,13 @@ def test_the_move_joins_an_existing_month(client, monkeypatch):
 def test_identical_bytes_already_in_the_month_are_not_added_twice(
     client, monkeypatch
 ):
-    _wire(monkeypatch, _extraction(day="2026-04-15"), _extraction())
+    _wire(
+        monkeypatch, _extraction(day="2026-04-15"), _extraction(day="2026-04-15"),
+    )
     april = _month(client, APRIL)
     _add(client, april)
     january = _month(client, JANUARY)
     _add(client, january)
-    _put(client, january, "date", "2026-04-15")
 
     out = _move(client, january).json()
     assert out["already_in_batch"] is True
@@ -265,6 +262,7 @@ def test_identical_bytes_already_in_the_month_are_not_added_twice(
 
 
 def test_a_typed_in_expense_moves_too(client, monkeypatch):
+    """Item 247: the add itself files it in its date's month."""
     _wire(monkeypatch)
     january = _month(client, JANUARY)
     added = client.post(
@@ -273,11 +271,9 @@ def test_a_typed_in_expense_moves_too(client, monkeypatch):
               "date": "2026-04-20"},
     )
     assert added.status_code == 200, added.text
-    doc = added.json()["document_id"]
-    assert _expense(client, january, doc)["month_move"]["month"] == "2026-04"
-
-    out = _move(client, january, doc).json()
+    out = added.json()["moved"]
     assert out["document_id"].startswith("manual:")
+    assert out["label"] == APRIL
     moved = _expense(client, out["batch_id"], out["document_id"])
     assert moved["vendor"]["display"] == "Taxi Rio"
     assert moved["total"] == "80.00"
@@ -298,7 +294,7 @@ def test_a_row_without_an_offer_needs_a_named_month(client, monkeypatch):
 
 
 def test_moving_into_a_reconciling_month_settles_its_charge(client, monkeypatch):
-    january = _misfiled_january(client, monkeypatch)
+    january = _misfiled_january(client, monkeypatch, day="2026-04-15")
     april = _month(client, APRIL)
     _attach_statement(client, april)
     staples = next(
@@ -307,7 +303,6 @@ def test_moving_into_a_reconciling_month_settles_its_charge(client, monkeypatch)
     )
     assert not staples.get("chosen_document_id")
 
-    _put(client, january, "date", "2026-04-15")
     out = _move(client, january).json()
     assert out["batch_id"] == april
     assert "rematch" in out
@@ -357,10 +352,9 @@ def test_a_moved_receipt_leaves_its_target_owing_a_rematch(client, monkeypatch):
     """Item 113 review finding 3: the move stores the receipt in the target,
     then re-matches the SOURCE first (minutes). A restart there must leave the
     target month's debt recorded, written in the move's own lock span."""
-    january = _misfiled_january(client, monkeypatch)
+    january = _misfiled_january(client, monkeypatch, day="2026-04-15")
     april = _month(client, APRIL)
     _attach_statement(client, april)
-    _put(client, january, "date", "2026-04-15")
     from expense_recon.web import service
 
     monkeypatch.setattr(service, "rematch_after_change", lambda *a, **k: None)

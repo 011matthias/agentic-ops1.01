@@ -95,11 +95,13 @@ from .service import (
     baseline_receipts,
     categorized_counts,
     cross_month_duplicate_evidence,
+    date_month_target,
     drop_unvouched_remembered_cards,
     has_statement,
     receipt_image_file,
     rematch_after_change,
     rematch_pending_mark,
+    route_expense_by_date,
     run_mode,
     set_aside_entries,
     store_cross_month_evidence,
@@ -459,15 +461,22 @@ def plan_reread(
 
     waiting_docs = {s.document_id: (e, s) for e, s in waiting}
     label_month = month_from_label(run.label)
+    typed = store.get_expense_field_overrides(run.run_id)
+    today = datetime.now(timezone.utc).date()
 
     def elsewhere(change: dict, receipt: Receipt) -> dict:
-        # A re-read never moves a receipt to another month; one whose new
-        # date lies outside this batch's month says so (January 2026 exists
-        # only because a July slip was read as 2026-01-04).
+        # One whose new date lies outside this batch's month says so
+        # (January 2026 exists only because a July slip was read as
+        # 2026-01-04). Item 247: the real run then files it in the month the
+        # date names (`moves_to`), unless the reviewer typed a date over the
+        # reading, which still decides; the dry run only names the month.
         d = receipt.detected_date
         if ("date" in change["changes"] and d is not None and label_month
                 and (d.year, d.month) != label_month):
             change["new_date_outside_month"] = True
+            target = date_month_target(d, batch_month=label_month, today=today)
+            if target and "date" not in (typed.get(change["document_id"]) or {}):
+                change["moves_to"] = target
         return change
 
     for doc in order:
@@ -797,13 +806,58 @@ def _on_copy(db_path: Path, run_id: str, view_of: ViewOf, fn):
 # ── The job ─────────────────────────────────────────────────────────────
 
 
+def route_moved_dates(
+    db_path: Path, learning_db_path: "Path | None", run_id: str,
+    plan: ReadPlan, written: list[str], *, data_root: Path,
+) -> tuple[list[dict], list[dict]]:
+    """Item 247, after a real run's commit: every written receipt whose new
+    date names another month (`moves_to`) is filed there, one move at a
+    time, each through `route_expense_by_date` so it reads the date the
+    month now holds. Returns (moved, move_held). Never on the dry run: the
+    move copies files into the target month's own folder and can create a
+    month, neither of which a throwaway database copy can undo."""
+    moved: list[dict] = []
+    move_held: list[dict] = []
+    done = set(written)
+    for change in plan.changes:
+        doc = change["document_id"]
+        if not change.get("moves_to") or doc not in done:
+            continue
+        try:
+            with RunStore(db_path) as store:
+                out = route_expense_by_date(
+                    store, run_id, doc, _now(), data_root=data_root,
+                    learning_db_path=learning_db_path,
+                )
+        except RunInputError as exc:
+            move_held.append({"document_id": doc, "error": exc.message,
+                              "code": exc.code})
+            continue
+        if out is None:
+            continue
+        if out.get("held"):
+            move_held.append({"document_id": doc, **out})
+            continue
+        moved.append({
+            "document_id": doc, "display": change.get("display"),
+            "batch_id": out["batch_id"], "label": out["label"],
+            "month": out["month"], "moved_as": out["document_id"],
+            "created_batch": out["created_batch"],
+            "already_in_batch": out["already_in_batch"],
+        })
+    return moved, move_held
+
+
 def run_reread_job(
     db_path: Path, learning_db_path: "Path | None", job_id: str, run_id: str,
     view_of: ViewOf, *, dry_run: bool, skip: list[str] | None = None,
+    data_root: Path | None = None,
 ) -> None:
     """Read the month again, then either measure the plan on a copy (dry
     run) or commit it to the month (real run). A refusal lands as the job's
-    error, its code first."""
+    error, its code first. Item 247: with `data_root`, a real run then files
+    each receipt whose date now names another month in that month
+    (`moved`, `move_held` on the result)."""
     def _stage(name: str) -> None:
         try:
             with RunStore(db_path) as s:
@@ -852,6 +906,15 @@ def run_reread_job(
                       "readings": readings, "applied": applied,
                       "written": commit["written"], "joined": commit["joined"],
                       "gone": commit["gone"], "rematch": commit["rematch"]}
+            if data_root is not None:
+                _stage("moving")
+                moved, move_held = route_moved_dates(
+                    db_path, learning_db_path, run_id, plan,
+                    commit["written"], data_root=data_root,
+                )
+                result["moved"] = moved
+                if move_held:
+                    result["move_held"] = move_held
         if tracker is not None:
             result["cost_usd"] = float(round(tracker.total_cost_usd, 4))
         with RunStore(db_path) as store:

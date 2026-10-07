@@ -173,6 +173,7 @@ from .service import (
     matched_autopick_decisions,
     move_expense_to_month,
     ready_confirm_pairs,
+    route_expense_by_date,
     prepare_intake_run,
     prepare_run,
     rematch_after_change,
@@ -4880,6 +4881,56 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             app.state.db_path, app.state.learning_db_path, run_id,
         )
 
+    def _route_by_date(
+        run_id: str, document_id: str, background: BackgroundTasks,
+    ) -> dict | None:
+        """Item 247: file an expense whose date just changed in the month the
+        date names. None when it stays; the move's answer when it moved;
+        `{"held": ...}` when a published month kept it; `{"error", "code"}`
+        when the move refused (the date edit itself is already committed,
+        and the row keeps its offer). Sync, for `run_in_threadpool`: the
+        batch lock and both months' re-match run here. A month the move
+        created claims its pooled mail afterwards, as the move route does."""
+        with open_store() as store:
+            try:
+                out = route_expense_by_date(
+                    store, run_id, document_id, _now_iso(),
+                    data_root=Path(app.state.data_root),
+                    learning_db_path=app.state.learning_db_path,
+                )
+            except RunInputError as exc:
+                return {"error": str(exc), "code": exc.code, **exc.fields}
+        if out and out.get("created_batch"):
+            background.add_task(
+                _claim_pooled_quietly, app.state.db_path,
+                app.state.learning_db_path, Path(app.state.data_root),
+            )
+        return out
+
+    async def _routed_reply(
+        run_id: str, document_id: str, background: BackgroundTasks,
+        rematch_needed: bool, extra: dict | None = None,
+    ) -> JSONResponse:
+        """The edit reply after item 247's routing. A move re-matched both
+        months already, so the edit's own re-match is not run again; the
+        reply's summary is the month the row LEFT, and `moved` names where it
+        went. A held or refused move rides back under `move_held` /
+        `move_error` and the edit's own re-match runs as usual."""
+        routed = await run_in_threadpool(
+            _route_by_date, run_id, document_id, background,
+        )
+        extra = dict(extra or {})
+        if routed is None:
+            return await _expense_edit_reply(run_id, rematch_needed, extra)
+        if routed.get("held"):
+            extra["move_held"] = routed
+        elif routed.get("error"):
+            extra["move_error"] = routed
+        else:
+            extra["moved"] = routed
+            return await _expense_edit_reply(run_id, False, extra)
+        return await _expense_edit_reply(run_id, rematch_needed, extra)
+
     async def _expense_edit_reply(
         run_id: str, rematch_needed: bool, extra: dict | None = None,
         *, document_id: str | None = None,
@@ -5959,12 +6010,20 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return await _expense_edit_reply(run_id, False)
 
     @app.put("/api/runs/{run_id}/expenses/{document_id:path}")
-    async def put_expense_field(run_id: str, document_id: str, request: Request):
+    async def put_expense_field(
+        run_id: str, document_id: str, request: Request,
+        background: BackgroundTasks,
+    ):
         """One field edit on one expense: {field, value}. Header fields land
         in expense_field_overrides; category / zoho_account fold into the
         existing line-level category_overrides (every line of the expense),
         so the export path needs no second override mechanism. value null /
-        "" clears the edit."""
+        "" clears the edit.
+
+        Item 247: a `date` edit (set or cleared) that puts the expense in
+        another calendar month moves it there in the same request; the reply
+        carries `moved` (the move's answer: `batch_id`, `label`, `month`,
+        `document_id` in the new month) and the left month's summary."""
         if not _receipt_first_on():
             return _flag_off()
         body = await request.json()
@@ -6027,6 +6086,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return err
             rematch_needed = False
             force_recategorize = False
+            date_changed = False
             # Item 41: a private confirmation is the PAIR (flag + who
             # gets reimbursed). This one-field-at-a-time route cannot
             # set both, so the flag alone is refused unless reimburse_to
@@ -6167,16 +6227,26 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 # re-categorizes the receipt against that company's leaves,
                 # even when its card already showed that company.
                 force_recategorize = field == "legal_entity" and before != value
+                date_changed = field == "date" and before != value
+        if date_changed:
+            # Item 247: the date decides the month.
+            return await _routed_reply(
+                run_id, document_id, background, rematch_needed,
+            )
         return await _expense_edit_reply(
             run_id, rematch_needed, document_id=document_id,
             shown_before=shown_before, force_recategorize=force_recategorize,
         )
 
     @app.post("/api/runs/{run_id}/expenses")
-    async def post_expense_add(run_id: str, request: Request):
+    async def post_expense_add(
+        run_id: str, request: Request, background: BackgroundTasks,
+    ):
         """Add a manual expense (Note 3: some expenses have no receipt
         file). Vendor + total required; date / currency / tax / category /
-        paid_through / legal_entity optional, validated like field edits."""
+        paid_through / legal_entity optional, validated like field edits.
+        Item 247: a date in another calendar month files the expense in that
+        month (`moved`), exactly as a date edit would."""
         if not _receipt_first_on():
             return _flag_off()
         body = await request.json()
@@ -6225,6 +6295,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         extra: dict = {"document_id": document_id}
         if dropped_category:
             extra["ignored"] = {"category": dropped_category}
+        if payload.get("date"):
+            return await _routed_reply(
+                run_id, document_id, background, rematch_needed, extra,
+            )
         return await _expense_edit_reply(run_id, rematch_needed, extra)
 
     @app.delete("/api/runs/{run_id}/expenses/{document_id:path}")
@@ -7130,6 +7204,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         background.add_task(
             run_reread_job, app.state.db_path, app.state.learning_db_path,
             job_id, run_id, _expense_view, dry_run=dry_run, skip=skip,
+            data_root=Path(app.state.data_root),
         )
         return JSONResponse({"ok": True, "dry_run": dry_run, "job_id": job_id})
 

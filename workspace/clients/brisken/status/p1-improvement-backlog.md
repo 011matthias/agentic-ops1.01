@@ -13071,6 +13071,74 @@ red -> green: the button's `**lesson_lists`, `ctx.expand` in
 `apply_selection`, the already-saved skip in `commit_month_memory`, the
 kept-half fill in `one_rule_per_merchant`.
 
+### 247. The date decides the month (notes #114 and #117, 2026-10-07; owner ruling the same day) (BUILT 2026-10-07; SPA prompt `docs/lovable-date-moves-month-prompt.md` not pasted)
+
+Criss, 08:55 UTC, January: *"Esta expense está no mes errado."* Operator,
+09:14 UTC, same row: *"this receipt appear in the month of january 2026, yet
+it was loaded 2026-07-04 ... where is the date the system uses to assign this
+receipt to january rather than july?"* Owner, verbatim: *"the baseline data on
+the dates that is extracted from receipts is the foundation for how the
+receipts get sent to months. So if user changes date, then the month changes
+accordingly."*
+
+**What happened.** `CARD-136_2026-07-05_USD-6.20_MP-PARADAOBRIGAT__BENCH-010.pdf`
+came in through the Receipts page on 2026-09-23 23:55 UTC. The drop files a
+file by the date the full extraction reads off it; the slip prints
+`04/07/26 23 56` with a faint 7, it read as a January date (item 77's misread
+of the same slip), and the empty January month took it. Item 240's re-read
+(2026-09-28) read 4 July and wrote it in place (`"read again 2026-09-28: date
+changed"`), but a re-read never moved a receipt and item 77 offered the move
+on a TYPED date only, so the row sat in January flagged `date_outside_period`
+with nothing to click. The `2026-07-04 23:56` on the row is the printed date
+and time, not the upload. The old reading is not on the row any more (the
+payload keeps no history), so the exact January date it read is unknown.
+
+**It is a second copy.** July already holds the same slip
+(`0071__20260704_Receipt_Food_ParadaObrigatoria.pdf`, operation
+16727/5113354, BRL 32.00, settled against `MP *PARADAOBRIGAT` USD 6.20). The
+right outcome for the January row is a delete (Criss's click), not a move;
+moving it would put a second copy into July, whose stored reference differs
+by one digit (`51133354` vs `5113354`), so the duplicate ladder may not pair
+them.
+
+**Built.**
+1. A date that CHANGES files the receipt in the calendar month it names,
+   through item 77's `move_expense_to_month`, in the same request: a typed or
+   cleared date (`PUT .../expenses/{doc}`), a dated typed-in expense
+   (`POST .../expenses`), and a real re-read that takes a new date where no
+   date was typed (`route_moved_dates`; the dry run names `moves_to` and
+   never moves). Replies carry `moved` / `move_held` / `move_error`.
+2. The offer (`month_move`) now stands on a READ date too, still only outside
+   the item-25 window, so a row nobody touches is never moved and a receipt
+   printed on the 30th for a charge posted on the 1st is not offered.
+3. One plausibility rule for both (`date_month_target`): the drop's (a day of
+   future grace, 366 days) measured from the batch's month, so a misread year
+   never opens a month. A published month at either end holds the move.
+4. Fix found on the way: the move's same-bytes check matched the target's OWN
+   soft-deleted copy, so moving a receipt back into the month it left kept the
+   dead row and deleted the live one. Deleted copies no longer count.
+
+**Live measurement (2026-10-07, one read per month, GET only).** 5 of 339
+rows sit outside their date's month, all machine-read: 2 outside the window
+(the January Parada copy -> July; July's 360Crossmedia EUR 900.00 read
+2026-03-30, `without_charge`) and 3 June-dated July rows from early-July mail
+(two Google 71.64 held by July's 07-01 charges, Anthropic 100.00). After the
+deploy exactly the first two show "Move to"; nothing moves until someone
+changes a date or clicks.
+
+**Not built.** Note #118 (record details like who/when must be read-only, the
+payment date editable): the date the row shows IS the editable expense date;
+whether the row's metadata is editable in the SPA was not checked. Note #115
+(old categories on the January row) is a different cause, not looked at.
+
+**Tests:** `tests/test_date_decides_month_item_247.py` (10, route-level) +
+`test_receipts_reread_item_240.py` (2 added, 1 extended) +
+`test_month_move.py` (offer tests rewritten for read dates). Regressed at five
+wiring points with `tools/regress_check.py`, each green -> red -> green: the
+PUT's `if date_changed`, the add's `if payload.get("date")`, the re-read's
+`if data_root is not None`, the move's deleted-copy filter, the offer's
+`date_month_target` return.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
