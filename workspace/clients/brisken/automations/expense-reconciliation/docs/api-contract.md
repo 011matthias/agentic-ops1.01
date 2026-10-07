@@ -6561,7 +6561,10 @@ none.
 * **Account.** When something is left besides company names and filler, one
   model call (`classify_by_note`, the note fenced as data) is asked which of
   the company's leaves the note's words name. At confidence 0.85 or more,
-  and passing the guards every model answer meets, it decides: source
+  passing the guards every model answer meets, and only when the note's own
+  words name that account (`sender_note.names_account`, item 254: one
+  meaningful word in common, so "Nicolas/Lydar" or "Verve.Works" name no
+  account however sure the model is), it decides: source
   `NOTE`, origin `person`, `posting_category.source: "note"`, posted like a
   reviewer's pick and never re-guessed by the merchant list. A split note is
   offered only Corporate Services' own never-allocated accounts (allocation

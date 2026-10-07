@@ -13416,6 +13416,28 @@ caller test, renamed `test_a_moved_company_rematches_and_keeps_its_cards_pair`,
 which asserted the lost pair before and asserts the kept pair now; both
 sites regressed with `tools/regress_check.py`, green -> red -> green.
 
+### 254. "Clear" means the note's own words name the account, not the model's confidence (found 2026-10-07 in item 252's dry runs, before any write) (BUILT 2026-10-07)
+
+Item 250's account tier decided whenever the model answered at 0.85 or
+more. The dry runs listed the 25 accounts it would set, and six came from
+notes naming no kind of cost: "Nicolas/Lydar" became CorpServ travel
+transportation, "CorpServ only - NICO PROJECT - Globe Multitool" became
+Marketing Expenses - people and Business Travel - CRM, and three Railway
+receipts (a hosting company) with "BCS only / Verve.Works" became
+Conferences travel transportation. The prompt says answer null when the note
+names no cost; the model did not, so a prompt cannot be the guard.
+
+`sender_note.names_account(note, account)`: the note, company names removed,
+must share one meaningful word with the account's name (generic words such
+as "expenses", "costs", "others" do not count; "IT" counts only written "IT"
+or "It", never the pronoun). `categorize._note_accounts` decides only when
+it agrees; otherwise the receipt runs the usual chain. "Dev IT costs" no
+longer files to "COGS - CLOUD Infrastructure (ePaaS)" either. Fixes new
+mail (item 250, live) as well as the backfill. Proof: 12 live cases in
+`test_only_an_account_the_notes_words_name_is_clear`, and
+`test_a_confident_answer_the_note_does_not_name_decides_nothing` through
+the categorizer, regressed green -> red -> green.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |

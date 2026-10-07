@@ -135,6 +135,50 @@ def account_hint(note: str) -> str:
     return " ".join(words)
 
 
+# Item 254: words an account name shares with almost every other account, so
+# a note matching only these names nothing.
+_ACCOUNT_GENERIC = frozenset({
+    "expense", "expenses", "cost", "costs", "other", "others", "and", "for",
+    "the", "of", "business", "cogs", "corpserv", "ms", "opex", "opeex",
+})
+_IT_WORD = re.compile(r"\bI[Tt]\b")
+
+
+def _account_words(text: str) -> set[str]:
+    words = set()
+    for w in _WORD.findall(text or ""):
+        low = w.lower()
+        if low in _ACCOUNT_GENERIC or low == "it":
+            continue
+        words.add(low[:-1] if len(low) > 3 and low.endswith("s") else low)
+    return words
+
+
+def names_account(note: str, account: str) -> bool:
+    """Whether the note's own words name the account: one meaningful word in
+    common between what is left of the note once company names are gone and
+    the account's name ("IT costs" names "CorpServ | IT Expenses", "Marketing"
+    names "Marketing Expenses - others", "Travel" names "CorpServ | Travel
+    Expense | Transportation").
+
+    Item 254 (2026-10-07). Item 250's "decide when clear" trusted the model's
+    confidence alone, and the dry runs of item 252 showed it deciding accounts
+    from notes that name no kind of cost: "Nicolas/Lydar" became a travel
+    account, three "BCS only / Verve.Works" Railway receipts (a hosting
+    company) became conference train travel. The model's answer now decides
+    only when this lexical check agrees; otherwise the receipt runs the usual
+    chain. "IT" counts only written as "IT" or "It", so the pronoun "it" in
+    "so it is split" names nothing."""
+    text = note or ""
+    for pattern, _company in _COMPANY_PATTERNS:
+        text = pattern.sub(" ", text)
+    note_words = _account_words(text)
+    account_words = _account_words(account)
+    if _IT_WORD.search(text) and re.search(r"\bIT\b", account or ""):
+        return True
+    return bool(note_words & account_words)
+
+
 def strip_signature(note: str, names: tuple[str, ...] = ()) -> str:
     """The note without the sender's signature block.
 
