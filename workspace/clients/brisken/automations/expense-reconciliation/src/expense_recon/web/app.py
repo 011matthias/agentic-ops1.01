@@ -4910,7 +4910,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     def _route_by_date(
         run_id: str, document_id: str, background: BackgroundTasks,
     ) -> dict | None:
-        """Item 248: file an expense whose date just changed in the month the
+        """Item 251: file an expense whose date just changed in the month the
         date names. None when it stays; the move's answer when it moved;
         `{"held": ...}` when a published month kept it; `{"error", "code"}`
         when the move refused (the date edit itself is already committed,
@@ -4937,7 +4937,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         run_id: str, document_id: str, background: BackgroundTasks,
         rematch_needed: bool, extra: dict | None = None,
     ) -> JSONResponse:
-        """The edit reply after item 248's routing. A move re-matched both
+        """The edit reply after item 251's routing. A move re-matched both
         months already, so the edit's own re-match is not run again; the
         reply's summary is the month the row LEFT, and `moved` names where it
         went. A held or refused move rides back under `move_held` /
@@ -6212,7 +6212,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         so the export path needs no second override mechanism. value null /
         "" clears the edit.
 
-        Item 248: a `date` edit (set or cleared) that puts the expense in
+        Item 251: a `date` edit (set or cleared) that puts the expense in
         another calendar month moves it there in the same request; the reply
         carries `moved` (the move's answer: `batch_id`, `label`, `month`,
         `document_id` in the new month) and the left month's summary."""
@@ -6421,7 +6421,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 force_recategorize = field == "legal_entity" and before != value
                 date_changed = field == "date" and before != value
         if date_changed:
-            # Item 248: the date decides the month.
+            # Item 251: the date decides the month.
             return await _routed_reply(
                 run_id, document_id, background, rematch_needed,
             )
@@ -6437,7 +6437,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         """Add a manual expense (Note 3: some expenses have no receipt
         file). Vendor + total required; date / currency / tax / category /
         paid_through / legal_entity optional, validated like field edits.
-        Item 248: a date in another calendar month files the expense in that
+        Item 251: a date in another calendar month files the expense in that
         month (`moved`), exactly as a date edit would."""
         if not _receipt_first_on():
             return _flag_off()

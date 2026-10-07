@@ -386,7 +386,7 @@ def test_a_restart_before_the_neighbours_turn_keeps_its_debt(
 
 def test_a_month_move_into_july_rematches_august(client, monkeypatch):
     """June's Google receipt read as 06-15; the reviewer types 07-31, which
-    moves it into July on the edit itself (item 248). July and June re-match
+    moves it into July on the edit itself (item 251). July and June re-match
     (neither has a statement), and so does August, whose statement opens on
     07-31."""
     _wire(
