@@ -13022,7 +13022,56 @@ show only when the row carries a bank-payment signal (`bill_suggestion`);
 that would hide it from the Perplexity row, and also from a bank-paid invoice
 the reader found no signal on. Owner call.
 
-### 246. Every page fits the screen, nothing cut off (owner 2026-10-07: "all pages to successfully adapt to users screen size and maintain 100% visability of all the content") (PROMPT WRITTEN 2026-10-07: `docs/lovable-responsive-full-visibility-prompt.md`, not pasted)
+### 246. "Save corrections to memory" saves what is ticked, and a save overwrites the rule for that case (owner, 2026-10-07, in session) (BUILT 2026-10-07; SPA prompt `docs/lovable-save-memory-ticks-prompt.md` not pasted)
+
+Owner, verbatim: *"save to memory function should not be all or nothing.
+users should have the chance to adjust precisely what changes in each line
+item they want saved to memory"*, then *"also make sure that when 'save to
+memory' is clicked that the existing rule for that case is overwritten"*.
+
+**What was already there.** Item 183A cut every save into lessons (one per
+remembered fact, stable id, sentence, rows, default tick) and the Publish
+checklist ticks them. The Save button's route took no body, so that path was
+all or nothing.
+
+**Built (backend).**
+1. `POST /api/runs/{id}/commit-memory` takes the same `keep` / `skip` ids as
+   Publish, through one parser (`_lesson_lists`). No body saves the defaults,
+   so the published SPA behaves as before.
+2. Each lesson says what it does to the rule memory holds: `effect` (`new` /
+   `replaces` / `same` / `adds`), `replaces[]` (the old values it
+   overwrites), and its sentence ends "Replaces <old>." A lesson this month's
+   own un-undone save wrote, still held as saved, is `already_saved`: it
+   starts unticked and no save writes it again (before, every click counted
+   the same correction once more). A correction changed since is not
+   `already_saved` and overwrites. A click with nothing left answers
+   `nothing_to_save` and journals no empty save.
+3. **The overwrite gap that was real.** The store was already latest-wins
+   per key, but recall folds every spelling of one merchant in one company
+   into one identity and, when those spellings' rules disagree, folds none:
+   each keeps answering for itself. So a save under `staples` left an older
+   person rule under `staples inc` filing every receipt spelled that way,
+   and the Memory page still showed it. `learning.one_rule_per_merchant` now
+   makes each category write delete the case's other-spelling rules (journaled,
+   so the undo brings them back), carrying over the half the save did not
+   name (`keep_category` / `keep_account`, person over seeded). When those
+   rules disagree on that half, nothing says which to keep, and the write is
+   left as before. Live today (2026-10-07 read): 1 merchant has two spellings
+   (Anthropic, Corporate Services: the person rule `anthropic` over the seeded
+   `antropic`), so this bites at the next save there, not retroactively.
+
+**Unchanged by owner rulings:** a merchant with decided accounts
+(`accounts_locked`, item 219) is changed only by ticking its drift lesson;
+OpenAI / Anthropic / Lovable merchant-list writes stay held for the owner
+(2026-09-18); FX samples accumulate (a learned mean, never a single rule).
+
+**Tests:** `tests/test_save_memory_ticks_item_246.py`, 11 route-level.
+Regressed at four wiring points with `tools/regress_check.py`, each green ->
+red -> green: the button's `**lesson_lists`, `ctx.expand` in
+`apply_selection`, the already-saved skip in `commit_month_memory`, the
+kept-half fill in `one_rule_per_merchant`.
+
+### 247. Every page fits the screen, nothing cut off (owner 2026-10-07: "all pages to successfully adapt to users screen size and maintain 100% visability of all the content") (PROMPT WRITTEN 2026-10-07: `docs/lovable-responsive-full-visibility-prompt.md`, not pasted)
 
 The owner started it in Lovable the same morning (`aef936db`, `0ac4b07a`).
 The first of those two commits is **already published** (live bundle read

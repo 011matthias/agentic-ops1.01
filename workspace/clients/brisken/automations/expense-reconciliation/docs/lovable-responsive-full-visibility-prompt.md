@@ -1,4 +1,4 @@
-# Lovable prompt: every page fits the screen, nothing is cut off (backlog item 246, owner 2026-10-07)
+# Lovable prompt: every page fits the screen, nothing is cut off (backlog item 247, owner 2026-10-07)
 
 > **NOT YET APPLIED.** SPA only, no backend change, no new field, no new
 > request, no new text key. Owner, 2026-10-07: "i need all pages to
