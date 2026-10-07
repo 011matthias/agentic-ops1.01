@@ -13084,6 +13084,46 @@ non-GET aborted (none attempted), renders "Replaces the rule saved as railway
 corporation". The published dialog still shows "Not saved by this button"
 until the prompt is pasted.
 
+### 247. Every page fits the screen, nothing cut off (owner 2026-10-07: "all pages to successfully adapt to users screen size and maintain 100% visability of all the content") (PROMPT WRITTEN 2026-10-07: `docs/lovable-responsive-full-visibility-prompt.md`, not pasted)
+
+The owner started it in Lovable the same morning (`aef936db`, `0ac4b07a`).
+The first of those two commits is **already published** (live bundle read
+2026-10-07: `overflow-x-clip` 5 hits in the ExpensesReviewGrid chunk, the
+second commit's `px-3` main classes absent), and it made things worse on
+the month screens: the review grid sits in a `<fieldset>`, whose minimum
+width is its content (~1,700 px), and the new `overflow-x-clip` on `<main>`
+cuts the excess off with no way to reach it. At 1280 px Legal entity, Paid
+through, Receipt and Actions are simply not on screen.
+
+**Measured** (local build of SPA `0ac4b07` against a local API over the
+2026-10-06 20:40 UTC SharePoint backup, headless Chrome, every non-GET
+aborted): 21 routes x EN/PT x 7 widths (360-1920), each in its default
+state, every filter tile / tab in turn, everything expanded, and the
+receipt + compare-copies dialogs open = 1,379 views. Before: 7,664 clipped,
+1,053 past the screen edge, 1,705 truncated, 445 behind a sideways scroll,
+page wider than the screen in 102 views (counts capped at 40 per kind per
+view). After the prompt's code: zero in every kind.
+
+**What the prompt does.** (1) `src/lib/fit-tables.ts`: every table, shadcn
+or plain, shows as a table while whole words fit and becomes labelled cards
+(`data-stacked`, `td[data-label]`) when they do not; header cells holding a
+control stay as a strip. (2) Buttons and select triggers wrap their label;
+a caller's `h-7` becomes `min-h-7` (`heightAsMinimum`). (3) `truncate` ->
+`break-words` app-wide, `wrap-anywhere` only for file names: `wrap-anywhere`
+on ordinary text let the grid squeeze the account column to one letter at
+1024 px ("CO GS - Oth er"), a readability failure the measurements did not
+see and the screenshots did. (4) The clip removed, fieldset `min-w-0`,
+toolbars / Settings tabs / Memory header wrap, header shows EN/PT, tagline,
+"Signed in as" and tab names at every width, Compare copies puts field names
+above the values below 640 px.
+
+Instrument (scratch, not committed): `measure.js` flags text or a control
+past the viewport, cut by an overflow-hidden/clip ancestor, behind an inner
+side-scroll, ellipsis / line-clamp / self-clip, and a header control hidden
+by stacking; each check was shown to fire on the baseline before its fix
+was trusted (self-clip caught "Chase Visa | 9693 | Cloud Expenses" cut in a
+select; the header check caught Memory's select-all hidden at 360-768 px).
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
