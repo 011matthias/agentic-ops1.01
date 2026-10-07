@@ -3111,6 +3111,37 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             return _expense_view(store, run)
         return _workbench_view(store, run)
 
+    def _run_page_view(store: RunStore, run) -> dict:
+        """Exactly what `GET /api/runs/{id}` serves for this run."""
+        # A batch WITH a statement attached graduates to the workbench:
+        # build_view over the baked snapshot, every statement-mode
+        # surface (decisions / confirm-ready / exports) unchanged. The
+        # expense grid stays reachable via GET /api/expense-batches/{id}.
+        if run_mode(run) == MODE_EXPENSE_GENERATION and not has_statement(run):
+            return _expense_page_view(store, run)
+        # Item 138: the Matching page's card tabs ride this GET only,
+        # on top of `_run_view`, which is the dispatch the mutating
+        # routes reply with (residual R2). The tabs are additive and
+        # never touch the summary, which is why the reply can skip them.
+        return attach_run_card_tabs(
+            _run_view(store, run), run,
+            store.get_expense_field_overrides(run.run_id),
+        )
+
+    def _reply_views(store: RunStore, run) -> dict:
+        """`views` on a duplicate click's reply when the SPA asks with
+        `?views=1` (2026-10-07): what `GET /api/expense-batches/{id}`
+        (`batch`, on an expense batch) and `GET /api/runs/{id}` (`run`)
+        would serve right now, so the page puts them in its cache instead
+        of refetching the month twice after the re-match it just waited
+        for. A month with no statement serves one payload on both."""
+        if run_mode(run) != MODE_EXPENSE_GENERATION:
+            return {"run": _run_page_view(store, run)}
+        batch = _expense_page_view(store, run)
+        if not has_statement(run):
+            return {"batch": batch, "run": batch}
+        return {"batch": batch, "run": _run_page_view(store, run)}
+
     @app.get("/api/runs/{run_id}")
     def api_workbench(run_id: str):
         """The review render model for the SPA: `build_view` (transaction
@@ -3122,20 +3153,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
-            # A batch WITH a statement attached graduates to the workbench:
-            # build_view over the baked snapshot, every statement-mode
-            # surface (decisions / confirm-ready / exports) unchanged. The
-            # expense grid stays reachable via GET /api/expense-batches/{id}.
-            if run_mode(run) == MODE_EXPENSE_GENERATION and not has_statement(run):
-                return JSONResponse(jsonable_encoder(_expense_page_view(store, run)))
-            # Item 138: the Matching page's card tabs ride this GET only,
-            # on top of `_run_view`, which is the dispatch the mutating
-            # routes reply with (residual R2). The tabs are additive and
-            # never touch the summary, which is why the reply can skip them.
-            view = attach_run_card_tabs(
-                _run_view(store, run), run,
-                store.get_expense_field_overrides(run_id),
-            )
+            view = _run_page_view(store, run)
         # build_view already carries run_id, label, summary, rows,
         # unmatched_*, duplicate_groups, category_options: return it as the
         # SPA render model.
@@ -3405,7 +3423,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     # the invariant, never deletes. Accepts either the backend-native
     # {group_id, resolution} or the SPA contract's {group_id, action}.
     @app.post("/api/runs/{run_id}/duplicates/resolve")
-    async def post_duplicate_resolve(run_id: str, request: Request):
+    async def post_duplicate_resolve(
+        run_id: str, request: Request, views: bool = False,
+    ):
         body = await request.json()
         group_id = body.get("group_id") or body.get("group_key")
         resolution = body.get("resolution") or body.get("action")
@@ -3446,10 +3466,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # `build_view`'s summary there handed the grid the workbench's
             # counts, and every one of the fields it renders (n_expenses,
             # n_ready, n_duplicate_rows) is absent from that shape.
-            view = _run_view(store, run)
+            # `?views=1`: the run's own GET payload carries that same
+            # summary (its card tabs never touch it), so it is built once.
+            written = _reply_views(store, run) if views else None
+            view = written["run"] if written else _run_view(store, run)
         out = {"ok": True, "summary": view["summary"]}
         if rematch is not None:
             out["rematch"] = rematch
+        if written is not None:
+            out["views"] = written
         return JSONResponse(jsonable_encoder(out))
 
     def _settings_account_fields(store: RunStore, settings: dict) -> dict:
@@ -4885,6 +4910,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         *, document_id: str | None = None,
         shown_before: dict[str, str] | None = None,
         force_recategorize: bool = False,
+        views: bool = False,
     ) -> JSONResponse:
         """The reply every expense-edit route gives (item 70).
 
@@ -4908,7 +4934,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         2026-09-24). Both happen BEFORE the re-match reads the pool, and the
         re-match does the same for what it moves. Every re-run row rides
         back under `recategorized_rows`; `document_id`'s own result, or a
-        failure, under `recategorized`, as before."""
+        failure, under `recategorized`, as before.
+
+        `views` (2026-10-07): the month's two GET payloads ride back under
+        `views` (`_reply_views`), and `summary` is read off the batch one."""
         rows: list[dict] = []
         recategorized = None
         if shown_before is not None or force_recategorize:
@@ -4937,8 +4966,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found", "code": "run_not_found"}, status_code=404)
-            view = _expense_view(store, run)
+            # The page view's card tabs never touch the summary, so with
+            # `views` the summary comes off it and the month is built once.
+            written = _reply_views(store, run) if views else None
+            view = written["batch"] if written else _expense_view(store, run)
         out = {"ok": True, **(extra or {}), "summary": view["summary"]}
+        if written is not None:
+            out["views"] = written
         if rematch is not None:
             out["rematch"] = rematch
         if recategorized is None:
@@ -6228,7 +6262,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return await _expense_edit_reply(run_id, rematch_needed, extra)
 
     @app.delete("/api/runs/{run_id}/expenses/{document_id:path}")
-    async def delete_expense(run_id: str, document_id: str):
+    async def delete_expense(run_id: str, document_id: str, views: bool = False):
         """Remove one expense from the batch (soft: an edit-table row, the
         snapshot is never rewritten by the delete itself; on a reconciling
         month the re-match that follows bakes the pool without it).
@@ -6286,7 +6320,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         )
 
             await run_in_threadpool(_pay_trip_debt)
-        return await _expense_edit_reply(run_id, rematch_needed)
+        return await _expense_edit_reply(run_id, rematch_needed, views=views)
 
     @app.post("/api/runs/{run_id}/expenses/{document_id:path}/move")
     def post_expense_move(
