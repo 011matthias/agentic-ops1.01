@@ -13350,7 +13350,7 @@ PUT's `if date_changed`, the add's `if payload.get("date")`, the re-read's
 `if data_root is not None`, the move's deleted-copy filter, the offer's
 `date_month_target` return.
 
-### 252. The senders' notes reach the receipts already in a month (owner 2026-10-07: "change existing rows, reread if need be") (BUILT 2026-10-07, not yet run live)
+### 252. The senders' notes reach the receipts already in a month (owner 2026-10-07: "change existing rows, reread if need be") (APPLIED LIVE 2026-10-07 to all six noted months after dry runs on Fly `4887af16`: 71 receipts stamped (24 notes re-read from the archive), 19 companies moved, 17 accounts set by the note (15 show it; on Typora and Uber Criss's own pick, equal to the note, wins on read), 40 notes shown again, re-matches clean, 0 pairs lost, 1 gained, no confirmed pair touched)
 
 Item 250 reads the note at arrival only, so its deploy changed no row already
 in a month. `POST /api/runs/{run_id}/sender-notes/apply` (body `{confirm,
@@ -13393,7 +13393,7 @@ real run waits for the owner's yes after its dry run. Bucket months
 not pasted); until then the month history prints the raw value.
 
 
-### 253. A note-moved receipt keeps its card's charge: pair by card, book by note (owner 2026-10-07, after item 252's dry runs) (BUILT 2026-10-07)
+### 253. A note-moved receipt keeps its card's charge: pair by card, book by note (owner 2026-10-07, after item 252's dry runs) (LIVE 2026-10-07: PR #1606, Fly `ca8a2cea`; the re-run dry runs lost 0 pairs)
 
 Item 252's dry runs on the six live months showed the cost of item 250's
 "note always wins": the matcher refuses every cross-company pair, so 5 card
@@ -13416,7 +13416,7 @@ caller test, renamed `test_a_moved_company_rematches_and_keeps_its_cards_pair`,
 which asserted the lost pair before and asserts the kept pair now; both
 sites regressed with `tools/regress_check.py`, green -> red -> green.
 
-### 254. "Clear" means the note's own words name the account, not the model's confidence (found 2026-10-07 in item 252's dry runs, before any write) (BUILT 2026-10-07)
+### 254. "Clear" means the note's own words name the account, not the model's confidence (found 2026-10-07 in item 252's dry runs, before any write) (LIVE 2026-10-07: PR #1608, Fly `4887af16`; the re-run dry runs kept 17 account decisions, all named in the note)
 
 Item 250's account tier decided whenever the model answered at 0.85 or
 more. The dry runs listed the 25 accounts it would set, and six came from
