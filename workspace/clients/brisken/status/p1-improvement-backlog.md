@@ -13186,7 +13186,10 @@ whether the row's metadata is editable in the SPA was not checked. Note #115
 
 **Tests:** `tests/test_date_decides_month_item_248.py` (10, route-level) +
 `test_receipts_reread_item_240.py` (2 added, 1 extended) +
-`test_month_move.py` (offer tests rewritten for read dates). Regressed at five
+`test_month_move.py` (offer tests rewritten for read dates);
+`test_neighbour_rematch_item_112.py` now proves August's neighbour re-match
+through the date edit's own `moved` reply, and `test_view_contract.py`
+raises its offer from a read date. Regressed at five
 wiring points with `tools/regress_check.py`, each green -> red -> green: the
 PUT's `if date_changed`, the add's `if payload.get("date")`, the re-read's
 `if data_root is not None`, the move's deleted-copy filter, the offer's
