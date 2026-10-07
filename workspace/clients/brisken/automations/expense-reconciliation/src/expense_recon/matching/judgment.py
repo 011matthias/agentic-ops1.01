@@ -43,6 +43,7 @@ from .deterministic import (
     _tx_card_keys,
     card_evidence,
     cards_differ,
+    pairing_entity,
     reference_gap,
     vendor_similarity,
 )
@@ -321,7 +322,10 @@ def _second_chance_shortlist(
     so the bounding can be tested without a model."""
     scored: list[tuple[tuple[float, float, float, str], Receipt]] = []
     for receipt in receipts:
-        if receipt.legal_entity_id != tx.legal_entity_id:
+        # Item 253: a company only the sender's note named does not decide
+        # which charge the receipt belongs to (`pairing_entity`).
+        entity = pairing_entity(receipt)
+        if entity is not None and entity != tx.legal_entity_id:
             continue
         if receipt.detected_currency is None or receipt.detected_total is None:
             continue

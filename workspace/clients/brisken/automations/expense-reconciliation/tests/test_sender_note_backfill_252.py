@@ -532,12 +532,15 @@ def _attach_statement(client, monkeypatch, batch_id) -> None:
     ))
 
 
-def test_a_moved_company_rematches_and_the_dry_run_names_the_pair_it_costs(
+def test_a_moved_company_rematches_and_keeps_its_cards_pair(
     client, monkeypatch,
 ):
-    """The company scopes the match, so a note that moves a card-paid receipt
-    to another company unpairs it from the card's charge, as a person's
-    company pick does. The dry run says so before anything is written."""
+    """Item 253 (owner 2026-10-07, "pair by card, book by note"): a note that
+    moves a card-paid receipt to another company changes where it books, not
+    which charge it belongs to. The month still re-matches (the company is a
+    match field), and the receipt stays paired with its card's charge. Before
+    item 253 this exact flow cost the pair, which is what the owner ruled
+    against after the 2026-10-07 dry runs showed 5 live pairs lost."""
     batch_id = _create_batch(client, monkeypatch)
     _deliver(client, monkeypatch, "BTS only", "Lovable Labs Incorporated",
              day="2026-08-30")
@@ -552,15 +555,17 @@ def test_a_moved_company_rematches_and_the_dry_run_names_the_pair_it_costs(
     assert dry["rematch_owed"] is True
     lost = [c for c in dry["consequences"]["pairs"]["changed"]
             if c["before"] == doc and c["after"] is None]
-    assert lost, dry["consequences"]["pairs"]
+    assert not lost, dry["consequences"]["pairs"]
     assert set(dry["consequences"]["rematch_alone"]) >= {"pairs", "confirmed", "expenses"}
 
     real = _result(client, batch_id, dry_run=False)
     assert real["written"] == [doc]
     assert real["rematch"] is not None and not real["rematch"].get("error")
-    assert any(c["before"] == doc and c["after"] is None
-               for c in real["applied"]["pairs"]["changed"])
-    assert doc not in _pairs(client, batch_id).values()
+    assert not any(c["before"] == doc and c["after"] is None
+                   for c in real["applied"]["pairs"]["changed"])
+    assert doc in _pairs(client, batch_id).values(), "still paired with its card's charge"
+    row = next(r for r in _rows(client, batch_id).values() if r["document_id"] == doc)
+    assert (row["legal_entity_id"], row["entity_source"]) == ("Consulting", "sender_note")
     snap = _snapshot(client, batch_id)
     assert "rematch_pending" not in snap, "the re-match it owed has run"
     assert snap["sender_notes_applied"][-1]["company_changed"] == [doc]
