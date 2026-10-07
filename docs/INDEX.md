@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-07 | Brisken Recon Subcard Filter Restored | client-dev | [→](docs/2026-10-07%20-%20Brisken%20Recon%20Subcard%20Filter%20Restored/Checkpoint.md) |
 | 2026-10-05 | Lead Desk Sign-In Safe Links Fix | client-dev | [→](docs/2026-10-05%20-%20Lead%20Desk%20Sign-In%20Safe%20Links%20Fix/Checkpoint.md) |
 | 2026-10-02 | Brisken September Month End And Invoice | client-dev | [→](docs/2026-10-02%20-%20Brisken%20September%20Month%20End%20And%20Invoice/Checkpoint.md) |
 | 2026-10-02 | Brisken Recon Dirk Account Questions Sent | client-dev | [→](docs/2026-10-02%20-%20Brisken%20Recon%20Dirk%20Account%20Questions%20Sent/Checkpoint.md) |
