@@ -1,4 +1,4 @@
-"""The date decides the month (backlog item 247, owner 2026-10-07).
+"""The date decides the month (backlog item 248, owner 2026-10-07).
 
 Owner, verbatim: "the baseline data on the dates that is extracted from
 receipts is the foundation for how the receipts get sent to months. So if
@@ -37,7 +37,7 @@ from expense_recon.web.app import create_app  # noqa: E402
 from expense_recon.web.store import RunStore  # noqa: E402
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
-JPG = b"\xff\xd8\xff\xe0item247-staples-slip"
+JPG = b"\xff\xd8\xff\xe0item248-staples-slip"
 DOC_ID = "0000__a.jpg"
 JANUARY = "January 2026"
 FEBRUARY = "February 2026"

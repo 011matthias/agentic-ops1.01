@@ -1,6 +1,6 @@
-# Lovable prompt: a date edit that moves the receipt says where it went (item 247)
+# Lovable prompt: a date edit that moves the receipt says where it went (item 248)
 
-> **NOT YET APPLIED.** Backend half ships with item 247: a `date` edit
+> **NOT YET APPLIED.** Backend half ships with item 248: a `date` edit
 > (`PUT /api/runs/{id}/expenses/{doc}`) or a typed-in expense
 > (`POST /api/runs/{id}/expenses`) whose date names another calendar month
 > moves the receipt there in the same request. Without this prompt the move

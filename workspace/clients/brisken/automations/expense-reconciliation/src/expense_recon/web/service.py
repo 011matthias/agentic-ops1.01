@@ -8549,7 +8549,7 @@ def build_expense_view(
         period = batch_period(
             run.label, [r.detected_date for r in receipts if r.detected_date]
         )
-    # Item 247: the month the window is centred on, derived the same way, and
+    # Item 248: the month the window is centred on, derived the same way, and
     # today as the move offer's yardstick for a date in the future.
     batch_month = None if is_trip_batch(run) else (
         month_from_label(run.label)
@@ -8940,7 +8940,7 @@ def build_expense_view(
             # Printed bank details on an open card row: a one-click offer,
             # never a move. Absent otherwise. A copy's original carries it.
             expenses[-1]["bill_suggestion"] = dict(res["bill_suggestion"])
-        # Item 77 / 247: a date, typed or read, that puts this receipt
+        # Item 77 / 248: a date, typed or read, that puts this receipt
         # outside the batch's window offers the move (POST
         # .../expenses/{id}/move). A `manual:` id that is not a typed-in add
         # is a receipt attached to a charge by hand; it belongs to that
@@ -17747,7 +17747,7 @@ def _candidate_date_gap(tx: "Transaction", receipt: "Receipt | None") -> dict:
 
 
 #
-# Item 247 (owner 2026-10-07): "the baseline data on the dates that is
+# Item 248 (owner 2026-10-07): "the baseline data on the dates that is
 # extracted from receipts is the foundation for how the receipts get sent to
 # months. So if user changes date, then the month changes accordingly."
 # Item 77 only OFFERED the move, and only on a typed date, so a re-read that
@@ -17802,7 +17802,7 @@ def month_move_for_row(
 ) -> str | None:
     """The "YYYY-MM" this row is OFFERED a move to, or None.
 
-    Item 247: a date the machine read counts the same as a typed one, because
+    Item 248: a date the machine read counts the same as a typed one, because
     the reading is what filed the receipt in the first place. The offer is
     held to dates outside the batch's window (item 25's three months): a
     receipt printed on the 30th for a charge posted on the 1st sits in the
@@ -17963,7 +17963,7 @@ def move_expense_to_month(
             _, t_receipts, t_outcome, _ = snapshot_from_dict(t_snapshot)
             t_dir = Path(target.work_dir) / "receipts"
             t_dir.mkdir(parents=True, exist_ok=True)
-            # Item 247: a copy this month deleted, or moved away, is not
+            # Item 248: a copy this month deleted, or moved away, is not
             # "already there". Moving a receipt back into the month it left
             # (a date typed wrong, then corrected) found its own soft-deleted
             # row, kept that dead row and deleted the live one: the receipt
@@ -18110,7 +18110,7 @@ def route_expense_by_date(
     learning_db_path: Path | None = None,
     today: date | None = None,
 ) -> dict | None:
-    """Item 247: after an expense's date changed, file it in the month the
+    """Item 248: after an expense's date changed, file it in the month the
     date names (`move_expense_to_month`).
 
     Reads the EFFECTIVE date (a typed date over the reading, a typed-in

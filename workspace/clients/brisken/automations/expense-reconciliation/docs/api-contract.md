@@ -3159,7 +3159,7 @@ believed, and nothing looked at where the row lives.
 "month_move": {"month": "2026-07", "label": "July 2026", "batch_id": "50622baec444"}
 ```
 
-Present when the row's date, typed OR read from the receipt (item 247; until
+Present when the row's date, typed OR read from the receipt (item 248; until
 2026-10-07 only a typed date), falls outside the batch's window (its month
 plus one either side, the item-25 window) AND the batch is a company month
 AND the date is one the drop would file (not more than a day in the future,
@@ -3170,7 +3170,7 @@ a created month gets; localize from `month`. A machine reading outside the
 window keeps its `date_outside_period` review state beside the offer. A
 receipt attached to a charge by hand (`manual:` id that is not a typed-in
 add) is never offered. `summary.n_month_moves` (int, every expense payload)
-counts the offers. Since item 247 a date EDIT no longer waits for this offer
+counts the offers. Since item 248 a date EDIT no longer waits for this offer
 (next section); the offer is what a row nobody touched shows.
 
 **The move**, `POST /api/runs/{run_id}/expenses/{document_id}/move`, body
@@ -3197,11 +3197,11 @@ Both months re-match when they hold a statement. Refusals: 400 for a trip, a
 malformed month, the batch's own month, an expense already removed, or no
 offer and no named month; 404 for an unknown expense. The source month is
 never deleted, even when the move empties it. A copy the target month itself
-deleted or moved away does not count as "already there" (item 247: moving a
+deleted or moved away does not count as "already there" (item 248: moving a
 receipt back into the month it left used to keep the dead copy and lose the
 live one).
 
-## The date decides the month: `moved` on a date edit (item 247, 2026-10-07)
+## The date decides the month: `moved` on a date edit (item 248, 2026-10-07)
 
 Owner: "the baseline data on the dates that is extracted from receipts is the
 foundation for how the receipts get sent to months. So if user changes date,

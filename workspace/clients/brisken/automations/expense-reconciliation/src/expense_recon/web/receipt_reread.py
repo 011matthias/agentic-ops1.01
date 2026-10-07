@@ -467,7 +467,7 @@ def plan_reread(
     def elsewhere(change: dict, receipt: Receipt) -> dict:
         # One whose new date lies outside this batch's month says so
         # (January 2026 exists only because a July slip was read as
-        # 2026-01-04). Item 247: the real run then files it in the month the
+        # 2026-01-04). Item 248: the real run then files it in the month the
         # date names (`moves_to`), unless the reviewer typed a date over the
         # reading, which still decides; the dry run only names the month.
         d = receipt.detected_date
@@ -810,7 +810,7 @@ def route_moved_dates(
     db_path: Path, learning_db_path: "Path | None", run_id: str,
     plan: ReadPlan, written: list[str], *, data_root: Path,
 ) -> tuple[list[dict], list[dict]]:
-    """Item 247, after a real run's commit: every written receipt whose new
+    """Item 248, after a real run's commit: every written receipt whose new
     date names another month (`moves_to`) is filed there, one move at a
     time, each through `route_expense_by_date` so it reads the date the
     month now holds. Returns (moved, move_held). Never on the dry run: the
@@ -855,7 +855,7 @@ def run_reread_job(
 ) -> None:
     """Read the month again, then either measure the plan on a copy (dry
     run) or commit it to the month (real run). A refusal lands as the job's
-    error, its code first. Item 247: with `data_root`, a real run then files
+    error, its code first. Item 248: with `data_root`, a real run then files
     each receipt whose date now names another month in that month
     (`moved`, `move_held` on the result)."""
     def _stage(name: str) -> None:

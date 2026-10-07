@@ -13071,7 +13071,7 @@ red -> green: the button's `**lesson_lists`, `ctx.expand` in
 `apply_selection`, the already-saved skip in `commit_month_memory`, the
 kept-half fill in `one_rule_per_merchant`.
 
-### 247. The date decides the month (notes #114 and #117, 2026-10-07; owner ruling the same day) (BUILT 2026-10-07; SPA prompt `docs/lovable-date-moves-month-prompt.md` not pasted)
+### 248. The date decides the month (notes #114 and #117, 2026-10-07; owner ruling the same day) (BUILT 2026-10-07; SPA prompt `docs/lovable-date-moves-month-prompt.md` not pasted)
 
 Criss, 08:55 UTC, January: *"Esta expense está no mes errado."* Operator,
 09:14 UTC, same row: *"this receipt appear in the month of january 2026, yet
@@ -13131,7 +13131,7 @@ payment date editable): the date the row shows IS the editable expense date;
 whether the row's metadata is editable in the SPA was not checked. Note #115
 (old categories on the January row) is a different cause, not looked at.
 
-**Tests:** `tests/test_date_decides_month_item_247.py` (10, route-level) +
+**Tests:** `tests/test_date_decides_month_item_248.py` (10, route-level) +
 `test_receipts_reread_item_240.py` (2 added, 1 extended) +
 `test_month_move.py` (offer tests rewritten for read dates). Regressed at five
 wiring points with `tools/regress_check.py`, each green -> red -> green: the
