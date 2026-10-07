@@ -6551,6 +6551,11 @@ none.
   `posting_paid_through` unchanged), the company moves. Only the reviewer's
   own pick (`entity_source: "override"`) beats it. Two companies with no
   "split" decide nothing; "BTA" and project names decide nothing.
+  **Pairing follows the card, not the note** (item 253, owner 2026-10-07):
+  the matcher treats a company only the note named as no company
+  (`matching.deterministic.pairing_entity`), so the receipt still pairs with
+  its own card's charge; its card scope still binds it. A reviewer's own
+  company pick scopes the match exactly as before.
 * **Split.** "split", "shared" or "50/50" books the whole amount in
   Corporate Services; the tool never divides a charge.
 * **Account.** When something is left besides company names and filler, one
