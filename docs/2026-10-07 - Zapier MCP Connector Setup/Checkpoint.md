@@ -35,6 +35,7 @@ The owner connected the Zapier claude.ai connector mid-conversation, but this co
 ## What Did NOT Work (and why)
 - **Grepping `~/.claude.json` / `.mcp.json` for "zapier":** claude.ai connectors are account-side and never appear in local config files, so the probe can only ever return a negative.
 - **ToolSearch for Zapier after the owner connected it:** the running conversation's MCP tool set is fixed at start; a connector added later shows Connected in `claude mcp list` but exposes no tools to this session.
+- **`gh pr create --repo` without the `.01` suffix (checkpoint ship):** gh answered "Head sha can't be blank / No commits between"; the slug is `011matthias/agentic-ops1.01` (reference_repo_tooling_gotchas.md). The `warn-gh-repo-slug-missing-01` rule fired but a warn does not stop the call.
 
 ---
 
