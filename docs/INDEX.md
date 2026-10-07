@@ -787,4 +787,5 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## warme-wimmer
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-07 | WW W1-06 Messeformular Zapier to n8n | client-dev | [→](docs/2026-10-07%20-%20WW%20W1-06%20Messeformular%20Zapier%20to%20n8n/Checkpoint.md) |
 | 2026-10-07 | Waerme Wimmer Takeover | client-dev | [→](docs/2026-10-07%20-%20Waerme%20Wimmer%20Takeover/Checkpoint.md) |
