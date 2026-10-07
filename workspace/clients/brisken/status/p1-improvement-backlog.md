@@ -13181,7 +13181,7 @@ out of the arrival duplicate key, or require the receipt-bearing part (a PDF,
 or the body for a body-only mail) to match. The Receipt overview now shows
 such mails as "Duplicate copy" with the subject they were matched to.
 
-### 250. The sender's note classifies the receipt: company, split, account (owner directive 2026-10-07: "expense recon must be able to use email content (notes left by receipt sender) to help classify receipts (categorization, legal entity, etc.)") (BUILT 2026-10-07, branch `client/brisken/p1-recon-mail-note-classify`; SPA prompt `docs/lovable-sender-note-classify-prompt.md`, not pasted)
+### 250. The sender's note classifies the receipt: company, split, account (owner directive 2026-10-07: "expense recon must be able to use email content (notes left by receipt sender) to help classify receipts (categorization, legal entity, etc.)") (LIVE 2026-10-07: PR #1589, Fly on `27ab0ec4`, `/healthz` commit verified by deploy.py, cold SPA drive of October renders, read-only; SPA prompt `docs/lovable-sender-note-classify-prompt.md`, not pasted)
 
 Reverses item 155's "display only, must never route" for OUR senders.
 
