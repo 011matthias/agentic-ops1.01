@@ -1713,6 +1713,7 @@ REMATCH_TRIGGERS_PIN = {
     "month_move",
     "duplicates_reapply",  # item 223 step 7: the operator's re-apply route
     "receipts_reread",  # item 240: the operator's re-read of stored receipts
+    "sender_notes",  # item 251: our senders' notes applied to stored receipts
 }
 
 

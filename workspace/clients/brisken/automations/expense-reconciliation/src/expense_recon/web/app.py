@@ -7344,4 +7344,57 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
         return JSONResponse({"ok": True, "dry_run": dry_run, "job_id": job_id})
 
+    @app.post("/api/runs/{run_id}/sender-notes/apply")
+    def apply_sender_notes(
+        run_id: str, background: BackgroundTasks,
+        payload: dict | None = Body(None),
+    ):
+        """Item 251: apply item 250's rulings to the receipts already in a
+        month. Each mailed receipt's note is the one its provenance recorded,
+        or is read again from the mail it came in; item 250's trust filter
+        and stamp then run as at arrival, and only the rows whose company or
+        account the note can move are categorized again. Body `{confirm,
+        dry_run}`: the caller repeats the month's label (or run id) even for
+        a dry run, and `dry_run` must be a JSON boolean. Both answer a job id
+        to poll; the dry run writes nothing to the month. Operator only; the
+        SPA offers no control for it."""
+        from .sender_note_backfill import (
+            backfill_refusal,
+            confirm_refusal,
+            run_backfill_job,
+        )
+
+        body = payload if isinstance(payload, dict) else {}
+        confirm = str(body.get("confirm", "")).strip()
+        dry_run = body.get("dry_run")
+        with open_store() as store:
+            run = store.get_run(run_id)
+            refused = backfill_refusal(run)
+            if refused is not None:
+                return JSONResponse(
+                    {"error": refused.message, "code": refused.code},
+                    status_code=404 if refused.code == "run_not_found" else 409,
+                )
+            unconfirmed = confirm_refusal(run, confirm)
+            if unconfirmed is not None:
+                return JSONResponse(
+                    {"error": unconfirmed.message, "code": unconfirmed.code},
+                    status_code=400,
+                )
+            if not isinstance(dry_run, bool):
+                return JSONResponse(
+                    {"error": "dry_run is required: true to preview, false "
+                              "to write the notes",
+                     "code": "sender_notes_dry_run_required"},
+                    status_code=400,
+                )
+            job_id = uuid.uuid4().hex[:12]
+            store.create_job(job_id, None, _now_iso())
+        background.add_task(
+            run_backfill_job, app.state.db_path, app.state.learning_db_path,
+            job_id, run_id, _expense_view, dry_run=dry_run,
+            data_root=Path(app.state.data_root),
+        )
+        return JSONResponse({"ok": True, "dry_run": dry_run, "job_id": job_id})
+
     return app
