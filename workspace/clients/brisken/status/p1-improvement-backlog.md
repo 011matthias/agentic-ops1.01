@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-09-27
+updated: 2026-10-07
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -13026,6 +13026,7 @@ the reader found no signal on. Owner call.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 162 | Fix (no item): the card roll-up lets the first coverage row name a card that only receipts had opened, so a receipt-only newest month no longer blanks `card_key`, label, digits and `known` | Owner 2026-10-07: the 2838 account filter went away. October (created 10-01, receipts, no statement) was read first and blanked every card it holds a receipt on, so the item 191 tree linked nothing (`subcards` [] everywhere) and 2838, 3645, 3876, 9693, 1176 read as not in Settings; live after: 2838 opens 3876 / 3645 / 0340, no figure moved | 2026-10-07, PR #1575, Fly v279 (commit `7a4e0b0e`); driven cold, read-only |
 | 161 | Item 243: the card score reads a printed number through the card register when the register resolved the card from that print, so "...1672" agrees with a 2838 charge once 1672 is on the 2838 card; hint words, picks, remembered cards and unregistered cards (girocards) unchanged | Item 240's July dry run: the FX gate demoted two true Karlsruhe pairs (USD 34.39, 53.80) for printing the corporate card's plastic number; every future slip printing 1672 would have missed its charge | 2026-09-29, PR (this item) |
 | 160 | Item 240: `POST /api/runs/{id}/receipts/reread` reads a month's stored receipts again through the arrival's path and takes date, total, currency, tax, type, card and a different merchant (one Gemini pass: 0 of 251 key fields moved between passes); dry run on two throwaway database copies separates the re-read's own effect from any re-match's; `skip`, other-year dates held | Receipts stored before item 239 keep OpenAI's misreadings (April MEGA CENTER in BRL where the card paid USD, FENIX 117.79 for 500.90) until read again; local run over all seven months: 58 receipts change, 7 charges newly paired and 1 unpaired | 2026-09-28, PR #1538 |
 | 159 | Item 239 steps 2-3: blind A/B on the 251 stored documents, Gemini 3.8 Flash right 15 to 3 on date / total / currency / card / tax / type and 8 to 0 on text-layer PDFs; `fly.toml` switches `EXPENSE_RECON_GEMINI_READS = "all"` (live once the `GEMINI_API_KEY` secret is set) | Receipts set aside as statements, Brisken named as its own supplier and misread dates stop at the reader | 2026-09-28, PR #1534 |
