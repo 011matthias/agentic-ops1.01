@@ -9,9 +9,9 @@ nothing else looks at where the row lives.
 Pinned here through the HTTP routes:
 
 1. A date outside the batch's window offers the move
-   (`expenses[].month_move`, `summary.n_month_moves`). Since item 248 a
+   (`expenses[].month_move`, `summary.n_month_moves`). Since item 251 a
    machine reading counts like a typed date, and a typed date moves the
-   receipt on the edit itself (`test_date_decides_month_item_248.py`), so the
+   receipt on the edit itself (`test_date_decides_month_item_251.py`), so the
    offer is what a row nobody touched shows.
 2. `POST .../expenses/{id}/move` files the receipt into its month, creating
    the month when it does not exist, carrying the reading, the file and the
@@ -145,9 +145,9 @@ def _misfiled_january(client, monkeypatch, *more, **extra):
 
 
 # --- 1. the offer -------------------------------------------------------
-# Item 248 changed who gets one: a date the machine read counts like a typed
+# Item 251 changed who gets one: a date the machine read counts like a typed
 # one, and a typed date no longer waits for a click (it moves on the edit,
-# `test_date_decides_month_item_248.py`). The offer is what a row nobody
+# `test_date_decides_month_item_251.py`). The offer is what a row nobody
 # touched shows when its date lies outside the batch's window.
 
 
@@ -262,7 +262,7 @@ def test_identical_bytes_already_in_the_month_are_not_added_twice(
 
 
 def test_a_typed_in_expense_moves_too(client, monkeypatch):
-    """Item 248: the add itself files it in its date's month."""
+    """Item 251: the add itself files it in its date's month."""
     _wire(monkeypatch)
     january = _month(client, JANUARY)
     added = client.post(

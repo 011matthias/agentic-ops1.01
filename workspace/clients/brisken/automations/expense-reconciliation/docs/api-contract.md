@@ -3159,9 +3159,11 @@ believed, and nothing looked at where the row lives.
 "month_move": {"month": "2026-07", "label": "July 2026", "batch_id": "50622baec444"}
 ```
 
-Present when the row's date, typed OR read from the receipt (item 248; until
-2026-10-07 only a typed date), falls outside the batch's window (its month
-plus one either side, the item-25 window) AND the batch is a company month
+Present when the row's date, typed OR read from the receipt (item 251; until
+2026-10-07 only a typed date), names another month: a READ date only when it
+falls outside the batch's window (its month plus one either side, the item-25
+window), a TYPED date whenever its month differs (a typed date moves on the
+edit, so one still here was held back) AND the batch is a company month
 AND the date is one the drop would file (not more than a day in the future,
 not more than 366 days from the batch's month). ABSENT otherwise, never null.
 `batch_id` names the month the move would join, and is absent when that
@@ -3170,7 +3172,7 @@ a created month gets; localize from `month`. A machine reading outside the
 window keeps its `date_outside_period` review state beside the offer. A
 receipt attached to a charge by hand (`manual:` id that is not a typed-in
 add) is never offered. `summary.n_month_moves` (int, every expense payload)
-counts the offers. Since item 248 a date EDIT no longer waits for this offer
+counts the offers. Since item 251 a date EDIT no longer waits for this offer
 (next section); the offer is what a row nobody touched shows.
 
 **The move**, `POST /api/runs/{run_id}/expenses/{document_id}/move`, body
@@ -3197,11 +3199,11 @@ Both months re-match when they hold a statement. Refusals: 400 for a trip, a
 malformed month, the batch's own month, an expense already removed, or no
 offer and no named month; 404 for an unknown expense. The source month is
 never deleted, even when the move empties it. A copy the target month itself
-deleted or moved away does not count as "already there" (item 248: moving a
+deleted or moved away does not count as "already there" (item 251: moving a
 receipt back into the month it left used to keep the dead copy and lose the
 live one).
 
-## The date decides the month: `moved` on a date edit (item 248, 2026-10-07)
+## The date decides the month: `moved` on a date edit (item 251, 2026-10-07)
 
 Owner: "the baseline data on the dates that is extracted from receipts is the
 foundation for how the receipts get sent to months. So if user changes date,
@@ -3220,12 +3222,20 @@ The edit/add reply gains one of three parallel keys, each ABSENT otherwise:
 ```json
 "moved": {"...": "the move's own reply, as POST .../move answers it"},
 "move_held": {"held": "month_published", "month": "2026-04", "label": "April 2026", "batch_id": "..."},
+"move_held": {"held": "day_month_swap", "month": "2026-05", "label": "May 2026", "date": "2026-05-07", "swap": "2026-07-05"},
 "move_error": {"error": "...", "code": "file_missing_on_disk"}
 ```
 
 With `moved`, `summary` is the month the row LEFT and the edit's own re-match
-is not run again (the move re-matched both months). `move_held`: the source or
-the target month is published, so the receipt stays and keeps its offer.
+is not run again (the move re-matched both months). `move_held` keeps the
+receipt where it is with its offer, for one of two reasons (`held`):
+`month_published`, the source or the target month is published; or
+`day_month_swap` (owner 2026-10-07), a TYPED date that, with day and month
+exchanged (`swap`), falls in this month while the date as typed does not. A
+browser's date picker follows the browser's locale, not the app's, so a
+day-first "05/07" in a month-first picker is stored as 7 May; July's
+NORMANDIE SEINE toll (file 2026-07-05) was typed as 2026-05-07 the morning
+the rule shipped. The offer's one click still moves it if the date is right.
 `move_error`: the move refused; the date edit is saved and the row keeps its
 offer. Nothing moves for a trip, a batch with no knowable month, a receipt
 attached to a charge by hand, or a date the offer would not name either (a
