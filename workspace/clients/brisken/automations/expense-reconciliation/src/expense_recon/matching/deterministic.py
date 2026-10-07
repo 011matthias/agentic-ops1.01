@@ -1811,6 +1811,21 @@ def receipt_card_scope(
     return pm_keys
 
 
+def pairing_entity(receipt: Receipt) -> str | None:
+    """The company a receipt pairs under, or None when it pairs under none.
+
+    Item 253 (owner 2026-10-07, "pair by card, book by note"): a company the
+    sender's note set (item 250) decides where the receipt BOOKS, never which
+    charge it is the evidence for. The card that paid is unchanged by the
+    note, so such a receipt pairs as if it named no company, and its card
+    scope still binds it to its own card's charges. Every other receipt
+    pairs under the company it names, as before."""
+    note = (receipt.sender_note_entity or "").strip()
+    if note and note == (receipt.legal_entity_id or "").strip():
+        return None
+    return receipt.legal_entity_id
+
+
 def pair_in_scope(
     tx: Transaction,
     receipt: Receipt,
@@ -1820,17 +1835,19 @@ def pair_in_scope(
 ) -> bool:
     """Whether a (charge, receipt) pair may be scored at all: a receipt
     that NAMES another legal entity never pairs (an empty entity on either
-    side is unscoped), and a receipt scoped to a card (``receipt_card_scope``)
+    side is unscoped, and so is a company only the sender's note named,
+    `pairing_entity`), and a receipt scoped to a card (``receipt_card_scope``)
     pairs only with charges on that card (``tx_keys``, the charge's
     ``_tx_card_keys``). ``entity_keys`` (``MatchingConfig.entity_keys``)
     makes two spellings of one company one company (item 220 step 5)."""
+    receipt_entity = pairing_entity(receipt) or ""
     if entity_keys:
-        if not entities_same(receipt.legal_entity_id, tx.legal_entity_id, entity_keys):
+        if not entities_same(receipt_entity, tx.legal_entity_id, entity_keys):
             return False
     elif (
-        receipt.legal_entity_id
+        receipt_entity
         and tx.legal_entity_id
-        and receipt.legal_entity_id != tx.legal_entity_id
+        and receipt_entity != tx.legal_entity_id
     ):
         return False
     if scope is not None and not (scope & tx_keys):

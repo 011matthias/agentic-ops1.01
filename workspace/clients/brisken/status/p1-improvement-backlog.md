@@ -9462,8 +9462,10 @@ one-card month has no sections, but its rows still carry `card_section`);
 ~2.2 s (seven month views built per call); a per-run cache keyed on the month's
 `updated_at` is the fix if the strip's load is felt.
 
-**2026-10-07 SHIPPED: the per-run cache (owner report: the months page's card
-filter tab "taking way too long to load").** Each run's `receipt_card_counts`
+**2026-10-07 SHIPPED and LIVE: the per-run cache (owner report: the months
+page's card filter tab "taking way too long to load"; PR #1595, live in
+`2636b226`; live rebuild after a write 0.164 s against 1.215 s for the
+uncached control route).** Each run's `receipt_card_counts`
 is now kept in `app.state.receipt_card_counts_cache`, keyed on that run's own
 inputs (`snapshot`, decisions, category overrides, field overrides, edits,
 duplicate resolutions) plus the two inputs shared by every run in one build
@@ -13390,6 +13392,29 @@ real run waits for the owner's yes after its dry run. Bucket months
 `sender_notes` needs one SPA label (`docs/lovable-sender-notes-trigger-prompt.md`,
 not pasted); until then the month history prints the raw value.
 
+
+### 253. A note-moved receipt keeps its card's charge: pair by card, book by note (owner 2026-10-07, after item 252's dry runs) (BUILT 2026-10-07)
+
+Item 252's dry runs on the six live months showed the cost of item 250's
+"note always wins": the matcher refuses every cross-company pair, so 5 card
+charges would have lost their receipt (August Anthropic invoice 0034, July
+Typora and the Yubico order, September PressMaster and Lovable #2096-7323)
+and one would have gained one. No confirmed pair was touched, and a re-match
+without the notes changed nothing. Owner, asked with those numbers: **"Pair
+by card, book by note"**: the note decides the booking company, never which
+charge the receipt is evidence for.
+
+`matching.deterministic.pairing_entity`: a receipt whose company equals its
+`sender_note_entity` pairs under no company; every other receipt pairs under
+the company it names, as before (a reviewer's pick away from the note's
+company scopes again). Used at the two places the matcher reads a receipt's
+company: `pair_in_scope` and the FX second-chance shortlist. Card scope is
+untouched, so the receipt still pairs only with its own card's charges.
+This also stops new mail (item 250, live since `27ab0ec4`) from breaking a
+pair. Proof: `tests/test_note_pairs_by_card_253.py` (4) and the item-252
+caller test, renamed `test_a_moved_company_rematches_and_keeps_its_cards_pair`,
+which asserted the lost pair before and asserts the kept pair now; both
+sites regressed with `tools/regress_check.py`, green -> red -> green.
 
 ## Shipped (loop history)
 
