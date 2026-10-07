@@ -110,8 +110,7 @@ Two Lovable prompts handed, not yet pasted:
 
 1. **Owner:** paste `docs/lovable-sender-note-classify-prompt.md` into Lovable; verify `expx.operator_note.hint`, `expx.review.badge.note`, `expx.entity.source.sender_note` render correctly.
 2. **Owner:** paste `docs/lovable-sender-notes-trigger-prompt.md` into Lovable; verify `mh.rematch.trigger.sender_notes` toast fires after a note backfill.
-3. **Fix `warn-send-output-truncated` false-positive:** pattern fires on "sender" in any command output; tighten the pattern to match actual send-truncation output shapes (not the word alone).
-4. Brisken comms-log is 9 days stale — log any conversations from the past week before the next session.
+3. Brisken comms-log is 9 days stale — log any conversations from the past week before the next session.
 
 ---
 
