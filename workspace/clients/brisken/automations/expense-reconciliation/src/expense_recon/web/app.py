@@ -105,6 +105,7 @@ from ..card_suggestion import EvidenceSource  # item 204, case 9 steps 1 and 5
 from .card_status_memo import (
     CardStatusMemo,
     CardStatusWarmer,
+    _sqlite_counter,
 )
 from .card_status_memo import data_version as card_status_data_version
 from ..error_codes import Refusal, code_of, fields_of  # Refusal: item 104
@@ -5249,6 +5250,32 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             return _flag_off()
         return Response(expense_batches_memo.get(), media_type="application/json")
 
+    # Item 190 measured this call at ~0.07 s before the receipt side was
+    # added and ~2.2 s after (seven months' full Expenses-page views built
+    # every time the folder-level memo below has to rebuild, which during
+    # active use is every few seconds, since any write anywhere in the data
+    # folder — a job's progress, a login — is a new key). A month that has
+    # not itself changed does not need its Expenses view rebuilt to answer
+    # the same receipt-card counts again, so each month's counts are kept
+    # here, under a version of that month's OWN inputs, not the whole
+    # folder's: a write to month X invalidates only X's entry, and every
+    # other month's counts come back without touching its Expenses view.
+    #
+    # The version is content, not a timestamp: every store value in this
+    # app is stamped to the SECOND (`_now_iso`), so two writes inside one
+    # real second (an edit right after a create, routine in both tests and
+    # a fast reviewer) would be indistinguishable by any clock reading and
+    # would serve the first write's counts forever after the second. Content
+    # equality has no such window: an unmatched input is a new tuple, not a
+    # tuple that will eventually move. The six per-run reads are exactly
+    # what `_expense_page_view` itself reads for this run (minus the shared
+    # statement evidence, which does not feed `receipt_card_counts`); the
+    # registry and the card-memory counter are shared across every run in
+    # one build and change rarely, so they are read once per build, not
+    # once per run.
+    receipt_card_counts_cache: dict[str, tuple[tuple, dict]] = {}
+    app.state.receipt_card_counts_cache = receipt_card_counts_cache
+
     def _card_status_body() -> bytes:
         """The roll-up's response body. It opens its own billing-account
         scope because the warm-up builds it on a thread no request
@@ -5259,16 +5286,45 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # the build reads it once (2026-09-25: it was read once per
             # month, ~0.5 s of this route on seven months).
             evidence = EvidenceSource(store)
+            settings = store.get_settings()
+            # The remembered-card registry (item 169) can change which card
+            # a card-less receipt resolves to without touching this run's
+            # own snapshot or edits at all; cheap because it is the file's
+            # own SQLite write counter, never its content.
+            try:
+                memory_version = _sqlite_counter(app.state.learning_db_path)
+            except Exception:  # noqa: BLE001 - an unreadable counter only
+                # drops this one signal; the five per-run reads below still
+                # make every real edit to a month's own data exact.
+                memory_version = None
+
+            def _receipt_cards(run):
+                shared = (settings, memory_version)
+                per_run = (
+                    run.snapshot,
+                    store.get_decisions(run.run_id),
+                    store.get_category_overrides(run.run_id),
+                    store.get_expense_field_overrides(run.run_id),
+                    store.get_expense_edits(run.run_id),
+                    store.get_duplicate_resolutions(run.run_id),
+                )
+                cached = receipt_card_counts_cache.get(run.run_id)
+                if cached is not None and cached[0] == (shared, per_run):
+                    return cached[1]
+                counts = receipt_card_counts(
+                    _expense_page_view(store, run, evidence=evidence)
+                )
+                receipt_card_counts_cache[run.run_id] = (
+                    (shared, per_run), counts,
+                )
+                return counts
+
             payload = build_card_status(
                 store,
-                receipt_cards=lambda run: receipt_card_counts(
-                    _expense_page_view(store, run, evidence=evidence)
-                ),
+                receipt_cards=_receipt_cards,
                 # The live registry's tree, so the months strip can nest a
                 # subcard under its account (item 191).
-                parents=card_parents(
-                    effective_cards(store.get_settings(), load_cards())
-                ),
+                parents=card_parents(effective_cards(settings, load_cards())),
             )
         return JSONResponse(payload).body
 
