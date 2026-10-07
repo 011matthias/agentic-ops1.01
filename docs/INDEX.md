@@ -11,6 +11,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-07 | Recon Responsive Full Visibility | client-dev | [→](docs/2026-10-07%20-%20Recon%20Responsive%20Full%20Visibility/Checkpoint.md) |
+| 2026-10-07 | Recon Save Memory Ticks | client-dev | [→](docs/2026-10-07%20-%20Recon%20Save%20Memory%20Ticks/Checkpoint.md) |
 | 2026-10-07 | Brisken Recon Subcard Filter Restored | client-dev | [→](docs/2026-10-07%20-%20Brisken%20Recon%20Subcard%20Filter%20Restored/Checkpoint.md) |
 | 2026-10-07 | Brisken Recon Confirm Button Under Account | client-dev | [→](docs/2026-10-07%20-%20Brisken%20Recon%20Confirm%20Button%20Under%20Account/Checkpoint.md) |
 | 2026-10-05 | Lead Desk Sign-In Safe Links Fix | client-dev | [→](docs/2026-10-05%20-%20Lead%20Desk%20Sign-In%20Safe%20Links%20Fix/Checkpoint.md) |
@@ -510,6 +512,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-07 | Jotform Warme Wimmer Vault Entry | misc | [Mini-Checkpoint-1](docs/2026-10-07%20-%20Jotform%20Warme%20Wimmer%20Vault%20Entry/Mini-Checkpoint-1.md) |
+| 2026-10-07 | Zapier MCP Connector Setup | system-infra | [→](docs/2026-10-07%20-%20Zapier%20MCP%20Connector%20Setup/Checkpoint.md) |
 | 2026-10-05 | Handyvertrag HIGH Verlaengerung | misc | [→](docs/2026-10-05%20-%20Handyvertrag%20HIGH%20Verlaengerung/Checkpoint.md) |
 | 2026-09-24 | BAfoeG Antrag und Nachzahlung | misc | [→](docs/2026-09-24%20-%20BAfoeG%20Antrag%20und%20Nachzahlung/Checkpoint.md) |
 | 2026-09-24 | KIT Radar und tmbstud-l Austragung | misc | [→](docs/2026-09-24%20-%20KIT%20Radar%20und%20tmbstud-l%20Austragung/Checkpoint.md) |
@@ -776,3 +780,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-09-09 | Vinted Watcher Precision + Portability | client-dev | [→](docs/2026-09-09%20-%20Vinted%20Watcher%20Precision%20%2B%20Portability/Checkpoint.md) |
 | 2026-09-08 | Vinted Watcher Outage Fix + Knowledge Base | client-dev | [Mini-Checkpoint-2](docs/2026-09-08%20-%20Vinted%20Watcher%20Outage%20Fix%20%2B%20Knowledge%20Base/Mini-Checkpoint-2.md) |
 | 2026-09-08 | Vinted Watcher Outage Fix + Knowledge Base | client-dev | [→](docs/2026-09-08%20-%20Vinted%20Watcher%20Outage%20Fix%20%2B%20Knowledge%20Base/Checkpoint.md) |
+
+## warme-wimmer
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-10-07 | Waerme Wimmer Takeover | client-dev | [→](docs/2026-10-07%20-%20Waerme%20Wimmer%20Takeover/Checkpoint.md) |

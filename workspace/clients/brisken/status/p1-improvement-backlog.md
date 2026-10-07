@@ -13139,11 +13139,201 @@ side-scroll, ellipsis / line-clamp / self-clip, and a header control hidden
 by stacking; each check was shown to fire on the baseline before its fix
 was trusted (self-clip caught "Chase Visa | 9693 | Cloud Expenses" cut in a
 select; the header check caught Memory's select-all hidden at 360-768 px).
+### 248. Email intake becomes Receipt overview: every receipt, every source, filterable (Dirk, 2026-10-07, relayed by the owner) (BACKEND LIVE 2026-10-07: PR #1587, Fly on `501edf7d`; SPA prompt `docs/lovable-receipt-overview-prompt.md` not pasted)
+
+Owner, relaying Dirk: *"dirk wants users to be able to see and filter. Lets do
+this in email intake tab. Rename email intake to Receipt overview; make sure
+ALL receipts in the tool land there; add filters: source, file type, file
+name, status, subject, received date, date in receipt, vendor, sum inside
+receipt; add fuzzy search and filters for every other column"*, with
+TanStack named as the library.
+
+**Why the old page could not do it.** `/api/inbound/log` is one row per MAIL
+(newest 100 on the page), so 193 of the 378 things the tool holds (every
+upload, receipts-page drop and expense-report page) never appeared, and a
+mailed receipt was a line inside an expander.
+
+**Backend: `GET /api/receipts/overview`** (`web/receipt_overview.py`, contract
+in `docs/api-contract.md`). One row per receipt from every expense batch's
+Expenses page payload, plus set-aside files and the mail that never became (or
+is no longer) an expense: waiting for its month, held, parked as a duplicate,
+dismissed, removed after filing. Statuses are read off the month's own
+verdicts (`without_charge`, `counts_in_total`, `payment_path`, `private`,
+`settled_outside`, `waits_for_statements`), never decided anew. Uploads have no
+per-file arrival record, so their received date is the stored file's write
+time, labelled `received_from: "stored_file"`. Memoized under the card
+roll-up's key plus the mail archive's. On the 2026-10-07 08:19 backup: 378
+rows = 243 matched, 58 duplicate copies, 26 no matching charge, 16 waiting
+for a statement, 16 dismissed, 8 set aside, 6 removed, 3 private, 2 held;
+185 email, 193 upload; every row has an arrival date; cold build 3.5-6.5 s,
+memo hit 0.03 s. Tests `tests/test_receipt_overview.py` (11); both wirings
+(mail log into the build, mail archive into the key) proven RED by
+`regress_check.py`; full module suite 4181 passed, 2 skipped.
+
+**SPA (prompt, full code inside).** TanStack Table v8 pinned (v9 changed the
+API and Lovable's edits stay reliable on v8) with match-sorter-utils. Receipts
+tab: status pills with counts, a search over every column (words AND, fields
+OR; substring / word start / acronym, letters-in-order only when close
+together, one typo in words of 5+ letters), quick filters for source, file
+type, month, received, receipt date, amount, currency, a funnel on every
+column header (facet with counts, date or number range, or fuzzy text), column
+toggles, 25/50/100/250 per page, state kept per browser, the existing receipt
+viewer on click. Emails tab: the old mail log, unchanged. Proven on a scratch
+clone with that exact code against a local copy of the backup: 20/20 checks.
+
+### 249. Mail parked as a "duplicate" because it shares a signature image (found 2026-10-07 while building item 248; not started)
+
+The arrival-time duplicate check matched two 2026-09-28 mails to the
+2026-09-14 Anthropic receipt mail (`20260914T054343-f6020d50`): Criss's
+forward of the Uber trip of 28 Sep (`20260928T153502-57fec943`, its only
+attachment `image.png`, 15,481 bytes) and ap@'s copy of the Microsoft invoice
+G186790773 (`20260928T084822-268b80cf`). All three carry the same signature
+`image.png`, which clears the 4,096-byte logo floor. Nothing was lost this
+time: the invoice arrived through Criss's twin mail one second earlier, and
+the Uber trip (Uber B.V. 12.72) was re-sent on 29 Sep and ingested. A
+body-only receipt sent once with that signature would be parked and never
+ingested. Fix direction (not decided): leave inline / signature-sized images
+out of the arrival duplicate key, or require the receipt-bearing part (a PDF,
+or the body for a body-only mail) to match. The Receipt overview now shows
+such mails as "Duplicate copy" with the subject they were matched to.
+
+### 250. The sender's note classifies the receipt: company, split, account (owner directive 2026-10-07: "expense recon must be able to use email content (notes left by receipt sender) to help classify receipts (categorization, legal entity, etc.)") (LIVE 2026-10-07: PR #1589, Fly on `27ab0ec4`, `/healthz` commit verified by deploy.py, cold SPA drive of October renders, read-only; SPA prompt `docs/lovable-sender-note-classify-prompt.md`, not pasted)
+
+Reverses item 155's "display only, must never route" for OUR senders.
+
+**Measured first (read-only, 2026-10-07).** 148 archived mails, 72 carry a
+note (the shipped `operator_note` cutter over `GET /api/inbound/{archive}/body`).
+Behind them, 89 live receipt rows: the note's company AGREES with the tool's
+on 40, FILLS a row with none on 5 (all `waits_for_statement`), CONTRADICTS
+the card or a person's pick on 17, says SPLIT on 5, names no company on 25
+(14 of those are only Criss's signature, "Cristiane Cavalcanti / Finance
+Manager"). Every noted mail came from dirk.neumann@brisken.com,
+dirk_.neumann@icloud.com, cristiane.cavalcanti@brisken.com, ap@brisken.com
+or dirk.neumann@gtgroup.com. Where Criss had booked a contradicted one
+(Typora "BCS", Hostinger "BTS"), she kept the card's company and used the
+note for the account ("COGS - Other Infra and IT Costs for Cloud Business").
+
+**Owner rulings, 2026-10-07 (three questions, after a walkthrough of how
+cards tie a charge to a company's books):**
+
+1. Company: **"note always wins"**, over the paying card; only Criss's own
+   pick on the row beats it. Accepted knowingly: a card-paid row can move to
+   a company whose Zoho chart does not hold that card.
+2. Split: **"own account, never split"**: a note that says split books the
+   whole amount in Corporate Services, on one of its own accounts with
+   allocation rule "N/A" (the `CorpServ | ...` family on Dirk's marked chart),
+   not on a shared account Zoho allocates onward. The tool still never splits.
+3. Account: **"decide when clear"**: a note whose words name one account of
+   the company's chart decides it; anything less clear decides nothing.
+
+**Built.** `sender_note.py` (pure: company vocabulary BCS / BTS / CorpServ,
+split words, signature cut, `CORPSERV_UNSPLIT_CODES`, `stamp_sender_notes`);
+`intake_mail.trusted_sender_notes` (our address, no `untrusted_instructions`,
+something left after the signature); three new receipt fields, serialized,
+stamped at BOTH arrival paths after the card stamp (`_add_receipts_locked`,
+`generate_expenses` via `execute_expense_batch`); `resolve_batch_row_cards`
+tier override > sender_note > card (`entity_source: "sender_note"`);
+categorizer tier `_note_accounts` above the merchant list on GL months
+(`classify_by_note`, note fenced as data, decides at confidence >= 0.85,
+same guards as any model answer, split offered only the unsplit codes),
+source `NOTE`, origin person, coarse `posting_category.source: "note"`,
+never overwritten by `live_registry_accounts`. Nothing writes to the override
+tables, so nothing a note decides is learned at Publish (2026-09-24 ruling).
+Contract: `docs/api-contract.md` "What our senders' notes decide".
+
+**Proof.** `tests/test_sender_note_250.py` (35) + the mail-creates-month case
+in `test_intake_mail.py`; item 155's differential is now
+`test_a_strangers_note_decides_nothing`. Regressed at all four wiring points
+(`tools/regress_check.py`: both arrival stamps, the row tier, the account
+tier): each goes red under the mutation and green again.
+
+**Not done, on purpose.** Receipts already in a month carry no note fields
+(read at arrival only), so the deploy changes no existing row; applying the
+rulings to the 89 would be a write to Criss's months. Bucket months
+(April-June) get the company tier but not the account tier. A card ending in
+a note ("2838", "Personal card") decides nothing. The 17 rows whose company
+the note would move post with the card's paid-through account in another
+company's books, exactly as a person's company pick on a card row does today.
+
+
+### 248. The date decides the month (notes #114 and #117, 2026-10-07; owner ruling the same day) (BUILT 2026-10-07; SPA prompt `docs/lovable-date-moves-month-prompt.md` not pasted)
+
+Criss, 08:55 UTC, January: *"Esta expense está no mes errado."* Operator,
+09:14 UTC, same row: *"this receipt appear in the month of january 2026, yet
+it was loaded 2026-07-04 ... where is the date the system uses to assign this
+receipt to january rather than july?"* Owner, verbatim: *"the baseline data on
+the dates that is extracted from receipts is the foundation for how the
+receipts get sent to months. So if user changes date, then the month changes
+accordingly."*
+
+**What happened.** `CARD-136_2026-07-05_USD-6.20_MP-PARADAOBRIGAT__BENCH-010.pdf`
+came in through the Receipts page on 2026-09-23 23:55 UTC. The drop files a
+file by the date the full extraction reads off it; the slip prints
+`04/07/26 23 56` with a faint 7, it read as a January date (item 77's misread
+of the same slip), and the empty January month took it. Item 240's re-read
+(2026-09-28) read 4 July and wrote it in place (`"read again 2026-09-28: date
+changed"`), but a re-read never moved a receipt and item 77 offered the move
+on a TYPED date only, so the row sat in January flagged `date_outside_period`
+with nothing to click. The `2026-07-04 23:56` on the row is the printed date
+and time, not the upload. The old reading is not on the row any more (the
+payload keeps no history), so the exact January date it read is unknown.
+
+**It is a second copy.** July already holds the same slip
+(`0071__20260704_Receipt_Food_ParadaObrigatoria.pdf`, operation
+16727/5113354, BRL 32.00, settled against `MP *PARADAOBRIGAT` USD 6.20). The
+right outcome for the January row is a delete (Criss's click), not a move;
+moving it would put a second copy into July, whose stored reference differs
+by one digit (`51133354` vs `5113354`), so the duplicate ladder may not pair
+them.
+
+**Built.**
+1. A date that CHANGES files the receipt in the calendar month it names,
+   through item 77's `move_expense_to_month`, in the same request: a typed or
+   cleared date (`PUT .../expenses/{doc}`), a dated typed-in expense
+   (`POST .../expenses`), and a real re-read that takes a new date where no
+   date was typed (`route_moved_dates`; the dry run names `moves_to` and
+   never moves). Replies carry `moved` / `move_held` / `move_error`.
+2. The offer (`month_move`) now stands on a READ date too, still only outside
+   the item-25 window, so a row nobody touches is never moved and a receipt
+   printed on the 30th for a charge posted on the 1st is not offered.
+3. One plausibility rule for both (`date_month_target`): the drop's (a day of
+   future grace, 366 days) measured from the batch's month, so a misread year
+   never opens a month. A published month at either end holds the move.
+4. Fix found on the way: the move's same-bytes check matched the target's OWN
+   soft-deleted copy, so moving a receipt back into the month it left kept the
+   dead row and deleted the live one. Deleted copies no longer count.
+
+**Live measurement (2026-10-07, one read per month, GET only).** 5 of 339
+rows sit outside their date's month, all machine-read: 2 outside the window
+(the January Parada copy -> July; July's 360Crossmedia EUR 900.00 read
+2026-03-30, `without_charge`) and 3 June-dated July rows from early-July mail
+(two Google 71.64 held by July's 07-01 charges, Anthropic 100.00). After the
+deploy exactly the first two show "Move to"; nothing moves until someone
+changes a date or clicks.
+
+**Not built.** Note #118 (record details like who/when must be read-only, the
+payment date editable): the date the row shows IS the editable expense date;
+whether the row's metadata is editable in the SPA was not checked. Note #115
+(old categories on the January row) is a different cause, not looked at.
+
+**Tests:** `tests/test_date_decides_month_item_248.py` (10, route-level) +
+`test_receipts_reread_item_240.py` (2 added, 1 extended) +
+`test_month_move.py` (offer tests rewritten for read dates);
+`test_neighbour_rematch_item_112.py` now proves August's neighbour re-match
+through the date edit's own `moved` reply, and `test_view_contract.py`
+raises its offer from a read date. Regressed at five
+wiring points with `tools/regress_check.py`, each green -> red -> green: the
+PUT's `if date_changed`, the add's `if payload.get("date")`, the re-read's
+`if data_root is not None`, the move's deleted-copy filter, the offer's
+`date_month_target` return.
 
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 165 | Fix (no item), follow-up to 163: `DELETE /api/runs/{id}/expenses/{doc}?views=1` and `POST /api/runs/{id}/duplicates/resolve?views=1` reply with `views.batch` / `views.run`, equal to the two page GETs at that moment; no flag, no change. SPA half `docs/lovable-duplicate-click-reply-views-prompt.md` (cache the reply, no refetch), handed to the owner, not pasted | After a duplicate click the page refetched the month twice and showed the old row until both landed. Local, September, click until the grid holds the new month: Delete 3.96 / 4.41 -> 3.83 / 3.71 s, Not a copy 3.68 / 4.48 -> 3.13 / 3.70 s; one screen update instead of two, and Not a copy refreshes the reconciliation line it left stale | 2026-10-07, PR #1590, Fly v284 (commit `0541288a`); live GET /api/runs + /api/expense-batches for September and October hash-identical before/after (baseline stable across two reads), page driven cold (read-only); the `views` reply itself not exercised live (it needs a write on Criss's month) |
+| 164 | Item 248: `GET /api/receipts/overview`, every receipt the tool holds in one list (months, trips, set-aside files, and mail that never became or is no longer an expense), statuses read off each month's own verdicts, memoized under the card key plus the mail archive's; SPA prompt with the TanStack Table v8 page | Dirk 2026-10-07: users could not see or filter receipts; the Email intake page listed mails only, so uploads never appeared. Live after deploy (one read-only GET): 363 receipts, 184 email / 179 upload, every row with an arrival date, 2.5 s; published SPA unchanged until the paste, cold drive 0 writes | 2026-10-07, PR #1587, Fly on `501edf7d` |
+| 163 | Fix (no item): a duplicate click's re-match memoizes its vendor work. `vendor_similarity`, its word-pair ratio and `strip_reference_tokens` are `lru_cache`d (pure, bounded ~25 MB); `MerchantRegistry.resolve` memoizes per instance; `_distinctive` cached on its tokens. No output moves | Owner 2026-10-07: "removing duplicates takes way too long to load". "Delete this copy" and "Not a copy" re-match the month inside the request; on September (216 charges x 112 receipts since the 10-05 statement) the matcher scored 26,163 vendor pairs for 3,710 distinct ones, twice per re-match, and the registry resolved 700 times for 274 names. Local A/B on the 10-07 backup: Delete this copy 3.88 -> 1.75 s, Not a copy 5.28 -> 2.73 s, payloads byte-identical | 2026-10-07, PR #1583, Fly v281 (commit `5ae5905d`); live September duplicate layer, totals and vendors identical before/after, page driven cold (read-only); the click itself not timed live (it is a write on Criss's month) |
 | 162 | Fix (no item): the card roll-up lets the first coverage row name a card that only receipts had opened, so a receipt-only newest month no longer blanks `card_key`, label, digits and `known` | Owner 2026-10-07: the 2838 account filter went away. October (created 10-01, receipts, no statement) was read first and blanked every card it holds a receipt on, so the item 191 tree linked nothing (`subcards` [] everywhere) and 2838, 3645, 3876, 9693, 1176 read as not in Settings; live after: 2838 opens 3876 / 3645 / 0340, no figure moved | 2026-10-07, PR #1575, Fly v279 (commit `7a4e0b0e`); driven cold, read-only |
 | 161 | Item 243: the card score reads a printed number through the card register when the register resolved the card from that print, so "...1672" agrees with a 2838 charge once 1672 is on the 2838 card; hint words, picks, remembered cards and unregistered cards (girocards) unchanged | Item 240's July dry run: the FX gate demoted two true Karlsruhe pairs (USD 34.39, 53.80) for printing the corporate card's plastic number; every future slip printing 1672 would have missed its charge | 2026-09-29, PR (this item) |
 | 160 | Item 240: `POST /api/runs/{id}/receipts/reread` reads a month's stored receipts again through the arrival's path and takes date, total, currency, tax, type, card and a different merchant (one Gemini pass: 0 of 251 key fields moved between passes); dry run on two throwaway database copies separates the re-read's own effect from any re-match's; `skip`, other-year dates held | Receipts stored before item 239 keep OpenAI's misreadings (April MEGA CENTER in BRL where the card paid USD, FENIX 117.79 for 500.90) until read again; local run over all seven months: 58 receipts change, 7 charges newly paired and 1 unpaired | 2026-09-28, PR #1538 |
