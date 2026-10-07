@@ -10549,7 +10549,7 @@ def build_card_status(
     unreadable: list[str] = []
     no_card_months: list[dict] = []
 
-    def _slot(row: dict) -> dict:
+    def _slot(row: dict, *, named: bool = True) -> dict:
         slot = per_card.get(row["key"])
         if slot is None:
             slot = per_card[row["key"]] = {
@@ -10570,7 +10570,20 @@ def build_card_status(
                 "months": [],
                 "receipt_months": [],
                 "_ccy": [],
+                "_named": named,
             }
+        elif named and not slot["_named"]:
+            # The slot was opened by a month holding only receipts on the
+            # card, which name nothing but the key. The first coverage row
+            # names it. Without this the newest month decides: live
+            # 2026-10-07, October had receipts and no statement, so 2838,
+            # 3645 and 3876 lost `card_key`, the tree (item 191) could not
+            # link them, and the months strip lost 2838's subcards.
+            slot["card_key"] = row.get("card_key") or ""
+            slot["label"] = row.get("label") or slot["label"]
+            slot["digits"] = list(row.get("digits") or [])
+            slot["known"] = bool(row.get("known"))
+            slot["_named"] = True
         # The entity is the registry's and only a known row carries one;
         # keep the first non-empty rather than letting a later blank win.
         if not slot["entity"] and row.get("entity"):
@@ -10681,7 +10694,9 @@ def build_card_status(
             }
             if key:
                 entry["statement"] = key in stated
-                _slot({"key": key, "label": key})["receipt_months"].append(entry)
+                _slot({"key": key, "label": key}, named=False)[
+                    "receipt_months"
+                ].append(entry)
             else:
                 no_card_months.append(entry)
 
@@ -10690,6 +10705,7 @@ def build_card_status(
     cards = []
     for slot in per_card.values():
         slot["unreconciled_by_ccy"] = _add_money(slot.pop("_ccy"))
+        slot.pop("_named")
         slot["n_statements"] = len(slot["statements"])
         # The months this card is actually ON, which is the question note
         # #86 opens with. A month that merely listed the card in its
