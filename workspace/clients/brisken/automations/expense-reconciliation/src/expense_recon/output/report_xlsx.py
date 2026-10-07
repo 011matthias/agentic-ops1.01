@@ -618,7 +618,7 @@ def _write_needs_review(wb: Workbook, rows: list[_Row]) -> None:
 
     # Item 216 Build 2 step 2: the model's answer on a GL month joins the
     # sheet; a person's pick (EDITED since then, LINE before) stays off it,
-    # and so does an account the sender's own note named (NOTE, item 246).
+    # and so does an account the sender's own note named (NOTE, item 250).
     review_rows = [
         r for r in rows
         if r.source not in (

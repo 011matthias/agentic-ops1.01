@@ -1286,7 +1286,7 @@ def _provenance_entry(person: dict, received_at: str, arch: Path | None) -> dict
     # Item 155: the sender's own prose above the forward - the filing
     # instruction that exists nowhere in the attached PDF. Parallel and
     # ABSENT when the mail carried none (56 of the 86 readable live
-    # bodies), never "". Shown to the reviewer as written. Since item 246
+    # bodies), never "". Shown to the reviewer as written. Since item 250
     # (owner 2026-10-07) a note from one of OUR senders also classifies;
     # that reading goes through `trusted_sender_notes`, never this record.
     #
@@ -1306,7 +1306,7 @@ def _provenance_entry(person: dict, received_at: str, arch: Path | None) -> dict
 def trusted_sender_notes(
     provenance: dict | None, cfg: "IntakeConfig",
 ) -> dict[str, str]:
-    """`{document_id: note}` for the notes allowed to classify (item 246).
+    """`{document_id: note}` for the notes allowed to classify (item 250).
 
     Owner 2026-10-07: a note from one of our own senders classifies the
     receipt (company, and the account when the note names one clearly). The

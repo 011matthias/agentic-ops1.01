@@ -3219,7 +3219,7 @@ def test_create_refusal_pools_the_mail(client, monkeypatch):
 def test_a_month_the_mail_creates_classifies_by_the_senders_note(
     client, monkeypatch,
 ):
-    """Item 246, the second arrival path: a mail that creates its own month
+    """Item 250, the second arrival path: a mail that creates its own month
     runs `generate_expenses`, not the add path, and the sender's note must
     reach the receipt there too. Created months carry no default company,
     so without the note this row would read "none"."""

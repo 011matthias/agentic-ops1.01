@@ -255,7 +255,7 @@ def receipt_to_dict(r: Receipt) -> dict:
         "document_kind": r.document_kind,
         # Item 87 (2026-09-17).
         "card_key": r.card_key,
-        # Item 246 (2026-10-07).
+        # Item 250 (2026-10-07).
         "sender_note": r.sender_note,
         "sender_note_entity": r.sender_note_entity,
         "sender_note_split": r.sender_note_split,
@@ -306,7 +306,7 @@ def receipt_from_dict(d: dict) -> Receipt:
         document_kind=d.get("document_kind"),
         # .get keeps pre-2026-09-17 snapshots loadable (no item-87 key).
         card_key=d.get("card_key"),
-        # .get keeps pre-2026-10-07 snapshots loadable (no item-246 keys).
+        # .get keeps pre-2026-10-07 snapshots loadable (no item-250 keys).
         sender_note=d.get("sender_note") or "",
         sender_note_entity=d.get("sender_note_entity") or "",
         sender_note_split=bool(d.get("sender_note_split")),

@@ -1157,7 +1157,7 @@ def generate_expenses(
             expense_block.get("card_hints"), dict
         ) else None,
     )
-    # Item 246: `sender_notes` is `{document_id: note}` from the web layer,
+    # Item 250: `sender_notes` is `{document_id: note}` from the web layer,
     # already limited to our own senders. The note's company outranks the
     # card, so it stamps after it and before the categorizer reads the stamp.
     receipts = stamp_sender_notes(receipts, sender_notes)

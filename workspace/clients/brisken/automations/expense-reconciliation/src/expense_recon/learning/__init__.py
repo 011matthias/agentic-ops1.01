@@ -28,6 +28,7 @@ from .commits import (
     RecordingStore,
     apply_plan,
     distinct_keys,
+    one_rule_per_merchant,
     registry_diff,
 )
 from .consult import (
@@ -59,6 +60,7 @@ __all__ = [
     "RecordingStore",
     "apply_plan",
     "distinct_keys",
+    "one_rule_per_merchant",
     "registry_diff",
     "MerchantCategory",
     "MerchantEntity",

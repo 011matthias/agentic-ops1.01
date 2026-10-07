@@ -2945,7 +2945,7 @@ def _coarse_source_join(joined: str | None) -> str:
             continue
         origin = origin_of_source_value(tok)
         if tok.upper() == ClassificationSource.NOTE.value:
-            # Item 246: a person's answer too, but the sender's in the mail,
+            # Item 250: a person's answer too, but the sender's in the mail,
             # not the reviewer's on the row; the screen says which.
             coarse = "note"
         elif origin == ORIGIN_PERSON:
@@ -6606,7 +6606,7 @@ def execute_expense_batch(
     exception propagates). The mail-intake materializer uses it to
     re-check that no competing batch for the same month landed while the
     OCR ran — this function itself stays policy-free."""
-    # Item 246: a month the mail itself creates classifies by the senders'
+    # Item 250: a month the mail itself creates classifies by the senders'
     # notes exactly as a receipt added to an open month does.
     sender_notes = None
     if prepared.intake_provenance:
@@ -7151,7 +7151,7 @@ def resolve_batch_row_cards(
     `entity_source` is override | sender_note | card | batch | learned | none
     — "learned" meaning the stamped value differs from the batch default
     (memory or an earlier card stamp), so the UI can say why without
-    guessing; "sender_note" (item 246) the company one of our senders named
+    guessing; "sender_note" (item 250) the company one of our senders named
     in the note above the forward, which outranks the card.
 
     `person` / `person_source` (backlog item 40): who the expense belongs
@@ -7385,7 +7385,7 @@ def resolve_batch_row_cards(
         if override.strip():
             entity, source = override.strip(), "override"
         elif (r.sender_note_entity or "").strip():
-            # Item 246 (owner 2026-10-07: "note always wins"): the company the
+            # Item 250 (owner 2026-10-07: "note always wins"): the company the
             # sender's own note names outranks the paying card. Only the
             # reviewer's pick above beats it.
             entity, source = r.sender_note_entity.strip(), "sender_note"
@@ -14757,7 +14757,7 @@ def _add_receipts_locked(
         new_receipts = stamp_card_entities(
             new_receipts, _batch_cards(cfg), _batch_card_hints(cfg)
         )
-        # Item 246: the note one of our senders typed above the forward,
+        # Item 250: the note one of our senders typed above the forward,
         # AFTER the card (the note's company outranks it) and before the
         # categorizer, which picks the company's chart off the stamp.
         from ..sender_note import stamp_sender_notes
@@ -18841,7 +18841,10 @@ def commit_month_memory(
     `only_if_changed` (the publish path), `{"saved": False, "reason":
     "unchanged"}` when the run's corrections are exactly what was last saved,
     so publishing, unpublishing and publishing again does not count the same
-    corrections twice in the Memory page's counts. The button always saves.
+    corrections twice in the Memory page's counts. The button saves what is
+    ticked, minus lessons this month already saved and memory still holds
+    (item 246); with nothing left it answers `nothing_to_save` and records no
+    save.
 
     Item 183 half A: `keep` (the ticked lesson ids) or `skip` choose which of
     the plan's lessons are written; neither means the defaults (corrections
@@ -18867,7 +18870,12 @@ def commit_month_memory(
         field_overrides=field_overrides, edits=edits, now_iso=now_iso,
     )
     chosen = ml.select(lessons, keep=keep, skip=skip)
-    kept = chosen["kept"]
+    # Item 246: a lesson this month already saved, which memory still holds
+    # as saved, is not written again: it would only count the same
+    # correction twice. A lesson whose value changed since is written, and
+    # overwrites the rule.
+    held = {lsn.id for lsn in lessons if lsn.already_saved}
+    kept = [lid for lid in chosen["kept"] if lid not in held]
     if only_if_changed:
         last = store.get_memory_commit(run.run_id)
         if last is not None and last["digest"] == digest:
@@ -18875,6 +18883,15 @@ def commit_month_memory(
             kept = [lid for lid in kept if before is not None and lid not in before]
             if not kept:
                 return {"saved": False, "reason": "unchanged"}
+    elif not kept:
+        # The button with nothing to write records no empty save, so the
+        # undo stays on the last save that changed something.
+        empty = {"writes": [], "unresolved_conflicts": []}
+        written = _learned_as_written(learned, empty, chosen, kept)
+        return {
+            "saved": False, "reason": "nothing_to_save", "learned": written,
+            "journal_id": None, "lessons": written["lessons"],
+        }
     applied = ml.apply_selection(ctx, lessons, kept)
     views = [_planned_write_view(w) for w in applied["writes"]]
     # Read before the write, so the journal's pre-image is the state a
@@ -18937,8 +18954,14 @@ def _learned_as_written(learned: dict, applied: dict, chosen: dict, kept) -> dic
     conflict counts stay as found, and `lessons` says which ids went where."""
     out = dict(learned)
     calls: dict[str, int] = {}
+    replaced = 0
     for w in applied["writes"]:
+        if w.is_delete:
+            replaced += 1
+            continue
         calls[w.table] = calls.get(w.table, 0) + 1
+    # Item 246: rules under another spelling of a saved merchant, removed.
+    out["rules_replaced"] = replaced
     for summary_key, table in _LEARNED_CALL_COUNTS.items():
         if summary_key in out:
             out[summary_key] = calls.get(table, 0)
@@ -19008,7 +19031,8 @@ def plan_month_memory(
         decisions=decisions, overrides=overrides,
         field_overrides=field_overrides, edits=edits, now_iso=now_iso,
     )
-    writes = ctx.writes
+    # Item 246: the writes as a save makes them, other spellings replaced.
+    writes = ctx.expand(ctx.writes)
     counts: dict[str, int] = {}
     for table, _key in distinct_keys(writes):
         counts[table] = counts.get(table, 0) + 1
@@ -19107,6 +19131,7 @@ def _memory_plan(
             )}),
             effective, card_res,
         )
+    stored, stored_categories = _stored_learning_rows(learning_db_path)
     ctx = ml.LessonContext(
         run=run, writes=writes, merchants_before=merchants_before,
         merchants_after=merchants_after, overrides=overrides or {},
@@ -19115,8 +19140,29 @@ def _memory_plan(
         rec_by_id=rec_by_id, gl=gl, now_iso=now_iso,
         identity=memory_identity(settings), alias_pairs=alias_pairs,
         cards=cards, card_seen=card_seen,
+        stored=stored, stored_categories=stored_categories,
+        saved_ids=_last_kept_lessons(store, run.run_id) or set(),
     )
     return ctx, ml.build_lessons(ctx), learned
+
+
+def _stored_learning_rows(learning_db_path: Path | None) -> tuple[dict, list]:
+    """Item 246: memory as it stands, read once per plan and never created:
+    `({(table, key tuple): row}, [MerchantCategory])`. An absent store is
+    empty memory."""
+    from ..learning import TABLE_KEYS
+
+    if learning_db_path is None or not Path(learning_db_path).exists():
+        return {}, []
+    stored: dict = {}
+    with LearningStore(learning_db_path) as s:
+        for table, cols in TABLE_KEYS.items():
+            for row in s.conn.execute(f"SELECT * FROM {table}").fetchall():  # noqa: S608 - fixed names
+                row = dict(row)
+                key = tuple("" if row.get(c) is None else str(row[c]) for c in cols)
+                stored[(table, key)] = row
+        categories = s.all_merchant_categories()
+    return stored, categories
 
 
 def _planned_write_view(w) -> dict:
@@ -19128,7 +19174,9 @@ def _planned_write_view(w) -> dict:
     from ..learning import TABLE_KEYS
 
     value = ""
-    if w.table == "merchant_category":
+    if w.is_delete:
+        pass
+    elif w.table == "merchant_category":
         value = str(w.args[2] or "")
     elif w.table == "merchant_entity":
         value = str(w.args[1] or "")
@@ -19143,6 +19191,9 @@ def _planned_write_view(w) -> dict:
         "key": dict(zip(TABLE_KEYS[w.table], w.key)),
         "surface": MEMORY_TABLE_SURFACE.get(w.table, ""),
         "value": value,
+        # Item 246: "delete" is a rule under another spelling of the same
+        # merchant that this save replaces.
+        "op": "delete" if w.is_delete else "write",
     }
 
 

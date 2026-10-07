@@ -211,7 +211,7 @@ def render_body_pdf(
 # returns what the person wrote above it.
 #
 # Shown as written, and never an instruction (rule_untrusted_inbound): it
-# selects no recipient, cost center or card. Since item 246 (owner
+# selects no recipient, cost center or card. Since item 250 (owner
 # 2026-10-07) a note from one of OUR senders also classifies the receipt's
 # company and account; that reading lives in `sender_note` and starts at
 # `intake_mail.trusted_sender_notes`, never here.

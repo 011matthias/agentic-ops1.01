@@ -13022,7 +13022,166 @@ show only when the row carries a bank-payment signal (`bill_suggestion`);
 that would hide it from the Perplexity row, and also from a bank-paid invoice
 the reader found no signal on. Owner call.
 
-### 246. The sender's note classifies the receipt: company, split, account (owner directive 2026-10-07: "expense recon must be able to use email content (notes left by receipt sender) to help classify receipts (categorization, legal entity, etc.)") (BUILT 2026-10-07, branch `client/brisken/p1-recon-mail-note-classify`; SPA prompt `docs/lovable-sender-note-classify-prompt.md`, not pasted)
+### 246. "Save corrections to memory" saves what is ticked, and a save overwrites the rule for that case (owner, 2026-10-07, in session) (BACKEND LIVE 2026-10-07: PR #1580, Fly v280 on `68beb63a`; SPA prompt `docs/lovable-save-memory-ticks-prompt.md` not pasted)
+
+Owner, verbatim: *"save to memory function should not be all or nothing.
+users should have the chance to adjust precisely what changes in each line
+item they want saved to memory"*, then *"also make sure that when 'save to
+memory' is clicked that the existing rule for that case is overwritten"*.
+
+**What was already there.** Item 183A cut every save into lessons (one per
+remembered fact, stable id, sentence, rows, default tick) and the Publish
+checklist ticks them. The Save button's route took no body, so that path was
+all or nothing.
+
+**Built (backend).**
+1. `POST /api/runs/{id}/commit-memory` takes the same `keep` / `skip` ids as
+   Publish, through one parser (`_lesson_lists`). No body saves the defaults,
+   so the published SPA behaves as before.
+2. Each lesson says what it does to the rule memory holds: `effect` (`new` /
+   `replaces` / `same` / `adds`), `replaces[]` (the old values it
+   overwrites), and its sentence ends "Replaces <old>." A lesson this month's
+   own un-undone save wrote, still held as saved, is `already_saved`: it
+   starts unticked and no save writes it again (before, every click counted
+   the same correction once more). A correction changed since is not
+   `already_saved` and overwrites. A click with nothing left answers
+   `nothing_to_save` and journals no empty save.
+3. **The overwrite gap that was real.** The store was already latest-wins
+   per key, but recall folds every spelling of one merchant in one company
+   into one identity and, when those spellings' rules disagree, folds none:
+   each keeps answering for itself. So a save under `staples` left an older
+   person rule under `staples inc` filing every receipt spelled that way,
+   and the Memory page still showed it. `learning.one_rule_per_merchant` now
+   makes each category write delete the case's other-spelling rules (journaled,
+   so the undo brings them back), carrying over the half the save did not
+   name (`keep_category` / `keep_account`, person over seeded). When those
+   rules disagree on that half, nothing says which to keep, and the write is
+   left as before. Live today (2026-10-07 read): 1 merchant has two spellings
+   (Anthropic, Corporate Services: the person rule `anthropic` over the seeded
+   `antropic`), so this bites at the next save there, not retroactively.
+
+**Unchanged by owner rulings:** a merchant with decided accounts
+(`accounts_locked`, item 219) is changed only by ticking its drift lesson;
+OpenAI / Anthropic / Lovable merchant-list writes stay held for the owner
+(2026-09-18); FX samples accumulate (a learned mean, never a single rule).
+
+**Tests:** `tests/test_save_memory_ticks_item_246.py`, 11 route-level.
+Regressed at four wiring points with `tools/regress_check.py`, each green ->
+red -> green: the button's `**lesson_lists`, `ctx.expand` in
+`apply_selection`, the already-saved skip in `commit_month_memory`, the
+kept-half fill in `one_rule_per_merchant`. Full module suite 4181 passed,
+2 skipped.
+
+**Live 2026-10-07 (Fly v280), checked with 0 writes.** Every month's
+`memory-plan` read before and after the deploy: writes and lesson ids equal
+on six months; May gained 2 deletes (the new behavior: Lovable Labs
+Incorporated and Railway Corporation rules, same category, account carried
+over, written only at May's next save) after edits made there since the
+morning read; July only grew (new receipts). A malformed `keep` on a fake run
+answers 400 `invalid_body`, the well-formed control 404, so the new parser
+serves. Consumer: a headless drive of the published Save dialog on May, every
+non-GET aborted (none attempted), renders "Replaces the rule saved as railway
+corporation". The published dialog still shows "Not saved by this button"
+until the prompt is pasted.
+
+### 247. Every page fits the screen, nothing cut off (owner 2026-10-07: "all pages to successfully adapt to users screen size and maintain 100% visability of all the content") (PROMPT WRITTEN 2026-10-07: `docs/lovable-responsive-full-visibility-prompt.md`, not pasted)
+
+The owner started it in Lovable the same morning (`aef936db`, `0ac4b07a`).
+The first of those two commits is **already published** (live bundle read
+2026-10-07: `overflow-x-clip` 5 hits in the ExpensesReviewGrid chunk, the
+second commit's `px-3` main classes absent), and it made things worse on
+the month screens: the review grid sits in a `<fieldset>`, whose minimum
+width is its content (~1,700 px), and the new `overflow-x-clip` on `<main>`
+cuts the excess off with no way to reach it. At 1280 px Legal entity, Paid
+through, Receipt and Actions are simply not on screen.
+
+**Measured** (local build of SPA `0ac4b07` against a local API over the
+2026-10-06 20:40 UTC SharePoint backup, headless Chrome, every non-GET
+aborted): 21 routes x EN/PT x 7 widths (360-1920), each in its default
+state, every filter tile / tab in turn, everything expanded, and the
+receipt + compare-copies dialogs open = 1,379 views. Before: 7,664 clipped,
+1,053 past the screen edge, 1,705 truncated, 445 behind a sideways scroll,
+page wider than the screen in 102 views (counts capped at 40 per kind per
+view). After the prompt's code: zero in every kind.
+
+**What the prompt does.** (1) `src/lib/fit-tables.ts`: every table, shadcn
+or plain, shows as a table while whole words fit and becomes labelled cards
+(`data-stacked`, `td[data-label]`) when they do not; header cells holding a
+control stay as a strip. (2) Buttons and select triggers wrap their label;
+a caller's `h-7` becomes `min-h-7` (`heightAsMinimum`). (3) `truncate` ->
+`break-words` app-wide, `wrap-anywhere` only for file names: `wrap-anywhere`
+on ordinary text let the grid squeeze the account column to one letter at
+1024 px ("CO GS - Oth er"), a readability failure the measurements did not
+see and the screenshots did. (4) The clip removed, fieldset `min-w-0`,
+toolbars / Settings tabs / Memory header wrap, header shows EN/PT, tagline,
+"Signed in as" and tab names at every width, Compare copies puts field names
+above the values below 640 px.
+
+Instrument (scratch, not committed): `measure.js` flags text or a control
+past the viewport, cut by an overflow-hidden/clip ancestor, behind an inner
+side-scroll, ellipsis / line-clamp / self-clip, and a header control hidden
+by stacking; each check was shown to fire on the baseline before its fix
+was trusted (self-clip caught "Chase Visa | 9693 | Cloud Expenses" cut in a
+select; the header check caught Memory's select-all hidden at 360-768 px).
+### 248. Email intake becomes Receipt overview: every receipt, every source, filterable (Dirk, 2026-10-07, relayed by the owner) (BACKEND BUILT 2026-10-07; SPA prompt `docs/lovable-receipt-overview-prompt.md` not pasted)
+
+Owner, relaying Dirk: *"dirk wants users to be able to see and filter. Lets do
+this in email intake tab. Rename email intake to Receipt overview; make sure
+ALL receipts in the tool land there; add filters: source, file type, file
+name, status, subject, received date, date in receipt, vendor, sum inside
+receipt; add fuzzy search and filters for every other column"*, with
+TanStack named as the library.
+
+**Why the old page could not do it.** `/api/inbound/log` is one row per MAIL
+(newest 100 on the page), so 193 of the 378 things the tool holds (every
+upload, receipts-page drop and expense-report page) never appeared, and a
+mailed receipt was a line inside an expander.
+
+**Backend: `GET /api/receipts/overview`** (`web/receipt_overview.py`, contract
+in `docs/api-contract.md`). One row per receipt from every expense batch's
+Expenses page payload, plus set-aside files and the mail that never became (or
+is no longer) an expense: waiting for its month, held, parked as a duplicate,
+dismissed, removed after filing. Statuses are read off the month's own
+verdicts (`without_charge`, `counts_in_total`, `payment_path`, `private`,
+`settled_outside`, `waits_for_statements`), never decided anew. Uploads have no
+per-file arrival record, so their received date is the stored file's write
+time, labelled `received_from: "stored_file"`. Memoized under the card
+roll-up's key plus the mail archive's. On the 2026-10-07 08:19 backup: 378
+rows = 243 matched, 58 duplicate copies, 26 no matching charge, 16 waiting
+for a statement, 16 dismissed, 8 set aside, 6 removed, 3 private, 2 held;
+185 email, 193 upload; every row has an arrival date; cold build 3.5-6.5 s,
+memo hit 0.03 s. Tests `tests/test_receipt_overview.py` (11); both wirings
+(mail log into the build, mail archive into the key) proven RED by
+`regress_check.py`; full module suite 4181 passed, 2 skipped.
+
+**SPA (prompt, full code inside).** TanStack Table v8 pinned (v9 changed the
+API and Lovable's edits stay reliable on v8) with match-sorter-utils. Receipts
+tab: status pills with counts, a search over every column (words AND, fields
+OR; substring / word start / acronym, letters-in-order only when close
+together, one typo in words of 5+ letters), quick filters for source, file
+type, month, received, receipt date, amount, currency, a funnel on every
+column header (facet with counts, date or number range, or fuzzy text), column
+toggles, 25/50/100/250 per page, state kept per browser, the existing receipt
+viewer on click. Emails tab: the old mail log, unchanged. Proven on a scratch
+clone with that exact code against a local copy of the backup: 20/20 checks.
+
+### 249. Mail parked as a "duplicate" because it shares a signature image (found 2026-10-07 while building item 248; not started)
+
+The arrival-time duplicate check matched two 2026-09-28 mails to the
+2026-09-14 Anthropic receipt mail (`20260914T054343-f6020d50`): Criss's
+forward of the Uber trip of 28 Sep (`20260928T153502-57fec943`, its only
+attachment `image.png`, 15,481 bytes) and ap@'s copy of the Microsoft invoice
+G186790773 (`20260928T084822-268b80cf`). All three carry the same signature
+`image.png`, which clears the 4,096-byte logo floor. Nothing was lost this
+time: the invoice arrived through Criss's twin mail one second earlier, and
+the Uber trip (Uber B.V. 12.72) was re-sent on 29 Sep and ingested. A
+body-only receipt sent once with that signature would be parked and never
+ingested. Fix direction (not decided): leave inline / signature-sized images
+out of the arrival duplicate key, or require the receipt-bearing part (a PDF,
+or the body for a body-only mail) to match. The Receipt overview now shows
+such mails as "Duplicate copy" with the subject they were matched to.
+
+### 250. The sender's note classifies the receipt: company, split, account (owner directive 2026-10-07: "expense recon must be able to use email content (notes left by receipt sender) to help classify receipts (categorization, legal entity, etc.)") (BUILT 2026-10-07, branch `client/brisken/p1-recon-mail-note-classify`; SPA prompt `docs/lovable-sender-note-classify-prompt.md`, not pasted)
 
 Reverses item 155's "display only, must never route" for OUR senders.
 
@@ -13066,7 +13225,7 @@ never overwritten by `live_registry_accounts`. Nothing writes to the override
 tables, so nothing a note decides is learned at Publish (2026-09-24 ruling).
 Contract: `docs/api-contract.md` "What our senders' notes decide".
 
-**Proof.** `tests/test_sender_note_246.py` (35) + the mail-creates-month case
+**Proof.** `tests/test_sender_note_250.py` (35) + the mail-creates-month case
 in `test_intake_mail.py`; item 155's differential is now
 `test_a_strangers_note_decides_nothing`. Regressed at all four wiring points
 (`tools/regress_check.py`: both arrival stamps, the row tier, the account
@@ -13080,10 +13239,12 @@ a note ("2838", "Personal card") decides nothing. The 17 rows whose company
 the note would move post with the card's paid-through account in another
 company's books, exactly as a person's company pick on a card row does today.
 
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 163 | Fix (no item): a duplicate click's re-match memoizes its vendor work. `vendor_similarity`, its word-pair ratio and `strip_reference_tokens` are `lru_cache`d (pure, bounded ~25 MB); `MerchantRegistry.resolve` memoizes per instance; `_distinctive` cached on its tokens. No output moves | Owner 2026-10-07: "removing duplicates takes way too long to load". "Delete this copy" and "Not a copy" re-match the month inside the request; on September (216 charges x 112 receipts since the 10-05 statement) the matcher scored 26,163 vendor pairs for 3,710 distinct ones, twice per re-match, and the registry resolved 700 times for 274 names. Local A/B on the 10-07 backup: Delete this copy 3.88 -> 1.75 s, Not a copy 5.28 -> 2.73 s, payloads byte-identical | 2026-10-07, PR #1583, Fly v281 (commit `5ae5905d`); live September duplicate layer, totals and vendors identical before/after, page driven cold (read-only); the click itself not timed live (it is a write on Criss's month) |
 | 162 | Fix (no item): the card roll-up lets the first coverage row name a card that only receipts had opened, so a receipt-only newest month no longer blanks `card_key`, label, digits and `known` | Owner 2026-10-07: the 2838 account filter went away. October (created 10-01, receipts, no statement) was read first and blanked every card it holds a receipt on, so the item 191 tree linked nothing (`subcards` [] everywhere) and 2838, 3645, 3876, 9693, 1176 read as not in Settings; live after: 2838 opens 3876 / 3645 / 0340, no figure moved | 2026-10-07, PR #1575, Fly v279 (commit `7a4e0b0e`); driven cold, read-only |
 | 161 | Item 243: the card score reads a printed number through the card register when the register resolved the card from that print, so "...1672" agrees with a 2838 charge once 1672 is on the 2838 card; hint words, picks, remembered cards and unregistered cards (girocards) unchanged | Item 240's July dry run: the FX gate demoted two true Karlsruhe pairs (USD 34.39, 53.80) for printing the corporate card's plastic number; every future slip printing 1672 would have missed its charge | 2026-09-29, PR (this item) |
 | 160 | Item 240: `POST /api/runs/{id}/receipts/reread` reads a month's stored receipts again through the arrival's path and takes date, total, currency, tax, type, card and a different merchant (one Gemini pass: 0 of 251 key fields moved between passes); dry run on two throwaway database copies separates the re-read's own effect from any re-match's; `skip`, other-year dates held | Receipts stored before item 239 keep OpenAI's misreadings (April MEGA CENTER in BRL where the card paid USD, FENIX 117.79 for 500.90) until read again; local run over all seven months: 58 receipts change, 7 charges newly paired and 1 unpaired | 2026-09-28, PR #1538 |

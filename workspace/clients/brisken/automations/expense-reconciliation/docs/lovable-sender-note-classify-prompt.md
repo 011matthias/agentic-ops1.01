@@ -1,4 +1,4 @@
-# Lovable prompt: the sender's note now classifies (item 246)
+# Lovable prompt: the sender's note now classifies (item 250)
 
 **Background.** Since item 155 the expense row shows the note the sender typed
 above a forwarded receipt ("BTS only", "CorpServ only / IT costs") with the

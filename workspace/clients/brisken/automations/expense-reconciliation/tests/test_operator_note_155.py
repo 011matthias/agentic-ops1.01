@@ -9,8 +9,8 @@ marker, an Outlook `From:/Date:/To:/Subject:` block, that block under a
 it, and a NESTED forward where the instruction sits BETWEEN two header
 blocks. The rest drive it through the mail route to `expenses[]`.
 
-Since item 246 (owner 2026-10-07) a note from one of OUR senders also
-classifies (`tests/test_sender_note_246.py`). A stranger's note is still
+Since item 250 (owner 2026-10-07) a note from one of OUR senders also
+classifies (`tests/test_sender_note_250.py`). A stranger's note is still
 display only (rule_untrusted_inbound): the last test here is the
 differential that says so, two identical receipts where only one stranger's
 mail carries a note naming a company and a category, landing on identical
@@ -392,7 +392,7 @@ def test_a_strangers_note_decides_nothing(client, monkeypatch):
     """rule_untrusted_inbound, as a differential rather than a promise.
 
     Two identical receipts from a stranger into one month; one mail's note
-    names a company (in the short form item 246 reads from our own senders),
+    names a company (in the short form item 250 reads from our own senders),
     a cost center and a category in the plainest words it could. Every
     decision the row carries is identical on both, and only the note
     differs.

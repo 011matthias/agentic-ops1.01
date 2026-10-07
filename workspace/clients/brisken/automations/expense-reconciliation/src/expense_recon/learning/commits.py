@@ -34,6 +34,9 @@ _METHOD_TABLE: dict[str, str] = {
     "record_field_correction": "field_correction",
     "record_vendor_alias": "vendor_alias",
     "record_merchant_fx": "merchant_fx",
+    # Item 246: a save replaces the rules recall folds into the one it writes
+    # (`one_rule_per_merchant`). Never called by a learner.
+    "delete_merchant_category": "merchant_category",
 }
 
 
@@ -55,6 +58,10 @@ class PlannedWrite:
     @property
     def key_dict(self) -> dict[str, str]:
         return dict(zip(TABLE_KEYS[self.table], self.key))
+
+    @property
+    def is_delete(self) -> bool:
+        return self.method.startswith("delete_")
 
 
 class RecordingStore:
@@ -97,6 +104,76 @@ class RecordingStore:
 
     def record_merchant_fx(self, *args: Any, **kwargs: Any) -> None:
         self._record("record_merchant_fx", *args, **kwargs)
+
+
+def one_rule_per_merchant(
+    writes: list[PlannedWrite], stored: list, identity: Any,
+) -> list[PlannedWrite]:
+    """Item 246 (owner 2026-10-07: "when save to memory is clicked the
+    existing rule for that case is overwritten"): each category write also
+    replaces the rules stored for the same merchant in the same company under
+    another spelling.
+
+    Recall folds every spelling of one merchant into one identity
+    (`MerchantCategoryLookup`), and when those rules disagree it folds none of
+    them: each spelling keeps answering for itself. So a save written under
+    `anthropic` left a rule under `anthropic pbc` answering every receipt
+    spelled that way, and the Memory page still showed it. Here the save
+    deletes those rules, and the one it writes is the case's only rule.
+
+    A write that keeps a half it did not name (`keep_category` /
+    `keep_account`, item 183) takes that half from the rules being replaced,
+    the person's over the seeded, so deleting them loses nothing. When those
+    rules disagree on that half, nothing says which to keep, and the write is
+    left exactly as the learner made it, siblings and all.
+
+    `stored` is every `MerchantCategory` row; `identity` the resolver recall
+    uses (`MerchantIdentityResolver`). Pure: it reads nothing and writes
+    nothing, so the plan, the lessons and the save expand the same way."""
+    from .consult import _person_row
+
+    if not writes or not stored or identity is None:
+        return list(writes)
+
+    def ikey(vendor: str) -> str:
+        return identity.key(vendor) or vendor
+
+    out: list[PlannedWrite] = []
+    for w in writes:
+        if w.method != "record_merchant_category":
+            out.append(w)
+            continue
+        entity, vendor = w.key
+        target = ikey(vendor)
+        case = [r for r in stored
+                if r.legal_entity_id == entity and ikey(r.vendor_norm) == target]
+        siblings = [r for r in case if r.vendor_norm != vendor]
+        if not siblings:
+            out.append(w)
+            continue
+        deciding = [r for r in case if _person_row(r)] or case
+        args = list(w.args)
+        ambiguous = False
+        for keep, index, column in (
+            ("keep_category", 2, "category"), ("keep_account", 3, "zoho_account"),
+        ):
+            if not w.kwargs.get(keep):
+                continue
+            values = {getattr(r, column) for r in deciding if getattr(r, column)}
+            if len(values) > 1:
+                ambiguous = True
+                break
+            args[index] = values.pop() if values else None
+        if ambiguous:
+            out.append(w)
+            continue
+        out.append(PlannedWrite(w.table, w.key, w.method, tuple(args), {}))
+        for r in siblings:
+            key = (r.legal_entity_id, r.vendor_norm)
+            out.append(PlannedWrite(
+                "merchant_category", key, "delete_merchant_category", key, {},
+            ))
+    return out
 
 
 def apply_plan(store: Any, writes: list[PlannedWrite]) -> int:

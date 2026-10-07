@@ -268,7 +268,7 @@ class LLMClient(Protocol):
         total: Decimal,
         categories: list[str],
     ) -> ClassificationResult:
-        """Item 246: the account the sender's own note names, or null. The
+        """Item 250: the account the sender's own note names, or null. The
         note is fenced as data; the categorizer acts on the answer only at
         high confidence. Optional: the categorizer skips a client without
         it."""
@@ -379,7 +379,7 @@ Total: {total}
 Return a single JSON object with: category (one of the listed names or null), confidence (number), reasoning (string), zoho_account (copy the exact label of the single best-matching GL account from the account list above, or null if no account list was given or none clearly fits).
 """
 
-# Item 246 (owner 2026-10-07, "decide when clear"): the colleague who sent the
+# Item 250 (owner 2026-10-07, "decide when clear"): the colleague who sent the
 # receipt often says what it is ("IT subscriptions", "Marketing", "Travel
 # (Matthias)"). The note is evidence about THIS receipt, fenced as data like
 # every third-party text; the rules below are ours.
@@ -1475,7 +1475,7 @@ class MockLLMClient:
         note_responses: list[ClassificationResult] | None = None,
     ):
         self._queue = list(responses or [])
-        # Item 246: answers for `classify_by_note`, kept apart from the
+        # Item 250: answers for `classify_by_note`, kept apart from the
         # classify queue so a note never consumes a line or vendor answer.
         # Empty = the note names no account (null, confidence 0).
         self._note_queue = list(note_responses or [])

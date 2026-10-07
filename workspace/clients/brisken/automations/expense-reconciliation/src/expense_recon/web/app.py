@@ -2099,6 +2099,24 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 
         return _start_background_run(background, prepared, intake.label)
 
+    def _lesson_lists(payload) -> dict | JSONResponse:
+        """`keep` / `skip` from a save's body: the ticked lesson ids (from
+        `GET .../memory-plan` `lessons[].id`), or ids dropped from the
+        defaults. Neither keeps the defaults. One parser for Publish and the
+        Save button (item 246), so the two cannot read ticks differently."""
+        lists: dict = {}
+        for name in ("keep", "skip"):
+            raw = payload.get(name) if isinstance(payload, dict) else None
+            if raw is None:
+                continue
+            if not isinstance(raw, list) or not all(isinstance(x, str) for x in raw):
+                return JSONResponse({
+                    "error": f"{name} must be a list of lesson ids",
+                    "code": "invalid_body",
+                }, status_code=400)
+            lists[name] = raw
+        return lists
+
     # ── Publish / unpublish a reviewed run (drives the intake status the
     # dashboard and the dev-side notifier read).
     @app.post("/api/runs/{run_id}/publish")
@@ -2114,17 +2132,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # `skip` drops ids from the defaults instead. Neither keeps today's
         # behaviour: corrections saved, conflicts and owner-gated merchants
         # not. Zero ticked still publishes.
-        lesson_lists: dict = {}
-        for name in ("keep", "skip"):
-            raw = payload.get(name) if isinstance(payload, dict) else None
-            if raw is None:
-                continue
-            if not isinstance(raw, list) or not all(isinstance(x, str) for x in raw):
-                return JSONResponse({
-                    "error": f"{name} must be a list of lesson ids",
-                    "code": "invalid_body",
-                }, status_code=400)
-            lesson_lists[name] = raw
+        lesson_lists = _lesson_lists(payload)
+        if isinstance(lesson_lists, JSONResponse):
+            return lesson_lists
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
@@ -5202,6 +5212,108 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             return _flag_off()
         return Response(card_status_memo.get(), media_type="application/json")
 
+    def _receipt_overview_body() -> bytes:
+        """Every receipt in the tool, one row each (the Receipt overview
+        page, Dirk 2026-10-07). Built from each batch's Expenses page payload
+        and the mail log, so every verdict on a row is its month's own."""
+        from .intake_mail import read_log
+        from .receipt_overview import BatchPage, build_receipt_overview
+        from .service import batch_type, receipt_image_file
+
+        pages: list[BatchPage] = []
+        work_dirs: dict[str, Path] = {}
+        with account_request_scope(_account_index), open_store() as store:
+            evidence = EvidenceSource(store)
+            for run in store.list_runs():
+                if (run.config or {}).get("mode") != MODE_EXPENSE_GENERATION:
+                    continue
+                work_dirs[run.run_id] = Path(run.work_dir)
+                try:
+                    view = _expense_page_view(store, run, evidence=evidence)
+                except Exception:  # noqa: BLE001 - one bad month never sinks the list
+                    log.exception("receipt overview: view build failed for %s", run.run_id)
+                    view = {}
+                pages.append(BatchPage(
+                    batch_id=run.run_id,
+                    label=run.label or run.run_id,
+                    batch_type=batch_type(run),
+                    view=jsonable_encoder(view),
+                ))
+
+        def _stored_at(batch_id: str, document_id: str) -> str | None:
+            work_dir = work_dirs.get(batch_id)
+            if work_dir is None:
+                return None
+            path = receipt_image_file(work_dir, document_id, expense_mode=True)
+            if path is None:
+                return None
+            try:
+                stamp = path.stat().st_mtime
+            except OSError:
+                return None
+            return datetime.fromtimestamp(stamp, tz=timezone.utc).isoformat(timespec="seconds")
+
+        payload = build_receipt_overview(
+            pages,
+            read_log(app.state.data_root, limit=1_000_000),
+            stored_at=_stored_at,
+            generated_at=_now_iso(),
+        )
+        return JSONResponse(payload).body
+
+    def _inbound_version() -> tuple:
+        """Mail changes the overview without touching the folder the card
+        key reads: an arrival appends to the log, a dismiss or a replay
+        rewrites one archive's meta.json."""
+        from .intake_mail import _log_path, inbound_root
+
+        parts: list[tuple] = []
+        log_file = _log_path(app.state.data_root)
+        try:
+            st = log_file.stat()
+            parts.append(("log", st.st_mtime_ns, st.st_size))
+        except FileNotFoundError:
+            parts.append(("log", "absent"))
+        root = inbound_root(app.state.data_root)
+        if root.is_dir():
+            for entry in sorted(os.scandir(root), key=lambda e: e.name):
+                if not entry.is_dir():
+                    continue
+                try:
+                    st = (Path(entry.path) / "meta.json").stat()
+                    parts.append((entry.name, st.st_mtime_ns, st.st_size))
+                except FileNotFoundError:
+                    parts.append((entry.name, "no-meta"))
+        return tuple(parts)
+
+    def _receipt_overview_version() -> tuple | None:
+        folder = card_status_data_version(
+            data_root_path,
+            tuple(Path(p) for p in [os.environ.get(CARDS_ENV)] if p),
+        )
+        if folder is None:
+            return None
+        try:
+            return (folder, _inbound_version())
+        except OSError:
+            return None
+
+    # Same memo as the card roll-up, keyed on the data folder plus the mail
+    # archive: rebuilt on the first read after any write, free in between.
+    receipt_overview_memo = CardStatusMemo(
+        version=_receipt_overview_version, build=_receipt_overview_body,
+    )
+    app.state.receipt_overview_memo = receipt_overview_memo
+
+    @app.get("/api/receipts/overview")
+    def api_receipt_overview():
+        """Every receipt the tool holds, one row each, with its source,
+        file, status, mail subject, arrival, and what the receipt reads
+        (date, vendor, sum). Read-only; the SPA filters it client-side."""
+        if not _receipt_first_on():
+            return _flag_off()
+        return Response(receipt_overview_memo.get(), media_type="application/json")
+
     @app.get("/api/cost-centers/totals")
     def cost_center_totals(
         date_from: str | None = Query(default=None, alias="from"),
@@ -6690,11 +6802,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse(jsonable_encoder(result))
 
     @app.post("/api/runs/{run_id}/commit-memory")
-    def post_commit_memory(run_id: str):
+    def post_commit_memory(run_id: str, payload: dict | None = Body(None)):
         # Explicit finalize: fold THIS run's confirmed decisions into the
         # durable learning store so next month consults them (Phase 2).
         # Expense batches (Phase 6) branch inside commit_to_memory: the
         # field/edit overlays teach entity mappings + field corrections.
+        # Item 246: the body takes the same `keep` / `skip` lesson ids as
+        # Publish, so a person saves exactly the lines they ticked; no body
+        # saves the defaults, as before.
+        lesson_lists = _lesson_lists(payload)
+        if isinstance(lesson_lists, JSONResponse):
+            return lesson_lists
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
@@ -6707,13 +6825,20 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             saved = commit_month_memory(
                 store, run, app.state.learning_db_path, _now_iso(),
                 trigger=MEMORY_TRIGGER_BUTTON, only_if_changed=False,
+                **lesson_lists,
             )
         # Item 163: the id of the journal entry this save wrote, so the
         # caller can undo exactly this save rather than "the last one".
-        return JSONResponse({
-            "ok": True, "learned": saved["learned"],
+        # Item 246: `saved` / `reason` say whether anything was written, and
+        # `lessons` which ids went where (kept, skipped, already saved).
+        body = {
+            "ok": True, "saved": saved["saved"], "learned": saved["learned"],
             "journal_id": saved.get("journal_id"),
-        })
+            "lessons": saved["learned"].get("lessons"),
+        }
+        if saved.get("reason"):
+            body["reason"] = saved["reason"]
+        return JSONResponse(body)
 
     @app.get("/runs/{run_id}/report.xlsx")
     def download_report(run_id: str):

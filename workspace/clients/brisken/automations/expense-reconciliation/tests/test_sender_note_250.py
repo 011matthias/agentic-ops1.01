@@ -1,4 +1,4 @@
-"""Item 246 (owner 2026-10-07): the note one of our senders typed above the
+"""Item 250 (owner 2026-10-07): the note one of our senders typed above the
 forward classifies the receipt.
 
 Three rulings, each pinned here at the caller that applies it:

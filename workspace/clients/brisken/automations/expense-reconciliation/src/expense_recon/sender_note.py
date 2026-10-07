@@ -1,4 +1,4 @@
-"""What the sender's own note says about a receipt (item 246).
+"""What the sender's own note says about a receipt (item 250).
 
 Above a forwarded receipt Dirk and Criss type the filing instruction: "BTS
 only", "CorpServ only / IT costs", "BCS / Verve.Works", "CorpServ - split /

@@ -423,7 +423,7 @@ def categorize_receipts_with_registry(
     # what varies by company is the ACCOUNT, which the (company, vendor)
     # rule still decides through `_registry_account`.
     gl = entity_orgs is not None
-    # Item 246 (owner 2026-10-07, "decide when clear"): the account the
+    # Item 250 (owner 2026-10-07, "decide when clear"): the account the
     # sender's own note names decides before the merchant list. It is a
     # person's answer about THIS receipt, where the list is a rule about the
     # merchant; only the reviewer's own pick (applied on read) beats it. GL
@@ -1067,7 +1067,7 @@ def _registry_gl(
     return None
 
 
-# Item 246: how sure the model must be that the note's own words name one
+# Item 250: how sure the model must be that the note's own words name one
 # account before the note DECIDES it. Above the 0.6 suggestion floor
 # (`REVIEW_THRESHOLD`) on purpose: the prompt reserves 0.9+ for a note that
 # names a listed account, and "decide when clear" means exactly that case.
@@ -1080,7 +1080,7 @@ def _note_accounts(
     entity_orgs: "Mapping[str, str] | None",
 ) -> dict[str, Receipt]:
     """`{document_id: receipt stamped NOTE}` for each receipt whose sender's
-    note names one account of its company's chart clearly (item 246, owner
+    note names one account of its company's chart clearly (item 250, owner
     2026-10-07).
 
     Nothing is decided, and the receipt runs the normal chain, when: there
@@ -1176,7 +1176,7 @@ def _live_mapped(
 
 
 def _decided_by_person(cat: Categorization | None) -> bool:
-    """A reviewer's pick, or the account the sender's note named (item 246):
+    """A reviewer's pick, or the account the sender's note named (item 250):
     both are a person's answer, and the merchant list must not overwrite
     either on read."""
     return cat is not None and cat.source in (

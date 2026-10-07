@@ -52,7 +52,7 @@ class ClassificationSource(str, Enum):
     LEARNED = "LEARNED"    # Tier 1: confirmed merchant->category recalled from memory (Phase 2)
     REGISTRY = "REGISTRY"  # Tier 1: canonical merchant-registry default (2026-07-29); preempts the LLM
     EDITED = "EDITED"      # Tier 1: a reviewer set this category by hand (item 109)
-    NOTE = "NOTE"          # Tier 1: the sender's own note named the account (item 246)
+    NOTE = "NOTE"          # Tier 1: the sender's own note named the account (item 250)
     UNCLASSIFIED = "UNCLASSIFIED"  # pre-categorization default
 
 
@@ -67,7 +67,7 @@ class ClassificationSource(str, Enum):
 # needs-review. This is the one mapping; a surface reads it, never the enum.
 #
 # - person: a reviewer decided it (EDITED), or the person who sent the
-#   receipt named the account in the note above the forward (NOTE, item 246,
+#   receipt named the account in the note above the forward (NOTE, item 250,
 #   owner 2026-10-07: "decide when clear"). A NOTE answer is never learned:
 #   learners read the override tables, and a note writes none.
 # - rule: a deterministic source a person curated (the merchant list, a
@@ -526,7 +526,7 @@ class Receipt:
     # only when the printed payment method names no card number, so a
     # printed number always wins over what was remembered.
     card_key: str | None = None
-    # Item 246 (owner 2026-10-07): the note one of OUR senders typed above
+    # Item 250 (owner 2026-10-07): the note one of OUR senders typed above
     # the forward (signature stripped; strangers' notes never get here), the
     # company it decides ("" = none), and whether it says the cost is split.
     # Stamped once at arrival (`sender_note.stamp_sender_notes`). The company
