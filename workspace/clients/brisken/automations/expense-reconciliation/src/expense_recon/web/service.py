@@ -8571,6 +8571,13 @@ def build_expense_view(
         period = batch_period(
             run.label, [r.detected_date for r in receipts if r.detected_date]
         )
+    # Item 248: the month the window is centred on, derived the same way, and
+    # today as the move offer's yardstick for a date in the future.
+    batch_month = None if is_trip_batch(run) else (
+        month_from_label(run.label)
+        or month_from_dates([r.detected_date for r in receipts if r.detected_date])
+    )
+    today = datetime.now(timezone.utc).date()
     # Item 38 x item 40: on a trip, an expense paid by a person who is
     # not on the roster is worth a flag. The person comes off the card
     # chain (or `reimburse_to` on a private row) exactly as item 40
@@ -8955,18 +8962,16 @@ def build_expense_view(
             # Printed bank details on an open card row: a one-click offer,
             # never a move. Absent otherwise. A copy's original carries it.
             expenses[-1]["bill_suggestion"] = dict(res["bill_suggestion"])
-        # Item 77: a reviewer-typed date that puts this receipt in another
-        # month offers the move (POST .../expenses/{id}/move). A `manual:` id
-        # that is not a typed-in add is a receipt attached to a charge by
-        # hand; it belongs to that charge, not to a month, so it is never
-        # offered. `month_batch` (the route's lookup) names the batch the
-        # move would join; absent when the move would create the month.
+        # Item 77 / 248: a date, typed or read, that puts this receipt
+        # outside the batch's window offers the move (POST
+        # .../expenses/{id}/move). A `manual:` id that is not a typed-in add
+        # is a receipt attached to a charge by hand; it belongs to that
+        # charge, not to a month, so it is never offered. `month_batch` (the
+        # route's lookup) names the batch the move would join; absent when
+        # the move would create the month.
         move_to = month_move_for_row(
-            r, period=period, is_trip=is_trip_batch(run),
-            date_is_human=(
-                "date" in field_overrides.get(r.document_id, {})
-                or r.document_id in manual_add_ids
-            ),
+            r, period=period, batch_month=batch_month,
+            is_trip=is_trip_batch(run), today=today,
         )
         if move_to is not None and (
             not r.document_id.startswith("manual:")
@@ -17775,26 +17780,74 @@ def _candidate_date_gap(tx: "Transaction", receipt: "Receipt | None") -> dict:
 # one as a soft delete that names where it went.
 
 
+#
+# Item 248 (owner 2026-10-07): "the baseline data on the dates that is
+# extracted from receipts is the foundation for how the receipts get sent to
+# months. So if user changes date, then the month changes accordingly."
+# Item 77 only OFFERED the move, and only on a typed date, so a re-read that
+# corrected the misread (a second copy of the same Parada slip, read as
+# January on 2026-09-23 and as 4 July on 2026-09-28) left it in January with
+# nothing to click. Now a date that CHANGES (typed, cleared back to the
+# reading, entered with a typed-in expense, or taken by a re-read) carries
+# the receipt into the calendar month it names, the month the drop would have
+# filed it in, through the move below. A row nobody touches is never moved on
+# read; it is OFFERED the move when its date, typed or read, lies outside the
+# batch's window.
+
+# The drop's plausibility rule (`intake_mail.resolve_receipt_month`), with the
+# batch's own month as the yardstick instead of the arrival: a date the drop
+# would not have filed never opens or joins a month by itself.
+DATE_MOVE_FUTURE_GRACE_DAYS = 1
+DATE_MOVE_MAX_DISTANCE_DAYS = 366
+
+
+def date_month_target(
+    d: date | None,
+    *,
+    batch_month: tuple[int, int] | None,
+    today: date,
+) -> str | None:
+    """The "YYYY-MM" a receipt dated `d` belongs in, when that is not the
+    batch's own month; None when it belongs here or the date cannot route.
+
+    A date more than a day in the future, or more than a year from the
+    batch's month, does not route: a misread year would otherwise open a
+    month nobody has (April's San Paolo slip read as 2024). A batch with no
+    knowable month has nothing to compare against."""
+    if d is None or batch_month is None:
+        return None
+    if (d.year, d.month) == tuple(batch_month):
+        return None
+    if (d - today).days > DATE_MOVE_FUTURE_GRACE_DAYS:
+        return None
+    anchor = date(batch_month[0], batch_month[1], 1)
+    if abs((d - anchor).days) > DATE_MOVE_MAX_DISTANCE_DAYS:
+        return None
+    return f"{d.year:04d}-{d.month:02d}"
+
+
 def month_move_for_row(
     r: Receipt,
     *,
     period: tuple[date, date] | None,
-    date_is_human: bool,
+    batch_month: tuple[int, int] | None,
     is_trip: bool,
+    today: date,
 ) -> str | None:
-    """The "YYYY-MM" this row belongs in, or None when it belongs here.
+    """The "YYYY-MM" this row is OFFERED a move to, or None.
 
-    Only a date the reviewer typed (or a whole expense entered by hand) can
-    move a row: a machine reading outside the window is item 25's
-    `date_outside_period` question, and moving on a reading the guard does
-    not trust would file the receipt by the same mistake twice. A trip spans
-    months freely, and a batch with no knowable month has no window to be
-    outside of."""
-    if is_trip or not date_is_human or r.detected_date is None:
+    Item 248: a date the machine read counts the same as a typed one, because
+    the reading is what filed the receipt in the first place. The offer is
+    held to dates outside the batch's window (item 25's three months): a
+    receipt printed on the 30th for a charge posted on the 1st sits in the
+    neighbouring month on purpose, often held by that month's charge, and is
+    moved only when someone changes its date. A trip spans months freely, and
+    a batch with no knowable month has no window to be outside of."""
+    if is_trip or r.detected_date is None:
         return None
     if not outside_period(r.detected_date, period):
         return None
-    return f"{r.detected_date.year:04d}-{r.detected_date.month:02d}"
+    return date_month_target(r.detected_date, batch_month=batch_month, today=today)
 
 
 def _month_move_source(store: RunStore, run: RunRow, document_id: str):
@@ -17944,10 +17997,20 @@ def move_expense_to_month(
             _, t_receipts, t_outcome, _ = snapshot_from_dict(t_snapshot)
             t_dir = Path(target.work_dir) / "receipts"
             t_dir.mkdir(parents=True, exist_ok=True)
+            # Item 248: a copy this month deleted, or moved away, is not
+            # "already there". Moving a receipt back into the month it left
+            # (a date typed wrong, then corrected) found its own soft-deleted
+            # row, kept that dead row and deleted the live one: the receipt
+            # vanished from both months.
+            t_gone = {
+                e["document_id"] for e in store.get_expense_edits(target.run_id)
+                if e["op"] == "delete"
+            }
             same = next(
                 (
                     r.document_id for r in t_receipts
-                    if (t_dir / r.document_id).is_file()
+                    if r.document_id not in t_gone
+                    and (t_dir / r.document_id).is_file()
                     and hashlib.sha1(
                         (t_dir / r.document_id).read_bytes()
                     ).hexdigest()[:16] == digest
@@ -18069,6 +18132,74 @@ def move_expense_to_month(
         if moved_cross:
             out["months_rematched"] = moved_cross
     return out
+
+
+def route_expense_by_date(
+    store: RunStore,
+    run_id: str,
+    document_id: str,
+    now_iso: str,
+    *,
+    data_root: Path,
+    learning_db_path: Path | None = None,
+    today: date | None = None,
+) -> dict | None:
+    """Item 248: after an expense's date changed, file it in the month the
+    date names (`move_expense_to_month`).
+
+    Reads the EFFECTIVE date (a typed date over the reading, a typed-in
+    expense's own date), so a re-read that changed the reading under a date
+    the reviewer typed moves nothing. None when the expense already sits in
+    its month or cannot be routed: a trip, a batch with no knowable month, a
+    receipt attached to a charge by hand, a date `date_month_target` would
+    not file, an expense no longer in the month. Otherwise the move's own
+    answer, or `{"held": "month_published", "month", "label"}` when a
+    published month, at either end, keeps it where it is (the offer stays on
+    the row). Sync: the batch lock and both months' re-match run here."""
+    from .intake_mail import _month_human, _open_batch_for_month, _ym
+
+    run = store.get_run(run_id)
+    if (
+        run is None
+        or run_mode(run) != MODE_EXPENSE_GENERATION
+        or is_trip_batch(run)
+    ):
+        return None
+    edits = store.get_expense_edits(run_id)
+    if document_id.startswith("manual:") and not any(
+        e["document_id"] == document_id and e["op"] == "add" for e in edits
+    ):
+        return None
+    effective = apply_expense_edits(
+        baseline_receipts(run),
+        store.get_expense_field_overrides(run_id),
+        edits,
+    )
+    rec = next((r for r in effective if r.document_id == document_id), None)
+    if rec is None:
+        return None
+    batch_month = month_from_label(run.label) or month_from_dates(
+        [r.detected_date for r in effective if r.detected_date]
+    )
+    month = date_month_target(
+        rec.detected_date,
+        batch_month=batch_month,
+        today=today or datetime.now(timezone.utc).date(),
+    )
+    if month is None:
+        return None
+    target = _open_batch_for_month(store, _ym(month))
+    if run.published or (target is not None and target.published):
+        return {
+            "held": "month_published",
+            "month": month,
+            "label": _month_human(month),
+            "batch_id": (run if run.published else target).run_id,
+        }
+    return move_expense_to_month(
+        store, run, document_id, month, now_iso,
+        data_root=data_root, learning_db_path=learning_db_path,
+    )
 
 
 # ── Item 74: duplicates mean one thing each ──────────────────────────

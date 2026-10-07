@@ -3159,16 +3159,19 @@ believed, and nothing looked at where the row lives.
 "month_move": {"month": "2026-07", "label": "July 2026", "batch_id": "50622baec444"}
 ```
 
-Present only when the row's date was TYPED by the reviewer (or the whole
-expense was entered by hand) AND falls outside the batch's window (its month
-plus one either side, the item-25 window) AND the batch is a company month.
-ABSENT otherwise, never null. `batch_id` names the month the move would join,
-and is absent when that month does not exist yet (the move creates it).
-`label` is the English label a created month gets; localize from `month`.
-A machine reading outside the window never offers a move: it stays the
-`date_outside_period` review state. A receipt attached to a charge by hand
-(`manual:` id that is not a typed-in add) is never offered.
-`summary.n_month_moves` (int, every expense payload) counts the offers.
+Present when the row's date, typed OR read from the receipt (item 248; until
+2026-10-07 only a typed date), falls outside the batch's window (its month
+plus one either side, the item-25 window) AND the batch is a company month
+AND the date is one the drop would file (not more than a day in the future,
+not more than 366 days from the batch's month). ABSENT otherwise, never null.
+`batch_id` names the month the move would join, and is absent when that
+month does not exist yet (the move creates it). `label` is the English label
+a created month gets; localize from `month`. A machine reading outside the
+window keeps its `date_outside_period` review state beside the offer. A
+receipt attached to a charge by hand (`manual:` id that is not a typed-in
+add) is never offered. `summary.n_month_moves` (int, every expense payload)
+counts the offers. Since item 248 a date EDIT no longer waits for this offer
+(next section); the offer is what a row nobody touched shows.
 
 **The move**, `POST /api/runs/{run_id}/expenses/{document_id}/move`, body
 `{"month": "YYYY-MM"}` optional (default: the row's offer). Reply:
@@ -3193,7 +3196,48 @@ creates carries `created_by: "move"` and claims its pooled mail afterwards.
 Both months re-match when they hold a statement. Refusals: 400 for a trip, a
 malformed month, the batch's own month, an expense already removed, or no
 offer and no named month; 404 for an unknown expense. The source month is
-never deleted, even when the move empties it.
+never deleted, even when the move empties it. A copy the target month itself
+deleted or moved away does not count as "already there" (item 248: moving a
+receipt back into the month it left used to keep the dead copy and lose the
+live one).
+
+## The date decides the month: `moved` on a date edit (item 248, 2026-10-07)
+
+Owner: "the baseline data on the dates that is extracted from receipts is the
+foundation for how the receipts get sent to months. So if user changes date,
+then the month changes accordingly." A date that CHANGES carries the receipt
+into the calendar month it names (the month the drop files a receipt in),
+through the move above, in the same request:
+
+- `PUT /api/runs/{id}/expenses/{doc}` with `field: "date"`, setting OR
+  clearing a typed date (clearing hands the decision back to the reading);
+- `POST /api/runs/{id}/expenses` with a `date`;
+- a real re-read (`POST /api/runs/{id}/receipts/reread`, `dry_run: false`)
+  that takes a new date, unless the reviewer typed a date over the reading.
+
+The edit/add reply gains one of three parallel keys, each ABSENT otherwise:
+
+```json
+"moved": {"...": "the move's own reply, as POST .../move answers it"},
+"move_held": {"held": "month_published", "month": "2026-04", "label": "April 2026", "batch_id": "..."},
+"move_error": {"error": "...", "code": "file_missing_on_disk"}
+```
+
+With `moved`, `summary` is the month the row LEFT and the edit's own re-match
+is not run again (the move re-matched both months). `move_held`: the source or
+the target month is published, so the receipt stays and keeps its offer.
+`move_error`: the move refused; the date edit is saved and the row keeps its
+offer. Nothing moves for a trip, a batch with no knowable month, a receipt
+attached to a charge by hand, or a date the offer would not name either (a
+day or more in the future, more than 366 days from the batch's month).
+
+The re-read reports it too: each `readings.changes[]` entry whose new date
+names another month carries `moves_to` (`"YYYY-MM"`) on the dry run and the
+real run alike (absent when a typed date keeps the receipt); the real run's
+result carries `moved[]` (`document_id`, `display`, `batch_id`, `label`,
+`month`, `moved_as`, `created_batch`, `already_in_batch`) and, when any
+were kept, `move_held[]`. The dry run never moves: a move copies the file
+into the target month's folder and can open a month.
 
 **Printed identifiers** (item 77 amendment, note #45), `expenses[]`, parallel,
 strings, ABSENT when the receipt did not print them and on every receipt read
