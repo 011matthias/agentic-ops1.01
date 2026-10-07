@@ -44,7 +44,7 @@ from .llm.client import (
 )
 from .category_vocabulary import recognize as recognize_category
 from .merchant_registry import company_account
-from .sender_note import CORPSERV_UNSPLIT_CODES, account_hint
+from .sender_note import CORPSERV_UNSPLIT_CODES, account_hint, names_account
 from .matching.types import (
     EXPENSE_CATEGORIES,
     Categorization,
@@ -1129,6 +1129,10 @@ def _note_accounts(
         if cat.source is not ClassificationSource.NOTE:
             continue
         if r.sender_note_split and cat.category not in CORPSERV_UNSPLIT_CODES:
+            continue
+        # Item 254: the model's confidence alone is not "clear". The note's
+        # own words must name the account it picked (`names_account`).
+        if not names_account(note, cat.zoho_account or result.category or ""):
             continue
         out[r.document_id] = _stamp_lines(r, replace(
             cat, reasoning=f"The sender's note: {result.reasoning}".strip(),

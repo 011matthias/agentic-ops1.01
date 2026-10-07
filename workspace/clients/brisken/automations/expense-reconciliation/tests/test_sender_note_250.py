@@ -130,6 +130,32 @@ def test_the_stamp_carries_the_note_and_moves_the_company():
     assert untouched.sender_note_entity == ""
 
 
+@pytest.mark.parametrize("note, account, names", [
+    # The live picks the item-252 dry runs would have decided (2026-10-07).
+    ("CorpServ only\nIT costs", "CorpServ | IT Expenses", True),
+    ("This is ZOHO BOOKS for CorpServ\nSo it is split between BCS and BTS\n"
+     "Booked to It subscriptions in CorpServ.", "CorpServ | IT Expenses", True),
+    ("BTS\nMarketing/Sales", "Marketing Expenses - others", True),
+    ("CorpServ only\nTravel (Matthias)", "CorpServ |Travel Expense | Transportation", True),
+    ("BCS\nIt software - 1 time license…",
+     "COGS - Other Infra and IT Costs for Cloud Business", True),
+    ("BTS only\nPersonal card\nMArketing", "Marketing Expenses - others", True),
+    # Notes that name no kind of cost, where the model still answered.
+    ("Nicolas/Lydar", "CorpServ |Travel Expense | Transportation", False),
+    ("CorpServ only - NICO PROJECT - Globe Multitool", "Marketing Expenses - people", False),
+    ("CorpServ only - NICO PROJECT - Globe Multitool",
+     "Business Travel Expenses - CRM | Transportation", False),
+    ("BCS only\nVerve.Works", "Conferences: Travel Expenses | Transportation", False),
+    ("CorpServ only\nDev IT costs", "COGS - CLOUD Infrastructure (ePaaS)", False),
+    # The pronoun "it" is not IT.
+    ("BTS only, so it is shared", "CorpServ | IT Expenses", False),
+])
+def test_only_an_account_the_notes_words_name_is_clear(note, account, names):
+    from expense_recon.sender_note import names_account
+
+    assert names_account(note, account) is names
+
+
 # ------------------------------------------------------ the account tier --
 
 def _receipt(note="", *, split=False, entity=CORPORATE_SERVICES, lines=True):
@@ -184,6 +210,18 @@ def test_an_unsure_note_decides_nothing_and_the_chain_runs():
         client=client, entity_orgs=ENTITY_ORGS)
     assert _cat(out).source is not ClassificationSource.NOTE
     assert ("classify_line_items" in [name for name, _ in client.calls])
+
+
+def test_a_confident_answer_the_note_does_not_name_decides_nothing():
+    """Item 254: the 2026-10-07 dry runs had the model confidently file
+    "Nicolas/Lydar" under travel. Confidence is not clarity: the note's own
+    words must name the account."""
+    client = MockLLMClient(note_responses=[ClassificationResult(
+        category=_label(CORP_ORG, "E100010-01"), zoho_account=None,
+        confidence=0.95, reasoning="Lydar")])
+    (out,), _ = categorize_receipts_with_registry(
+        [_receipt("Nicolas/Lydar")], client=client, entity_orgs=ENTITY_ORGS)
+    assert _cat(out).source is not ClassificationSource.NOTE
 
 
 def test_a_company_only_note_spends_no_call():
