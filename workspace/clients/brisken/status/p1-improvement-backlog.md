@@ -13258,6 +13258,52 @@ company's books, exactly as a person's company pick on a card row does today.
 
 ### 251. The date decides the month (notes #114 and #117, 2026-10-07; owner ruling the same day) (BACKEND LIVE 2026-10-07: PR #1594, Fly on `2af1531c`, merged as "248" while a sibling's Receipt overview took 248; swap guard in the follow-up PR; SPA prompt `docs/lovable-date-moves-month-prompt.md` not pasted)
 
+### 252. The senders' notes reach the receipts already in a month (owner 2026-10-07: "change existing rows, reread if need be") (BUILT 2026-10-07, not yet run live)
+
+Item 250 reads the note at arrival only, so its deploy changed no row already
+in a month. `POST /api/runs/{run_id}/sender-notes/apply` (body `{confirm,
+dry_run}`, a job to poll, operator only, no SPA control) applies the same
+rulings to one month's stored receipts. Built in
+`web/sender_note_backfill.py`, shaped like item 240's re-read.
+
+**What it does.** Each mailed receipt's note is the one its provenance
+recorded, or, for receipts ingested before 2026-09-20 (none recorded one),
+the note read again from its mail: the archive the entry names, else the one
+archive whose log row lists the document for this month. Two archives or none
+means no note; an archive is never guessed. A note read again is also written
+into `intake_provenance` so the row shows it, with its mail's agent-directed
+text flags (recorded, else a fresh `untrusted.scan`, since mail from before
+2026-09-17 was never scanned). Then item 250's own stamp on both `receipts`
+and `extracted_receipts`. On a GL month a row whose shown company moved is
+categorized again for that company, and a row whose company stays keeps its
+old answer unless the note now decides the account (`NOTE`). A month with a
+statement re-matches when a company moved, since the company scopes the
+match.
+
+**Trust boundary** is item 250's, unchanged (`trusted_sender_notes`).
+
+**Dry run first.** It writes nothing. Where a re-match is owed it measures on
+two throwaway database copies, as item 240 does, and names the pairs the move
+costs: a card-paid receipt moved to another company stops pairing with that
+card's charge, the same as a person's company pick.
+
+**Never learned.** Nothing goes into the override tables, so Criss's own
+picks stay on top and a Publish learns nothing from a note.
+
+**Proof.** `tests/test_sender_note_backfill_252.py` (15, all through the
+route), regressed with `tools/regress_check.py` at the stamp and at the
+archive re-read: each goes red under the mutation and green again.
+
+**Not done.** Not run on a live month: it writes to Criss's months, so each
+real run waits for the owner's yes after its dry run. Bucket months
+(April-June) get the company, not the account. The new re-match cause
+`sender_notes` needs one SPA label (`docs/lovable-sender-notes-trigger-prompt.md`,
+not pasted); until then the month history prints the raw value.
+
+
+### 248. The date decides the month (notes #114 and #117, 2026-10-07; owner ruling the same day) (BUILT 2026-10-07; SPA prompt `docs/lovable-date-moves-month-prompt.md` not pasted)
+
+
 Criss, 08:55 UTC, January: *"Esta expense está no mes errado."* Operator,
 09:14 UTC, same row: *"this receipt appear in the month of january 2026, yet
 it was loaded 2026-07-04 ... where is the date the system uses to assign this

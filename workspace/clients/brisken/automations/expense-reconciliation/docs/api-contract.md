@@ -534,7 +534,9 @@ folder), `cards`, `master_data`, `set_aside`, `trip`, and since item 112
 `adjacent_receipts` (a neighbouring month's arrival), and since item 223 step 7
 `duplicates_reapply` (the operator re-applying the duplicate rules to a
 matched month, see the last section), and since item 240 `receipts_reread`
-(the operator reading a month's stored receipts again). Since item 103 the four
+(the operator reading a month's stored receipts again), and since item 252
+`sender_notes` (the operator applying our senders' notes to a month's stored
+receipts, when a receipt's company moved). Since item 103 the four
 counts are the effective ones the month's page shows at that moment (see "The
 four charge counters count the effective verdict"), not the raw outcome the
 matcher produced. Oldest first. The
@@ -6564,6 +6566,60 @@ none.
 * **Never learned.** Nothing a note decides is written to the override
   tables the Publish learners read; only corrections are memorized
   (owner 2026-09-24).
+
+### Applying them to the receipts already in a month: `POST /api/runs/{run_id}/sender-notes/apply` (item 252)
+
+Owner 2026-10-07: "change existing rows, reread if need be". Operator only;
+the SPA offers no control for it. Same shape as item 240's re-read.
+
+Body: `{"confirm": "<month label or run id>", "dry_run": true|false}`, both
+required, for a dry run too. Both answer `{"ok": true, "dry_run": ...,
+"job_id": "..."}`; poll `GET /jobs/{job_id}`.
+
+| Refusal | Status | `code` |
+|---|---|---|
+| no such run | 404 | `run_not_found` |
+| not an expense batch / published / a re-match running or owed / no receipt came by mail | 409 | `not_an_expense_batch` / `month_published` / `rematch_running` / `sender_notes_no_receipts` |
+| confirm missing or wrong | 400 | `sender_notes_confirm_required` / `sender_notes_confirm_mismatch` |
+| `dry_run` not a JSON boolean | 400 | `sender_notes_dry_run_required` |
+
+**Which note.** For each receipt in the pool with a provenance entry: the
+entry's `operator_note`, else (every receipt ingested before 2026-09-20) the
+note read again from its mail, the archive the entry names, else the one
+archive whose log row lists the document for this month. No archive, or two,
+means no note. A note read again carries its mail's agent-directed text
+flags: the ones the archive recorded, else a fresh scan of its subject and
+body. Then item 250's own filter (`trusted_sender_notes`) and stamp, on both
+`receipts` and `extracted_receipts`; a receipt already carrying the same note
+fields is unchanged, so a second run writes nothing.
+
+**What it writes.** The note fields and the company they decide; a note read
+again into `intake_provenance` (with its flags), so the row shows
+`operator_note`; and categories only where the note can move them, on a GL
+month: a row whose shown company moved is categorized again for that company,
+and a row whose note asks an account question keeps its old answer unless the
+new one is the note's (source `NOTE`). Nothing goes into the reviewer's
+tables, so her picks stay on top and Publish learns nothing from a note. A
+`sender_notes_applied` record is appended to the snapshot. A month with a
+statement re-matches (trigger `sender_notes`) when a company moved, because
+the company scopes the match: a card-paid receipt moved to another company
+no longer pairs with that card's charge, as with a person's company pick.
+
+Job `result`:
+
+| Path | Meaning |
+|---|---|
+| `counts` | `{receipts, mailed, notes_found, notes_recorded, notes_reread, trusted, stamped, company_changed, account_by_note, unchanged, display_restored}`; `unchanged` = trusted notes whose receipt already carries them |
+| `skipped[]` | `{document_id, why: "no_archive" \| "archive_ambiguous" \| "archive_missing"}`: a mailed receipt with no recorded note whose mail could not be named with certainty |
+| `documents[]` | one per receipt whose stored fields change: `{document_id, vendor, note, note_reread, company_changed, recategorized: "company" \| "account" \| null, account_by_note, fields[], before, after}`. `before` / `after` are `{vendor, legal_entity_id, entity_source, posting_category, suggested_category, review_reason_code, operator_note}` read off the Expenses view, the two categories as `{category, zoho_account, source}` or `null` |
+| `display_restored[]` | documents whose provenance gained the note read again (strangers' notes included: shown, never acted on) |
+| `rematch_owed` (dry run) | whether a re-match is part of the run |
+| `consequences` (dry run) / `applied` (real run) | item 240's shape: `pairs`, `confirmed`, `expenses`, `duplicates`. Its `expenses[]` reads keys an Expenses row does not carry (`entity`, `category`, `zoho_account`), so a moved company or category shows in `documents[]`, not there |
+| `consequences.rematch_alone` / `rematch_error` | as item 240 when a re-match is owed (measured on two throwaway copies); `null` otherwise, when the view is built on the new snapshot in memory |
+| `written[]` / `gone[]` / `rematch` (real run) | receipts written; receipts someone changed between the plan and the write (left alone); the re-match's own answer or `null` |
+| `cost_usd` | model spend, when a category was asked again |
+
+Tests: `tests/test_sender_note_backfill_252.py`.
 
 ### Where the text ends and the quote begins
 
