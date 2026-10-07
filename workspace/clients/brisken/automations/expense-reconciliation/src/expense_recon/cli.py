@@ -95,6 +95,7 @@ from .categorize import (
     categorize_receipts_with_registry,
 )
 from .cards import cards_from_setting, stamp_card_entities
+from .sender_note import stamp_sender_notes
 from .categorize_charges import categorize_charges, derive_subscription_status
 from .coa_provision import GL_ENTITY_ORGS_KEY
 from .correspondence import CORRESPONDENCE, quarantine_correspondence
@@ -1064,7 +1065,7 @@ def keep_invoice_read_as_statement(r: Receipt) -> Receipt | None:
 
 def generate_expenses(
     cfg: dict, config_dir: Path, *, learned=None, llm_client=None,
-    on_stage=None, expense_memory=None, registry=None,
+    on_stage=None, expense_memory=None, registry=None, sender_notes=None,
 ) -> ReconcileResult:
     """Receipt-first expense generation: ingest -> vision -> categorize a
     batch of receipts with NO bank statement, one "expense" per receipt.
@@ -1156,6 +1157,10 @@ def generate_expenses(
             expense_block.get("card_hints"), dict
         ) else None,
     )
+    # Item 250: `sender_notes` is `{document_id: note}` from the web layer,
+    # already limited to our own senders. The note's company outranks the
+    # card, so it stamps after it and before the categorizer reads the stamp.
+    receipts = stamp_sender_notes(receipts, sender_notes)
 
     # Non-receipt quarantine (2026-08-13), before the categorizer spends a
     # call on them: statement pages and report-summary pages that arrive in
