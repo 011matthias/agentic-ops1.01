@@ -9462,8 +9462,10 @@ one-card month has no sections, but its rows still carry `card_section`);
 ~2.2 s (seven month views built per call); a per-run cache keyed on the month's
 `updated_at` is the fix if the strip's load is felt.
 
-**2026-10-07 SHIPPED: the per-run cache (owner report: the months page's card
-filter tab "taking way too long to load").** Each run's `receipt_card_counts`
+**2026-10-07 SHIPPED and LIVE: the per-run cache (owner report: the months
+page's card filter tab "taking way too long to load"; PR #1595, live in
+`2636b226`; live rebuild after a write 0.164 s against 1.215 s for the
+uncached control route).** Each run's `receipt_card_counts`
 is now kept in `app.state.receipt_card_counts_cache`, keyed on that run's own
 inputs (`snapshot`, decisions, category overrides, field overrides, edits,
 duplicate resolutions) plus the two inputs shared by every run in one build
