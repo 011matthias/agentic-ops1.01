@@ -13022,6 +13022,64 @@ show only when the row carries a bank-payment signal (`bill_suggestion`);
 that would hide it from the Perplexity row, and also from a bank-paid invoice
 the reader found no signal on. Owner call.
 
+### 248. Email intake becomes Receipt overview: every receipt, every source, filterable (Dirk, 2026-10-07, relayed by the owner) (BACKEND BUILT 2026-10-07; SPA prompt `docs/lovable-receipt-overview-prompt.md` not pasted)
+
+Owner, relaying Dirk: *"dirk wants users to be able to see and filter. Lets do
+this in email intake tab. Rename email intake to Receipt overview; make sure
+ALL receipts in the tool land there; add filters: source, file type, file
+name, status, subject, received date, date in receipt, vendor, sum inside
+receipt; add fuzzy search and filters for every other column"*, with
+TanStack named as the library.
+
+**Why the old page could not do it.** `/api/inbound/log` is one row per MAIL
+(newest 100 on the page), so 193 of the 378 things the tool holds (every
+upload, receipts-page drop and expense-report page) never appeared, and a
+mailed receipt was a line inside an expander.
+
+**Backend: `GET /api/receipts/overview`** (`web/receipt_overview.py`, contract
+in `docs/api-contract.md`). One row per receipt from every expense batch's
+Expenses page payload, plus set-aside files and the mail that never became (or
+is no longer) an expense: waiting for its month, held, parked as a duplicate,
+dismissed, removed after filing. Statuses are read off the month's own
+verdicts (`without_charge`, `counts_in_total`, `payment_path`, `private`,
+`settled_outside`, `waits_for_statements`), never decided anew. Uploads have no
+per-file arrival record, so their received date is the stored file's write
+time, labelled `received_from: "stored_file"`. Memoized under the card
+roll-up's key plus the mail archive's. On the 2026-10-07 08:19 backup: 378
+rows = 243 matched, 58 duplicate copies, 26 no matching charge, 16 waiting
+for a statement, 16 dismissed, 8 set aside, 6 removed, 3 private, 2 held;
+185 email, 193 upload; every row has an arrival date; cold build 3.5-6.5 s,
+memo hit 0.03 s. Tests `tests/test_receipt_overview.py` (11); both wirings
+(mail log into the build, mail archive into the key) proven RED by
+`regress_check.py`; full module suite 4181 passed, 2 skipped.
+
+**SPA (prompt, full code inside).** TanStack Table v8 pinned (v9 changed the
+API and Lovable's edits stay reliable on v8) with match-sorter-utils. Receipts
+tab: status pills with counts, a search over every column (words AND, fields
+OR; substring / word start / acronym, letters-in-order only when close
+together, one typo in words of 5+ letters), quick filters for source, file
+type, month, received, receipt date, amount, currency, a funnel on every
+column header (facet with counts, date or number range, or fuzzy text), column
+toggles, 25/50/100/250 per page, state kept per browser, the existing receipt
+viewer on click. Emails tab: the old mail log, unchanged. Proven on a scratch
+clone with that exact code against a local copy of the backup: 20/20 checks.
+
+### 249. Mail parked as a "duplicate" because it shares a signature image (found 2026-10-07 while building item 248; not started)
+
+The arrival-time duplicate check matched two 2026-09-28 mails to the
+2026-09-14 Anthropic receipt mail (`20260914T054343-f6020d50`): Criss's
+forward of the Uber trip of 28 Sep (`20260928T153502-57fec943`, its only
+attachment `image.png`, 15,481 bytes) and ap@'s copy of the Microsoft invoice
+G186790773 (`20260928T084822-268b80cf`). All three carry the same signature
+`image.png`, which clears the 4,096-byte logo floor. Nothing was lost this
+time: the invoice arrived through Criss's twin mail one second earlier, and
+the Uber trip (Uber B.V. 12.72) was re-sent on 29 Sep and ingested. A
+body-only receipt sent once with that signature would be parked and never
+ingested. Fix direction (not decided): leave inline / signature-sized images
+out of the arrival duplicate key, or require the receipt-bearing part (a PDF,
+or the body for a body-only mail) to match. The Receipt overview now shows
+such mails as "Duplicate copy" with the subject they were matched to.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
