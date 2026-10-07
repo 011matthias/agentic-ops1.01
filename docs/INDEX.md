@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-07 | Brisken Recon Receipt Overview | client-dev | [→](docs/2026-10-07%20-%20Brisken%20Recon%20Receipt%20Overview/Checkpoint.md) |
 | 2026-10-07 | Recon Responsive Full Visibility | client-dev | [→](docs/2026-10-07%20-%20Recon%20Responsive%20Full%20Visibility/Checkpoint.md) |
 | 2026-10-07 | Recon Save Memory Ticks | client-dev | [→](docs/2026-10-07%20-%20Recon%20Save%20Memory%20Ticks/Checkpoint.md) |
 | 2026-10-07 | Brisken Recon Subcard Filter Restored | client-dev | [→](docs/2026-10-07%20-%20Brisken%20Recon%20Subcard%20Filter%20Restored/Checkpoint.md) |
