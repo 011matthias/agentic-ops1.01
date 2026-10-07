@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-07 | Recon Date Decides Month | client-dev | [→](docs/2026-10-07%20-%20Recon%20Date%20Decides%20Month/Checkpoint.md) |
 | 2026-10-07 | Recon Sender Notes Classify | client-dev | [Mini-Checkpoint-1](docs/2026-10-07%20-%20Recon%20Sender%20Notes%20Classify/Mini-Checkpoint-1.md) |
 | 2026-10-07 | Brisken Recon Duplicate Click Speed | client-dev | [→](docs/2026-10-07%20-%20Brisken%20Recon%20Duplicate%20Click%20Speed/Checkpoint.md) |
 | 2026-10-07 | Brisken Recon Receipt Overview | client-dev | [→](docs/2026-10-07%20-%20Brisken%20Recon%20Receipt%20Overview/Checkpoint.md) |
