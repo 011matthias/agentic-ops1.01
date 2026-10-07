@@ -8217,3 +8217,47 @@ the same answers. The real run writes the readings (each changed receipt's
 joined set-aside entry `restored_by: "reread"`, appends a `receipts_reread`
 record to the snapshot, and re-matches the month with trigger
 `receipts_reread`. Tests: `tests/test_receipts_reread_item_240.py`.
+
+## The receipt overview: `GET /api/receipts/overview` (item 248, 2026-10-07)
+
+Dirk: users should see and filter every receipt in the tool in one place. One
+row per receipt, from every source, newest arrival first. Read-only, built by
+`web/receipt_overview.py` from each batch's Expenses page payload (months and
+trips) plus the mail log, so every verdict on a row is its month's own. Kept
+under the card roll-up's memo key plus the mail archive's (log size/mtime and
+every `meta.json`), so an arrival, a dismiss or a replay is on the next read.
+Cold build ~3.5-6.5 s on the 2026-10-07 backup (8 months, 378 rows), memo hit
+~0.03 s.
+
+Top level: `receipts[]`, `n_receipts`, `by_status{}`, `by_source{}`,
+`statuses[]` (every code in display order), `batches[]`
+(`{batch_id, label, batch_type}`), `generated_at`.
+
+Every row carries every key (null when unknown): `id` (`{batch}/{document}`
+or `mail/{archive}/{n}`), `source` (`email` | `upload`), `status`, `review`
+(`ready` | `check` | `pick` | null) + `review_reason`, `file_name` (every
+`NNNN__` prefix dropped), `file_type` (lower-case extension, `jpeg` -> `jpg`,
+`email_body` for a mail text the intake rendered, `other`), `document_id`,
+`can_view` (the month's `receipt_image_available`; true on a removed document
+whose month still exists, false when the month is gone), `batch_id`,
+`batch_label`, `batch_type`, `archive`, `subject`, `from_address`,
+`submitted_by`, `received_at` + `received_from` (`mail` = the mail's arrival;
+`stored_file` = the stored receipt file's write time, the only arrival an
+upload has, since no upload records one per file), `receipt_date`, `vendor`,
+`total` (as printed) + `amount` (number), `currency`, `card`, `person`,
+`category` (the accounts in `books_as`, else the posting account), `reference`
+(invoice / receipt number / reference), `note`, `duplicate_of`, `pool_month`,
+`set_aside_reason`.
+
+`status`, for a receipt in a month, in this order: `duplicate`
+(`counts_in_total: false` or an extra copy), `private`, `bill`
+(`payment_path: "bill"`), `settled_outside`, `matched` (not
+`without_charge`), `waiting_for_statement` (no statement on the month, or
+`waits_for_statements`), `no_charge`. For a file that is not or no longer an
+expense: `set_aside` (not restored), `waiting_for_month` (mail `pooled`),
+`held` (mail `held_*`), `processing`, `removed` (filed, then gone from its
+month, or its month deleted; a document found under the same file name on a
+row joined to the same mail is not removed, so a month move does not read as
+a deletion), `dismissed`. A mail is joined to a row by the provenance's
+`archive`, else the log's (batch, document) pairs, else the arrival second.
+Tests: `tests/test_receipt_overview.py`.

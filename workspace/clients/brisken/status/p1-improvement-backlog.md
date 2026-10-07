@@ -13123,11 +13123,69 @@ side-scroll, ellipsis / line-clamp / self-clip, and a header control hidden
 by stacking; each check was shown to fire on the baseline before its fix
 was trusted (self-clip caught "Chase Visa | 9693 | Cloud Expenses" cut in a
 select; the header check caught Memory's select-all hidden at 360-768 px).
+### 248. Email intake becomes Receipt overview: every receipt, every source, filterable (Dirk, 2026-10-07, relayed by the owner) (BACKEND LIVE 2026-10-07: PR #1587, Fly on `501edf7d`; SPA prompt `docs/lovable-receipt-overview-prompt.md` not pasted)
+
+Owner, relaying Dirk: *"dirk wants users to be able to see and filter. Lets do
+this in email intake tab. Rename email intake to Receipt overview; make sure
+ALL receipts in the tool land there; add filters: source, file type, file
+name, status, subject, received date, date in receipt, vendor, sum inside
+receipt; add fuzzy search and filters for every other column"*, with
+TanStack named as the library.
+
+**Why the old page could not do it.** `/api/inbound/log` is one row per MAIL
+(newest 100 on the page), so 193 of the 378 things the tool holds (every
+upload, receipts-page drop and expense-report page) never appeared, and a
+mailed receipt was a line inside an expander.
+
+**Backend: `GET /api/receipts/overview`** (`web/receipt_overview.py`, contract
+in `docs/api-contract.md`). One row per receipt from every expense batch's
+Expenses page payload, plus set-aside files and the mail that never became (or
+is no longer) an expense: waiting for its month, held, parked as a duplicate,
+dismissed, removed after filing. Statuses are read off the month's own
+verdicts (`without_charge`, `counts_in_total`, `payment_path`, `private`,
+`settled_outside`, `waits_for_statements`), never decided anew. Uploads have no
+per-file arrival record, so their received date is the stored file's write
+time, labelled `received_from: "stored_file"`. Memoized under the card
+roll-up's key plus the mail archive's. On the 2026-10-07 08:19 backup: 378
+rows = 243 matched, 58 duplicate copies, 26 no matching charge, 16 waiting
+for a statement, 16 dismissed, 8 set aside, 6 removed, 3 private, 2 held;
+185 email, 193 upload; every row has an arrival date; cold build 3.5-6.5 s,
+memo hit 0.03 s. Tests `tests/test_receipt_overview.py` (11); both wirings
+(mail log into the build, mail archive into the key) proven RED by
+`regress_check.py`; full module suite 4181 passed, 2 skipped.
+
+**SPA (prompt, full code inside).** TanStack Table v8 pinned (v9 changed the
+API and Lovable's edits stay reliable on v8) with match-sorter-utils. Receipts
+tab: status pills with counts, a search over every column (words AND, fields
+OR; substring / word start / acronym, letters-in-order only when close
+together, one typo in words of 5+ letters), quick filters for source, file
+type, month, received, receipt date, amount, currency, a funnel on every
+column header (facet with counts, date or number range, or fuzzy text), column
+toggles, 25/50/100/250 per page, state kept per browser, the existing receipt
+viewer on click. Emails tab: the old mail log, unchanged. Proven on a scratch
+clone with that exact code against a local copy of the backup: 20/20 checks.
+
+### 249. Mail parked as a "duplicate" because it shares a signature image (found 2026-10-07 while building item 248; not started)
+
+The arrival-time duplicate check matched two 2026-09-28 mails to the
+2026-09-14 Anthropic receipt mail (`20260914T054343-f6020d50`): Criss's
+forward of the Uber trip of 28 Sep (`20260928T153502-57fec943`, its only
+attachment `image.png`, 15,481 bytes) and ap@'s copy of the Microsoft invoice
+G186790773 (`20260928T084822-268b80cf`). All three carry the same signature
+`image.png`, which clears the 4,096-byte logo floor. Nothing was lost this
+time: the invoice arrived through Criss's twin mail one second earlier, and
+the Uber trip (Uber B.V. 12.72) was re-sent on 29 Sep and ingested. A
+body-only receipt sent once with that signature would be parked and never
+ingested. Fix direction (not decided): leave inline / signature-sized images
+out of the arrival duplicate key, or require the receipt-bearing part (a PDF,
+or the body for a body-only mail) to match. The Receipt overview now shows
+such mails as "Duplicate copy" with the subject they were matched to.
 
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 164 | Item 248: `GET /api/receipts/overview`, every receipt the tool holds in one list (months, trips, set-aside files, and mail that never became or is no longer an expense), statuses read off each month's own verdicts, memoized under the card key plus the mail archive's; SPA prompt with the TanStack Table v8 page | Dirk 2026-10-07: users could not see or filter receipts; the Email intake page listed mails only, so uploads never appeared. Live after deploy (one read-only GET): 363 receipts, 184 email / 179 upload, every row with an arrival date, 2.5 s; published SPA unchanged until the paste, cold drive 0 writes | 2026-10-07, PR #1587, Fly on `501edf7d` |
 | 163 | Fix (no item): a duplicate click's re-match memoizes its vendor work. `vendor_similarity`, its word-pair ratio and `strip_reference_tokens` are `lru_cache`d (pure, bounded ~25 MB); `MerchantRegistry.resolve` memoizes per instance; `_distinctive` cached on its tokens. No output moves | Owner 2026-10-07: "removing duplicates takes way too long to load". "Delete this copy" and "Not a copy" re-match the month inside the request; on September (216 charges x 112 receipts since the 10-05 statement) the matcher scored 26,163 vendor pairs for 3,710 distinct ones, twice per re-match, and the registry resolved 700 times for 274 names. Local A/B on the 10-07 backup: Delete this copy 3.88 -> 1.75 s, Not a copy 5.28 -> 2.73 s, payloads byte-identical | 2026-10-07, PR #1583, Fly v281 (commit `5ae5905d`); live September duplicate layer, totals and vendors identical before/after, page driven cold (read-only); the click itself not timed live (it is a write on Criss's month) |
 | 162 | Fix (no item): the card roll-up lets the first coverage row name a card that only receipts had opened, so a receipt-only newest month no longer blanks `card_key`, label, digits and `known` | Owner 2026-10-07: the 2838 account filter went away. October (created 10-01, receipts, no statement) was read first and blanked every card it holds a receipt on, so the item 191 tree linked nothing (`subcards` [] everywhere) and 2838, 3645, 3876, 9693, 1176 read as not in Settings; live after: 2838 opens 3876 / 3645 / 0340, no figure moved | 2026-10-07, PR #1575, Fly v279 (commit `7a4e0b0e`); driven cold, read-only |
 | 161 | Item 243: the card score reads a printed number through the card register when the register resolved the card from that print, so "...1672" agrees with a 2838 charge once 1672 is on the 2838 card; hint words, picks, remembered cards and unregistered cards (girocards) unchanged | Item 240's July dry run: the FX gate demoted two true Karlsruhe pairs (USD 34.39, 53.80) for printing the corporate card's plastic number; every future slip printing 1672 would have missed its charge | 2026-09-29, PR (this item) |
