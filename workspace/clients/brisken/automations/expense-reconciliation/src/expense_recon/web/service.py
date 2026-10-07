@@ -8571,7 +8571,7 @@ def build_expense_view(
         period = batch_period(
             run.label, [r.detected_date for r in receipts if r.detected_date]
         )
-    # Item 248: the month the window is centred on, derived the same way, and
+    # Item 251: the month the window is centred on, derived the same way, and
     # today as the move offer's yardstick for a date in the future.
     batch_month = None if is_trip_batch(run) else (
         month_from_label(run.label)
@@ -8962,7 +8962,7 @@ def build_expense_view(
             # Printed bank details on an open card row: a one-click offer,
             # never a move. Absent otherwise. A copy's original carries it.
             expenses[-1]["bill_suggestion"] = dict(res["bill_suggestion"])
-        # Item 77 / 248: a date, typed or read, that puts this receipt
+        # Item 77 / 251: a date, typed or read, that puts this receipt
         # outside the batch's window offers the move (POST
         # .../expenses/{id}/move). A `manual:` id that is not a typed-in add
         # is a receipt attached to a charge by hand; it belongs to that
@@ -8972,6 +8972,10 @@ def build_expense_view(
         move_to = month_move_for_row(
             r, period=period, batch_month=batch_month,
             is_trip=is_trip_batch(run), today=today,
+            date_is_human=(
+                "date" in field_overrides.get(r.document_id, {})
+                or r.document_id in manual_add_ids
+            ),
         )
         if move_to is not None and (
             not r.document_id.startswith("manual:")
@@ -17781,7 +17785,7 @@ def _candidate_date_gap(tx: "Transaction", receipt: "Receipt | None") -> dict:
 
 
 #
-# Item 248 (owner 2026-10-07): "the baseline data on the dates that is
+# Item 251 (owner 2026-10-07): "the baseline data on the dates that is
 # extracted from receipts is the foundation for how the receipts get sent to
 # months. So if user changes date, then the month changes accordingly."
 # Item 77 only OFFERED the move, and only on a typed date, so a re-read that
@@ -17826,6 +17830,34 @@ def date_month_target(
     return f"{d.year:04d}-{d.month:02d}"
 
 
+def day_month_swap(d: date | None) -> date | None:
+    """`d` with its day and month exchanged, when that is another real date
+    (the day is 1-12 and differs from the month), else None. A browser's date
+    picker follows the browser's locale, not the app's, so a day-first
+    "05/07" typed into a month-first picker is stored as 7 May."""
+    if d is None or d.day > 12 or d.day == d.month:
+        return None
+    try:
+        return date(d.year, d.day, d.month)
+    except ValueError:
+        return None
+
+
+def swap_lands_here(d: date | None, batch_month: tuple[int, int] | None) -> date | None:
+    """Item 251 swap guard (owner 2026-10-07): the swapped reading of `d`
+    when it falls in the batch's own month while `d` does not, else None.
+    July's NORMANDIE SEINE toll (file named 2026-07-05) was typed as
+    2026-05-07 the morning the rule shipped."""
+    swapped = day_month_swap(d)
+    if swapped is None or batch_month is None:
+        return None
+    if (d.year, d.month) == tuple(batch_month):
+        return None
+    if (swapped.year, swapped.month) != tuple(batch_month):
+        return None
+    return swapped
+
+
 def month_move_for_row(
     r: Receipt,
     *,
@@ -17833,19 +17865,23 @@ def month_move_for_row(
     batch_month: tuple[int, int] | None,
     is_trip: bool,
     today: date,
+    date_is_human: bool = False,
 ) -> str | None:
     """The "YYYY-MM" this row is OFFERED a move to, or None.
 
-    Item 248: a date the machine read counts the same as a typed one, because
-    the reading is what filed the receipt in the first place. The offer is
-    held to dates outside the batch's window (item 25's three months): a
+    Item 251: a date the machine read counts the same as a typed one, because
+    the reading is what filed the receipt in the first place. A READ date is
+    offered only outside the batch's window (item 25's three months): a
     receipt printed on the 30th for a charge posted on the 1st sits in the
     neighbouring month on purpose, often held by that month's charge, and is
-    moved only when someone changes its date. A trip spans months freely, and
-    a batch with no knowable month has no window to be outside of."""
+    moved only when someone changes its date. A TYPED date is offered
+    whenever its month differs: a typed date moves the receipt on the edit,
+    so one still here was held back (a published month, the day/month swap
+    guard) and needs its one click. A trip spans months freely, and a batch
+    with no knowable month has no window to be outside of."""
     if is_trip or r.detected_date is None:
         return None
-    if not outside_period(r.detected_date, period):
+    if not date_is_human and not outside_period(r.detected_date, period):
         return None
     return date_month_target(r.detected_date, batch_month=batch_month, today=today)
 
@@ -17997,7 +18033,7 @@ def move_expense_to_month(
             _, t_receipts, t_outcome, _ = snapshot_from_dict(t_snapshot)
             t_dir = Path(target.work_dir) / "receipts"
             t_dir.mkdir(parents=True, exist_ok=True)
-            # Item 248: a copy this month deleted, or moved away, is not
+            # Item 251: a copy this month deleted, or moved away, is not
             # "already there". Moving a receipt back into the month it left
             # (a date typed wrong, then corrected) found its own soft-deleted
             # row, kept that dead row and deleted the live one: the receipt
@@ -18144,7 +18180,7 @@ def route_expense_by_date(
     learning_db_path: Path | None = None,
     today: date | None = None,
 ) -> dict | None:
-    """Item 248: after an expense's date changed, file it in the month the
+    """Item 251: after an expense's date changed, file it in the month the
     date names (`move_expense_to_month`).
 
     Reads the EFFECTIVE date (a typed date over the reading, a typed-in
@@ -18153,9 +18189,12 @@ def route_expense_by_date(
     its month or cannot be routed: a trip, a batch with no knowable month, a
     receipt attached to a charge by hand, a date `date_month_target` would
     not file, an expense no longer in the month. Otherwise the move's own
-    answer, or `{"held": "month_published", "month", "label"}` when a
-    published month, at either end, keeps it where it is (the offer stays on
-    the row). Sync: the batch lock and both months' re-match run here."""
+    answer, or a hold that keeps it where it is with the offer on the row:
+    `{"held": "day_month_swap", "month", "label", "date", "swap"}` when a
+    TYPED date reads as this month with day and month exchanged, and
+    `{"held": "month_published", "month", "label", "batch_id"}` when a
+    published month, at either end, would change. Sync: the batch lock and
+    both months' re-match run here."""
     from .intake_mail import _month_human, _open_batch_for_month, _ym
 
     run = store.get_run(run_id)
@@ -18188,6 +18227,22 @@ def route_expense_by_date(
     )
     if month is None:
         return None
+    typed = (
+        "date" in (store.get_expense_field_overrides(run_id).get(document_id) or {})
+        or document_id.startswith("manual:")
+    )
+    swapped = swap_lands_here(rec.detected_date, batch_month) if typed else None
+    if swapped is not None:
+        # Owner 2026-10-07: a typed date that reads as this month with day
+        # and month exchanged is held, not moved; the offer stays for the
+        # one click that moves it if the date really is the other month.
+        return {
+            "held": "day_month_swap",
+            "month": month,
+            "label": _month_human(month),
+            "date": rec.detected_date.isoformat(),
+            "swap": swapped.isoformat(),
+        }
     target = _open_batch_for_month(store, _ym(month))
     if run.published or (target is not None and target.published):
         return {

@@ -384,7 +384,7 @@ def test_a_new_date_in_another_month_is_flagged_not_moved(client, monkeypatch):
     out = _result(client, batch_id, dry_run=True)
     (change,) = out["readings"]["changes"]
     assert change["new_date_outside_month"] is True
-    # Item 248: the dry run names where the real run would file it.
+    # Item 251: the dry run names where the real run would file it.
     assert change["moves_to"] == "2026-07"
     assert "moved" not in out
     assert [b["label"] for b in client.get("/api/expense-batches").json()["batches"]] == [LABEL]
@@ -396,7 +396,7 @@ def test_a_new_date_in_another_month_is_flagged_not_moved(client, monkeypatch):
 
 
 def test_apply_files_a_receipt_whose_new_date_names_another_month(client, monkeypatch):
-    """Item 248 (notes #114 / #117): the January Parada copy was re-read as
+    """Item 251 (notes #114 / #117): the January Parada copy was re-read as
     4 July and stayed in January. The real run now carries it to July."""
     batch_id, reader = _month(client, monkeypatch)
     _second_reading(reader, Lovable=_ext(date="2026-07-30", total="15.00",

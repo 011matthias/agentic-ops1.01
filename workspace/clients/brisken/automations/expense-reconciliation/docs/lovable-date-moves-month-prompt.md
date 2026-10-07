@@ -1,6 +1,6 @@
-# Lovable prompt: a date edit that moves the receipt says where it went (item 248)
+# Lovable prompt: a date edit that moves the receipt says where it went (item 251)
 
-> **NOT YET APPLIED.** Backend half ships with item 248: a `date` edit
+> **NOT YET APPLIED.** Backend half ships with item 251: a `date` edit
 > (`PUT /api/runs/{id}/expenses/{doc}`) or a typed-in expense
 > (`POST /api/runs/{id}/expenses`) whose date names another calendar month
 > moves the receipt there in the same request. Without this prompt the move
@@ -25,7 +25,12 @@ The owner: "the dates extracted from receipts are the foundation for how receipt
 
 ```ts
 moved?: MoveExpenseMonthResponse;   // the existing type of the Move button's reply
-move_held?: { held: "month_published"; month: string; label: string; batch_id: string };
+move_held?: {
+  held: "month_published" | "day_month_swap";
+  month: string; label: string;
+  batch_id?: string;                // month_published
+  date?: string; swap?: string;     // day_month_swap, both "YYYY-MM-DD"
+};
 move_error?: { error: string; code: string };
 ```
 
@@ -37,12 +42,14 @@ Both the field saver and the add dialog already call `afterExpenseEdit(queryClie
    - also invalidate `["expense-batches"]` (the months list; the move may have opened a month) and `["expense-batch", res.moved.batch_id]`.
    - show the SAME toast the Move button shows today, built the same way: key `expx.review.monthMove.already` when `moved.already_in_batch`, else `expx.review.monthMove.opened` when `moved.created_batch`, else `expx.review.monthMove.done`; `{month}` = `moved.label`; with the same action button that navigates to `/expenses/$batchId` with `batchId = moved.batch_id`. Give `afterExpenseEdit` the router's `navigate` (an optional parameter, passed from the two callers) so the action can use it.
    - do not show the generic "updated" / "added" toast for that save; the move toast replaces it.
-2. When `res.move_held` is present: `toast.info(t("expx.review.monthMove.held", { month: move_held.label }))`. The row stays and keeps its "Move to" offer.
+2. When `res.move_held` is present, the row stays and keeps its "Move to" offer:
+   - `move_held.held === "day_month_swap"`: `toast.warning(t("expx.review.monthMove.swap", { date: <move_held.date formatted in the app's locale>, swap: <move_held.swap formatted in the app's locale>, month: move_held.label }), { duration: 10000 })`. Format both dates with the app's own date formatter (the same one the grid uses), so a PT reader sees day-first.
+   - otherwise (`"month_published"`): `toast.info(t("expx.review.monthMove.held", { month: move_held.label }))`.
 3. When `res.move_error` is present: `toast.warning(t("expx.review.monthMove.failed", { error: move_error.error }))`. The date is saved; the row keeps its "Move to" offer.
 
 ## 3. The "Move to" offer
 
-No change to the offer itself. Its comment in `api.ts` ("Present only when the reviewer typed a date belonging to another month") becomes: "Present when the row's date, typed or read from the receipt, lies outside this month's window."
+No change to the offer itself. Its comment in `api.ts` ("Present only when the reviewer typed a date belonging to another month") becomes: "Present when the row's date names another month: a date read from the receipt only outside this month's window, a typed date whenever its month differs (its move was held back)."
 
 ## 4. Strings
 
@@ -50,4 +57,5 @@ No change to the offer itself. Its comment in `api.ts` ("Present only when the r
 |---|---|---|
 | `expx.review.monthMove.held` | {month} is published, so the receipt stays here for now | {month} está publicado, então o recibo fica aqui por enquanto |
 | `expx.review.monthMove.failed` | Date saved, but the receipt could not be moved: {error} | Data salva, mas o recibo não pôde ser movido: {error} |
+| `expx.review.monthMove.swap` | Saved {date}, but kept here: read day-first it is {swap}, which is this month. If {date} is right, use "Move to {month}". | Data {date} salva, mas o recibo ficou aqui: lida com o dia primeiro é {swap}, que é este mês. Se {date} estiver certa, use "Mover para {month}". |
 ````
