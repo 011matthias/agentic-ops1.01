@@ -385,9 +385,10 @@ def test_a_restart_before_the_neighbours_turn_keeps_its_debt(
 
 
 def test_a_month_move_into_july_rematches_august(client, monkeypatch):
-    """June's Google receipt read as 06-15; the reviewer types 07-31 and moves
-    it into July. July and June re-match (neither has a statement), and so
-    does August, whose statement opens on 07-31."""
+    """June's Google receipt read as 06-15; the reviewer types 07-31, which
+    moves it into July on the edit itself (item 251). July and June re-match
+    (neither has a statement), and so does August, whose statement opens on
+    07-31."""
     _wire(
         monkeypatch,
         _receipt("Google", "71.64", "2026-06-15"),
@@ -405,14 +406,10 @@ def test_a_month_move_into_july_rematches_august(client, monkeypatch):
     )
     assert resp.status_code == 200, resp.text
 
-    moved = client.post(
-        f"/api/runs/{june}/expenses/{doc}/move", json={"month": "2026-07"}
-    )
-
-    assert moved.status_code == 200, moved.text
-    assert moved.json()["batch_id"] == july
+    moved = resp.json()["moved"]
+    assert moved["batch_id"] == july
     assert _triggers(client, august) == ["statement", "adjacent_receipts"]
     row = _google_row(client, august)
-    assert row["chosen_document_id"] == moved.json()["document_id"]
+    assert row["chosen_document_id"] == moved["document_id"]
     assert row["settled_by"]["run_id"] == july
-    assert [m["run_id"] for m in moved.json()["months_rematched"]] == [august]
+    assert [m["run_id"] for m in moved["months_rematched"]] == [august]

@@ -44,6 +44,7 @@ from .llm.client import (
 )
 from .category_vocabulary import recognize as recognize_category
 from .merchant_registry import company_account
+from .sender_note import CORPSERV_UNSPLIT_CODES, account_hint, names_account
 from .matching.types import (
     EXPENSE_CATEGORIES,
     Categorization,
@@ -421,13 +422,22 @@ def categorize_receipts_with_registry(
     # CATEGORY is the merchant's (one per merchant, the registry's), and
     # what varies by company is the ACCOUNT, which the (company, vendor)
     # rule still decides through `_registry_account`.
-    cat_docs = {doc for doc, m in registry_matches.items() if m.category}
     gl = entity_orgs is not None
-    gl_stamped: dict[str, Receipt] = {}
+    # Item 250 (owner 2026-10-07, "decide when clear"): the account the
+    # sender's own note names decides before the merchant list. It is a
+    # person's answer about THIS receipt, where the list is a rule about the
+    # merchant; only the reviewer's own pick (applied on read) beats it. GL
+    # months only: the note's words are matched against a company's chart.
+    note_stamped = _note_accounts(receipts, client, entity_orgs) if gl else {}
+    cat_docs = {
+        doc for doc, m in registry_matches.items()
+        if m.category and doc not in note_stamped
+    }
+    gl_stamped: dict[str, Receipt] = dict(note_stamped)
     if gl:
         for r in receipts:
             m = registry_matches.get(r.document_id)
-            if m is None:
+            if m is None or r.document_id in note_stamped:
                 continue
             org_id = org_id_for_entity(r.legal_entity_id, entity_orgs)
             # Items 180/181: a merchant with no default category still
@@ -1057,6 +1067,79 @@ def _registry_gl(
     return None
 
 
+# Item 250: how sure the model must be that the note's own words name one
+# account before the note DECIDES it. Above the 0.6 suggestion floor
+# (`REVIEW_THRESHOLD`) on purpose: the prompt reserves 0.9+ for a note that
+# names a listed account, and "decide when clear" means exactly that case.
+NOTE_DECIDES_AT = 0.85
+
+
+def _note_accounts(
+    receipts: list[Receipt],
+    client: LLMClient | None,
+    entity_orgs: "Mapping[str, str] | None",
+) -> dict[str, Receipt]:
+    """`{document_id: receipt stamped NOTE}` for each receipt whose sender's
+    note names one account of its company's chart clearly (item 250, owner
+    2026-10-07).
+
+    Nothing is decided, and the receipt runs the normal chain, when: there
+    is no note, or nothing in it but company names and filler ("BTS only");
+    the company has no curated chart; the model answers null or below
+    `NOTE_DECIDES_AT`; or the answer fails the guards every model answer
+    meets (a leaf of THIS org, never a parent, never another vendor's
+    product account). A split note is offered only Corporate Services' own
+    never-allocated accounts (`CORPSERV_UNSPLIT_CODES`, owner: "own account,
+    never split"), and an answer outside them decides nothing. A failed call
+    decides nothing either: the note is extra evidence, never a gate."""
+    classify = getattr(client, "classify_by_note", None)
+    if classify is None:
+        return {}
+    out: dict[str, Receipt] = {}
+    for r in receipts:
+        note = (r.sender_note or "").strip()
+        if not note or not account_hint(note):
+            continue
+        org_id = org_id_for_entity(r.legal_entity_id, entity_orgs)
+        labels = _gl_leaf_labels(org_id)
+        if not curated_leaves.covers_org(org_id) or not labels:
+            continue
+        if r.sender_note_split:
+            labels = tuple(
+                label for label in labels
+                if label.split(" ", 1)[0] in CORPSERV_UNSPLIT_CODES
+            )
+            if not labels:
+                continue
+        try:
+            result = classify(
+                note=note,
+                vendor=r.vendor_clean or r.detected_vendor or "",
+                total=r.detected_total or Decimal("0"),
+                categories=list(labels),
+            )
+        except Exception:  # noqa: BLE001 - the note is extra evidence, never a gate
+            continue
+        if result.category is None or result.confidence < NOTE_DECIDES_AT:
+            continue
+        cat = _gl_model_result(
+            result, org_id, source_on_hit=ClassificationSource.NOTE,
+            vendor_names=_vendor_names(r),
+        )
+        if cat.source is not ClassificationSource.NOTE:
+            continue
+        if r.sender_note_split and cat.category not in CORPSERV_UNSPLIT_CODES:
+            continue
+        # Item 254: the model's confidence alone is not "clear". The note's
+        # own words must name the account it picked (`names_account`).
+        if not names_account(note, cat.zoho_account or result.category or ""):
+            continue
+        out[r.document_id] = _stamp_lines(r, replace(
+            cat, reasoning=f"The sender's note: {result.reasoning}".strip(),
+        ))
+    return out
+
+
 def registry_mapped_categorization(
     org_id: str, label: str, code: str,
 ) -> Categorization:
@@ -1097,7 +1180,12 @@ def _live_mapped(
 
 
 def _decided_by_person(cat: Categorization | None) -> bool:
-    return cat is not None and cat.source is ClassificationSource.EDITED
+    """A reviewer's pick, or the account the sender's note named (item 250):
+    both are a person's answer, and the merchant list must not overwrite
+    either on read."""
+    return cat is not None and cat.source in (
+        ClassificationSource.EDITED, ClassificationSource.NOTE,
+    )
 
 
 def _stale_suggestion(

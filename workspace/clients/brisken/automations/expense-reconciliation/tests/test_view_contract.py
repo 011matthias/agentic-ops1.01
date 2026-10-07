@@ -1268,8 +1268,8 @@ def test_month_move_and_printed_identifiers_are_absent_or_typed(
     otherwise. `summary.n_month_moves` is an int on every expense payload.
 
     The module fixtures carry no offer and no identifier, so they pin the
-    absent half; a January month with a slip whose date is typed into April
-    pins the present half."""
+    absent half; a January month holding a slip read as an April date pins
+    the present half (item 251: a TYPED April date moves the slip instead)."""
     import re
 
     for view in payloads["expense_batch"]:
@@ -1281,7 +1281,7 @@ def test_month_move_and_printed_identifiers_are_absent_or_typed(
     monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     mock = MockLLMClient(extraction_responses=[_extraction(
-        date="2026-01-15", time="23:56", invoice_number="HMVWDWIL-0029",
+        date="2026-04-15", time="23:56", invoice_number="HMVWDWIL-0029",
         receipt_number="2247-1655-6392",
     )])
     monkeypatch.setattr("expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
@@ -1296,10 +1296,6 @@ def test_month_move_and_printed_identifiers_are_absent_or_typed(
             files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
         ).json()
         assert client.get(f"/jobs/{job['job_id']}").json()["status"] == "done"
-        assert client.put(
-            f"/api/runs/{batch_id}/expenses/0000__a.jpg",
-            json={"field": "date", "value": "2026-04-15"},
-        ).status_code == 200
         view = client.get(f"/api/expense-batches/{batch_id}").json()
 
     (row,) = view["expenses"]
@@ -1717,6 +1713,7 @@ REMATCH_TRIGGERS_PIN = {
     "month_move",
     "duplicates_reapply",  # item 223 step 7: the operator's re-apply route
     "receipts_reread",  # item 240: the operator's re-read of stored receipts
+    "sender_notes",  # item 252: our senders' notes applied to stored receipts
 }
 
 

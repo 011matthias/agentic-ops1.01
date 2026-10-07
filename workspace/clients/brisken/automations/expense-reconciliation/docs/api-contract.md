@@ -534,7 +534,9 @@ folder), `cards`, `master_data`, `set_aside`, `trip`, and since item 112
 `adjacent_receipts` (a neighbouring month's arrival), and since item 223 step 7
 `duplicates_reapply` (the operator re-applying the duplicate rules to a
 matched month, see the last section), and since item 240 `receipts_reread`
-(the operator reading a month's stored receipts again). Since item 103 the four
+(the operator reading a month's stored receipts again), and since item 252
+`sender_notes` (the operator applying our senders' notes to a month's stored
+receipts, when a receipt's company moved). Since item 103 the four
 counts are the effective ones the month's page shows at that moment (see "The
 four charge counters count the effective verdict"), not the raw outcome the
 matcher produced. Oldest first. The
@@ -3159,16 +3161,21 @@ believed, and nothing looked at where the row lives.
 "month_move": {"month": "2026-07", "label": "July 2026", "batch_id": "50622baec444"}
 ```
 
-Present only when the row's date was TYPED by the reviewer (or the whole
-expense was entered by hand) AND falls outside the batch's window (its month
-plus one either side, the item-25 window) AND the batch is a company month.
-ABSENT otherwise, never null. `batch_id` names the month the move would join,
-and is absent when that month does not exist yet (the move creates it).
-`label` is the English label a created month gets; localize from `month`.
-A machine reading outside the window never offers a move: it stays the
-`date_outside_period` review state. A receipt attached to a charge by hand
-(`manual:` id that is not a typed-in add) is never offered.
-`summary.n_month_moves` (int, every expense payload) counts the offers.
+Present when the row's date, typed OR read from the receipt (item 251; until
+2026-10-07 only a typed date), names another month: a READ date only when it
+falls outside the batch's window (its month plus one either side, the item-25
+window), a TYPED date whenever its month differs (a typed date moves on the
+edit, so one still here was held back) AND the batch is a company month
+AND the date is one the drop would file (not more than a day in the future,
+not more than 366 days from the batch's month). ABSENT otherwise, never null.
+`batch_id` names the month the move would join, and is absent when that
+month does not exist yet (the move creates it). `label` is the English label
+a created month gets; localize from `month`. A machine reading outside the
+window keeps its `date_outside_period` review state beside the offer. A
+receipt attached to a charge by hand (`manual:` id that is not a typed-in
+add) is never offered. `summary.n_month_moves` (int, every expense payload)
+counts the offers. Since item 251 a date EDIT no longer waits for this offer
+(next section); the offer is what a row nobody touched shows.
 
 **The move**, `POST /api/runs/{run_id}/expenses/{document_id}/move`, body
 `{"month": "YYYY-MM"}` optional (default: the row's offer). Reply:
@@ -3193,7 +3200,56 @@ creates carries `created_by: "move"` and claims its pooled mail afterwards.
 Both months re-match when they hold a statement. Refusals: 400 for a trip, a
 malformed month, the batch's own month, an expense already removed, or no
 offer and no named month; 404 for an unknown expense. The source month is
-never deleted, even when the move empties it.
+never deleted, even when the move empties it. A copy the target month itself
+deleted or moved away does not count as "already there" (item 251: moving a
+receipt back into the month it left used to keep the dead copy and lose the
+live one).
+
+## The date decides the month: `moved` on a date edit (item 251, 2026-10-07)
+
+Owner: "the baseline data on the dates that is extracted from receipts is the
+foundation for how the receipts get sent to months. So if user changes date,
+then the month changes accordingly." A date that CHANGES carries the receipt
+into the calendar month it names (the month the drop files a receipt in),
+through the move above, in the same request:
+
+- `PUT /api/runs/{id}/expenses/{doc}` with `field: "date"`, setting OR
+  clearing a typed date (clearing hands the decision back to the reading);
+- `POST /api/runs/{id}/expenses` with a `date`;
+- a real re-read (`POST /api/runs/{id}/receipts/reread`, `dry_run: false`)
+  that takes a new date, unless the reviewer typed a date over the reading.
+
+The edit/add reply gains one of three parallel keys, each ABSENT otherwise:
+
+```json
+"moved": {"...": "the move's own reply, as POST .../move answers it"},
+"move_held": {"held": "month_published", "month": "2026-04", "label": "April 2026", "batch_id": "..."},
+"move_held": {"held": "day_month_swap", "month": "2026-05", "label": "May 2026", "date": "2026-05-07", "swap": "2026-07-05"},
+"move_error": {"error": "...", "code": "file_missing_on_disk"}
+```
+
+With `moved`, `summary` is the month the row LEFT and the edit's own re-match
+is not run again (the move re-matched both months). `move_held` keeps the
+receipt where it is with its offer, for one of two reasons (`held`):
+`month_published`, the source or the target month is published; or
+`day_month_swap` (owner 2026-10-07), a TYPED date that, with day and month
+exchanged (`swap`), falls in this month while the date as typed does not. A
+browser's date picker follows the browser's locale, not the app's, so a
+day-first "05/07" in a month-first picker is stored as 7 May; July's
+NORMANDIE SEINE toll (file 2026-07-05) was typed as 2026-05-07 the morning
+the rule shipped. The offer's one click still moves it if the date is right.
+`move_error`: the move refused; the date edit is saved and the row keeps its
+offer. Nothing moves for a trip, a batch with no knowable month, a receipt
+attached to a charge by hand, or a date the offer would not name either (a
+day or more in the future, more than 366 days from the batch's month).
+
+The re-read reports it too: each `readings.changes[]` entry whose new date
+names another month carries `moves_to` (`"YYYY-MM"`) on the dry run and the
+real run alike (absent when a typed date keeps the receipt); the real run's
+result carries `moved[]` (`document_id`, `display`, `batch_id`, `label`,
+`month`, `moved_as`, `created_batch`, `already_in_batch`) and, when any
+were kept, `move_held[]`. The dry run never moves: a move copies the file
+into the target month's folder and can open a month.
 
 **Printed identifiers** (item 77 amendment, note #45), `expenses[]`, parallel,
 strings, ABSENT when the receipt did not print them and on every receipt read
@@ -6466,16 +6522,112 @@ carried no prose of its own. It rides in provenance too, at
 `submitted_by.operator_note`, which is where it is recorded; the row key is
 a LIFT of that, exactly as `untrusted_instructions` is lifted.
 
-**Display only, and this is the whole of its contract.** Mail text is
-untrusted inbound ([[rule_untrusted_inbound]]): this string chooses no
-entity, no category, no cost center, no card and no recipient, it reaches
-no model as instruction, and nothing in the tool branches on it. The
-reviewer reads it and decides. `test_the_note_decides_nothing` is the
-differential that says so rather than promising it: two identical receipts,
-one of whose mails names an entity, a cost center, a category and a card in
-the plainest words it could, land on identical `legal_entity_id`,
-`entity_source`, `person`, `posting_category`, `card_source`,
-`cost_center` and `private`.
+**This string is shown as written.** It never selects a recipient, a cost
+center or a card. Since item 250 (owner 2026-10-07) a note from one of OUR
+senders also classifies the receipt; that reading is the next section. A
+stranger's note stays display only ([[rule_untrusted_inbound]]):
+`test_a_strangers_note_decides_nothing` is the differential, two identical
+receipts from an outside address, one of whose mails names a company
+("BTS"), a cost center, a category and a card in the plainest words it
+could, landing on identical `legal_entity_id`, `entity_source`, `person`,
+`posting_category`, `card_source`, `cost_center` and `private`.
+
+### What our senders' notes decide (item 250)
+
+Owner rulings 2026-10-07. A note counts only when all of these hold
+(`intake_mail.trusted_sender_notes`): the address is ours (the Brisken
+tenant or `intake.known_senders`), the mail raised no
+`untrusted_instructions`, and something is left once the signature is cut
+(a line naming one of the intake aliases' people starts the signature; 14 of
+the 72 live notes are only Criss's). It is read once, at arrival, and rides
+on the receipt (`sender_note`, `sender_note_entity`, `sender_note_split`,
+serialized with it), so a receipt that arrived before the deploy carries
+none.
+
+* **Company.** `BCS` = Cloud Services, `BTS` = Consulting, `CorpServ` /
+  `Corp Serv` = Corporate Services (the curated chart's own tab names). One
+  named company sets `legal_entity_id` with `entity_source: "sender_note"`,
+  over the paying card: the card stays the card (`card`, `person`,
+  `posting_paid_through` unchanged), the company moves. Only the reviewer's
+  own pick (`entity_source: "override"`) beats it. Two companies with no
+  "split" decide nothing; "BTA" and project names decide nothing.
+  **Pairing follows the card, not the note** (item 253, owner 2026-10-07):
+  the matcher treats a company only the note named as no company
+  (`matching.deterministic.pairing_entity`), so the receipt still pairs with
+  its own card's charge; its card scope still binds it. A reviewer's own
+  company pick scopes the match exactly as before.
+* **Split.** "split", "shared" or "50/50" books the whole amount in
+  Corporate Services; the tool never divides a charge.
+* **Account.** When something is left besides company names and filler, one
+  model call (`classify_by_note`, the note fenced as data) is asked which of
+  the company's leaves the note's words name. At confidence 0.85 or more,
+  passing the guards every model answer meets, and only when the note's own
+  words name that account (`sender_note.names_account`, item 254: one
+  meaningful word in common, so "Nicolas/Lydar" or "Verve.Works" name no
+  account however sure the model is), it decides: source
+  `NOTE`, origin `person`, `posting_category.source: "note"`, posted like a
+  reviewer's pick and never re-guessed by the merchant list. A split note is
+  offered only Corporate Services' own never-allocated accounts (allocation
+  rule "N/A" on Dirk's marked chart: the `CorpServ | ...` family, owner
+  "own account, never split"). Anything less clear decides nothing and the
+  receipt runs the usual chain.
+* **Never learned.** Nothing a note decides is written to the override
+  tables the Publish learners read; only corrections are memorized
+  (owner 2026-09-24).
+
+### Applying them to the receipts already in a month: `POST /api/runs/{run_id}/sender-notes/apply` (item 252)
+
+Owner 2026-10-07: "change existing rows, reread if need be". Operator only;
+the SPA offers no control for it. Same shape as item 240's re-read.
+
+Body: `{"confirm": "<month label or run id>", "dry_run": true|false}`, both
+required, for a dry run too. Both answer `{"ok": true, "dry_run": ...,
+"job_id": "..."}`; poll `GET /jobs/{job_id}`.
+
+| Refusal | Status | `code` |
+|---|---|---|
+| no such run | 404 | `run_not_found` |
+| not an expense batch / published / a re-match running or owed / no receipt came by mail | 409 | `not_an_expense_batch` / `month_published` / `rematch_running` / `sender_notes_no_receipts` |
+| confirm missing or wrong | 400 | `sender_notes_confirm_required` / `sender_notes_confirm_mismatch` |
+| `dry_run` not a JSON boolean | 400 | `sender_notes_dry_run_required` |
+
+**Which note.** For each receipt in the pool with a provenance entry: the
+entry's `operator_note`, else (every receipt ingested before 2026-09-20) the
+note read again from its mail, the archive the entry names, else the one
+archive whose log row lists the document for this month. No archive, or two,
+means no note. A note read again carries its mail's agent-directed text
+flags: the ones the archive recorded, else a fresh scan of its subject and
+body. Then item 250's own filter (`trusted_sender_notes`) and stamp, on both
+`receipts` and `extracted_receipts`; a receipt already carrying the same note
+fields is unchanged, so a second run writes nothing.
+
+**What it writes.** The note fields and the company they decide; a note read
+again into `intake_provenance` (with its flags), so the row shows
+`operator_note`; and categories only where the note can move them, on a GL
+month: a row whose shown company moved is categorized again for that company,
+and a row whose note asks an account question keeps its old answer unless the
+new one is the note's (source `NOTE`). Nothing goes into the reviewer's
+tables, so her picks stay on top and Publish learns nothing from a note. A
+`sender_notes_applied` record is appended to the snapshot. A month with a
+statement re-matches (trigger `sender_notes`) when a company moved, because
+the company scopes the match: a card-paid receipt moved to another company
+no longer pairs with that card's charge, as with a person's company pick.
+
+Job `result`:
+
+| Path | Meaning |
+|---|---|
+| `counts` | `{receipts, mailed, notes_found, notes_recorded, notes_reread, trusted, stamped, company_changed, account_by_note, unchanged, display_restored}`; `unchanged` = trusted notes whose receipt already carries them |
+| `skipped[]` | `{document_id, why: "no_archive" \| "archive_ambiguous" \| "archive_missing"}`: a mailed receipt with no recorded note whose mail could not be named with certainty |
+| `documents[]` | one per receipt whose stored fields change: `{document_id, vendor, note, note_reread, company_changed, recategorized: "company" \| "account" \| null, account_by_note, fields[], before, after}`. `before` / `after` are `{vendor, legal_entity_id, entity_source, posting_category, suggested_category, review_reason_code, operator_note}` read off the Expenses view, the two categories as `{category, zoho_account, source}` or `null` |
+| `display_restored[]` | documents whose provenance gained the note read again (strangers' notes included: shown, never acted on) |
+| `rematch_owed` (dry run) | whether a re-match is part of the run |
+| `consequences` (dry run) / `applied` (real run) | item 240's shape: `pairs`, `confirmed`, `expenses`, `duplicates`. Its `expenses[]` reads keys an Expenses row does not carry (`entity`, `category`, `zoho_account`), so a moved company or category shows in `documents[]`, not there |
+| `consequences.rematch_alone` / `rematch_error` | as item 240 when a re-match is owed (measured on two throwaway copies); `null` otherwise, when the view is built on the new snapshot in memory |
+| `written[]` / `gone[]` / `rematch` (real run) | receipts written; receipts someone changed between the plan and the write (left alone); the re-match's own answer or `null` |
+| `cost_usd` | model spend, when a category was asked again |
+
+Tests: `tests/test_sender_note_backfill_252.py`.
 
 ### Where the text ends and the quote begins
 
@@ -8217,3 +8369,47 @@ the same answers. The real run writes the readings (each changed receipt's
 joined set-aside entry `restored_by: "reread"`, appends a `receipts_reread`
 record to the snapshot, and re-matches the month with trigger
 `receipts_reread`. Tests: `tests/test_receipts_reread_item_240.py`.
+
+## The receipt overview: `GET /api/receipts/overview` (item 248, 2026-10-07)
+
+Dirk: users should see and filter every receipt in the tool in one place. One
+row per receipt, from every source, newest arrival first. Read-only, built by
+`web/receipt_overview.py` from each batch's Expenses page payload (months and
+trips) plus the mail log, so every verdict on a row is its month's own. Kept
+under the card roll-up's memo key plus the mail archive's (log size/mtime and
+every `meta.json`), so an arrival, a dismiss or a replay is on the next read.
+Cold build ~3.5-6.5 s on the 2026-10-07 backup (8 months, 378 rows), memo hit
+~0.03 s.
+
+Top level: `receipts[]`, `n_receipts`, `by_status{}`, `by_source{}`,
+`statuses[]` (every code in display order), `batches[]`
+(`{batch_id, label, batch_type}`), `generated_at`.
+
+Every row carries every key (null when unknown): `id` (`{batch}/{document}`
+or `mail/{archive}/{n}`), `source` (`email` | `upload`), `status`, `review`
+(`ready` | `check` | `pick` | null) + `review_reason`, `file_name` (every
+`NNNN__` prefix dropped), `file_type` (lower-case extension, `jpeg` -> `jpg`,
+`email_body` for a mail text the intake rendered, `other`), `document_id`,
+`can_view` (the month's `receipt_image_available`; true on a removed document
+whose month still exists, false when the month is gone), `batch_id`,
+`batch_label`, `batch_type`, `archive`, `subject`, `from_address`,
+`submitted_by`, `received_at` + `received_from` (`mail` = the mail's arrival;
+`stored_file` = the stored receipt file's write time, the only arrival an
+upload has, since no upload records one per file), `receipt_date`, `vendor`,
+`total` (as printed) + `amount` (number), `currency`, `card`, `person`,
+`category` (the accounts in `books_as`, else the posting account), `reference`
+(invoice / receipt number / reference), `note`, `duplicate_of`, `pool_month`,
+`set_aside_reason`.
+
+`status`, for a receipt in a month, in this order: `duplicate`
+(`counts_in_total: false` or an extra copy), `private`, `bill`
+(`payment_path: "bill"`), `settled_outside`, `matched` (not
+`without_charge`), `waiting_for_statement` (no statement on the month, or
+`waits_for_statements`), `no_charge`. For a file that is not or no longer an
+expense: `set_aside` (not restored), `waiting_for_month` (mail `pooled`),
+`held` (mail `held_*`), `processing`, `removed` (filed, then gone from its
+month, or its month deleted; a document found under the same file name on a
+row joined to the same mail is not removed, so a month move does not read as
+a deletion), `dismissed`. A mail is joined to a row by the provenance's
+`archive`, else the log's (batch, document) pairs, else the arrival second.
+Tests: `tests/test_receipt_overview.py`.

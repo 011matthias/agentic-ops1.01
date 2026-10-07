@@ -384,10 +384,46 @@ def test_a_new_date_in_another_month_is_flagged_not_moved(client, monkeypatch):
     out = _result(client, batch_id, dry_run=True)
     (change,) = out["readings"]["changes"]
     assert change["new_date_outside_month"] is True
+    # Item 251: the dry run names where the real run would file it.
+    assert change["moves_to"] == "2026-07"
+    assert "moved" not in out
+    assert [b["label"] for b in client.get("/api/expense-batches").json()["batches"]] == [LABEL]
     _second_reading(reader, Lovable=_ext(date="2026-08-29", total="15.00",
                                          vendor="Lovable Labs Incorporated"))
     (inside,) = _result(client, batch_id, dry_run=True)["readings"]["changes"]
     assert "new_date_outside_month" not in inside, "absent, never false"
+    assert "moves_to" not in inside
+
+
+def test_apply_files_a_receipt_whose_new_date_names_another_month(client, monkeypatch):
+    """Item 251 (notes #114 / #117): the January Parada copy was re-read as
+    4 July and stayed in January. The real run now carries it to July."""
+    batch_id, reader = _month(client, monkeypatch)
+    _second_reading(reader, Lovable=_ext(date="2026-07-30", total="15.00",
+                                         vendor="Lovable Labs Incorporated"))
+    out = _result(client, batch_id, dry_run=False)
+    (moved,) = out["moved"]
+    assert moved["label"] == "July 2026" and moved["created_batch"] is True
+    assert not any("Lovable" in e["document_id"] for e in _grid(client, batch_id)["expenses"])
+    (row,) = _grid(client, moved["batch_id"])["expenses"]
+    assert row["document_id"] == moved["moved_as"]
+    assert row["date"] == "2026-07-30"
+    assert "read again" in (row["data_quality_note"] or "")
+
+
+def test_a_typed_date_keeps_the_receipt_where_she_put_it(client, monkeypatch):
+    batch_id, reader = _month(client, monkeypatch)
+    lovable = _row(_grid(client, batch_id), "Lovable")["document_id"]
+    edit = client.put(f"/api/runs/{batch_id}/expenses/{lovable}",
+                      json={"field": "date", "value": "2026-08-20"})
+    assert edit.status_code == 200 and "moved" not in edit.json()
+    _second_reading(reader, Lovable=_ext(date="2026-07-30", total="15.00",
+                                         vendor="Lovable Labs Incorporated"))
+    (change,) = _result(client, batch_id, dry_run=True)["readings"]["changes"]
+    assert "moves_to" not in change, "her date decides, not the reading"
+    out = _result(client, batch_id, dry_run=False)
+    assert out["moved"] == []
+    assert _row(_grid(client, batch_id), "Lovable")["date"] == "2026-08-20"
 
 
 def test_an_expense_the_reviewer_deleted_is_not_read_again(client, monkeypatch):

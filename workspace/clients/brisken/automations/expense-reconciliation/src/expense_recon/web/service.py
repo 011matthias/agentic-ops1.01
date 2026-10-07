@@ -2944,7 +2944,11 @@ def _coarse_source_join(joined: str | None) -> str:
         if not tok:
             continue
         origin = origin_of_source_value(tok)
-        if origin == ORIGIN_PERSON:
+        if tok.upper() == ClassificationSource.NOTE.value:
+            # Item 250: a person's answer too, but the sender's in the mail,
+            # not the reviewer's on the row; the screen says which.
+            coarse = "note"
+        elif origin == ORIGIN_PERSON:
             coarse = "override"
         elif origin == ORIGIN_RULE:
             coarse = tok.lower()  # REGISTRY -> registry, LEARNED -> learned
@@ -6602,6 +6606,16 @@ def execute_expense_batch(
     exception propagates). The mail-intake materializer uses it to
     re-check that no competing batch for the same month landed while the
     OCR ran — this function itself stays policy-free."""
+    # Item 250: a month the mail itself creates classifies by the senders'
+    # notes exactly as a receipt added to an open month does.
+    sender_notes = None
+    if prepared.intake_provenance:
+        from .intake_mail import IntakeConfig, trusted_sender_notes
+
+        sender_notes = trusted_sender_notes(
+            prepared.intake_provenance,
+            IntakeConfig.from_settings(store.get_settings()),
+        )
     try:
         result = generate_expenses(
             prepared.cfg,
@@ -6610,6 +6624,7 @@ def execute_expense_batch(
             on_stage=on_stage,
             expense_memory=prepared.expense_memory,
             registry=prepared.registry,
+            sender_notes=sender_notes,
         )
     except ConfigError as exc:
         raise RunInputError(
@@ -7133,9 +7148,11 @@ def resolve_batch_row_cards(
     `receipts` are the POST-overlay pool (edits applied), so the entity
     fallback step reads what the reviewer sees; the override step reads
     `field_overrides` directly so an explicit edit is labeled as such.
-    `entity_source` is override | card | batch | learned | none — "learned"
-    meaning the stamped value differs from the batch default (memory or an
-    earlier card stamp), so the UI can say why without guessing.
+    `entity_source` is override | sender_note | card | batch | learned | none
+    — "learned" meaning the stamped value differs from the batch default
+    (memory or an earlier card stamp), so the UI can say why without
+    guessing; "sender_note" (item 250) the company one of our senders named
+    in the note above the forward, which outranks the card.
 
     `person` / `person_source` (backlog item 40): who the expense belongs
     to, resolved as the LAST link of the SAME card chain — the resolved
@@ -7367,6 +7384,11 @@ def resolve_batch_row_cards(
         override = fields.get("legal_entity", "")
         if override.strip():
             entity, source = override.strip(), "override"
+        elif (r.sender_note_entity or "").strip():
+            # Item 250 (owner 2026-10-07: "note always wins"): the company the
+            # sender's own note names outranks the paying card. Only the
+            # reviewer's pick above beats it.
+            entity, source = r.sender_note_entity.strip(), "sender_note"
         elif card is not None and card.entity:
             entity, source = card.entity, "card"
         elif (r.legal_entity_id or "").strip():
@@ -8549,6 +8571,13 @@ def build_expense_view(
         period = batch_period(
             run.label, [r.detected_date for r in receipts if r.detected_date]
         )
+    # Item 251: the month the window is centred on, derived the same way, and
+    # today as the move offer's yardstick for a date in the future.
+    batch_month = None if is_trip_batch(run) else (
+        month_from_label(run.label)
+        or month_from_dates([r.detected_date for r in receipts if r.detected_date])
+    )
+    today = datetime.now(timezone.utc).date()
     # Item 38 x item 40: on a trip, an expense paid by a person who is
     # not on the roster is worth a flag. The person comes off the card
     # chain (or `reimburse_to` on a private row) exactly as item 40
@@ -8933,14 +8962,16 @@ def build_expense_view(
             # Printed bank details on an open card row: a one-click offer,
             # never a move. Absent otherwise. A copy's original carries it.
             expenses[-1]["bill_suggestion"] = dict(res["bill_suggestion"])
-        # Item 77: a reviewer-typed date that puts this receipt in another
-        # month offers the move (POST .../expenses/{id}/move). A `manual:` id
-        # that is not a typed-in add is a receipt attached to a charge by
-        # hand; it belongs to that charge, not to a month, so it is never
-        # offered. `month_batch` (the route's lookup) names the batch the
-        # move would join; absent when the move would create the month.
+        # Item 77 / 251: a date, typed or read, that puts this receipt
+        # outside the batch's window offers the move (POST
+        # .../expenses/{id}/move). A `manual:` id that is not a typed-in add
+        # is a receipt attached to a charge by hand; it belongs to that
+        # charge, not to a month, so it is never offered. `month_batch` (the
+        # route's lookup) names the batch the move would join; absent when
+        # the move would create the month.
         move_to = month_move_for_row(
-            r, period=period, is_trip=is_trip_batch(run),
+            r, period=period, batch_month=batch_month,
+            is_trip=is_trip_batch(run), today=today,
             date_is_human=(
                 "date" in field_overrides.get(r.document_id, {})
                 or r.document_id in manual_add_ids
@@ -10549,7 +10580,7 @@ def build_card_status(
     unreadable: list[str] = []
     no_card_months: list[dict] = []
 
-    def _slot(row: dict) -> dict:
+    def _slot(row: dict, *, named: bool = True) -> dict:
         slot = per_card.get(row["key"])
         if slot is None:
             slot = per_card[row["key"]] = {
@@ -10570,7 +10601,20 @@ def build_card_status(
                 "months": [],
                 "receipt_months": [],
                 "_ccy": [],
+                "_named": named,
             }
+        elif named and not slot["_named"]:
+            # The slot was opened by a month holding only receipts on the
+            # card, which name nothing but the key. The first coverage row
+            # names it. Without this the newest month decides: live
+            # 2026-10-07, October had receipts and no statement, so 2838,
+            # 3645 and 3876 lost `card_key`, the tree (item 191) could not
+            # link them, and the months strip lost 2838's subcards.
+            slot["card_key"] = row.get("card_key") or ""
+            slot["label"] = row.get("label") or slot["label"]
+            slot["digits"] = list(row.get("digits") or [])
+            slot["known"] = bool(row.get("known"))
+            slot["_named"] = True
         # The entity is the registry's and only a known row carries one;
         # keep the first non-empty rather than letting a later blank win.
         if not slot["entity"] and row.get("entity"):
@@ -10681,7 +10725,9 @@ def build_card_status(
             }
             if key:
                 entry["statement"] = key in stated
-                _slot({"key": key, "label": key})["receipt_months"].append(entry)
+                _slot({"key": key, "label": key}, named=False)[
+                    "receipt_months"
+                ].append(entry)
             else:
                 no_card_months.append(entry)
 
@@ -10690,6 +10736,7 @@ def build_card_status(
     cards = []
     for slot in per_card.values():
         slot["unreconciled_by_ccy"] = _add_money(slot.pop("_ccy"))
+        slot.pop("_named")
         slot["n_statements"] = len(slot["statements"])
         # The months this card is actually ON, which is the question note
         # #86 opens with. A month that merely listed the card in its
@@ -14719,6 +14766,18 @@ def _add_receipts_locked(
         new_receipts = stamp_card_entities(
             new_receipts, _batch_cards(cfg), _batch_card_hints(cfg)
         )
+        # Item 250: the note one of our senders typed above the forward,
+        # AFTER the card (the note's company outranks it) and before the
+        # categorizer, which picks the company's chart off the stamp.
+        from ..sender_note import stamp_sender_notes
+        from .intake_mail import IntakeConfig, trusted_sender_notes
+
+        new_receipts = stamp_sender_notes(
+            new_receipts,
+            trusted_sender_notes(
+                new_provenance, IntakeConfig.from_settings(store.get_settings())
+            ),
+        )
         learned = (
             MerchantCategoryLookup.from_db_path(learning_db_path)
             if learning_db_path is not None else None
@@ -17725,26 +17784,106 @@ def _candidate_date_gap(tx: "Transaction", receipt: "Receipt | None") -> dict:
 # one as a soft delete that names where it went.
 
 
+#
+# Item 251 (owner 2026-10-07): "the baseline data on the dates that is
+# extracted from receipts is the foundation for how the receipts get sent to
+# months. So if user changes date, then the month changes accordingly."
+# Item 77 only OFFERED the move, and only on a typed date, so a re-read that
+# corrected the misread (a second copy of the same Parada slip, read as
+# January on 2026-09-23 and as 4 July on 2026-09-28) left it in January with
+# nothing to click. Now a date that CHANGES (typed, cleared back to the
+# reading, entered with a typed-in expense, or taken by a re-read) carries
+# the receipt into the calendar month it names, the month the drop would have
+# filed it in, through the move below. A row nobody touches is never moved on
+# read; it is OFFERED the move when its date, typed or read, lies outside the
+# batch's window.
+
+# The drop's plausibility rule (`intake_mail.resolve_receipt_month`), with the
+# batch's own month as the yardstick instead of the arrival: a date the drop
+# would not have filed never opens or joins a month by itself.
+DATE_MOVE_FUTURE_GRACE_DAYS = 1
+DATE_MOVE_MAX_DISTANCE_DAYS = 366
+
+
+def date_month_target(
+    d: date | None,
+    *,
+    batch_month: tuple[int, int] | None,
+    today: date,
+) -> str | None:
+    """The "YYYY-MM" a receipt dated `d` belongs in, when that is not the
+    batch's own month; None when it belongs here or the date cannot route.
+
+    A date more than a day in the future, or more than a year from the
+    batch's month, does not route: a misread year would otherwise open a
+    month nobody has (April's San Paolo slip read as 2024). A batch with no
+    knowable month has nothing to compare against."""
+    if d is None or batch_month is None:
+        return None
+    if (d.year, d.month) == tuple(batch_month):
+        return None
+    if (d - today).days > DATE_MOVE_FUTURE_GRACE_DAYS:
+        return None
+    anchor = date(batch_month[0], batch_month[1], 1)
+    if abs((d - anchor).days) > DATE_MOVE_MAX_DISTANCE_DAYS:
+        return None
+    return f"{d.year:04d}-{d.month:02d}"
+
+
+def day_month_swap(d: date | None) -> date | None:
+    """`d` with its day and month exchanged, when that is another real date
+    (the day is 1-12 and differs from the month), else None. A browser's date
+    picker follows the browser's locale, not the app's, so a day-first
+    "05/07" typed into a month-first picker is stored as 7 May."""
+    if d is None or d.day > 12 or d.day == d.month:
+        return None
+    try:
+        return date(d.year, d.day, d.month)
+    except ValueError:
+        return None
+
+
+def swap_lands_here(d: date | None, batch_month: tuple[int, int] | None) -> date | None:
+    """Item 251 swap guard (owner 2026-10-07): the swapped reading of `d`
+    when it falls in the batch's own month while `d` does not, else None.
+    July's NORMANDIE SEINE toll (file named 2026-07-05) was typed as
+    2026-05-07 the morning the rule shipped."""
+    swapped = day_month_swap(d)
+    if swapped is None or batch_month is None:
+        return None
+    if (d.year, d.month) == tuple(batch_month):
+        return None
+    if (swapped.year, swapped.month) != tuple(batch_month):
+        return None
+    return swapped
+
+
 def month_move_for_row(
     r: Receipt,
     *,
     period: tuple[date, date] | None,
-    date_is_human: bool,
+    batch_month: tuple[int, int] | None,
     is_trip: bool,
+    today: date,
+    date_is_human: bool = False,
 ) -> str | None:
-    """The "YYYY-MM" this row belongs in, or None when it belongs here.
+    """The "YYYY-MM" this row is OFFERED a move to, or None.
 
-    Only a date the reviewer typed (or a whole expense entered by hand) can
-    move a row: a machine reading outside the window is item 25's
-    `date_outside_period` question, and moving on a reading the guard does
-    not trust would file the receipt by the same mistake twice. A trip spans
-    months freely, and a batch with no knowable month has no window to be
-    outside of."""
-    if is_trip or not date_is_human or r.detected_date is None:
+    Item 251: a date the machine read counts the same as a typed one, because
+    the reading is what filed the receipt in the first place. A READ date is
+    offered only outside the batch's window (item 25's three months): a
+    receipt printed on the 30th for a charge posted on the 1st sits in the
+    neighbouring month on purpose, often held by that month's charge, and is
+    moved only when someone changes its date. A TYPED date is offered
+    whenever its month differs: a typed date moves the receipt on the edit,
+    so one still here was held back (a published month, the day/month swap
+    guard) and needs its one click. A trip spans months freely, and a batch
+    with no knowable month has no window to be outside of."""
+    if is_trip or r.detected_date is None:
         return None
-    if not outside_period(r.detected_date, period):
+    if not date_is_human and not outside_period(r.detected_date, period):
         return None
-    return f"{r.detected_date.year:04d}-{r.detected_date.month:02d}"
+    return date_month_target(r.detected_date, batch_month=batch_month, today=today)
 
 
 def _month_move_source(store: RunStore, run: RunRow, document_id: str):
@@ -17894,10 +18033,20 @@ def move_expense_to_month(
             _, t_receipts, t_outcome, _ = snapshot_from_dict(t_snapshot)
             t_dir = Path(target.work_dir) / "receipts"
             t_dir.mkdir(parents=True, exist_ok=True)
+            # Item 251: a copy this month deleted, or moved away, is not
+            # "already there". Moving a receipt back into the month it left
+            # (a date typed wrong, then corrected) found its own soft-deleted
+            # row, kept that dead row and deleted the live one: the receipt
+            # vanished from both months.
+            t_gone = {
+                e["document_id"] for e in store.get_expense_edits(target.run_id)
+                if e["op"] == "delete"
+            }
             same = next(
                 (
                     r.document_id for r in t_receipts
-                    if (t_dir / r.document_id).is_file()
+                    if r.document_id not in t_gone
+                    and (t_dir / r.document_id).is_file()
                     and hashlib.sha1(
                         (t_dir / r.document_id).read_bytes()
                     ).hexdigest()[:16] == digest
@@ -18019,6 +18168,93 @@ def move_expense_to_month(
         if moved_cross:
             out["months_rematched"] = moved_cross
     return out
+
+
+def route_expense_by_date(
+    store: RunStore,
+    run_id: str,
+    document_id: str,
+    now_iso: str,
+    *,
+    data_root: Path,
+    learning_db_path: Path | None = None,
+    today: date | None = None,
+) -> dict | None:
+    """Item 251: after an expense's date changed, file it in the month the
+    date names (`move_expense_to_month`).
+
+    Reads the EFFECTIVE date (a typed date over the reading, a typed-in
+    expense's own date), so a re-read that changed the reading under a date
+    the reviewer typed moves nothing. None when the expense already sits in
+    its month or cannot be routed: a trip, a batch with no knowable month, a
+    receipt attached to a charge by hand, a date `date_month_target` would
+    not file, an expense no longer in the month. Otherwise the move's own
+    answer, or a hold that keeps it where it is with the offer on the row:
+    `{"held": "day_month_swap", "month", "label", "date", "swap"}` when a
+    TYPED date reads as this month with day and month exchanged, and
+    `{"held": "month_published", "month", "label", "batch_id"}` when a
+    published month, at either end, would change. Sync: the batch lock and
+    both months' re-match run here."""
+    from .intake_mail import _month_human, _open_batch_for_month, _ym
+
+    run = store.get_run(run_id)
+    if (
+        run is None
+        or run_mode(run) != MODE_EXPENSE_GENERATION
+        or is_trip_batch(run)
+    ):
+        return None
+    edits = store.get_expense_edits(run_id)
+    if document_id.startswith("manual:") and not any(
+        e["document_id"] == document_id and e["op"] == "add" for e in edits
+    ):
+        return None
+    effective = apply_expense_edits(
+        baseline_receipts(run),
+        store.get_expense_field_overrides(run_id),
+        edits,
+    )
+    rec = next((r for r in effective if r.document_id == document_id), None)
+    if rec is None:
+        return None
+    batch_month = month_from_label(run.label) or month_from_dates(
+        [r.detected_date for r in effective if r.detected_date]
+    )
+    month = date_month_target(
+        rec.detected_date,
+        batch_month=batch_month,
+        today=today or datetime.now(timezone.utc).date(),
+    )
+    if month is None:
+        return None
+    typed = (
+        "date" in (store.get_expense_field_overrides(run_id).get(document_id) or {})
+        or document_id.startswith("manual:")
+    )
+    swapped = swap_lands_here(rec.detected_date, batch_month) if typed else None
+    if swapped is not None:
+        # Owner 2026-10-07: a typed date that reads as this month with day
+        # and month exchanged is held, not moved; the offer stays for the
+        # one click that moves it if the date really is the other month.
+        return {
+            "held": "day_month_swap",
+            "month": month,
+            "label": _month_human(month),
+            "date": rec.detected_date.isoformat(),
+            "swap": swapped.isoformat(),
+        }
+    target = _open_batch_for_month(store, _ym(month))
+    if run.published or (target is not None and target.published):
+        return {
+            "held": "month_published",
+            "month": month,
+            "label": _month_human(month),
+            "batch_id": (run if run.published else target).run_id,
+        }
+    return move_expense_to_month(
+        store, run, document_id, month, now_iso,
+        data_root=data_root, learning_db_path=learning_db_path,
+    )
 
 
 # ── Item 74: duplicates mean one thing each ──────────────────────────
@@ -18791,7 +19027,10 @@ def commit_month_memory(
     `only_if_changed` (the publish path), `{"saved": False, "reason":
     "unchanged"}` when the run's corrections are exactly what was last saved,
     so publishing, unpublishing and publishing again does not count the same
-    corrections twice in the Memory page's counts. The button always saves.
+    corrections twice in the Memory page's counts. The button saves what is
+    ticked, minus lessons this month already saved and memory still holds
+    (item 246); with nothing left it answers `nothing_to_save` and records no
+    save.
 
     Item 183 half A: `keep` (the ticked lesson ids) or `skip` choose which of
     the plan's lessons are written; neither means the defaults (corrections
@@ -18817,7 +19056,12 @@ def commit_month_memory(
         field_overrides=field_overrides, edits=edits, now_iso=now_iso,
     )
     chosen = ml.select(lessons, keep=keep, skip=skip)
-    kept = chosen["kept"]
+    # Item 246: a lesson this month already saved, which memory still holds
+    # as saved, is not written again: it would only count the same
+    # correction twice. A lesson whose value changed since is written, and
+    # overwrites the rule.
+    held = {lsn.id for lsn in lessons if lsn.already_saved}
+    kept = [lid for lid in chosen["kept"] if lid not in held]
     if only_if_changed:
         last = store.get_memory_commit(run.run_id)
         if last is not None and last["digest"] == digest:
@@ -18825,6 +19069,15 @@ def commit_month_memory(
             kept = [lid for lid in kept if before is not None and lid not in before]
             if not kept:
                 return {"saved": False, "reason": "unchanged"}
+    elif not kept:
+        # The button with nothing to write records no empty save, so the
+        # undo stays on the last save that changed something.
+        empty = {"writes": [], "unresolved_conflicts": []}
+        written = _learned_as_written(learned, empty, chosen, kept)
+        return {
+            "saved": False, "reason": "nothing_to_save", "learned": written,
+            "journal_id": None, "lessons": written["lessons"],
+        }
     applied = ml.apply_selection(ctx, lessons, kept)
     views = [_planned_write_view(w) for w in applied["writes"]]
     # Read before the write, so the journal's pre-image is the state a
@@ -18887,8 +19140,14 @@ def _learned_as_written(learned: dict, applied: dict, chosen: dict, kept) -> dic
     conflict counts stay as found, and `lessons` says which ids went where."""
     out = dict(learned)
     calls: dict[str, int] = {}
+    replaced = 0
     for w in applied["writes"]:
+        if w.is_delete:
+            replaced += 1
+            continue
         calls[w.table] = calls.get(w.table, 0) + 1
+    # Item 246: rules under another spelling of a saved merchant, removed.
+    out["rules_replaced"] = replaced
     for summary_key, table in _LEARNED_CALL_COUNTS.items():
         if summary_key in out:
             out[summary_key] = calls.get(table, 0)
@@ -18958,7 +19217,8 @@ def plan_month_memory(
         decisions=decisions, overrides=overrides,
         field_overrides=field_overrides, edits=edits, now_iso=now_iso,
     )
-    writes = ctx.writes
+    # Item 246: the writes as a save makes them, other spellings replaced.
+    writes = ctx.expand(ctx.writes)
     counts: dict[str, int] = {}
     for table, _key in distinct_keys(writes):
         counts[table] = counts.get(table, 0) + 1
@@ -19057,6 +19317,7 @@ def _memory_plan(
             )}),
             effective, card_res,
         )
+    stored, stored_categories = _stored_learning_rows(learning_db_path)
     ctx = ml.LessonContext(
         run=run, writes=writes, merchants_before=merchants_before,
         merchants_after=merchants_after, overrides=overrides or {},
@@ -19065,8 +19326,29 @@ def _memory_plan(
         rec_by_id=rec_by_id, gl=gl, now_iso=now_iso,
         identity=memory_identity(settings), alias_pairs=alias_pairs,
         cards=cards, card_seen=card_seen,
+        stored=stored, stored_categories=stored_categories,
+        saved_ids=_last_kept_lessons(store, run.run_id) or set(),
     )
     return ctx, ml.build_lessons(ctx), learned
+
+
+def _stored_learning_rows(learning_db_path: Path | None) -> tuple[dict, list]:
+    """Item 246: memory as it stands, read once per plan and never created:
+    `({(table, key tuple): row}, [MerchantCategory])`. An absent store is
+    empty memory."""
+    from ..learning import TABLE_KEYS
+
+    if learning_db_path is None or not Path(learning_db_path).exists():
+        return {}, []
+    stored: dict = {}
+    with LearningStore(learning_db_path) as s:
+        for table, cols in TABLE_KEYS.items():
+            for row in s.conn.execute(f"SELECT * FROM {table}").fetchall():  # noqa: S608 - fixed names
+                row = dict(row)
+                key = tuple("" if row.get(c) is None else str(row[c]) for c in cols)
+                stored[(table, key)] = row
+        categories = s.all_merchant_categories()
+    return stored, categories
 
 
 def _planned_write_view(w) -> dict:
@@ -19078,7 +19360,9 @@ def _planned_write_view(w) -> dict:
     from ..learning import TABLE_KEYS
 
     value = ""
-    if w.table == "merchant_category":
+    if w.is_delete:
+        pass
+    elif w.table == "merchant_category":
         value = str(w.args[2] or "")
     elif w.table == "merchant_entity":
         value = str(w.args[1] or "")
@@ -19093,6 +19377,9 @@ def _planned_write_view(w) -> dict:
         "key": dict(zip(TABLE_KEYS[w.table], w.key)),
         "surface": MEMORY_TABLE_SURFACE.get(w.table, ""),
         "value": value,
+        # Item 246: "delete" is a rule under another spelling of the same
+        # merchant that this save replaces.
+        "op": "delete" if w.is_delete else "write",
     }
 
 

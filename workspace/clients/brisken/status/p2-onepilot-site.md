@@ -4,7 +4,7 @@ workstream: p2-onepilot-site
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-09-10
+updated: 2026-10-05
 general_ref: status/p2-lead-gen-general.md
 ---
 
@@ -13,6 +13,13 @@ general_ref: status/p2-lead-gen-general.md
 The OnePilot marketing site prototype and its positioning assets. The OnePilot
 *vision* itself is shared context (in `status/p2-lead-gen-general.md`); this
 workstream is the concrete site build, blueprints, and review assets.
+
+**Cross-reference (2026-10-05):** the hosting/platform question this file's
+"Hosting" row tracked is superseded: Dirk greenlit replicating onepilot (and
+the other marketing sites) in Lovable, and that rebuild's ordered plan now
+lives in `status/p2-lovable-rebuild.md`. Everything else below — the TC
+deck-story alignment, the nested-hierarchy decision, the blueprints and the
+one-pager generator work — is still live and un-superseded.
 
 The prototype WAS hosted for internal review (pre-Dirk) at
 brisken-onepilot-proto.fly.dev behind a name page; that host is destroyed as of
