@@ -13022,7 +13022,7 @@ show only when the row carries a bank-payment signal (`bill_suggestion`);
 that would hide it from the Perplexity row, and also from a bank-paid invoice
 the reader found no signal on. Owner call.
 
-### 246. "Save corrections to memory" saves what is ticked, and a save overwrites the rule for that case (owner, 2026-10-07, in session) (BUILT 2026-10-07; SPA prompt `docs/lovable-save-memory-ticks-prompt.md` not pasted)
+### 246. "Save corrections to memory" saves what is ticked, and a save overwrites the rule for that case (owner, 2026-10-07, in session) (BACKEND LIVE 2026-10-07: PR #1580, Fly v280 on `68beb63a`; SPA prompt `docs/lovable-save-memory-ticks-prompt.md` not pasted)
 
 Owner, verbatim: *"save to memory function should not be all or nothing.
 users should have the chance to adjust precisely what changes in each line
@@ -13069,7 +13069,20 @@ OpenAI / Anthropic / Lovable merchant-list writes stay held for the owner
 Regressed at four wiring points with `tools/regress_check.py`, each green ->
 red -> green: the button's `**lesson_lists`, `ctx.expand` in
 `apply_selection`, the already-saved skip in `commit_month_memory`, the
-kept-half fill in `one_rule_per_merchant`.
+kept-half fill in `one_rule_per_merchant`. Full module suite 4181 passed,
+2 skipped.
+
+**Live 2026-10-07 (Fly v280), checked with 0 writes.** Every month's
+`memory-plan` read before and after the deploy: writes and lesson ids equal
+on six months; May gained 2 deletes (the new behavior: Lovable Labs
+Incorporated and Railway Corporation rules, same category, account carried
+over, written only at May's next save) after edits made there since the
+morning read; July only grew (new receipts). A malformed `keep` on a fake run
+answers 400 `invalid_body`, the well-formed control 404, so the new parser
+serves. Consumer: a headless drive of the published Save dialog on May, every
+non-GET aborted (none attempted), renders "Replaces the rule saved as railway
+corporation". The published dialog still shows "Not saved by this button"
+until the prompt is pasted.
 
 ## Shipped (loop history)
 
