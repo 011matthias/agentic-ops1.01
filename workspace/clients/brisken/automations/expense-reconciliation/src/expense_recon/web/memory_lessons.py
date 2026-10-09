@@ -24,6 +24,10 @@ checklist, and turns the ticks back into exactly the writes that are made.
 Owner decisions (2026-09-25): corrections ticked, conflicts unticked; an
 unticked lesson is dropped and offered again next time (no declined store);
 Publish with nothing ticked still publishes.
+
+Item 255: each lesson's sentence is written in every language the memory
+window offers (`descriptions`, `description_pt`); `description` stays English.
+Vendor, company, account and card names are printed as stored in both.
 """
 from __future__ import annotations
 
@@ -57,6 +61,17 @@ REGISTRY = "registry"
 OWNER_GATED_MERCHANTS = ("anthropic", "openai", "lovable")
 
 
+LANGS = ("en", "pt")
+
+
+def _say(lang: str, en: str, pt: str) -> str:
+    return pt if lang == "pt" else en
+
+
+def _each_lang(build) -> dict[str, str]:
+    return {lang: build(lang) for lang in LANGS}
+
+
 def is_owner_gated(merchant: str | None) -> bool:
     squashed = normalize_vendor(merchant or "").replace(" ", "")
     return any(squashed.startswith(g) for g in OWNER_GATED_MERCHANTS)
@@ -87,10 +102,17 @@ class Lesson:
     effect: str = "new"
     replaces: list = field(default_factory=list)
     already_saved: bool = False
+    # Item 255: the sentence per language; `description` is its English.
+    descriptions: dict = field(default_factory=dict)
     # Not served: what applying the lesson needs.
     writes: list = field(default_factory=list)
     merchant: str = ""
     rows: list = field(default_factory=list)
+
+    def __post_init__(self):
+        if not self.descriptions:
+            self.descriptions = {"en": self.description}
+        self.description = self.descriptions.get("en", self.description)
 
     def view(self) -> dict:
         return {
@@ -99,6 +121,8 @@ class Lesson:
             "table": self.table,
             "key": self.key,
             "description": self.description,
+            "descriptions": dict(self.descriptions),
+            "description_pt": self.descriptions.get("pt", self.description),
             "sources": self.sources,
             "default_keep": self.default_keep,
             "owner_gated": self.owner_gated,
@@ -154,12 +178,13 @@ class LessonContext:
 # ── describing ──────────────────────────────────────────────────────────
 
 
-def _company(ctx: LessonContext, entity: str) -> tuple[str, str | None]:
+def _company(ctx: LessonContext, entity: str, lang: str = "en") -> tuple[str, str | None]:
     """(the company's display name, its org id on a GL month)."""
+    none = _say(lang, "no company", "sem empresa")
     if not ctx.gl:
-        return entity or "no company", None
+        return entity or none, None
     org = org_id_for_entity(entity, ctx.gl.get("entity_orgs") or {})
-    return (ctx.gl.get("labels") or {}).get(org or "", entity or "no company"), org
+    return (ctx.gl.get("labels") or {}).get(org or "", entity or none), org
 
 
 def _account_text(code: str | None, org: str | None) -> str:
@@ -169,13 +194,15 @@ def _account_text(code: str | None, org: str | None) -> str:
     return f"{code} {name}".strip()
 
 
-def _value_text(category, account, org=None) -> str:
+def _value_text(category, account, org=None, lang: str = "en") -> str:
     parts = []
     if category:
-        parts.append(f"category {_account_text(category, org) if org else category}")
+        label = _say(lang, "category", "categoria")
+        parts.append(f"{label} {_account_text(category, org) if org else category}")
     if account:
-        parts.append(f"account {_account_text(account, org) if org else account}")
-    return " and ".join(parts) or "nothing"
+        label = _say(lang, "account", "conta")
+        parts.append(f"{label} {_account_text(account, org) if org else account}")
+    return _say(lang, " and ", " e ").join(parts) or _say(lang, "nothing", "nada")
 
 
 def _row_source(ctx: LessonContext, document_id: str, line_index=None) -> dict:
@@ -193,26 +220,31 @@ def _row_source(ctx: LessonContext, document_id: str, line_index=None) -> dict:
     return out
 
 
-def _shown(sources: list[dict]) -> str:
+def _shown(sources: list[dict], lang: str = "en") -> str:
     shown = ", ".join(
         " ".join(p for p in (s["vendor"], s["total"], s["currency"], s["date"]) if p)
         for s in sources[:3]
     )
-    return shown + (f" and {len(sources) - 3} more" if len(sources) > 3 else "")
+    more = len(sources) - 3
+    return shown + (_say(lang, f" and {more} more", f" e mais {more}") if more > 0 else "")
 
 
-def _rows_text(sources: list[dict]) -> str:
+def _rows_text(sources: list[dict], lang: str = "en") -> str:
     if not sources:
         return ""
-    noun = "row" if len(sources) == 1 else "rows"
-    return f" From {len(sources)} corrected {noun}: {_shown(sources)}."
+    n, one = len(sources), len(sources) == 1
+    head = _say(lang, f" From {n} corrected {'row' if one else 'rows'}",
+                f" De {n} {'linha corrigida' if one else 'linhas corrigidas'}")
+    return f"{head}: {_shown(sources, lang)}."
 
 
-def _seen_text(sources: list[dict]) -> str:
+def _seen_text(sources: list[dict], lang: str = "en") -> str:
     if not sources:
         return ""
-    noun = "receipt" if len(sources) == 1 else "receipts"
-    return f" Seen on {len(sources)} {noun}: {_shown(sources)}."
+    n, one = len(sources), len(sources) == 1
+    head = _say(lang, f" Seen on {n} {'receipt' if one else 'receipts'}",
+                f" Visto em {n} {'recibo' if one else 'recibos'}")
+    return f"{head}: {_shown(sources, lang)}."
 
 
 def _card_text(ctx: LessonContext, key) -> str:
@@ -226,9 +258,11 @@ def _card_text(ctx: LessonContext, key) -> str:
     return f"{card.display_label} ({person})" if person else card.display_label
 
 
-def _cards_text(ctx: LessonContext, keys) -> str:
+def _cards_text(ctx: LessonContext, keys, lang: str = "en") -> str:
     names = [_card_text(ctx, k) for k in keys]
-    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+    if len(names) == 1:
+        return names[0]
+    return ", ".join(names[:-1]) + _say(lang, " and ", " e ") + names[-1]
 
 
 def _vendor_text(sources: list[dict], fallback: str) -> str:
@@ -239,10 +273,18 @@ def _vendor_text(sources: list[dict], fallback: str) -> str:
 
 # What a remembered field fills in on the next receipt (`_LEARNABLE_FIELDS`).
 _FIELD_PHRASE = {
-    "card_key": "paid with {}",
-    "paid_through": "paid through {}",
-    "vendor": "named {}",
-    "tax_label": "with the tax line {}",
+    "en": {
+        "card_key": "paid with {}",
+        "paid_through": "paid through {}",
+        "vendor": "named {}",
+        "tax_label": "with the tax line {}",
+    },
+    "pt": {
+        "card_key": "pago com {}",
+        "paid_through": "pago por meio de {}",
+        "vendor": "com o nome {}",
+        "tax_label": "com a linha de imposto {}",
+    },
 }
 
 
@@ -274,13 +316,14 @@ def _value_stored(table: str, row: dict):
     return None
 
 
-def _old_text(ctx: LessonContext, table: str, key: tuple, row: dict) -> str:
+def _old_text(ctx: LessonContext, table: str, key: tuple, row: dict, lang: str = "en") -> str:
     """The rule being replaced, as the next receipt would have read it."""
     if table == "merchant_category":
         _company_name, org = _company(ctx, key[0])
-        return _value_text(row.get("category"), row.get("zoho_account"), org)
+        return _value_text(row.get("category"), row.get("zoho_account"), org, lang)
     if table == "merchant_entity":
-        return f"the company {row.get('legal_entity_id') or ''}".strip()
+        company = row.get("legal_entity_id") or ""
+        return _say(lang, f"the company {company}", f"a empresa {company}").strip()
     if table == "field_correction":
         value = row.get("value") or ""
         return _card_text(ctx, value) if key[2] == "card_key" else value
@@ -305,6 +348,8 @@ def _writes_effect(ctx: LessonContext, writes: list) -> tuple[str, list[dict]]:
                     "table": w.table, "key": w.key_dict, "removed": True,
                     "value": (f"the rule saved as {w.key[1]} "
                               f"({_old_text(ctx, w.table, w.key, before)})"),
+                    "value_pt": (f"a regra salva como {w.key[1]} "
+                                 f"({_old_text(ctx, w.table, w.key, before, 'pt')})"),
                 })
             continue
         if before is None:
@@ -316,6 +361,7 @@ def _writes_effect(ctx: LessonContext, writes: list) -> tuple[str, list[dict]]:
                 replaces.append({
                     "table": w.table, "key": w.key_dict, "removed": False,
                     "value": _old_text(ctx, w.table, w.key, before),
+                    "value_pt": _old_text(ctx, w.table, w.key, before, "pt"),
                 })
     if replaces:
         return "replaces", replaces
@@ -326,6 +372,8 @@ def _writes_effect(ctx: LessonContext, writes: list) -> tuple[str, list[dict]]:
 
 _REGISTRY_FIELDS = (("category", "category"), ("zoho_account", "account"),
                     ("cost_center", "cost center"), ("card_key", "card"))
+_FIELD_LABEL_PT = {"category": "categoria", "account": "conta",
+                   "cost center": "centro de custo", "card": "cartão"}
 
 
 def _registry_effect(before: dict | None, after: dict | None) -> tuple[str, list[dict]]:
@@ -339,13 +387,15 @@ def _registry_effect(before: dict | None, after: dict | None) -> tuple[str, list
     for fld, label in _REGISTRY_FIELDS:
         if b.get(fld) and a.get(fld) != b.get(fld):
             replaces.append({"table": REGISTRY, "key": {"field": fld},
-                             "removed": False, "value": f"{label} {b.get(fld)}"})
+                             "removed": False, "value": f"{label} {b.get(fld)}",
+                             "value_pt": f"{_FIELD_LABEL_PT[label]} {b.get(fld)}"})
     accounts_b, accounts_a = b.get("accounts") or {}, a.get("accounts") or {}
     for company in sorted(accounts_b):
         if accounts_a.get(company) != accounts_b[company]:
             replaces.append({"table": REGISTRY, "key": {"field": "accounts", "company": company},
                              "removed": False,
-                             "value": f"account in {company} {accounts_b[company]}"})
+                             "value": f"account in {company} {accounts_b[company]}",
+                             "value_pt": f"conta em {company} {accounts_b[company]}"})
     return ("replaces", replaces) if replaces else ("adds", [])
 
 
@@ -353,23 +403,34 @@ def _settle(lsn: Lesson, effect: str, replaces: list[dict], ctx: LessonContext) 
     """Stamp a lesson with its effect, say it in its sentence, and hold back
     one this month already saved."""
     lsn.effect, lsn.replaces = effect, replaces
-    text, held = lsn.description, ""
-    if text.endswith(_HELD):
-        text, held = text[: -len(_HELD)], _HELD
-    if replaces:
-        text += " Replaces " + "; ".join(r["value"] for r in replaces) + "."
-    if (lsn.id in ctx.saved_ids and effect in ("same", "adds")
-            and lsn.kind == KIND_CORRECTION and lsn.table != REGISTRY):
+    already = (lsn.id in ctx.saved_ids and effect in ("same", "adds")
+               and lsn.kind == KIND_CORRECTION and lsn.table != REGISTRY)
+    if already:
         lsn.already_saved = True
         lsn.default_keep = False
-        text += " Already saved from this month."
-    elif effect == "same":
-        text += " Memory already holds this."
-    lsn.description = text + held
+    for lang, text in list(lsn.descriptions.items()):
+        held = _HELD[lang]
+        if text.endswith(held):
+            text = text[: -len(held)]
+        else:
+            held = ""
+        if replaces:
+            values = (r.get("value_pt", r["value"]) if lang == "pt" else r["value"]
+                      for r in replaces)
+            text += _say(lang, " Replaces ", " Substitui ") + "; ".join(values) + "."
+        if already:
+            text += _say(lang, " Already saved from this month.", " Já salva deste mês.")
+        elif effect == "same":
+            text += _say(lang, " Memory already holds this.", " A memória já tem isto.")
+        lsn.descriptions[lang] = text + held
+    lsn.description = lsn.descriptions["en"]
     return lsn
 
 
-_HELD = " Held for the owner: never written from a checklist."
+_HELD = {
+    "en": " Held for the owner: never written from a checklist.",
+    "pt": " Reservado ao responsável: nunca é gravado por esta lista.",
+}
 
 
 # ── attributing a learning row to the rows that taught it ───────────────
@@ -404,53 +465,64 @@ def _field_sources(ctx: LessonContext) -> dict[tuple, list[str]]:
 # ── the lessons ─────────────────────────────────────────────────────────
 
 
-def _describe_write(ctx: LessonContext, table: str, key: tuple, last, sources=()) -> str:
+def _describe_write(ctx: LessonContext, table: str, key: tuple, last, sources=(),
+                    lang: str = "en") -> str:
     """What the next receipt gets, in the words the grid uses (item 225:
     note #91, "make sure the corrections displayed ... are tangible")."""
     if table == "merchant_category":
         entity, vendor = key
-        company, org = _company(ctx, entity)
+        company, org = _company(ctx, entity, lang)
         vendor = _vendor_text(list(sources), vendor)
-        return (f"From now on, {vendor} receipts in {company} get "
-                f"{_value_text(last.args[2], last.args[3], org)}.")
+        value = _value_text(last.args[2], last.args[3], org, lang)
+        return _say(lang, f"From now on, {vendor} receipts in {company} get {value}.",
+                    f"De agora em diante, os recibos de {vendor} em {company} "
+                    f"recebem {value}.")
     if table == "merchant_entity":
         vendor = _vendor_text(list(sources), key[0])
-        return f"From now on, {vendor} receipts go to the company {last.args[1]}."
+        return _say(lang, f"From now on, {vendor} receipts go to the company {last.args[1]}.",
+                    f"De agora em diante, os recibos de {vendor} vão para a empresa "
+                    f"{last.args[1]}.")
     if table == "field_correction":
         entity, vendor, fname = key
-        company, _org = _company(ctx, entity)
+        company, _org = _company(ctx, entity, lang)
         vendor = _vendor_text(list(sources), vendor)
         value = _card_text(ctx, last.args[3]) if fname == "card_key" else last.args[3]
-        phrase = _FIELD_PHRASE.get(fname, fname + " {}").format(value)
-        return f"From now on, {vendor} receipts in {company} are filled in as {phrase}."
+        phrase = _FIELD_PHRASE[lang].get(fname, fname + " {}").format(value)
+        return _say(lang, f"From now on, {vendor} receipts in {company} are filled in as {phrase}.",
+                    f"De agora em diante, os recibos de {vendor} em {company} são "
+                    f"preenchidos como {phrase}.")
     if table == "vendor_alias":
-        return f"The bank's {key[1]} is the receipt vendor {key[2]}."
+        return _say(lang, f"The bank's {key[1]} is the receipt vendor {key[2]}.",
+                    f"{key[1]}, como aparece no banco, é o fornecedor {key[2]} do recibo.")
     if table == "merchant_fx":
-        return f"{key[1]}: {key[2]} to {key[3]} at {last.args[4]}."
+        return _say(lang, f"{key[1]}: {key[2]} to {key[3]} at {last.args[4]}.",
+                    f"{key[1]}: {key[2]} para {key[3]} a {last.args[4]}.")
     return f"{table} {'|'.join(key)}."
 
 
-def _registry_changes(before: dict | None, after: dict | None, ctx=None) -> str:
+def _registry_changes(before: dict | None, after: dict | None, ctx=None,
+                      lang: str = "en") -> str:
     b, a = before or {}, after or {}
     parts = []
     new_aliases = [x for x in a.get("aliases") or [] if x not in (b.get("aliases") or [])]
     if new_aliases:
-        parts.append("new spelling " + ", ".join(new_aliases))
+        parts.append(_say(lang, "new spelling ", "nova grafia ") + ", ".join(new_aliases))
     for fld, label in (("category", "category"), ("zoho_account", "account"),
                        ("cost_center", "cost center")):
         if a.get(fld) != b.get(fld) and a.get(fld):
-            parts.append(f"{label} {a.get(fld)}")
+            parts.append(f"{_say(lang, label, _FIELD_LABEL_PT[label])} {a.get(fld)}")
     accounts_a, accounts_b = a.get("accounts") or {}, b.get("accounts") or {}
     for company in sorted(accounts_a):
         if accounts_a[company] != accounts_b.get(company):
-            parts.append(f"account in {company} {accounts_a[company]}")
-    card = _registry_card_change(b, a, ctx)
+            parts.append(_say(lang, f"account in {company} {accounts_a[company]}",
+                              f"conta em {company} {accounts_a[company]}"))
+    card = _registry_card_change(b, a, ctx, lang)
     if card:
         parts.append(card)
-    return "; ".join(parts) or "entry updated"
+    return "; ".join(parts) or _say(lang, "entry updated", "registro atualizado")
 
 
-def _registry_card_change(b: dict, a: dict, ctx) -> str:
+def _registry_card_change(b: dict, a: dict, ctx, lang: str = "en") -> str:
     """The card half of a merchant-list change as what the next receipt gets
     (item 225). Only the card learner moves these fields: one card seen ->
     that card is filled in; a second card -> none is, and a learned one goes."""
@@ -460,15 +532,20 @@ def _registry_card_change(b: dict, a: dict, ctx) -> str:
     if key_a == key_b and not new_seen:
         return ""
     name = (lambda k: _card_text(ctx, k)) if ctx is not None else str
-    names = (lambda ks: _cards_text(ctx, ks)) if ctx is not None else ", ".join
+    names = (lambda ks: _cards_text(ctx, ks, lang)) if ctx is not None else ", ".join
     if key_a and key_a != key_b:
-        return f"paid with {name(key_a)}, so its next receipt gets that card"
+        return _say(lang, f"paid with {name(key_a)}, so its next receipt gets that card",
+                    f"pago com {name(key_a)}, então o próximo recibo recebe esse cartão")
     if key_b and not key_a:
-        return (f"paid with {names(seen_a)}, so the card it had learned "
-                f"({name(key_b)}) is no longer filled in")
+        return _say(lang,
+                    f"paid with {names(seen_a)}, so the card it had learned "
+                    f"({name(key_b)}) is no longer filled in",
+                    f"pago com {names(seen_a)}, então o cartão aprendido "
+                    f"({name(key_b)}) deixa de ser preenchido")
     if len(seen_a) > 1:
-        return f"paid with {names(seen_a)}, so no card is filled in for it"
-    return f"seen on {names(new_seen)}"
+        return _say(lang, f"paid with {names(seen_a)}, so no card is filled in for it",
+                    f"pago com {names(seen_a)}, então nenhum cartão é preenchido")
+    return _say(lang, f"seen on {names(new_seen)}", f"visto em {names(new_seen)}")
 
 
 def _registry_rows(ctx: LessonContext, merchant: str) -> list[tuple]:
@@ -554,18 +631,23 @@ def _drift_lessons(ctx: LessonContext, cat_groups: dict) -> tuple[list[Lesson], 
             )
             sources = [_row_source(ctx, d, ln) for d, ln in rows]
             booked = len({d for d, _ln in rows})
+            of = max(total, booked)
+            new_acct, decided_acct = _account_text(code, org), _account_text(decided_code, org)
             lesson = Lesson(
                 id=f"{group}:{code}",
                 kind=KIND_DRIFT,
                 table=REGISTRY,
                 key={"merchant": merchant, "company": label, "account": code},
-                description=(
-                    f"Change the default for {merchant} in {company} to "
-                    f"{_account_text(code, org)}? {booked} of this month's "
-                    f"{max(total, booked)} {merchant} rows there were booked to it; "
-                    f"the decided account is {_account_text(decided_code, org)}."
-                    + _rows_text(sources)
-                ),
+                description="",
+                descriptions=_each_lang(lambda lang: _say(
+                    lang,
+                    f"Change the default for {merchant} in {company} to {new_acct}? "
+                    f"{booked} of this month's {of} {merchant} rows there were booked "
+                    f"to it; the decided account is {decided_acct}.",
+                    f"Mudar o padrão de {merchant} em {company} para {new_acct}? "
+                    f"{booked} das {of} linhas de {merchant} deste mês ali foram "
+                    f"lançadas nela; a conta decidida é {decided_acct}.",
+                ) + _rows_text(sources, lang)),
                 sources=sources,
                 default_keep=False,
                 conflict_group=group,
@@ -577,7 +659,8 @@ def _drift_lessons(ctx: LessonContext, cat_groups: dict) -> tuple[list[Lesson], 
             lessons.append(_settle(lesson, "replaces", [{
                 "table": REGISTRY, "key": {"field": "accounts", "company": label},
                 "removed": False,
-                "value": f"account in {company} {_account_text(decided_code, org)}",
+                "value": f"account in {company} {decided_acct}",
+                "value_pt": f"conta em {company} {decided_acct}",
             }] + replaced, ctx))
     return lessons, folded
 
@@ -604,8 +687,10 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
             kind=KIND_CORRECTION,
             table=table,
             key=dict(zip(TABLE_KEYS[table], key)),
-            description=(_describe_write(ctx, table, key, writes[-1], sources)
-                         + _rows_text(sources)),
+            description="",
+            descriptions=_each_lang(
+                lambda lang: _describe_write(ctx, table, key, writes[-1], sources, lang)
+                + _rows_text(sources, lang)),
             sources=sources,
             default_keep=True,
             writes=writes,
@@ -631,14 +716,17 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
                 for doc in dict.fromkeys(d for d, _k in ctx.card_seen.get(merchant, ()))
                 if doc not in taken
             ]
-        held = " Held for the owner: never written from a checklist." if gated else ""
         lessons.append(_settle(Lesson(
             id=lesson_id(REGISTRY, (merchant,)),
             kind=KIND_CORRECTION,
             table=REGISTRY,
             key={"merchant": merchant},
-            description=(f"Merchant list, {merchant}: {_registry_changes(b, a, ctx)}."
-                         + _rows_text(sources) + _seen_text(seen_on) + held),
+            description="",
+            descriptions=_each_lang(lambda lang: (
+                _say(lang, "Merchant list", "Lista de comerciantes")
+                + f", {merchant}: {_registry_changes(b, a, ctx, lang)}."
+                + _rows_text(sources, lang) + _seen_text(seen_on, lang)
+                + (_HELD[lang] if gated else ""))),
             sources=sources + seen_on,
             default_keep=not gated,
             owner_gated=gated,
@@ -650,7 +738,7 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
         if key in folded or not merge_taught(v for _r, v in members)[2]:
             continue
         entity, vendor = key
-        company, org = _company(ctx, entity)
+        _company_name, org = _company(ctx, entity)
         group = lesson_id("merchant_category", key)
         for value in dict.fromkeys(v for _r, v in members):
             rows = [r for r, v in members if v == value]
@@ -665,8 +753,14 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
                 kind=KIND_CONFLICT,
                 table="merchant_category",
                 key={"legal_entity_id": entity, "vendor_norm": vendor},
-                description=(f"{vendor} in {company}: rows disagree. This option "
-                             f"remembers {_value_text(*value, org)}." + _rows_text(sources)),
+                description="",
+                descriptions=_each_lang(lambda lang: _say(
+                    lang,
+                    f"{vendor} in {_company(ctx, entity, lang)[0]}: rows disagree. "
+                    f"This option remembers {_value_text(*value, org, lang)}.",
+                    f"{vendor} em {_company(ctx, entity, lang)[0]}: as linhas divergem. "
+                    f"Esta opção memoriza {_value_text(*value, org, lang)}.",
+                ) + _rows_text(sources, lang)),
                 sources=sources,
                 default_keep=False,
                 conflict_group=group,
@@ -685,22 +779,25 @@ def build_lessons(ctx: LessonContext) -> list[Lesson]:
             continue
         gated = is_owner_gated(merchant)
         group = lesson_id(REGISTRY, (merchant, company))
-        where = f" in {company}" if company else ""
         for value in dict.fromkeys(v for _r, v in members):
             rows = [r for r, v in members if v == value]
             candidate = _registry_candidate(ctx, ctx.merchants_before, rows)
             if candidate.get(merchant) == ctx.merchants_before.get(merchant):
                 continue
             sources = [_row_source(ctx, d, ln) for d, ln in rows]
-            held = " Held for the owner: never written from a checklist." if gated else ""
             lessons.append(_settle(Lesson(
                 id=f"conflict:{group}:{value[0] or ''}|{value[1] or ''}",
                 kind=KIND_CONFLICT,
                 table=REGISTRY,
                 key={"merchant": merchant, "company": company},
-                description=(f"Merchant list, {merchant}{where}: rows disagree. This "
-                             f"option remembers {_value_text(*value)}."
-                             + _rows_text(sources) + held),
+                description="",
+                descriptions=_each_lang(lambda lang: _say(
+                    lang,
+                    f"Merchant list, {merchant}{f' in {company}' if company else ''}: "
+                    f"rows disagree. This option remembers {_value_text(*value, lang=lang)}.",
+                    f"Lista de comerciantes, {merchant}{f' em {company}' if company else ''}: "
+                    f"as linhas divergem. Esta opção memoriza {_value_text(*value, lang=lang)}.",
+                ) + _rows_text(sources, lang) + (_HELD[lang] if gated else "")),
                 sources=sources,
                 default_keep=False,
                 owner_gated=gated,

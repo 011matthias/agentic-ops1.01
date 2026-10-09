@@ -6901,13 +6901,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse({"ok": True, "forgotten": forgotten})
 
     @app.get("/api/runs/{run_id}/memory-plan")
-    def get_memory_plan(run_id: str):
+    def get_memory_plan(run_id: str, lang: str = "en"):
         """Item 163 (note #81): what "Save corrections to memory" would
         write, before it is pressed. Read-only: every row is computed by
         running the real learners against a recording stand-in, so the
         preview and the save cannot disagree. `writes[]` names the table,
         the key, the value and the surface that manages it; `registry` is
-        the per-merchant before/after of the same save."""
+        the per-merchant before/after of the same save.
+
+        Item 255: every lesson carries `descriptions` ({"en", "pt"}) and
+        `description_pt`; `?lang=pt` also puts the Portuguese sentence in
+        `description`. Any other value reads English."""
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
@@ -6915,6 +6919,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             plan = plan_month_memory(
                 store, run, app.state.learning_db_path, now_iso=_now_iso()
             )
+        lang = (lang or "").strip().lower()[:2]
+        if lang != "en":
+            for lesson in plan["lessons"]:
+                lesson["description"] = lesson["descriptions"].get(lang, lesson["description"])
         return JSONResponse(jsonable_encoder(plan))
 
     @app.get("/api/memory/commits")
