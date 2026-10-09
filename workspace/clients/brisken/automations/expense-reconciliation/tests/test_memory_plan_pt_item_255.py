@@ -103,6 +103,7 @@ def _assert_portuguese(lessons) -> None:
         assert pt != lsn["descriptions"]["en"], (lsn["id"], pt)
         left = [w for w in ENGLISH if w in pt]
         assert not left, (lsn["id"], left, pt)
+        assert "como com" not in pt and "como como" not in pt, (lsn["id"], pt)
 
 
 def test_a_remembered_card_reads_in_portuguese(client, monkeypatch):
@@ -112,7 +113,7 @@ def test_a_remembered_card_reads_in_portuguese(client, monkeypatch):
     card = _card_lesson(_lessons(client, batch, "pt"))
     assert card["description"] == (
         "De agora em diante, os recibos de OBSIDIAN em Corporate Services são "
-        "preenchidos como pago com Corporate card (Chase) (Nicolas). "
+        "preenchidos como pagos com Corporate card (Chase) (Nicolas). "
         "De 1 linha corrigida: OBSIDIAN 40.50 USD 2026-07-10."
     ), card["description"]
     assert card["descriptions"]["en"] == (
@@ -152,6 +153,7 @@ def test_portuguese_reaches_every_kind_of_lesson(client, monkeypatch):
     _edit(client, batch, a, "category", "Office Supplies & Consumables")
     _edit(client, batch, b, "category", "Equipment & Hardware")
     _edit(client, batch, a, "paid_through", "Petty Cash")
+    _edit(client, batch, b, "tax_label", "Flight Tax")
     _edit(client, batch, c, "category", "Software & Subscriptions")
 
     lessons = _lessons(client, batch, "pt")
@@ -166,7 +168,10 @@ def test_portuguese_reaches_every_kind_of_lesson(client, monkeypatch):
                in d for d in conflicts), conflicts
     paid = next(lsn["description"] for lsn in lessons
                 if lsn["table"] == "field_correction" and lsn["key"]["field"] == "paid_through")
-    assert "pago por meio de Petty Cash" in paid, paid
+    assert "são preenchidos como pagos por meio de Petty Cash" in paid, paid
+    tax = next(lsn["description"] for lsn in lessons
+               if lsn["table"] == "field_correction" and lsn["key"]["field"] == "tax_label")
+    assert "são preenchidos com a linha de imposto Flight Tax." in tax, tax
     gated = [lsn for lsn in lessons if lsn["owner_gated"]]
     assert gated, [lsn["id"] for lsn in lessons]
     for lsn in gated:

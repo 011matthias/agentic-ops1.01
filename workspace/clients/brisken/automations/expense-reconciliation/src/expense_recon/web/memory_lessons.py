@@ -279,9 +279,11 @@ _FIELD_PHRASE = {
         "vendor": "named {}",
         "tax_label": "with the tax line {}",
     },
+    # Read after "os recibos ... são preenchidos", so each carries its own
+    # joining word ("como pagos com", "com a linha de imposto").
     "pt": {
-        "card_key": "pago com {}",
-        "paid_through": "pago por meio de {}",
+        "card_key": "como pagos com {}",
+        "paid_through": "como pagos por meio de {}",
         "vendor": "com o nome {}",
         "tax_label": "com a linha de imposto {}",
     },
@@ -487,10 +489,11 @@ def _describe_write(ctx: LessonContext, table: str, key: tuple, last, sources=()
         company, _org = _company(ctx, entity, lang)
         vendor = _vendor_text(list(sources), vendor)
         value = _card_text(ctx, last.args[3]) if fname == "card_key" else last.args[3]
-        phrase = _FIELD_PHRASE[lang].get(fname, fname + " {}").format(value)
+        phrase = _FIELD_PHRASE[lang].get(
+            fname, _say(lang, fname + " {}", f"com {fname} {{}}")).format(value)
         return _say(lang, f"From now on, {vendor} receipts in {company} are filled in as {phrase}.",
                     f"De agora em diante, os recibos de {vendor} em {company} são "
-                    f"preenchidos como {phrase}.")
+                    f"preenchidos {phrase}.")
     if table == "vendor_alias":
         return _say(lang, f"The bank's {key[1]} is the receipt vendor {key[2]}.",
                     f"{key[1]}, como aparece no banco, é o fornecedor {key[2]} do recibo.")

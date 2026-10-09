@@ -13438,7 +13438,7 @@ mail (item 250, live) as well as the backfill. Proof: 12 live cases in
 `test_a_confident_answer_the_note_does_not_name_decides_nothing` through
 the categorizer, regressed green -> red -> green.
 
-### 255. The save-to-memory window's correction lines read in Portuguese (owner 2026-10-09, after Lovable `0f0a63d`) (BUILT 2026-10-09)
+### 255. The save-to-memory window's correction lines read in Portuguese (owner 2026-10-09, after Lovable `0f0a63d`) (LIVE 2026-10-09: PR #1617 on Fly `2b498fe4`, October's 13 lessons served in Portuguese; the follow-up PR makes each field read naturally after "são preenchidos", e.g. "com a linha de imposto", where the first cut copied the English "as with")
 
 The window's headings, buttons and badges already switched language, but
 each correction line ("From now on, OBSIDIAN receipts in Corporate Services
