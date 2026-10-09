@@ -40,3 +40,7 @@ Matthias inherited Nico's open Wärme Wimmer task: walk Tobias and Sabine throug
 - `C:\Users\neuma_p1qrsic\.claude\projects\c--Users-neuma-p1qrsic-Repo-agentic-ops1\3cc7f367-8f86-4957-bc93-afa2fb12d83d\subagents\workflows\wf_287f540f-f75\journal.jsonl`
 - `C:\Users\neuma_p1qrsic\Repo\agentic-ops\.scratch\ww-sales-72627\release-runbook.md` (written by the build's docs step)
 - memory `project_warme_wimmer_takeover.md`
+
+## Continuation prompt
+
+The continuation prompt for the next chat was delivered in the reply on 2026-10-09 (about 15:45 Berlin). Its essentials: find the build's real state (`wt1l9oa8u.output` present = finished; journal mtimes moving = still running in the old chat; neither = died, re-run only the unfinished phases from the old script), verify the three test suites, fix remaining blocker/major findings, commit/push/PR on akkton/agentic-ops (merge on owner order), ask Matthias for the release yes with a plain scope of effects, release per `.scratch/ww-sales-72627/release-runbook.md`, re-publish the sticky notes if the build deviates, Monday pre-flight with Sabine, then the walkthrough. HUK-106488 stays held; Hero admin login, alert recipients and W2-05/06/09 type filters stay open. The prompt ends with the SESSION LOOP section (WW version).
