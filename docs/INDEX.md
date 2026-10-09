@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-09 | Recon Card Filter Perf Fix | client-dev | [→](docs/2026-10-09%20-%20Recon%20Card%20Filter%20Perf%20Fix/Checkpoint.md) |
 | 2026-10-07 | Recon Sender Notes Classify And Backfill | client-dev | [→](docs/2026-10-07%20-%20Recon%20Sender%20Notes%20Classify%20And%20Backfill/Checkpoint.md) |
 | 2026-10-07 | Publish to Close Month Rename | client-dev | [→](docs/2026-10-07%20-%20Publish%20to%20Close%20Month%20Rename/Checkpoint.md) |
 | 2026-10-07 | Recon Date Decides Month | client-dev | [→](docs/2026-10-07%20-%20Recon%20Date%20Decides%20Month/Checkpoint.md) |
