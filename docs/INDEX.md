@@ -792,5 +792,6 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## warme-wimmer
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-09 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-1](docs/2026-10-09%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-1.md) |
 | 2026-10-07 | WW W1-06 Messeformular Zapier to n8n | client-dev | [→](docs/2026-10-07%20-%20WW%20W1-06%20Messeformular%20Zapier%20to%20n8n/Checkpoint.md) |
 | 2026-10-07 | Waerme Wimmer Takeover | client-dev | [→](docs/2026-10-07%20-%20Waerme%20Wimmer%20Takeover/Checkpoint.md) |
