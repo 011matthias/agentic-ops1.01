@@ -5091,6 +5091,15 @@ per-merchant `{before, after}` of the same save.
  "counts": {"field_correction": 1}, "registry": {}, "learned": {...}}
 ```
 
+**Language (item 255).** Every `lessons[]` entry carries its sentence in each
+language the window offers: `descriptions: {"en": ..., "pt": ...}` and
+`description_pt` (the same Portuguese). `?lang=pt` also puts the Portuguese
+in `description`; no `lang`, `en`, or a language we do not write keeps
+English there. Vendor, company, account and card names are printed as stored
+in both languages. `replaces[]` entries gain `value_pt` beside `value`. The
+save takes lesson ids, never sentences, so the language changes nothing
+written.
+
 **`GET /api/memory/commits`** is the ledger: one entry per save, newest
 first, with the month that taught it, the trigger (`button` / `publish`),
 what it learned, every row it touched with the surface that manages it, and

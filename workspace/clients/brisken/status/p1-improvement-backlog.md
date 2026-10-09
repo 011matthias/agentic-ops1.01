@@ -13438,6 +13438,28 @@ mail (item 250, live) as well as the backfill. Proof: 12 live cases in
 `test_a_confident_answer_the_note_does_not_name_decides_nothing` through
 the categorizer, regressed green -> red -> green.
 
+### 255. The save-to-memory window's correction lines read in Portuguese (owner 2026-10-09, after Lovable `0f0a63d`) (BUILT 2026-10-09)
+
+The window's headings, buttons and badges already switched language, but
+each correction line ("From now on, OBSIDIAN receipts in Corporate Services
+are filled in as paid with ...") is written by the server, in English only.
+Lovable's change (asked of Lovable directly 2026-10-09, no prompt file;
+published, found in a lazily loaded chunk of the live bundle) asks
+`GET /api/runs/{id}/memory-plan?lang=pt` and reads `descriptions[lang]`, then
+`description_pt`, then `description`.
+
+`memory_lessons` now builds every lesson's sentence in English and
+Portuguese from the same parts (`descriptions`, `description_pt`); vendor,
+company, account and card names stay as stored. `?lang=pt` also puts the
+Portuguese in `description`. Wording reuses the app's own Portuguese
+("Lista de comerciantes", "Já salva deste mês", "Reservado ao responsável",
+"Substitui", "recibo"). Nothing persisted changes: the save takes lesson ids.
+Proof: `test_memory_plan_pt_item_255.py` (5 route tests, incl. a sweep that no
+English connector survives in any Portuguese sentence across corrections,
+merchant-list entries, conflicts, an owner-held merchant and an already-saved
+month), regressed green -> red -> green at the route's language switch and at
+the per-language builder; the six existing memory suites (86 tests) unchanged.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
