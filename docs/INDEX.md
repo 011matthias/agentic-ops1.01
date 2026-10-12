@@ -793,6 +793,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## warme-wimmer
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-12 | WW W2-14 Duplicate Test Run | client-dev | [→](docs/2026-10-12%20-%20WW%20W2-14%20Duplicate%20Test%20Run/Checkpoint.md) |
 | 2026-10-11 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-3](docs/2026-10-11%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-3.md) |
 | 2026-10-11 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-2](docs/2026-10-11%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-2.md) |
 | 2026-10-11 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-1](docs/2026-10-11%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-1.md) |
