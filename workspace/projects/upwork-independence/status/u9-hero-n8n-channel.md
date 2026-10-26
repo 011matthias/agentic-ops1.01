@@ -20,11 +20,11 @@ doors. Opened 2026-10-26 (owner decision 8). Full plan:
 
 | Element | State | Status | Next action | Blocker | Detail |
 |---|---|---|---|---|---|
-| D1 node identity | open | Recommended `n8n-nodes-hero-software` (free on npm 2026-10-26), own public repo under UnpauseAI | Owner decides name + GitHub owner | owner | plan §Phase 0 |
+| D1 node identity | decided | `n8n-nodes-hero-software` under UnpauseAI (owner, 2026-10-26). GitHub identity = USER account `UnpauseAI` (created 2026-10-26), not an org; gh here is authed as `011matthias` | Before publish: repo under UnpauseAI with 011matthias as collaborator (or gh logged in as UnpauseAI) + npm account with trusted publishing | owner | plan §Phase 0 |
 | D2 WW as named reference | open | Needed for case study, n8n Experts entry, HERO pitch; anonymised fallback defined | Owner asks Raphael | owner | plan §Phase 0 |
 | D3 package prices | open | Anchors: care EUR200, licence EUR600, tiers 650/1,850 | Owner decides | owner | plan §What we sell |
-| HERO first contact | not-started | 5 questions defined (terms, API cost/plan, limits + v9, test account, listing/webinar/Vorteilswelt) | Draft on owner request; owner sends to kooperationen@hero-software.de | D2 | plan §Phase 0 |
-| n8n node v1 | not-started | Scope fixed: 5 polling triggers, contact/project/logbook/task/file actions, raw GraphQL; WW quirks handled | Build in parallel with the HERO email; publish after HERO's answer or 2 weeks | D1 | plan §Phase 1 |
+| HERO first contact | drafted | German draft (WW unnamed, "ihr") handed to owner 2026-10-26; recommended sender admin@unpauseai.com. Add question 6: webhooks (the guide lists none, but WW production workflows receive HERO webhook bodies) | Owner sends; the 2-week publish clock starts on send | owner | plan §Phase 0 |
+| n8n node v1 | built (local) | `C:\Users\neuma_p1qrsic\Repo\n8n-nodes-hero-software`, 8 local commits, no remote. Build + lint pass; 93 tests (incl. every sent document validated against the 2026-10-09 HERO schema snapshot, opt-in via `HERO_SCHEMA_PATH`; a planted invalid argument turns it red). Zero HERO API calls: live use of the client's production key was denied by the auto-mode classifier. Every operation still "not yet verified against the live API" | Live checklist (10 points in the repo) on a HERO test account; `npm run dev` once in a real n8n; publish from a fresh squashed history (old commits name client files) | HERO test account | plan §Phase 1 |
 | Verification submission | not-started | Requirements read 2026-10-26 (no runtime deps, provenance publish, lint) | Submit at creators.n8n.io/nodes when published | node v1 | plan §Phase 1 |
 | Templates x3 | not-started | Inbox triage, form-to-project, status follow-up | After node v1 | node v1 | plan §Phase 2 |
 | Case study + landing page | not-started | Measured numbers only | After D2 | D2 | plan §Phase 2 |
