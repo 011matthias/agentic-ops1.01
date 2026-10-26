@@ -764,6 +764,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## upwork-independence
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-26 | UWI HERO n8n Channel | misc | [→](docs/2026-10-26%20-%20UWI%20HERO%20n8n%20Channel/Checkpoint.md) |
 | 2026-09-09 | UWI Phase-2 Shape + Voice-Line Assessment | system-infra | [→](docs/2026-09-09%20-%20UWI%20Phase-2%20Shape%20%2B%20Voice-Line%20Assessment/Checkpoint.md) |
 | 2026-09-05 | UWI Monetization Strategy Committed | system-infra | [Mini-Checkpoint-2](docs/2026-09-05%20-%20UWI%20Monetization%20Strategy%20Committed/Mini-Checkpoint-2.md) |
 | 2026-07-28 | UnpauseAI Cold-Email u1 Provisioning | misc | [→](docs/2026-07-28%20-%20UnpauseAI%20Cold-Email%20u1%20Provisioning/Checkpoint.md) |
