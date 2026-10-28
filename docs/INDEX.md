@@ -819,3 +819,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-10-20 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-3](docs/2026-10-20%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-3.md) |
 | 2026-10-20 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-2](docs/2026-10-20%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-2.md) |
 | 2026-10-20 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-1](docs/2026-10-20%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-1.md) |
+
+## personal-kit
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-10-28 | KIT IAM-Praktikum und ECTS-Plan | misc | [Mini-Checkpoint-1](docs/2026-10-28%20-%20KIT%20IAM-Praktikum%20und%20ECTS-Plan/Mini-Checkpoint-1.md) |
