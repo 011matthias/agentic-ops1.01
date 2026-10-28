@@ -18,7 +18,7 @@ No owner decision; cost S or M; each item has a named test or measurement. Items
 
 ### W1-1 [ci-1, ci-7, ci-12] cost S
 
-Status: todo
+Status: done PR #1657 (2026-10-28): platform.yml + lead-desk-tests.yml path-filtered, concurrency on all four workflows (group keyed on workflow name). Verified: docs PR #970 listed only secrets + hooks, exit 0; #1657 itself ran every split job.
 
 Depends on: none
 
@@ -32,7 +32,7 @@ Files: `.github/workflows/ci.yml`, `.github/workflows/platform.yml`, `.github/wo
 
 ### W1-2 [ci-2] cost M
 
-Status: todo
+Status: done PR #1660 (2026-10-28): pytest step gated by dorny/paths-filter; ledger + root-layout tests unconditional. Filter extended with workspace/projects/vinted-reselling/** (four tests import its code) and the whole expense-recon app folder. Skip path verified on the batch-1 checkpoint docs PR.
 
 Depends on: item 1
 
@@ -46,7 +46,7 @@ Files: `.github/workflows/ci.yml`
 
 ### W1-3 [ci-4] cost S
 
-Status: todo
+Status: done PR #1656 (2026-10-28): merge_verdict reads mergeable + statusCheckRollup via .claude/hooks/_gh.py (repo-sweep imports classify_rollup from it); CONFLICTING asks with the remedy, not cleared by merge-anyway. regress_check bites on both wiring points.
 
 Depends on: none
 
@@ -60,7 +60,7 @@ Files: `.claude/hooks/no-auto-commit-gate.py`, `.claude/hooks/_gh.py`, `tools/re
 
 ### W1-4 [machine-4, machine-9, machine-3, machine-5] cost M
 
-Status: todo
+Status: partly done 2026-10-28: (a) all eight PRs merged (#1638 #1226 #1198 #1178 #1161 #1073 #970 #955), serially, because GitHub's merge ignores the union drivers and each merge re-conflicts the rest on INDEX.md; (b) fetch.prune=true; (c) 10 husks removed (Repo 107 -> 97 entries). (d) OPEN: three live sibling sessions on the primary at every check.
 
 Depends on: none
 
@@ -186,7 +186,7 @@ Files: `.claude/settings.json`, `.claude/rules/rule_session-pressure.md`, `tools
 
 ### W1-13 [homes-11, exposure-2, exposure-1, exposure-11, machine-5, machine-8] cost M
 
-Status: todo
+Status: done PR #1659 (2026-10-28): parked-primary skip (live dry run printed it), untracked files vetted through the real placement gate, token/snapshot shapes skipped, leftovers in the PR body, test_root_layout.py. (c) _placement.py not factored (no second consumer; tests use load_hook); CREDENTIAL_PATTERNS kept (stricter, covers the push-policy repos). regress_check bites on three wiring points.
 
 Depends on: none
 
@@ -950,7 +950,7 @@ Files: `.claude/settings.json`, `~/.claude/settings.json`, `.claude/hooks/no-aut
 
 ### W1-31 [G5] cost S
 
-Status: todo
+Status: todo. Scope measured 2026-10-28: 50 non-test and 50 test `text=True` calls lack `encoding=`; .claude/settings.json has PYTHONIOENCODING only. Larger than its S label.
 
 Depends on: none
 
