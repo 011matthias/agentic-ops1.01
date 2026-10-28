@@ -135,7 +135,24 @@ def secret_shape(full: str, rel: str) -> str | None:
     return None
 
 
-PLACEMENT_GATE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+def pii_reason(repo: str, rel: str) -> str | None:
+    """Skip reason when tools/pii_scan.py counts personal data in an untracked
+    file (counts only, never values), else None. Fail-open: a scanner error
+    never stops the sweep, the push gate and CI still see the file."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from pathlib import Path
+
+        import pii_scan
+        hits = pii_scan.scan_paths(Path(repo), [rel])
+    except Exception:
+        return None
+    if not hits:
+        return None
+    return "personal data: " + pii_scan.format_hits(hits)[0].split(": ", 1)[1]
+
+
+PLACEMENT_GATE =os.path.join(os.path.dirname(os.path.abspath(__file__)),
                               "..", ".claude", "hooks", "file-placement-gate.py")
 
 
@@ -434,7 +451,8 @@ def plan(repo: str, entries: list[tuple[str, str]],
             skipped.append(f"{rel} (>50MB)")
             continue
         if status == "??":
-            reason = secret_shape(full, rel) or (placement and placement(repo, rel))
+            reason = (secret_shape(full, rel) or pii_reason(repo, rel)
+                      or (placement and placement(repo, rel)))
             if reason:
                 skipped.append(f"{rel} ({reason})")
                 continue
