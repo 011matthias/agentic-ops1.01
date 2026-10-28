@@ -19,6 +19,9 @@ jobs:
   hooks:
     name: Enforcement hook tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read  # dorny/paths-filter lists the PR's files via the API
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v5
@@ -40,7 +43,32 @@ jobs:
         run: uv run tools/check-index.py
       - name: Pattern rules lint
         run: uv run tools/pattern_rules.py lint
+      # Tests whose inputs any PR can change (the friction register, the
+      # committed repo root) run on every PR; the full suite only when its
+      # inputs change (layout plan W1-2).
+      - name: Ledger and root-layout tests (every PR)
+        run: >-
+          uv run --no-project --with pytest --with python-pptx --with requests --with httpx --with pyyaml --with openpyxl
+          pytest -q tools/tests/test_root_layout.py
+          tools/tests/test_validate_output_slop.py -k "friction_register or root"
+      - name: Did the suite's inputs change?
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            suite:
+              - 'tools/**'
+              - '.claude/**'
+              - 'pytest.ini'
+              - 'ruff.toml'
+              - '.github/workflows/**'
+              - 'docs/optimize/**'
+              - 'workspace/clients/brisken/status/p1-improvement-backlog.md'
+              - 'workspace/clients/brisken/automations/expense-reconciliation/**'
+              - 'workspace/projects/vinted-reselling/**'
       - name: Run enforcement-layer test suite
+        if: github.event_name != 'pull_request' || steps.filter.outputs.suite == 'true'
         run: uv run --no-project --with pytest --with python-pptx --with requests --with httpx --with pyyaml --with openpyxl pytest tools/tests
 
   secrets:
