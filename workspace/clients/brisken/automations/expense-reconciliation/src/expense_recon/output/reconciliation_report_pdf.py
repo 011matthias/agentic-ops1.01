@@ -37,6 +37,7 @@ import io
 from collections.abc import Sequence
 
 from ..unmatched_reasons import RECEIPT_REASON_SHORT
+from .posting_common import suggested_cell
 from ._pdf_common import (
     PAGE_MARGIN_MM,
     booked_without_receipt,
@@ -99,6 +100,12 @@ def _status_label(row: dict) -> str:
         # away as already booked. Only the reviewer's verdict reached this
         # word before, so 48 July rows printed "no receipt" as if still open.
         return "already posted"
+    # Front 1: the two other verdicts that close a charge with no receipt
+    # (`unmatched_reasons`), so paper and screen agree nothing is owed.
+    if row.get("reason_code") == "closed_recurring":
+        return "booked as recurring"
+    if row.get("reason_code") == "no_receipt_expected":
+        return "no receipt expected"
     if bucket in ("unmatched", ""):
         return "no receipt"
     if bucket == "refund":
@@ -122,6 +129,7 @@ def build_reconciliation_report_pdf(
     title: str,
     evidence: Sequence[dict] | None = None,
     receipt_cards: dict[str, tuple[str, str]] | None = None,
+    card_parents: dict[str, str] | None = None,
 ) -> bytes:
     """Render the reconciliation document from the workbench's OWN view.
 
@@ -134,6 +142,13 @@ def build_reconciliation_report_pdf(
     for every receipt in the pool, the card the tool resolved for it
     (`service.report_receipt_cards`); it decides the section of a receipt no
     charge holds. Omitted, such a receipt files under the no-card section.
+
+    `card_parents` (item 147) is `{subcard key: account key}` from the
+    registry (`cards.card_parents`). Given one, an account's section comes
+    first and the cards under it follow, its heading states the group's
+    figures and names the statement once, and each subcard's heading points
+    back at the account instead of repeating the file. Omitted, the sections
+    are the flat list they were.
     """
     from reportlab.platypus import Paragraph
 
@@ -197,7 +212,7 @@ def build_reconciliation_report_pdf(
     for item in items:
         cards.setdefault(str(item.get("document_id") or ""), ("", ""))
     cards.pop("", None)
-    sections = card_sections(view, cards)
+    sections = card_sections(view, cards, card_parents)
 
     if sum(1 for s in sections if s["key"]) < 2:
         # One card at most (every run older than the card axis, a one-card
@@ -249,10 +264,14 @@ def _card_section(
     story.append(PageBreak())
     story.append(Paragraph(esc(sec["label"]), styles["h2"]))
     n_docs = len(sec["receipt_docs"])
-    line = "  ·  ".join(x for x in (
-        card_statement_line(sec),
-        f"{n_docs} receipt{'' if n_docs == 1 else 's'}",
-    ) if x)
+    # Item 147: an account's heading states the GROUP's charges and money
+    # (`card_statement_line` sums its subcards), but the receipt pages behind
+    # it are its own card's; each subcard's pages follow in its own section
+    # below. Saying which stops the count reading as a group figure it is not.
+    receipts = f"{n_docs} receipt{'' if n_docs == 1 else 's'}" + (
+        " on this card" if sec.get("children") else ""
+    )
+    line = "  ·  ".join(x for x in (card_statement_line(sec), receipts) if x)
     story.append(Paragraph(esc(line), styles["sub"]))
     story.append(Spacer(1, 4))
 
@@ -578,6 +597,19 @@ def _charge_table(rows: list[dict], styles: dict):
             {} if row.get("posting_category_proposed")
             else row.get("posting_category") or {}
         )
+        posting_text = posting.get("zoho_account") or posting.get("category") or ""
+        suggested = (
+            {} if row.get("posting_category_proposed")
+            else row.get("suggested_category") or {}
+        )
+        suggested_text = (
+            suggested.get("zoho_account") or suggested.get("category") or ""
+        )
+        if suggested_text:
+            # Item 216 Build 2 step 2: the model's answer on a GL month is
+            # printed labelled, as `expenses.csv` writes it, never as a posting.
+            suggested_text = suggested_cell(suggested_text)
+        account_text = "; ".join(t for t in (posting_text, suggested_text) if t)
         matched_vendor = ""
         for cand in row.get("candidates") or []:
             if cand.get("document_id") == row.get("chosen_document_id"):
@@ -596,10 +628,7 @@ def _charge_table(rows: list[dict], styles: dict):
             Paragraph(esc(row.get("currency") or ""), styles["cell"]),
             Paragraph(esc(status), styles["cell"]),
             Paragraph(esc(matched_vendor or "none"), styles["cell"]),
-            Paragraph(
-                esc(posting.get("zoho_account") or posting.get("category") or ""),
-                styles["cell"],
-            ),
+            Paragraph(esc(account_text), styles["cell"]),
         ])
     table = Table(table_rows, colWidths=[w for _n, w in _CHARGES], repeatRows=1)
     table.setStyle(table_style())

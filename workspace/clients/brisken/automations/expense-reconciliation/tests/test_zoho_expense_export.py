@@ -319,7 +319,9 @@ def test_generate_expenses_to_zoho_csv_end_to_end(tmp_path):
     data = _row(rows[1])
     assert data["Vendor"] == "Uber"
     assert data["Expense Amount"] == "24.50"
-    assert data["Expense Account"] == "Travel & Transport"  # mock categorized
+    # The mock categorized it (Travel & Transport) but named no account, and
+    # a category is not an account: the column says so instead (item 5).
+    assert data["Expense Account"] == "(account unmapped - assign)"
 
 
 def test_run_expense_mode_dispatch_writes_csv(tmp_path):

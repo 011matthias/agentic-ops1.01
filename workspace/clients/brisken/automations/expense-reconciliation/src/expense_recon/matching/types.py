@@ -52,7 +52,103 @@ class ClassificationSource(str, Enum):
     LEARNED = "LEARNED"    # Tier 1: confirmed merchant->category recalled from memory (Phase 2)
     REGISTRY = "REGISTRY"  # Tier 1: canonical merchant-registry default (2026-07-29); preempts the LLM
     EDITED = "EDITED"      # Tier 1: a reviewer set this category by hand (item 109)
+    NOTE = "NOTE"          # Tier 1: the sender's own note named the account (item 250)
     UNCLASSIFIED = "UNCLASSIFIED"  # pre-categorization default
+
+
+# ── Who answered (item 216 cause 1) ───────────────────────────────────────────────
+#
+# `ClassificationSource` records HOW an answer was produced. Every surface
+# also needs WHO stands behind it, and each used to derive that on its own:
+# the statement sheet trusted LEARNED only (so Criss's own pick on a charge
+# printed "(confirm)"), the Zoho journal trusted LEARNED and EDITED (so a
+# merchant-list answer never posted), the row review called every answer but
+# hers "the tool guessed this", and the report coloured her pick as
+# needs-review. This is the one mapping; a surface reads it, never the enum.
+#
+# - person: a reviewer decided it (EDITED), or the person who sent the
+#   receipt named the account in the note above the forward (NOTE, item 250,
+#   owner 2026-10-07: "decide when clear"). A NOTE answer is never learned:
+#   learners read the override tables, and a note writes none.
+# - rule: a deterministic source a person curated (the merchant list, a
+#   remembered correction). The owner's 2026-09-25 ruling: an account comes
+#   from a rule or a person.
+# - suggestion: the model's reading, of the receipt's lines or of the bank's
+#   description.
+# - None: no answer (REVIEW, UNCLASSIFIED, or no category at all).
+ORIGIN_PERSON = "person"
+ORIGIN_RULE = "rule"
+ORIGIN_SUGGESTION = "suggestion"
+DECIDED_ORIGINS = frozenset({ORIGIN_PERSON, ORIGIN_RULE})
+
+_ORIGIN_OF_SOURCE = {
+    ClassificationSource.EDITED: ORIGIN_PERSON,
+    ClassificationSource.NOTE: ORIGIN_PERSON,
+    ClassificationSource.LEARNED: ORIGIN_RULE,
+    ClassificationSource.REGISTRY: ORIGIN_RULE,
+    ClassificationSource.LINE: ORIGIN_SUGGESTION,
+    ClassificationSource.VENDOR: ORIGIN_SUGGESTION,
+}
+
+
+def answer_origin(cat) -> str | None:
+    """Who stands behind a categorization: person, rule, suggestion or None.
+
+    Takes a `Categorization`, or anything carrying `.source` and `.category`;
+    a source given as its string value is read the same way."""
+    if cat is None or not getattr(cat, "category", None):
+        return None
+    source = getattr(cat, "source", None)
+    if isinstance(source, str):
+        try:
+            source = ClassificationSource(source)
+        except ValueError:
+            return None
+    return _ORIGIN_OF_SOURCE.get(source)
+
+
+def is_suggestion_only(cat) -> bool:
+    """Whether an answer is the model's on a month categorized in Zoho
+    accounts, so every surface shows it as a suggestion and nothing posts
+    it (item 216 Build 2 step 2, owner ruling 2026-09-25: "the model
+    suggests, a rule or a person decides"). A person's Confirm makes it
+    theirs (`inherited`), and it posts from then on.
+
+    The vocabulary is read off the answer: a month is categorized in exactly
+    one, and on a GL month the category is a curated leaf CODE
+    (`curated_leaves.leaf`). A bucket-era answer (one of the eight
+    `EXPENSE_CATEGORIES` names) is no code, so those months (April to June,
+    never converted by the owner's order) keep the reading they were booked
+    under."""
+    if answer_origin(cat) != ORIGIN_SUGGESTION:
+        return False
+    # Pure data (the compiled chart); imported here so this module stays at
+    # the bottom of the import graph.
+    from ..zoho import curated_leaves
+
+    return curated_leaves.leaf(cat.category) is not None
+
+
+def origin_of_source_value(value: str | None) -> str | None:
+    """`answer_origin` for a view dict's `source` string. A joined value
+    (`"LINE; EDITED"`, several lines of one receipt) answers the weakest
+    origin among its parts, because the row is only as decided as its least
+    decided line; an unknown part answers None."""
+    parts = [p.strip() for p in str(value or "").split(";") if p.strip()]
+    if not parts:
+        return None
+    origins = []
+    for p in parts:
+        try:
+            origins.append(_ORIGIN_OF_SOURCE.get(ClassificationSource(p)))
+        except ValueError:
+            return None
+    if any(o is None for o in origins):
+        return None
+    for weakest in (ORIGIN_SUGGESTION, ORIGIN_RULE, ORIGIN_PERSON):
+        if weakest in origins:
+            return weakest
+    return None
 
 
 # The eight expense categories Brisken uses (BLUEPRINT LD-1). The
@@ -88,6 +184,15 @@ class Categorization:
     (`"kept_er"`), or the comparison could not be made and the report's
     category was kept conservatively (`"review_unresolved"`). None when no
     adjudication ran (no chart wired, or override_er_category off).
+
+    `refusal` (Phase 1 GL engine, 2026-09-24) is the machine reason a row
+    was REFUSED an account (`zoho.posting_resolution` / `curated_leaves`
+    codes: `org_not_curated`, `not_expense_relevant`, `account_unresolved`,
+    ...). Set only on a refusal, and a refusal always has `category=None`:
+    `bool(category)` is False exactly when the engine refused, so no
+    truthiness gate downstream reads a placeholder as a category. None on
+    every row the old bucket path wrote, which keeps "no signal" and
+    "refused, for this reason" apart at the display boundary.
     """
 
     category: str | None
@@ -96,6 +201,7 @@ class Categorization:
     source: ClassificationSource
     reasoning: str = ""
     decision: str | None = None
+    refusal: str | None = None
 
 
 @dataclass(frozen=True)
@@ -122,6 +228,25 @@ class LineItem:
     quantity: Decimal | None = None
     unit_price: Decimal | None = None
     categorization: Categorization | None = None
+
+
+@dataclass(frozen=True)
+class CellFill:
+    """One coloured cell on the statement row that produced a transaction.
+
+    A NAME for a shade, never a verdict (owner directive 2026-09-20: the
+    tool's job is to see the colour, the reviewer's is to interpret it).
+    `family` is one of the vocabulary in `ingest.statement_xlsx`
+    (white / gray / black / red / orange / yellow / olive / green / cyan /
+    blue / purple / pink); `hex` is the fill as it was read, six uppercase
+    hex digits, no `#`. `index` is the 0-based column, because a header can
+    repeat (both live workbooks carry two `Memo` columns).
+    """
+
+    column: str
+    index: int
+    hex: str
+    family: str
 
 
 @dataclass(frozen=True)
@@ -181,6 +306,16 @@ class Transaction:
     # nothing (`web.month_readiness`).
     entry_status_source: str | None = None
 
+    # Every coloured cell on the source workbook row, left to right (item
+    # 162, owner directive 2026-09-20). The RECORD of what the sheet is
+    # marked with, parallel to `entry_status`, which stays the two-mark
+    # VERDICT and is still decided by the mapped columns alone. A fill whose
+    # family carries no verdict (orange, blue, green, ...) appears here and
+    # nowhere else, so "coloured with something we do not act on" is finally
+    # distinguishable from "not coloured". Empty for CSV and PDF statements,
+    # which have no fills, and for every month ingested before the item.
+    fills: tuple[CellFill, ...] = ()
+
     # Refund / credit flag (3.10 / LD-5 A5), set at INGEST from the source's
     # own convention (a Type column, sign inference, or the PDF's negative
     # print) — never inferred again downstream. Under the canonical sign
@@ -227,6 +362,17 @@ class Transaction:
     # in the snapshot's `statement_anchors`, and `source_row` stays what it
     # has always been: the row in the file this charge was first read from.
     source_row: int | None = None
+
+    # The 1-based page a PDF statement printed this charge on (note item
+    # T3, 2026-09-18). A PDF has no tabular row, so `source_row` stays
+    # None on every charge it prints, and until this field a PDF charge
+    # carried no place at all: live August 2026 holds three of them, from
+    # `20260804-statements-1176-.pdf`. None for a workbook charge, which
+    # answers with `source_row` instead, and None on every snapshot
+    # written before this field. Not part of the content id
+    # (`assign_content_ids` reads amount, date, vendor, card and
+    # currency), so recording it moves no existing transaction id.
+    source_page: int | None = None
 
     # What the statement's own Type label says this line is (item 73):
     # purchase / payment / refund / reversal / fee / interest. None when the
@@ -343,6 +489,11 @@ class Receipt:
     detected_time: str | None = None
     invoice_number: str | None = None
     receipt_number: str | None = None
+    # Item 223 step 4 (2026-09-27): what the document calls itself (invoice /
+    # receipt / reminder / statement / other), read in the same extraction
+    # call. None for every receipt read before the field existed; a re-match
+    # reuses stored readings, so only arrivals from the deploy on carry it.
+    document_kind: str | None = None
 
     # Merchant registry (2026-07-29): the short storefront brand for
     # `detected_vendor` with legal suffixes / distributor tails stripped
@@ -375,6 +526,14 @@ class Receipt:
     # only when the printed payment method names no card number, so a
     # printed number always wins over what was remembered.
     card_key: str | None = None
+    # Item 250 (owner 2026-10-07): the note one of OUR senders typed above
+    # the forward (signature stripped; strangers' notes never get here), the
+    # company it decides ("" = none), and whether it says the cost is split.
+    # Stamped once at arrival (`sender_note.stamp_sender_notes`). The company
+    # outranks the card; only the reviewer's own pick beats it.
+    sender_note: str = ""
+    sender_note_entity: str = ""
+    sender_note_split: bool = False
     # Item 137 (2026-09-17): the card the TOOL resolved for this receipt,
     # as digit keys (`Card.digit_keys`) and where it came from ("override" =
     # picked by hand on the row, "hint" = the printed payment method or a
@@ -430,6 +589,13 @@ class Match:
     # `blend_card_weight`. 0.0 also means "not scored" on a
     # reviewer-built match, same convention as the three sub-scores above.
     card_score: float = 0.0
+    # Item X1 (2026-09-18): a machine-readable reason the matcher set
+    # `requires_review` on this pair, beside the prose in `reason`. "" when
+    # the pair was not flagged this way (the old snapshots, every clean
+    # pair). Values: `deterministic.NO_CARD_RIVAL_REVIEW`,
+    # `deterministic.NO_CARD_VENDOR_REVIEW` (item 204 step 6),
+    # `deterministic.EXACT_VENDOR_LOOKALIKE_REVIEW` (item 222 step 6).
+    review_code: str = ""
 
 
 @dataclass(frozen=True)

@@ -11,8 +11,6 @@ These tests pin the three settings maps to the behaviour they restore.
 """
 from __future__ import annotations
 
-from decimal import Decimal
-
 from expense_recon.web.service import (
     RunForm,
     apply_master_data,
@@ -186,12 +184,16 @@ def test_no_order_is_still_alphabetical(monkeypatch):
 # ── FX reference rates (the 0-of-94 cause) ─────────────────────────────
 
 
-def test_fx_rates_inline_into_matching_block():
-    """The month's rates ride in the run config, so they reach the matcher
-    AND land in run.local.json for a faithful local repro."""
+def test_fx_rates_no_longer_inline_into_the_matching_block():
+    """Typed rates were retired on 2026-09-23, so master data no longer
+    puts any rate into a run config: a month's rates are FETCHED (the daily
+    OpenTickers poll, refreshed on every re-match, and the ECB monthly
+    average). A settings row that still carries the retired key -- the live
+    row did until the migration ran -- changes nothing."""
     settings = {"fx_reference_rates": {"BRL:USD": "0.192448"}}
     cfg = apply_master_data({"statement": {}}, _form(), settings)
-    assert cfg["matching"]["fx_reference_rates"] == {"BRL:USD": "0.192448"}
+    assert cfg == {"statement": {}}
+    assert "matching" not in cfg
 
 
 def test_master_data_absent_leaves_config_untouched():
@@ -262,10 +264,3 @@ def test_master_data_zoho_block_skips_chart_pull(tmp_path, monkeypatch):
 # ── the matcher actually consumes an inline block ──────────────────────
 
 
-def test_inline_rates_reach_matching_config():
-    """The CLI reads inline `matching` keys, not only a tuning_path — the
-    hosted surface has no tuning file on disk."""
-    from expense_recon.matching.deterministic import MatchingConfig
-
-    cfg = MatchingConfig.from_dict({"fx_reference_rates": {"BRL:USD": "0.192448"}})
-    assert cfg.fx_reference_rates[("BRL", "USD")] == Decimal("0.192448")

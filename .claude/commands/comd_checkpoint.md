@@ -183,10 +183,15 @@ If `pre` reported any client's comms-log at 4+ days stale: ask once — "{client
 
 ## 8. Finalize (one call)
 
-Build the payload and apply it:
+Build the payload and apply it. Write it to the **per-session** path `pre`
+printed (`.scratch/checkpoint-payload-<session>.json`), never the shared
+`.scratch/checkpoint-payload.json`: in a clone running concurrent sessions a
+sibling overwrites the shared file between your write and this call, and
+finalize then applies THEIR checkpoint (2026-09-09). `finalize` refuses the
+shared name outright.
 
 ```
-uv run tools/checkpoint_scaffold.py finalize --payload .scratch/checkpoint-payload.json
+uv run tools/checkpoint_scaffold.py finalize --payload .scratch/checkpoint-payload-<session>.json
 ```
 
 Payload (write to `.scratch/` — gitignored):

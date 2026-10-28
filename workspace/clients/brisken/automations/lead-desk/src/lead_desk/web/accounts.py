@@ -8,7 +8,11 @@ is the policy layer on top of it and the ``users`` / ``login_tokens`` store:
   access request (admins notified); pending/disabled get a plain message. No
   branch ever reveals a password, and a token is created ONLY when there is a
   live mailer to deliver it (no orphan links).
-* ``verify_and_login`` - the link lands at /auth/verify; the token is redeemed
+* ``link_recipient`` - the link lands at GET /auth/verify, which only reads it
+  and renders a confirm button. Reading never spends it, so a mail-security
+  scanner following the URL ahead of the recipient (Microsoft Safe Links
+  rewrites every link into Brisken) cannot use up their one click.
+* ``verify_and_login`` - the button POSTs back; the token is redeemed
   single-use and the session is issued. Fails closed if approval was revoked
   between issue and click.
 * ``approve_user`` / ``is_admin`` - the admin-approval half.
@@ -165,6 +169,21 @@ def request_magic_link(store, email: str, *, base_url: str, ip: str | None,
     if status == "pending":
         return {"status": "pending"}
     return {"status": "disabled"}
+
+
+def link_recipient(store, raw_token: str, now: str) -> str | None:
+    """Who a sign-in link belongs to, iff it is still usable, without spending
+    it. Same approval re-check as the redeem below, so a link whose account was
+    revoked reads as dead on the landing page rather than at the button."""
+    if not raw_token:
+        return None
+    email = store.peek_login_token(auth.hash_magic_token(raw_token), now)
+    if email is None:
+        return None
+    user = store.get_user(email)
+    if user is None or user["status"] != "approved":
+        return None
+    return email
 
 
 def verify_and_login(store, raw_token: str, now: str) -> str | None:

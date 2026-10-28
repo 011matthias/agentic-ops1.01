@@ -1,0 +1,9 @@
+document_id,detected_date,detected_total,detected_currency,detected_vendor,detected_reference
+r-01,2026-05-04,84.50,USD,Northwind Stationery,
+r-02,2026-05-07,31.50,USD,Blue Harbor Cafe,INV-77812
+r-03,2026-05-09,205.00,USD,Harbor Taxi Co,
+r-04,2026-05-13,29.99,USD,Orbit Cloud Services,
+r-05,2026-05-18,14.00,USD,Silverline Parking,
+r-06,2026-05-18,14.00,USD,Silverline Parking,
+r-07,2026-05-21,62.00,USD,Pinewood Books,
+r-08,2026-05-22,40.00,EUR,Cafe Lumiere,

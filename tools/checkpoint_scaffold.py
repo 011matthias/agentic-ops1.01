@@ -47,9 +47,11 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 from urllib.parse import quote
 
@@ -497,6 +499,29 @@ def _run(cmd: list[str], cwd: Path) -> str:
         return f"unavailable: {e}"
 
 
+LEGACY_PAYLOAD_NAME = "checkpoint-payload.json"
+PAYLOAD_MAX_AGE_H = 3
+
+
+def session_token() -> str:
+    """Stable per-session token. The harness exports CLAUDE_CODE_SESSION_ID to
+    tools as well as hooks; pid is the fallback for a bare shell."""
+    sid = re.sub(r"[^A-Za-z0-9_-]", "", os.environ.get("CLAUDE_CODE_SESSION_ID", ""))[:8]
+    return sid or f"pid{os.getpid()}"
+
+
+def payload_path(root: Path) -> Path:
+    """Where THIS session's finalize payload belongs.
+
+    The shared `.scratch/checkpoint-payload.json` is a collision by design in a
+    clone that runs concurrent sessions: on 2026-09-09 a sibling wrote its own
+    payload there between this session's write and its finalize, so finalize
+    appended the sibling's INDEX row and session entry (register row,
+    boundary-violation). A per-session filename makes that race impossible.
+    """
+    return root / ".scratch" / f"checkpoint-payload-{session_token()}.json"
+
+
 def cmd_pre(root: Path, args: argparse.Namespace) -> int:
     date = args.date or today()
     if args.topic:
@@ -506,6 +531,7 @@ def cmd_pre(root: Path, args: argparse.Namespace) -> int:
         print(f"write checkpoint prose to: {folder / fname}"
               + ("  (exists, not yet in INDEX: finalize will link this file)"
                  if (folder / fname).exists() else ""))
+    print(f"write the finalize payload to: {payload_path(root)}")
 
     print("\n== friction candidates (classify: promote or discard; then --clear-candidates) ==")
     print(_run(["uv", "run", "tools/session_state.py", "--list-candidates"], root))
@@ -656,6 +682,28 @@ def check_pattern_rule_fixes(root: Path, payload: dict) -> tuple[str | None, lis
 
 
 def cmd_finalize(root: Path, args: argparse.Namespace) -> int:
+    if args.payload != "-":
+        src = Path(args.payload)
+        if src.name == LEGACY_PAYLOAD_NAME:
+            print(
+                f"refusing the shared payload path {LEGACY_PAYLOAD_NAME}: in a clone "
+                "that runs concurrent sessions a sibling can overwrite it between "
+                "your write and this call, and finalize then applies THEIR "
+                "checkpoint (2026-09-09 register row). Write the payload to\n"
+                f"  {payload_path(root)}\n"
+                "and pass that path instead."
+            )
+            return 2
+        if src.exists():
+            age_h = (time.time() - src.stat().st_mtime) / 3600
+            if age_h > PAYLOAD_MAX_AGE_H:
+                print(
+                    f"refusing a stale payload: {src} was last written "
+                    f"{age_h:.1f}h ago (cap {PAYLOAD_MAX_AGE_H}h). A payload older "
+                    "than the work it describes is usually a leftover from an "
+                    "earlier session. Re-write it, then finalize."
+                )
+                return 2
     raw = sys.stdin.read() if args.payload == "-" else Path(args.payload).read_text(encoding="utf-8")
     payload = json.loads(raw)
     for field in ("topic", "work_type"):

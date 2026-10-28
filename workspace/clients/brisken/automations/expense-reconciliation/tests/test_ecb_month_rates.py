@@ -175,6 +175,27 @@ def _attach_statement(client, batch_id: str) -> None:
     ))
 
 
+def _add_receipt(client, monkeypatch, batch_id: str) -> None:
+    """One more receipt into a month that already has its statement: the
+    ordinary re-match, and the one that fetches no rates of its own."""
+    mock = MockLLMClient(
+        extraction_responses=[
+            ExtractedReceipt(
+                date="2026-07-15", total="12.00", currency="USD",
+                vendor="Papelaria Lima", reference="PPL-0715",
+                line_items=(), confidence=0.9, notes="",
+            ),
+        ],
+    )
+    monkeypatch.setattr(
+        "expense_recon.cli._build_llm_client", lambda cfg: (mock, None)
+    )
+    _done(client, client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[("files", ("Papelaria.jpg", JPG + b"9", "application/octet-stream"))],
+    ))
+
+
 def _config(client, batch_id: str) -> dict:
     store = RunStore(client._data_root / "recon-web.sqlite")
     try:
@@ -246,26 +267,25 @@ def test_route_a_june_charge_on_the_july_statement_reads_junes_average(
     assert "0.195256" in chosen["reason"]
 
 
-def test_route_a_rate_typed_in_settings_still_wins(client, monkeypatch, ecb):
-    """Owner ruling: a rate the operator types wins. With EUR:USD typed, the
-    Amazon pair stays on 1.162275 and carries no period; BRL, not typed,
-    still reads the ECB. The ECB table is stored either way."""
+def test_route_a_rate_typed_in_settings_is_ignored_and_never_stored(client, monkeypatch, ecb):
+    """Typed rates retired 2026-09-23. A PUT that still sends the key is
+    accepted and ignored (the published SPA sends it until its removal
+    prompt lands), nothing is stored under it, no run config carries it,
+    and every pair reads the ECB average."""
     _settings(client, {"EUR:USD": "1.162275"})
+    assert "fx_reference_rates" not in client.get("/api/settings").json()
     batch_id = _create_july(client, monkeypatch)
     _attach_statement(client, batch_id)
     view = client.get(f"/api/runs/{batch_id}").json()
 
     fx = _chosen(_row(view, "AMAZON"))["fx"]
-    assert fx["reference_rate"] == "1.162275"
-    assert fx["reference_rate_source"] == "settings"
-    assert "reference_rate_period" not in fx
-    assert fx["reference_gap"] == "-5.32"
-
-    fx = _chosen(_row(view, "SUPERMEC"))["fx"]
+    assert fx["reference_rate"] == "1.141748"
     assert fx["reference_rate_source"] == "ecb_month"
+    assert fx["reference_rate_period"] == "2026-07"
+    assert fx["reference_gap"] == "+0.35"
 
     matching = _config(client, batch_id)["matching"]
-    assert matching["fx_reference_rates"] == {"EUR:USD": "1.162275"}
+    assert "fx_reference_rates" not in matching
     assert set(matching["fx_ecb_monthly_rates"]) == {"2026-06", "2026-07", "2026-08"}
 
 
@@ -300,6 +320,44 @@ def test_route_an_ecb_outage_never_blocks_and_the_statement_attach_fetches_again
     fx = _chosen(_row(view, "AMAZON"))["fx"]
     assert fx["reference_rate_source"] == "ecb_month"
     assert fx["reference_rate"] == "1.141748"
+
+
+def test_route_a_month_that_never_got_an_ecb_table_gains_one_on_a_re_match(
+    client, monkeypatch, ecb
+):
+    """July 2026's real shape, and the reason the typed rates could not
+    simply be deleted. Measured in-container 2026-09-23: July was created
+    before item 82 shipped and never re-attached, so its stored config held
+    the typed rates and NO `fx_ecb_monthly_rates` at all. Retiring the typed
+    rung alone would have left its 18 cross-currency pairs with no rate on
+    any rung.
+
+    So a re-match tops the table up, and this proves it THROUGH the caller.
+    The ECB is down for the creation AND the attach, so the month really
+    holds no table; adding a receipt re-matches, and that path fetches
+    nothing of its own (`apply_ecb_rates` runs only at creation and inside
+    the statement read), so the table can only arrive via
+    `rematch_month`'s `top_up_ecb_rates`. Unwire that call and this goes
+    red."""
+    _settings(client)
+    ecb.down = True
+    batch_id = _create_july(client, monkeypatch)
+    _attach_statement(client, batch_id)
+    assert "fx_ecb_monthly_rates" not in (_config(client, batch_id).get("matching") or {})
+    amazon = _row(client.get(f"/api/runs/{batch_id}").json(), "AMAZON")
+    assert all(
+        (c.get("fx") or {}).get("reference_rate_source") is None
+        for c in amazon["candidates"]
+    )
+
+    ecb.down = False
+    _add_receipt(client, monkeypatch, batch_id)
+
+    table = _config(client, batch_id)["matching"]["fx_ecb_monthly_rates"]
+    assert table["2026-07"] == ECB["2026-07"]
+    fx = _chosen(_row(client.get(f"/api/runs/{batch_id}").json(), "AMAZON"))["fx"]
+    assert fx["reference_rate_source"] == "ecb_month"
+    assert fx["reference_rate_period"] == "2026-07"
 
 
 def test_route_a_trip_fetches_nothing(client, monkeypatch, ecb):
@@ -360,14 +418,17 @@ def test_a_month_not_yet_published_reads_its_nearest_neighbour_and_names_it():
     assert gap.ecb_monthly_rate("EUR", "USD", "2026-07")[1] == "2026-06"
 
 
-def test_the_rung_order_is_typed_then_derived_then_ecb():
-    """A typed rate wins; a rate the month derives from its own statement
-    FX lines or booked receipt rates comes next; the ECB average is the
-    fallback. Without a date the ECB rung cannot answer."""
+def test_the_rung_order_is_derived_then_ecb_and_a_typed_rate_is_ignored():
+    """A rate the month derives from its own statement FX lines or booked
+    receipt rates wins; the ECB average is the fallback. Without a date the
+    ECB rung cannot answer. The typed rung was retired on 2026-09-23: a
+    stored config still carrying the key is ignored, so the derived rate
+    answers even there."""
     derived = {("EUR", "USD"): (Decimal("1.15"), "statement", 3)}
     typed = _cfg(fx_reference_rates={"EUR:USD": "1.2"})
     on = date(2026, 7, 14)
-    assert _reference_rate_for(typed, "EUR", "USD", derived, on=on) == (Decimal("1.2"), "configured", 0)
+    assert _reference_rate_for(typed, "EUR", "USD", derived, on=on) == (Decimal("1.15"), "statement", 3)
+    assert _reference_rate_for(typed, "EUR", "USD", {}, on=on) == (Decimal("1.141748"), "ecb_month", 0)
     assert _reference_rate_for(_cfg(), "EUR", "USD", derived, on=on) == (Decimal("1.15"), "statement", 3)
     assert _reference_rate_for(_cfg(), "EUR", "USD", {}, on=on) == (Decimal("1.141748"), "ecb_month", 0)
     assert _reference_rate_for(_cfg(), "EUR", "USD", {}) is None

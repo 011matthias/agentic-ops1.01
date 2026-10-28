@@ -21,6 +21,7 @@ from decimal import Decimal
 from ..ingest._common import row_type_for_label, type_label_from_raw_text
 from ..matching.types import (
     Categorization,
+    CellFill,
     ClassificationSource,
     LineItem,
     Match,
@@ -59,6 +60,9 @@ def categorization_to_dict(c: Categorization | None) -> dict | None:
         "source": c.source.value,
         "reasoning": c.reasoning,
         "decision": c.decision,
+        # Only a refusal carries one; omitted otherwise so every snapshot the
+        # bucket path writes stays byte-identical.
+        **({"refusal": c.refusal} if c.refusal else {}),
     }
 
 
@@ -66,13 +70,21 @@ def categorization_from_dict(d: dict | None) -> Categorization | None:
     if d is None:
         return None
     return Categorization(
-        category=d["category"],
-        zoho_account=d["zoho_account"],
+        # .get on both halves of the classification: the eight-bucket
+        # vocabulary is being retired in favour of a GL leaf, so a snapshot
+        # written by a later version may carry the account and omit the
+        # category. A bare subscript would KeyError on load, and a month
+        # that cannot be opened is not a recoverable state. Same reasoning
+        # as `decision` below; this read has to tolerate the absence BEFORE
+        # any writer stops emitting the key.
+        category=d.get("category"),
+        zoho_account=d.get("zoho_account"),
         confidence=d["confidence"],
         source=ClassificationSource(d["source"]),
         reasoning=d.get("reasoning", ""),
         # .get keeps pre-WS2 snapshots loadable (no decision key).
         decision=d.get("decision"),
+        refusal=d.get("refusal"),
     )
 
 
@@ -116,6 +128,15 @@ def transaction_to_dict(t: Transaction) -> dict:
         # nothing, a gray fill closes the charge, so the provenance has to
         # survive the snapshot.
         "entry_status_source": t.entry_status_source,
+        # Item 162: the row's coloured cells, so a re-read is not needed to
+        # know what the sheet was marked with. Always written (possibly
+        # `[]`); `transaction_from_dict` tolerates its absence, which is
+        # every snapshot taken before the item.
+        "fills": [
+            {"column": f.column, "index": f.index, "hex": f.hex,
+             "family": f.family}
+            for f in t.fills
+        ],
         "is_credit": t.is_credit,
         # Per-row card identity (WS3). Load-bearing when a snapshot is
         # re-matched later (the bulk receipts-folder attach): without it the
@@ -127,6 +148,8 @@ def transaction_to_dict(t: Transaction) -> dict:
         # of the positional transaction_id; content-derived ids carry no
         # row, so it has to survive the snapshot round trip.
         "source_row": t.source_row,
+        # Note item T3: the PDF page, for the charges that have no row.
+        "source_page": t.source_page,
         # Item 73: the statement label's row type (None = the sign decides).
         "row_type": t.row_type,
     }
@@ -153,6 +176,18 @@ def transaction_from_dict(d: dict) -> Transaction:
         # no key means the mark came from the workbook fill (the web layer
         # never derived one).
         entry_status_source=d.get("entry_status_source"),
+        # .get keeps pre-item-162 snapshots loadable: no key means the
+        # month was read before the parser recorded fills, not that the
+        # sheet was uncoloured. A re-read is what fills them in.
+        fills=tuple(
+            CellFill(
+                column=f.get("column", ""),
+                index=f.get("index", -1),
+                hex=f.get("hex", ""),
+                family=f.get("family", ""),
+            )
+            for f in d.get("fills") or ()
+        ),
         # .get keeps pre-3.15 snapshots loadable (no is_credit key).
         is_credit=d.get("is_credit", False),
         # .get keeps pre-WS3 snapshots loadable (no card_last4 key); those
@@ -162,6 +197,10 @@ def transaction_from_dict(d: dict) -> Transaction:
         # those still carry positional ids, and `_anchor_row`'s legacy
         # fallback recovers their sheet row from the id as before.
         source_row=d.get("source_row"),
+        # .get keeps every snapshot written before note item T3 loadable
+        # (no source_page key); those PDF charges stay placeless until
+        # the month is re-read, which is what "not recorded" means.
+        source_page=d.get("source_page"),
         # A key that is present is the parser's answer, None included (no
         # label was read). A snapshot from before item 73 has no key; its
         # row still holds the printed Type cell in `raw_text`, so the label
@@ -212,8 +251,14 @@ def receipt_to_dict(r: Receipt) -> dict:
         "detected_time": r.detected_time,
         "invoice_number": r.invoice_number,
         "receipt_number": r.receipt_number,
+        # Item 223 step 4 (2026-09-27).
+        "document_kind": r.document_kind,
         # Item 87 (2026-09-17).
         "card_key": r.card_key,
+        # Item 250 (2026-10-07).
+        "sender_note": r.sender_note,
+        "sender_note_entity": r.sender_note_entity,
+        "sender_note_split": r.sender_note_split,
     }
 
 
@@ -257,8 +302,14 @@ def receipt_from_dict(d: dict) -> Receipt:
         detected_time=d.get("detected_time"),
         invoice_number=d.get("invoice_number"),
         receipt_number=d.get("receipt_number"),
+        # .get keeps pre-2026-09-27 snapshots loadable (no item-223 key).
+        document_kind=d.get("document_kind"),
         # .get keeps pre-2026-09-17 snapshots loadable (no item-87 key).
         card_key=d.get("card_key"),
+        # .get keeps pre-2026-10-07 snapshots loadable (no item-250 keys).
+        sender_note=d.get("sender_note") or "",
+        sender_note_entity=d.get("sender_note_entity") or "",
+        sender_note_split=bool(d.get("sender_note_split")),
     )
 
 
@@ -275,6 +326,7 @@ def match_to_dict(m: Match) -> dict:
         "date_score": m.date_score,
         "vendor_score": m.vendor_score,
         "card_score": m.card_score,
+        "review_code": m.review_code,
     }
 
 
@@ -293,6 +345,9 @@ def match_from_dict(d: dict) -> Match:
         # Absent from snapshots written before WS3; 0.0 reads as "not
         # scored" exactly like the three above, so an old run still loads.
         card_score=d.get("card_score", 0.0),
+        # Item X1: absent from snapshots written before it; "" is "not
+        # flagged", which is what every earlier pair was.
+        review_code=d.get("review_code", ""),
     )
 
 

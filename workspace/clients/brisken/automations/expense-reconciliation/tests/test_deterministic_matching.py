@@ -420,11 +420,11 @@ def test_credit_partitioned_into_refunds_never_matched():
 
 
 def test_fx_reference_rate_clean_match_is_deterministic():
-    """A configured monthly reference rate resolves a cross-currency
-    pair deterministically: deviation <= 3% is a clean FX_REFERENCE
-    match, no review, no LLM."""
+    """A fetched monthly reference rate resolves a cross-currency pair
+    deterministically: deviation <= the source's clean band (2% for a
+    central-bank rate) is a clean FX_REFERENCE match, no review, no LLM."""
     cfg = MatchingConfig(
-        fx_reference_rates={("EUR", "USD"): Decimal("1.10")}
+        fx_ecb_monthly_rates={"2026-04": {"USD": Decimal("1.10")}}
     )
     txs = [tx("t1", "111.00", date(2026, 4, 12))]      # 100 EUR * 1.10 = 110; dev 0.9%
     rs = [receipt("r1", "100.00", date(2026, 4, 12), currency="EUR")]
@@ -437,13 +437,14 @@ def test_fx_reference_rate_clean_match_is_deterministic():
 
 
 def test_fx_reference_rate_dcc_band_defers_to_judgment():
-    """Deviation in 3-13% (DCC markup / tip territory) DEFERS to the
+    """Deviation beyond the clean band and under 13% (DCC markup / tip
+    territory) DEFERS to the
     judgment bucket with the rate reasoning attached (2026-07-23; it used
     to auto-match review-flagged, which on the labelled fixture turned
     every coincidental within-13% charge into a deterministic pairing —
     38 of 46 no-charge receipts auto-matched)."""
     cfg = MatchingConfig(
-        fx_reference_rates={("EUR", "USD"): Decimal("1.10")}
+        fx_ecb_monthly_rates={"2026-04": {"USD": Decimal("1.10")}}
     )
     txs = [tx("t1", "118.00", date(2026, 4, 12))]      # dev 7.3%
     rs = [receipt("r1", "100.00", date(2026, 4, 12), currency="EUR")]
@@ -453,14 +454,14 @@ def test_fx_reference_rate_dcc_band_defers_to_judgment():
     m = out.judgment_required[0]
     assert m.match_type == MatchType.FX_JUDGMENT
     assert m.requires_review
-    assert "monthly reference rate" in m.reason
+    assert "ECB monthly average rate" in m.reason
 
 
 def test_fx_reference_rate_large_deviation_falls_through_to_band():
     """Beyond 13% the reference rate cannot resolve the pair; the
     implied-rate band / FX_JUDGMENT path applies exactly as before."""
     cfg = MatchingConfig(
-        fx_reference_rates={("EUR", "USD"): Decimal("1.10")}
+        fx_ecb_monthly_rates={"2026-04": {"USD": Decimal("1.10")}}
     )
     txs = [tx("t1", "140.00", date(2026, 4, 12))]      # dev 27%; implied 1.40 in EUR band
     rs = [receipt("r1", "100.00", date(2026, 4, 12), currency="EUR")]

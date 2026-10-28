@@ -42,8 +42,9 @@ where this client's receipts live.
 from __future__ import annotations
 
 import io
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
+from .single_currency import BASE_CURRENCY, total_for
 from ._pdf_common import (
     PAGE_MARGIN_MM,
     UNREADABLE_CAPTION,
@@ -122,6 +123,11 @@ def build_expense_report_pdf(
     copies_set_aside_totals: dict[str, str] | None = None,
     receipts_by_section: bool = False,
     amounts_unreadable: Sequence[int] = (),
+    conversions: "Mapping[int, object] | None" = None,
+    conversion_total: str = "",
+    conversion_note: str = "",
+    bills: Sequence[dict] | None = None,
+    bills_totals: dict[str, str] | None = None,
 ) -> bytes:
     """Render the month's report: listing first, then the receipts.
 
@@ -212,11 +218,32 @@ def build_expense_report_pdf(
     evidence entries carry `"copy": True` and the original's `rows`, and
     are captioned as the copy. Omitted => nothing printed, as before.
 
+    `conversions` (item 98) is `{listing number: RowConversion}` from
+    `single_currency.convert_rows`: the row's figure in the filing currency,
+    the rate that produced it and where the rate came from. Each one prints
+    as a small second line under its own amount, the same device item 65
+    uses for an unreadable one, so the document gains a figure per row and a
+    month total without gaining a column; the listing is already at the page
+    width item 143 had to fix. `conversion_total` is the month's one-line
+    total and `conversion_note` names any rows no rate could price. All
+    three default empty, and the document then renders exactly as before.
+
     `amounts_unreadable` (item 97) is the listing numbers of the rows written
     for a receipt whose total was never read. Their Amount cell is blank,
     which a total reads as zero, so the caller names them: each gets the
     "amount unreadable, not in total" caption and a place in the footer,
     the same as a cell that would not parse.
+
+    `bills` (Build 4 / backlog item 218, owner decisions 2026-09-25) are the
+    month's invoices paid by bank transfer, already left out of `rows`:
+
+        {"n": 14, "date": "2026-07-30", "vendor": "Tricarico",
+         "amount": "27,203.34", "currency": "BRL", "company": ""}
+
+    rendered as their own "Bills (paid by bank transfer)" section after the
+    reimbursements, with `bills_totals` (per currency, preformatted) as its
+    sums line. Numbers continue the listing's, as the reimbursements' do.
+    Omitted => nothing printed, as before.
     """
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
@@ -252,6 +279,12 @@ def build_expense_report_pdf(
     })
     unreadable_rows = set(unreadable)
     totals_text = format_totals(totals, "no expenses")
+    # Item 98: the month's single figure rides the same line as the
+    # per-currency totals, because it answers the question that line raises
+    # ("so what did the month cost?") and a reader who stops after the first
+    # line should already have the answer.
+    if conversion_total:
+        totals_text = f"{totals_text}  ·  {conversion_total}"
 
     story: list = [
         Paragraph(_esc(title), styles["title"]),
@@ -294,6 +327,13 @@ def build_expense_report_pdf(
         amount = _esc(cell(row, "Expense Amount"))
         if n in unreadable_rows:
             amount += f'<br/><font size="6">{_esc(UNREADABLE_CAPTION)}</font>'
+        # Item 98: the same cell says what the row cost in the filing
+        # currency and at what rate. Under the amount rather than beside it,
+        # because the listing has no width left for a tenth column.
+        converted = (conversions or {}).get(n)
+        caption = converted.caption() if converted is not None else ""
+        if caption:
+            amount += f'<br/><font size="6">{_esc(caption)}</font>'
         return [
             Paragraph(str(n), styles["cell"]),
             Paragraph(_esc(cell(row, "Expense Date")), styles["cell"]),
@@ -322,11 +362,19 @@ def build_expense_report_pdf(
             (n, cell(row, "Currency Code"), cell(row, "Expense Amount"))
             for n, row in numbered
         )
-        return (
+        line = (
             f"{label}: {len(numbered)} "
             f"expense{'s' if len(numbered) != 1 else ''}"
             f"  ·  {format_totals(slice_totals, 'no amounts read')}"
         )
+        # Item 98: a card's or a cost center's own figure in the filing
+        # currency, summed from the SAME per-row conversions as the month
+        # total, so a section line and the header cannot disagree. Silent
+        # when the slice priced nothing, rather than claiming it cost zero.
+        slice_base = total_for(conversions or {}, [n for n, _row in numbered])
+        if slice_base is not None:
+            line += f"  ·  {BASE_CURRENCY} {slice_base:,.2f}"
+        return line
 
     # Item 138: which page each evidence caption landed on, one list per
     # entry in `prepared` order, filled by `caption_mark` during the build.
@@ -466,6 +514,11 @@ def build_expense_report_pdf(
     if excluded:
         _flow(Paragraph(_esc(excluded), styles["sub"]))
 
+    # Item 98's footer half: the rows the single-currency total could not
+    # price, named the same way. Silent when every row converted.
+    if conversion_note:
+        _flow(Paragraph(_esc(conversion_note), styles["sub"]))
+
     # ── copies set aside (item 94): named, summed, never in the total ──
     if copies_set_aside:
         n_copies = len(copies_set_aside)
@@ -547,6 +600,37 @@ def build_expense_report_pdf(
             story.append(Paragraph(
                 _esc(f"Owed to {person}: {owed_line}"), styles["sub"]
             ))
+
+    # ── bills paid by bank transfer (Build 4 / item 218) ─────────────
+    if bills:
+        _flow(Spacer(1, 12))
+        story.append(Paragraph("Bills (paid by bank transfer)", styles["caption"]))
+        story.append(Paragraph(
+            "Not paid by a company card, so no card statement covers them. "
+            "Not part of the listing or its totals above; booked by hand in "
+            "Zoho.",
+            styles["capsub"],
+        ))
+        b_rows: list[list] = [[
+            Paragraph(_esc(name), styles["cellhead"])
+            for name in ("#", "Date", "Supplier", "Company", "Amount", "Ccy")
+        ]]
+        for row in bills:
+            b_rows.append([
+                Paragraph(_esc(str(row.get("n", ""))), styles["cell"]),
+                Paragraph(_esc(str(row.get("date", ""))), styles["cell"]),
+                Paragraph(_esc(str(row.get("vendor", ""))), styles["cell"]),
+                Paragraph(_esc(str(row.get("company", ""))), styles["cell"]),
+                Paragraph(_esc(str(row.get("amount", ""))), styles["cellr"]),
+                Paragraph(_esc(str(row.get("currency", ""))), styles["cell"]),
+            ])
+        b_table = Table(b_rows, colWidths=[26, 70, 160, 80, 90, 40], repeatRows=1)
+        b_table.setStyle(table_style())
+        story.append(b_table)
+        bills_line = "  ·  ".join(
+            f"{ccy} {amount}" for ccy, amount in sorted((bills_totals or {}).items())
+        ) or "no amounts read"
+        story.append(Paragraph(_esc(f"Bills total: {bills_line}"), styles["sub"]))
 
     if prepared_note:
         _flow(Spacer(1, 8))

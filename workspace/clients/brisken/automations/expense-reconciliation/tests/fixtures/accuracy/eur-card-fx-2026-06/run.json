@@ -1,0 +1,33 @@
+{
+  "statement": {
+    "path": "statement.csv",
+    "account_id": "eur-card",
+    "legal_entity_id": "synthetic-le",
+    "account_card_currency": "EUR",
+    "column_map": {
+      "transaction_date": "Date",
+      "posting_date": "Posted",
+      "amount": "Amount",
+      "vendor": "Merchant",
+      "original_amount": "Orig Amount",
+      "original_currency": "Orig Ccy",
+      "type": "Type"
+    }
+  },
+  "receipts": {
+    "path": "receipts.csv",
+    "source": "expense_csv",
+    "column_map": {
+      "document_id": "Document ID",
+      "expense_date": "Expense Date",
+      "amount": "Amount",
+      "currency": "Currency",
+      "vendor": "Merchant",
+      "reference": "Reference",
+      "amount_base": "Amount (EUR)"
+    }
+  },
+  "output": {
+    "path": "report.xlsx"
+  }
+}

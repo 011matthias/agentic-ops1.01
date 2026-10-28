@@ -54,6 +54,7 @@ import re
 import shutil
 import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from email import policy
@@ -1049,6 +1050,12 @@ def read_log(data_root: Path, limit: int = 100, overlay: bool = True) -> list[di
                 row["not_added"] = meta["not_added"]
             if meta.get("error"):
                 row["error"] = meta["error"]
+            if row.get("status") == STATUS_INGESTED:
+                # An ingested mail has no current error. A failed first try
+                # (the 2026-09-24 429 on a render) leaves its text on the
+                # archive and on the row logged at the time, and both stay
+                # there as the record; the row just stops presenting it.
+                row.pop("error", None)
             # Month-pool stamps (2026-08-24): which month this mail's
             # receipts belong to, and how that month was decided.
             if meta.get("receipt_month"):
@@ -1260,14 +1267,92 @@ def _provenance_entry(person: dict, received_at: str, arch: Path | None) -> dict
     flags, so a receipt created from an injected mail shows the flag on its
     grid row exactly where `submitted_by` already shows."""
     entry = {**person, "received_at": received_at}
+    meta = _read_meta(arch)  # {} for arch is None (item 106 / 125 both read it)
     if arch is not None:
         # Item 106: which mail stored this file, so a replay of the same
         # mail recognises its own receipt instead of calling it a copy.
         entry["archive"] = arch.name
+    # Item 125: whether this mail's SMTP session was encrypted, carried from
+    # the archive meta (stamped in archive_incoming) onto the receipt, so
+    # the operator sees on the grid who still delivers in the clear. Present
+    # ONLY when the intake recorded it (every real SMTP arrival does); a
+    # non-SMTP caller and a pre-2026-09-18 archive leave the key absent, so
+    # "not recorded" reads apart from "delivered in the clear" (False).
+    if "transport_tls" in meta:
+        entry["transport_tls"] = bool(meta.get("transport_tls"))
     flags = _untrusted_flags(arch)
     if flags:
         entry["untrusted_instructions"] = flags
+    # Item 155: the sender's own prose above the forward - the filing
+    # instruction that exists nowhere in the attached PDF. Parallel and
+    # ABSENT when the mail carried none (56 of the 86 readable live
+    # bodies), never "". Shown to the reviewer as written. Since item 250
+    # (owner 2026-10-07) a note from one of OUR senders also classifies;
+    # that reading goes through `trusted_sender_notes`, never this record.
+    #
+    # Recorded for a RENDERED body-only mail too, deliberately. The
+    # caution against double-recording guards against a second copy of
+    # the invoice, and the boundary rule cannot produce one: it keeps
+    # only what sits ABOVE the forward, and the invoice is always below.
+    # What it keeps on those mails is the 1-3 lines of instruction, which
+    # on a body-only mail are otherwise buried inside a rendered image the
+    # reviewer has to open - 13 of the 30 live notes arrive that way.
+    note = _archive_operator_note(arch)
+    if note:
+        entry["operator_note"] = note
     return entry
+
+
+def trusted_sender_notes(
+    provenance: dict | None, cfg: "IntakeConfig",
+) -> dict[str, str]:
+    """`{document_id: note}` for the notes allowed to classify (item 250).
+
+    Owner 2026-10-07: a note from one of our own senders classifies the
+    receipt (company, and the account when the note names one clearly). The
+    filter is the whole of that boundary, so it is deny-by-default:
+
+    - the address is ours (`is_known_sender`: the Brisken tenant or
+      `intake.known_senders`). A stranger's note stays display-only, exactly
+      as item 155 left every note. From is forgeable, so this is the same
+      courtesy boundary the ack and the auto-render use, not a security one:
+      a forged note can move a receipt's company and account, which the
+      reviewer sees labelled "from the sender's note" and can change.
+    - the mail carried no agent-directed text (`untrusted_instructions`): a
+      mail that tried to steer the tool decides nothing.
+    - the note is not only the sender's signature (`strip_signature`, cut at
+      a line naming one of the intake aliases' people).
+
+    Keyed by the provenance's own keys, which are the stored file names and
+    so the receipts' document ids."""
+    from ..sender_note import strip_signature
+
+    names = tuple(sorted({str(v) for v in (cfg.aliases or {}).values() if v}))
+    out: dict[str, str] = {}
+    for doc_id, entry in (provenance or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        note = str(entry.get("operator_note") or "").strip()
+        if not note or entry.get("untrusted_instructions"):
+            continue
+        if not is_known_sender(str(entry.get("address") or ""), cfg):
+            continue
+        note = strip_signature(note, names)
+        if note:
+            out[str(doc_id)] = note
+    return out
+
+
+def _archive_operator_note(arch: Path | None) -> str:
+    """The operator's note above the forward in this mail's body, or ""."""
+    if arch is None:
+        return ""
+    from .body_render import operator_note
+
+    try:
+        return operator_note(_archive_body_text(arch))
+    except Exception:  # noqa: BLE001 - a display note is never worth a crash
+        return ""
 
 
 def _archive_body_text(arch: Path) -> str:
@@ -1411,7 +1496,7 @@ def pool_deleted_batch(data_root: Path, batch_id: str) -> tuple[int, int]:
 
 def archive_incoming(
     data_root: Path, raw: bytes, parsed: InboundMessage, peer: str = "",
-    known_sender: bool = True,
+    known_sender: bool = True, transport_tls: bool | None = None,
 ) -> Path:
     """Custody step: archive + acceptance log row, called INLINE in the
     SMTP DATA handler before the 250 goes out. Raises on failure (the
@@ -1419,11 +1504,22 @@ def archive_incoming(
 
     The row records the message's SIZE and whether we recognised the
     sender (item 122), which is what lets the day budget re-seed the
-    unknown-sender byte spend after a restart instead of forgiving it."""
+    unknown-sender byte spend after a restart instead of forgiving it.
+
+    `transport_tls` (item 125) is whether the SMTP session had completed
+    STARTTLS before DATA; the listener always knows and always passes a
+    bool. It lands on the archive meta and the log row, and from the meta
+    onto every receipt the mail produces (`_provenance_entry`). Left None
+    by a non-SMTP caller, the key is ABSENT (never null), so a reader
+    tells "not recorded" from "delivered in the clear"; archives written
+    before 2026-09-18 read the same way."""
+    extra: dict = {"peer": peer}
+    if transport_tls is not None:
+        extra["transport_tls"] = bool(transport_tls)
     arch = archive_message(
-        data_root, raw, parsed, STATUS_RECEIVED, extra={"peer": peer}
+        data_root, raw, parsed, STATUS_RECEIVED, extra=extra
     )
-    _append_log(data_root, {
+    row = {
         "at": _now_iso(),
         "from": parsed.from_addr,
         "subject": parsed.subject,
@@ -1432,7 +1528,10 @@ def archive_incoming(
         "known_sender": bool(known_sender),
         "status": STATUS_RECEIVED,
         "archive": arch.name,
-    })
+    }
+    if transport_tls is not None:
+        row["transport_tls"] = bool(transport_tls)
+    _append_log(data_root, row)
     return arch
 
 
@@ -2051,6 +2150,7 @@ _SET_ASIDE_READS = {
     "statement": "a bank or card statement page",
     "report_summary": "a summary page",
     "other": "not a receipt",
+    "correspondence": "a payment reminder about another invoice",
 }
 _RENDERED_BODY = "rendered-body.pdf"
 
@@ -2085,6 +2185,8 @@ def no_expense_label(not_added) -> str:
             return "Nothing added: read as a statement page"
         if reasons == {"report_summary"}:
             return "Nothing added: read as a summary page"
+        if reasons == {"correspondence"}:
+            return "Nothing added: read as a payment reminder"
         return "Nothing added: not read as a receipt"
     if whys <= {"set_aside", "already_on_file"}:
         return "Nothing added: set aside or already on file"
@@ -2378,6 +2480,50 @@ def _month_stamps(
     }
 
 
+def body_text_by_digest(arch: "Path | None", staging: Path) -> dict[str, str]:
+    """`sha1[:16] -> the mail's body text`, for the rendered-body PDF only.
+
+    A body-only mail renders to an IMAGE pdf (`body_render.render_body_pdf`
+    pastes Pillow pages), so it carries no text layer and the extractor keeps
+    the model's notes as `ocr_text` instead of the body's own words. The
+    rendered body IS the mail, so the mail body is that document's text and
+    nothing else can supply it.
+
+    An ATTACHMENT is deliberately never mapped. "FW: Reminder Invoice from
+    Redis IUS25300" attaches the genuine invoice; lending the reminder's
+    words to the invoice would set the invoice aside with the reminder.
+
+    Read-only and fail-open: an unreadable archive yields {}.
+    """
+    if arch is None:
+        return {}
+    try:
+        eml = arch / "message.eml"
+        if not eml.is_file():
+            return {}
+        # Staging writes files position-prefixed (`0000__rendered-body.pdf`),
+        # so match the SUFFIX; an exact-name lookup here silently never hits.
+        rendered = [
+            p for p in Path(staging).iterdir()
+            if p.is_file() and (
+                p.name == _RENDERED_BODY or p.name.endswith(f"__{_RENDERED_BODY}")
+            )
+        ]
+        if not rendered:
+            return {}
+        from .body_render import extract_body_text
+
+        text = extract_body_text(eml.read_bytes())
+        if not (text or "").strip():
+            return {}
+        return {
+            hashlib.sha1(p.read_bytes()).hexdigest()[:16]: text
+            for p in rendered
+        }
+    except Exception:  # noqa: BLE001 - a damaged archive is evidence of nothing
+        return {}
+
+
 def _ingest_job(
     db_path: Path, job_id: str, run_id: str, staging: Path,
     learning_db_path: Path | None, provenance: dict[str, dict],
@@ -2400,6 +2546,7 @@ def _ingest_job(
                 learning_db_path=learning_db_path,
                 on_stage=lambda s: store.set_job_stage(job_id, s, _now_iso()),
                 provenance_by_digest=provenance,
+                text_by_digest=body_text_by_digest(arch, staging),
             )
             store.set_job_status(
                 job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso()
@@ -3478,7 +3625,9 @@ def join_trip(
                 provenance_by_digest=provenance,
             )
             with RunStore(db_path) as store:
-                run_id = execute_expense_batch(store, prepared)
+                run_id = execute_expense_batch(
+                    store, prepared, learning_db_path=learning_db_path,
+                )
                 created = store.get_run(run_id)
         except Exception as exc:  # noqa: BLE001 - pool it back, keep it clickable
             if prepared is not None:
@@ -4268,6 +4417,220 @@ def drop_rematch_summary(rematch: object) -> dict | None:
     }
 
 
+# How many dropped receipts are READ at once (item 148). Every worker is one
+# concurrent vision round-trip for ONE operator's drop: the round-trip, not
+# our CPU, is the wall clock, so a handful already collapses it, while a wide
+# pool would fire a single drop at the provider as a burst and spend the
+# shared key's per-minute headroom on retries. Six keeps a 40-file drop inside
+# one round-trip-ish instead of forty, and leaves headroom for the mail
+# intake reading on the same key at the same time.
+_DROP_READ_WORKERS = 6
+# Progress granularity for the read pass. Each report is a short-lived store
+# connection, so a 500-file drop reporting every file would spend the saving
+# on bookkeeping.
+_DROP_PROGRESS_ALL_UNTIL = 20
+_DROP_PROGRESS_EVERY = 5
+
+
+def _drop_progress_due(done: int, total: int) -> bool:
+    """Whether `reading receipts (done/total)` is worth a stage write: every
+    file while each one still reads as movement, then every fifth, plus the
+    last one whatever the pile size."""
+    return (
+        done <= _DROP_PROGRESS_ALL_UNTIL
+        or done % _DROP_PROGRESS_EVERY == 0
+        or done == total
+    )
+
+
+# A zip dropped on the Receipts page (owner directive 2026-09-27) is opened on
+# the server and every member files on its own, exactly as if the operator had
+# dropped the files themselves: its own month verdict, its own ledger row, and
+# the destination month's content dedupe. A pile that spans months is the case
+# the month upload gets wrong (it files a whole zip into ONE month and dedupes
+# only there), which is why the zip belongs on this page.
+#
+# Only a zip the operator dropped is opened (`NNNN__x.zip`, the endpoint's
+# spool name). Members are written beside it as `NNNN-MMMM__member` so they
+# keep the drop's order, and a zip inside a zip is left as a member and
+# rejected on type rather than recursed into. Which zip a member came from is
+# kept in a dotfile manifest beside them, so a member row can say so even
+# after the zip is gone (a restart re-runs the drop over the members alone).
+DROP_ZIP_UNREADABLE = "zip-unreadable"
+DROP_ZIP_TOO_MANY = "zip-too-many-files"
+DROP_ZIP_NO_SPACE = "zip-no-space"
+_DROP_ZIP_RE = re.compile(r"^(\d{4})__.+\.zip$", re.IGNORECASE)
+_DROP_MEMBER_RE = re.compile(r"^(\d{4})-\d{4}__")
+_DROP_SPOOL_PREFIX_RE = re.compile(r"^\d{4}(?:-\d{4})?__")
+_DROP_ZIP_MANIFEST = ".zip-origins.json"
+# A member's file name is capped well under the 255-byte filesystem limit
+# (the `NNNN-MMMM__` prefix rides on top), keeping its extension, so one long
+# name inside a zip can never fail the whole drop.
+_DROP_MEMBER_NAME_MAX = 100
+# Rule 5: the reason set grew, so the new codes ship their English prose
+# beside the code (`reason_label`). A page that does not know a code yet
+# prints the label instead of a raw token.
+_DROP_ZIP_REASON_LABELS = {
+    DROP_ZIP_UNREADABLE: (
+        "this zip could not be opened (it is damaged, or not really a zip)"
+    ),
+    DROP_ZIP_TOO_MANY: (
+        "unpacking this zip would take the drop past {limit} files; drop it"
+        " on its own, or split it into smaller zips"
+    ),
+    DROP_ZIP_NO_SPACE: (
+        "the server does not have the free space to unpack this zip right"
+        " now; nothing in it was filed"
+    ),
+}
+
+
+def _disk_can_take(root: Path, n_bytes: int) -> bool:
+    """Would writing ``n_bytes`` more keep the volume above the mailbox's
+    free-disk floor? Unpacking a zip is the one place a drop can grow the
+    volume by far more than it received, and the mailbox refuses mail below
+    that floor, so a big zip must not be what stops receipts arriving.
+    Cannot-say answers yes: the write itself still fails loudly."""
+    try:
+        usage = shutil.disk_usage(str(root))
+    except OSError:
+        return True
+    return usage.free - max(0, n_bytes) >= free_disk_floor(usage.total)
+
+
+def _drop_member_file_name(name: str) -> str:
+    """The on-disk (and ledger) name of a zip member: the endpoint's
+    character rule, capped at `_DROP_MEMBER_NAME_MAX` with the extension
+    kept."""
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", name) or "file"
+    if len(safe) <= _DROP_MEMBER_NAME_MAX:
+        return safe
+    stem, dot, ext = safe.rpartition(".")
+    ext = ext[:16]
+    if not dot or not stem:
+        return safe[:_DROP_MEMBER_NAME_MAX]
+    return stem[: _DROP_MEMBER_NAME_MAX - len(ext) - 1] + "." + ext
+
+
+def drop_zip_origins(staging: Path) -> dict[str, str]:
+    """``{zip prefix NNNN: the zip's display name}`` for this drop's
+    unpacked zips; empty when there is none or the manifest is unreadable
+    (a member row then simply carries no `from_zip`)."""
+    try:
+        data = json.loads(
+            (Path(staging) / _DROP_ZIP_MANIFEST).read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return {}
+    return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+
+
+def expand_dropped_zips(staging: Path) -> dict[str, dict]:
+    """Open every zip the operator dropped into ``staging`` and write its
+    members beside it, so the router below sees a pile of plain files.
+
+    Returns ``{staged zip name: ledger fields}`` for each zip refused WHOLE
+    and left in place, one row under the zip's name, nothing in it read:
+    ``zip-unreadable``; ``zip-too-many-files`` with ``limit`` when its members
+    would take the drop's unpacked total past ``FOLDER_MAX_FILES`` (counted
+    across every zip in the drop, before anything is written, because each
+    member costs a read before the per-month cap could drop it); or
+    ``zip-no-space`` when unpacking would breach the disk floor.
+
+    Per member: a type the page does not take is written as an EMPTY
+    placeholder (the router's type check runs first and names it, the bytes
+    are never needed), a receipt is read up to one byte past the size cap
+    (the router's size check names an oversized one), and a member that
+    cannot be read (a damaged entry, a password) is written empty and reads
+    ``empty-file``. One bad member never sinks the rest of the zip.
+
+    Restart-safe (item 114 re-runs an interrupted drop over the same folder):
+    the zip is deleted only after its last member is written, and before a
+    zip still present is looked at, whatever members an interrupted pass left
+    for it are deleted, so a refused zip never leaves part of itself to be
+    filed and the checks see the space those members held. A restart after
+    the delete finds plain files and nothing to open. A failure while WRITING
+    raises: the drop fails as a drop, never as a "bad zip" with half its
+    members on disk."""
+    import zipfile
+
+    from .service import (
+        FOLDER_MAX_FILES,
+        FOLDER_RECEIPT_MAX_BYTES,
+        zip_member_name,
+    )
+
+    staging = Path(staging)
+    refused: dict[str, dict] = {}
+    zips = sorted(
+        p for p in staging.iterdir()
+        if p.is_file() and _DROP_ZIP_RE.match(p.name)
+    )
+    if not zips:
+        return refused
+    pending = {_DROP_ZIP_RE.match(z.name).group(1) for z in zips}
+    for p in staging.iterdir():
+        m = _DROP_MEMBER_RE.match(p.name)
+        if m and m.group(1) in pending:
+            p.unlink()  # left by an interrupted pass over a zip still here
+    unpacked = sum(1 for p in staging.iterdir() if _DROP_MEMBER_RE.match(p.name))
+    origins = drop_zip_origins(staging)
+
+    for zpath in zips:
+        prefix = _DROP_ZIP_RE.match(zpath.name).group(1)
+        # Only READING the directory decides "unreadable": a malformed zip
+        # can fail as BadZipFile, ValueError, EOFError or struct.error. A
+        # failure while WRITING members (disk, permissions) is not the zip's
+        # fault and must fail the drop loudly.
+        try:
+            zf = zipfile.ZipFile(zpath)
+            members = [
+                (info, name) for info in zf.infolist()
+                if (name := zip_member_name(info)) is not None
+            ]
+        except Exception:  # noqa: BLE001 - see above: reading only
+            log.warning("drop zip %s unreadable", zpath.name, exc_info=True)
+            refused[zpath.name] = {"reason": DROP_ZIP_UNREADABLE}
+            continue
+        with zf:
+            if unpacked + len(members) > FOLDER_MAX_FILES:
+                refused[zpath.name] = {
+                    "reason": DROP_ZIP_TOO_MANY, "limit": FOLDER_MAX_FILES,
+                }
+                continue
+            need = sum(
+                min(info.file_size, FOLDER_RECEIPT_MAX_BYTES + 1)
+                for info, name in members
+                if Path(name).suffix.lower() in FOLDER_RECEIPT_SUFFIXES
+            )
+            if need and not _disk_can_take(staging, need):
+                refused[zpath.name] = {"reason": DROP_ZIP_NO_SPACE}
+                continue
+            origins[prefix] = _DROP_SPOOL_PREFIX_RE.sub("", zpath.name)
+            manifest = staging / _DROP_ZIP_MANIFEST
+            tmp = manifest.with_name(manifest.name + ".tmp")
+            tmp.write_text(json.dumps(origins), encoding="utf-8")
+            os.replace(tmp, manifest)
+            for j, (info, name) in enumerate(members, start=1):
+                dest = zpath.with_name(
+                    f"{prefix}-{j:04d}__{_drop_member_file_name(name)}"
+                )
+                if Path(name).suffix.lower() not in FOLDER_RECEIPT_SUFFIXES:
+                    dest.write_bytes(b"")
+                    continue
+                try:
+                    with zf.open(info) as fh:
+                        data = fh.read(FOLDER_RECEIPT_MAX_BYTES + 1)
+                except Exception:  # noqa: BLE001 - one member, not the pile
+                    log.warning("drop zip %s: member %s unreadable",
+                                zpath.name, name, exc_info=True)
+                    data = b""
+                dest.write_bytes(data)
+        unpacked += len(members)
+        zpath.unlink()
+    return refused
+
+
 def route_dropped_receipts(
     db_path: Path,
     learning_db_path: Path | None,
@@ -4309,7 +4672,11 @@ def route_dropped_receipts(
     / ``upload-cap`` (with ``limit``) HERE, before the ingest call whose
     internal cap would otherwise skip those files while the row read
     ``filed``; re-dropping the same pile is safe because content dedupe
-    skips what already landed."""
+    skips what already landed.
+
+    A dropped zip is opened first (`expand_dropped_zips`) and each member
+    files on its own row; a zip refused whole gets one ``rejected`` row
+    under its own name."""
     from .service import FOLDER_RECEIPT_MAX_BYTES
 
     def _stage(name: str) -> None:
@@ -4320,61 +4687,152 @@ def route_dropped_receipts(
                 pass
 
     now = _now_iso()
-    staged = sorted(p for p in Path(staging).iterdir() if p.is_file())
+    zip_refusals = expand_dropped_zips(Path(staging))
+    zip_origins = drop_zip_origins(Path(staging))
+    # Dotfiles are the drop's own bookkeeping (the zip manifest); the
+    # endpoint spools every upload under an `NNNN__` name.
+    staged = sorted(
+        p for p in Path(staging).iterdir()
+        if p.is_file() and not p.name.startswith(".")
+    )
     with RunStore(db_path) as store:
         settings = store.get_settings()
 
     rows: list[dict] = []
     routed: dict[str, list[tuple[dict, Path]]] = {}
-    client = _UNSET
     _stage("reading receipts")
+    # Pass 1, in staged order: every verdict that costs nothing settles here
+    # (unreadable type, empty, oversized, a typed month), and every file that
+    # has to be READ is queued for the pool below. `records` stays in staged
+    # order start to finish, so the ledger assembled from it at the end is
+    # the one the end-to-end loop assembled.
+    records: list[dict] = []
+    to_read: list[int] = []
     for path in staged:
-        display = re.sub(r"^\d{4}__", "", path.name)
+        display = _DROP_SPOOL_PREFIX_RE.sub("", path.name)
         suffix = path.suffix.lower()
+        refusal = zip_refusals.get(path.name)
+        if refusal is not None:
+            row = {"file": display, "status": "rejected", **refusal}
+            label = _DROP_ZIP_REASON_LABELS.get(str(refusal.get("reason")))
+            if label:
+                row["reason_label"] = label.format(limit=refusal.get("limit"))
+            records.append({"row": row, "path": path, "month": None,
+                            "display": display})
+            continue
         if suffix not in FOLDER_RECEIPT_SUFFIXES:
-            # Zips included, deliberately: a zip's members would each need
-            # their own routing verdict, and the page is a drag-and-drop
-            # of the files themselves.
-            rows.append({"file": display, "status": "rejected",
-                         "reason": "unsupported-type"})
+            # Includes a zip found INSIDE a dropped zip: only the operator's
+            # own zips are opened, never recursively.
+            records.append({
+                "row": {"file": display, "status": "rejected",
+                        "reason": "unsupported-type"},
+                "path": path, "month": None, "display": display,
+            })
             continue
         size = path.stat().st_size
         if size == 0:
-            rows.append({"file": display, "status": "rejected",
-                         "reason": "empty-file"})
-            continue
-        if size > FOLDER_RECEIPT_MAX_BYTES:
-            rows.append({"file": display, "status": "rejected",
-                         "reason": "too-large"})
-            continue
-        if month_override:
-            row = {"file": display, "status": "filed",
-                   "month": month_override, "month_source": "operator"}
-            rows.append(row)
-            routed.setdefault(month_override, []).append((row, path))
-            continue
-        if client is _UNSET:
-            client = _arrival_llm_client(settings)
-        dates = (
-            _extract_receipt_dates([path], client)
-            if client is not None else []
-        )
-        month, source, mixed = resolve_receipt_month(dates, now)
-        if source != "receipt":
-            rows.append({
-                "file": display, "status": "needs_month",
-                "reason": (
-                    "implausible-date" if source == "implausible-receipt"
-                    else "no-readable-date"
-                ),
+            records.append({
+                "row": {"file": display, "status": "rejected",
+                        "reason": "empty-file"},
+                "path": path, "month": None, "display": display,
             })
             continue
-        row = {"file": display, "status": "filed", "month": month,
-               "month_source": "receipt"}
-        if mixed:
-            row["mixed_months"] = True
-        rows.append(row)
-        routed.setdefault(month, []).append((row, path))
+        if size > FOLDER_RECEIPT_MAX_BYTES:
+            records.append({
+                "row": {"file": display, "status": "rejected",
+                        "reason": "too-large"},
+                "path": path, "month": None, "display": display,
+            })
+            continue
+        if month_override:
+            # A typed month is believed, so the file is never opened: the
+            # override path pays no vision call and never enters the pool.
+            row = {"file": display, "status": "filed",
+                   "month": month_override, "month_source": "operator"}
+            records.append({"row": row, "path": path,
+                            "month": month_override, "display": display})
+            continue
+        records.append({"row": None, "path": path, "month": None,
+                        "display": display})
+        to_read.append(len(records) - 1)
+
+    if to_read:
+        client = _arrival_llm_client(settings)
+
+        def _verdict(i: int) -> tuple[str, str, bool]:
+            """One file's month verdict, on a pool thread. Reads only its own
+            record and returns it; nothing shared is mutated here, so the
+            assembly below stays the single writer of `rows` and `routed`.
+            `_extract_receipt_dates` already swallows a per-file extraction
+            failure into "no dates"; the guard here covers the rest of the
+            read, so one unreadable file can never take down the pile."""
+            try:
+                dates = (
+                    _extract_receipt_dates([records[i]["path"]], client)
+                    if client is not None else []
+                )
+            except Exception:  # noqa: BLE001 - per file, exactly as before
+                log.warning("drop routing failed for %s",
+                            records[i]["display"], exc_info=True)
+                dates = []
+            return resolve_receipt_month(dates, now)
+
+        # The reads ARE the wall clock of a drop: one vision round-trip each,
+        # and end to end they simply added up (a 40-file drop measured 40x one
+        # round-trip — the "way too long" the owner reported 2026-09-18).
+        # Nothing in a file's verdict depends on its neighbours, so they run
+        # on a bounded pool. A 429 stays a per-file event either way: the SDK
+        # retries it inside the call, and a call that still fails leaves that
+        # one file `needs_month` while the rest file.
+        with ThreadPoolExecutor(
+            max_workers=min(_DROP_READ_WORKERS, len(to_read)),
+            thread_name_prefix="drop-read",
+        ) as pool:
+            futures = {i: pool.submit(_verdict, i) for i in to_read}
+            done = 0
+            for _ in as_completed(futures.values()):
+                done += 1
+                if _drop_progress_due(done, len(to_read)):
+                    # One frozen "reading receipts" for minutes was the whole
+                    # of the page's feedback; the count is what makes the wait
+                    # legible. The SPA renders the stage string verbatim, so
+                    # this needs nothing of it.
+                    _stage(f"reading receipts ({done}/{len(to_read)})")
+
+        for i in to_read:
+            month, source, mixed = futures[i].result()
+            rec = records[i]
+            if source != "receipt":
+                rec["row"] = {
+                    "file": rec["display"], "status": "needs_month",
+                    "reason": (
+                        "implausible-date" if source == "implausible-receipt"
+                        else "no-readable-date"
+                    ),
+                }
+                continue
+            row = {"file": rec["display"], "status": "filed", "month": month,
+                   "month_source": "receipt"}
+            if mixed:
+                row["mixed_months"] = True
+            rec["row"] = row
+            rec["month"] = month
+
+    # One writer, one order: the ledger and the per-month groups are built
+    # from `records` in staged order, so the same staging folder yields a
+    # byte-identical `rows` whether the reads ran one at a time or six.
+    for rec in records:
+        member = _DROP_MEMBER_RE.match(rec["path"].name)
+        if member and member.group(1) in zip_origins:
+            # The page holds the zip, not this file, so it cannot re-send
+            # the file alone (the needs_month picker's move); the row says
+            # where the file came from instead.
+            rec["row"]["from_zip"] = zip_origins[member.group(1)]
+        rows.append(rec["row"])
+        if rec["month"] is not None:
+            routed.setdefault(rec["month"], []).append(
+                (rec["row"], rec["path"])
+            )
 
     from .service import FOLDER_MAX_FILES as _drop_cap
 

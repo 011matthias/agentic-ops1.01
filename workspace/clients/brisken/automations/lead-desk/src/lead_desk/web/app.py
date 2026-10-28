@@ -272,8 +272,31 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             target += f"&next={quote(next_path, safe='')}"
         return RedirectResponse(url=target, status_code=303)
 
-    @app.get("/auth/verify")
-    def auth_verify(request: Request, token: str = "", next: str = ""):
+    @app.get("/auth/verify", response_class=HTMLResponse)
+    def auth_verify_page(request: Request, token: str = "", next: str = ""):
+        """Landing page for a sign-in link. Renders a confirm button and does
+        NOT spend the token.
+
+        Mail into Brisken arrives through Microsoft Safe Links, which rewrites
+        every link and fetches it before the recipient sees the message. While
+        this route redeemed on GET, that fetch spent the one-time token, and
+        the person clicking their own link landed on "invalid, expired, or
+        already used". Redeeming now takes the POST below, which a scanner
+        does not make."""
+        if not auth.gate_enabled():
+            return RedirectResponse(url="/", status_code=303)
+        with open_store() as store:
+            email = accounts.link_recipient(store, token, now_iso())
+        if not email:
+            return RedirectResponse(url="/login?err=badlink", status_code=303)
+        return templates.TemplateResponse(request, "auth_confirm.html", {
+            "email": email, "token": token,
+            "next_path": auth.safe_next_path(next),
+        })
+
+    @app.post("/auth/verify")
+    def auth_verify(request: Request, token: str = Form(""),
+                    next: str = Form("")):
         if not auth.gate_enabled():
             return RedirectResponse(url="/", status_code=303)
         with open_store() as store:

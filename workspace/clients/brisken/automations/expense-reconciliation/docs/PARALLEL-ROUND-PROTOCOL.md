@@ -72,10 +72,15 @@ use `git -C`, `uv run --directory`, and absolute paths.
   multi-line literal matches zero times.
 - Module suite:
   `uv run --directory workspace/clients/brisken/automations/expense-reconciliation --extra web --extra dev pytest -q`
-  (1550 tests at round-3 close). **CI does not run this suite** (`ci.yml` runs
-  hooks, platform, spell, Playwright, lead-desk). A green PR proves nothing
-  about the module; your local run, its count before and after, and the
-  regress line are the evidence. Put all three in the PR body.
+  (1550 tests at round-3 close). CI runs it on every PR that touches the
+  module (`.github/workflows/expense-recon-tests.yml`, job `test`), and since
+  item 127 the same workflow's `accuracy` job replays the committed labelled
+  bundles under `tests/fixtures/accuracy/` and compares them with
+  `expected.json` on exact equality. Neither replaces the local evidence:
+  your local run, its count before and after, and the regress line still go
+  in the PR body, and a matcher change that moves `expected.json` re-records
+  it in the same PR (`uv run tools/recon_accuracy_check.py ci ...
+  --write-expected`).
 - `.jpg` fixture names carry JPEG bytes through vision; `.pdf` names with
   JPEG bytes skip vision and fall back to a filename vendor (2026-09-14
   duplicate-collapse fixtures).
@@ -118,11 +123,12 @@ carries your commit too.
    carried it (`flyctl releases -a brisken-expense-recon`). Absent: deploy.
 2. Deploy from a fresh detached worktree, never from the item branch:
    `git -C C:\Users\neuma_p1qrsic\Repo\agentic-ops1 worktree add --detach C:\Users\neuma_p1qrsic\Repo\agentic-ops1-deploy-item{N} origin/main`,
-   confirm your merge commit is in `git log -1`, confirm `fly.toml` matches
-   `flyctl config show -a brisken-expense-recon` (always-on both services,
-   `recon_data_v2`, 1024 MB), then `flyctl deploy .` from the module
-   directory. If `flyctl releases` shows a release still in progress, wait
-   for it and re-probe step 1 before deploying.
+   confirm your merge commit is in `git log -1`, then run the module's
+   `deploy.py` from it (`uv run <worktree>/workspace/clients/brisken/automations/expense-reconciliation/deploy.py`).
+   It refuses a tree that is not `origin/main` and a `fly.toml` smaller than
+   the live machine; a direct `flyctl deploy` of the app is denied
+   (`docs/operating.md`, "Deploy"). If `flyctl releases` shows a release
+   still in progress, wait for it and re-probe step 1 before deploying.
 3. Remove the deploy worktree when the drive in §8 is done.
 
 ## 8. Verify: drive the SPA, with your own browser session

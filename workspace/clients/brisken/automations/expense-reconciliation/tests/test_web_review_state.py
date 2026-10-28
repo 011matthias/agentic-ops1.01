@@ -95,7 +95,7 @@ def test_reason_codes():
     assert _rv(_rec(_cat(source=ClassificationSource.VENDOR)))["reason_code"] == "vendor_guess"
     assert _rv(_rec(_cat(source=None)))["reason_code"] == "unknown_provenance"
     assert _rv(_rec(_cat()))["reason_code"] is None  # ready
-    cc = {"category": "M", "zoho_account": "M", "source": "LEARNED"}
+    cc = {"category": "M", "zoho_account": "M", "source": "VENDOR"}
     assert _rv(effective_bucket="unmatched", charge_category=cc)["reason_code"] == "receiptless_suggested"
     assert _rv(effective_bucket="refund")["reason_code"] is None
 
@@ -189,10 +189,19 @@ def test_override_is_ready():
 # ── receiptless ─────────────────────────────────────────────────────
 
 
-def test_receiptless_with_category_is_check():
-    cc = {"category": "Meals", "zoho_account": "M", "source": "LEARNED"}
+def test_receiptless_with_a_model_guess_is_check():
+    cc = {"category": "Meals", "zoho_account": "M", "source": "VENDOR"}
     r = _rv(effective_bucket="unmatched", charge_category=cc)
     assert r["state"] == "check" and r["reason"]
+
+
+@pytest.mark.parametrize("source", ["LEARNED", "REGISTRY", "EDITED"])
+def test_receiptless_with_a_decided_answer_asks_nothing(source):
+    """Item 216 cause 1: a remembered rule, a merchant-list rule and the
+    reviewer's own pick are answers (`answer_origin`), so the row no longer
+    says the tool guessed them from the bank's description."""
+    cc = {"category": "Meals", "zoho_account": "M", "source": source}
+    assert _rv(effective_bucket="unmatched", charge_category=cc)["state"] == "none"
 
 
 def test_receiptless_no_category_is_none():

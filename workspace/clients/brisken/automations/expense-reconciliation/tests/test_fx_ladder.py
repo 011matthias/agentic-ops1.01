@@ -285,13 +285,19 @@ def test_card_gate_inert_when_card_scoping_off():
 
 
 def test_true_pair_at_band_edge_outscores_junk_at_midpoint():
-    """Configured rate 0.16 (near the BRL band's low edge): the pair that
-    agrees with the RATE must outscore the pair whose implied rate merely
-    sits at the band midpoint. Fails under the old midpoint-distance
-    scoring."""
+    """A fetched rate of 0.16 (near the BRL band's low edge): the pair
+    that agrees with the RATE must outscore the pair whose implied rate
+    merely sits at the band midpoint. Fails under the old
+    midpoint-distance scoring.
+
+    The rate arrives on the daily rung since the typed one was retired
+    (item 168); 0.80 USD against 5.00 BRL per EUR crosses to 0.16, and a
+    fetched rate reads its band off `fx_ecb_match_pct`."""
     cfg = MatchingConfig(
-        fx_reference_rates={("BRL", "USD"): Decimal("0.16")},
-        fx_reference_match_pct=Decimal("0.001"),  # force both to the band
+        fx_daily_rates={
+            "2026-04-01": {"BRL": Decimal("5.00"), "USD": Decimal("0.80")},
+        },
+        fx_ecb_match_pct=Decimal("0.001"),  # force both to the band
         fx_reference_review_pct=Decimal("0.011"),
     )
     true_pair = match_one(

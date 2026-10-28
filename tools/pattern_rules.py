@@ -150,6 +150,8 @@ def cmd_test(args) -> int:
                       "new_text": args.text, "old_text": ""}
         elif event in ("prompt", "stop"):
             fields = {pr.DEFAULT_FIELD[event]: _strip_code(args.text)}
+            if event == "stop":
+                fields["final_text_raw"] = args.text
         else:
             from _shell import normalize_command
             fields = {"command": normalize_command(args.text)}

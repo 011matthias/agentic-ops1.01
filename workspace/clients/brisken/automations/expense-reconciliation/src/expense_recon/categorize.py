@@ -29,8 +29,9 @@ from __future__ import annotations
 import re
 from dataclasses import replace
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Mapping
 
+from .coa_provision import org_id_for_entity
 from .learning.consult import (
     RECALL_NO_COMPANY,
     RECALL_VENDOR_ONLY,
@@ -41,12 +42,27 @@ from .llm.client import (
     LineItemInput,
     LLMClient,
 )
+from .category_vocabulary import recognize as recognize_category
+from .merchant_registry import company_account
+from .sender_note import CORPSERV_UNSPLIT_CODES, account_hint, names_account
 from .matching.types import (
     EXPENSE_CATEGORIES,
     Categorization,
     ClassificationSource,
     LineItem,
     Receipt,
+    is_suggestion_only,
+)
+from .zoho import curated_leaves
+from .zoho.posting_resolution import (  # noqa: F401 (refusal_text re-exported)
+    ACCOUNT_UNRESOLVED,
+    ACCOUNT_VENDOR_SPECIFIC,
+    ENTITY_MISSING,
+    MODEL_PICKED_PARENT,
+    PostingResolution,
+    refusal_text,
+    resolve_posting_account,
+    vendor_may_post,
 )
 
 if TYPE_CHECKING:
@@ -189,11 +205,21 @@ def categorize_receipts(
     chart_of_accounts: list[str] | None = None,
     learned: "MerchantCategoryLookup | None" = None,
     override_er_category: bool = False,
-    registry_backed: "frozenset[str] | None" = None,
     judge_each_receipt: "frozenset[str] | None" = None,
+    merchant_profiles: "dict[str, str] | None" = None,
+    entity_orgs: "Mapping[str, str] | None" = None,
 ) -> list[Receipt]:
     """Return a new list of receipts with line_items carrying
     Categorization results per LD-2.
+
+    `entity_orgs` (Phase 1, item 3) switches the run to direct-to-GL
+    categorization: legal-entity label -> Zoho org id, as
+    `coa_provision.entity_org_ids` builds it. Present (even empty), every
+    receipt is judged against ITS entity's curated leaves and either carries
+    a leaf code as `category` or refuses with `category=None` and a named
+    `refusal` (see `_categorize_one_gl`). `chart_of_accounts` and
+    `override_er_category` do not apply on that path. None keeps the bucket
+    path below byte for byte.
 
     When `client` is provided, uses LLM calls. When None (default),
     falls back to the keyword stub — preserves slice-1 behaviour for
@@ -214,16 +240,18 @@ def categorize_receipts(
     from Zoho Books posting history that nobody has validated still stays
     below a confident line read. None / empty => behaviour unchanged.
 
-    `registry_backed` (item 115, internal) names the documents whose
-    merchant carries a registry default category. The registry already
-    preempts a line read, and a per-company learned row already outranks
-    the registry (2026-08-07), so for those documents the learned row
-    applies over the line read whatever taught it -- the alternative was
-    the old cycle, where a remembered row blocked the merchant default and
-    the line read won both. `judge_each_receipt` (item 115, internal) names
-    the documents whose merchant is marked multi-category: that mark is an
-    instruction to judge every receipt on its own items, so no remembered
-    category flattens its lines.
+    A merchant with a registry default category never reaches this function
+    (note item M1, 2026-09-18): `categorize_receipts_with_registry` stamps
+    it before the line read, so item 115's `registry_backed` plumbing is
+    gone. `judge_each_receipt` (item 115, internal) names the documents
+    whose merchant is marked multi-category: that mark is an instruction to
+    judge every receipt on its own items, so no remembered category
+    flattens its lines.
+
+    `merchant_profiles` (note item M4, internal) maps document_id -> the
+    registry's free prose for that receipt's merchant, and rides into the
+    two LLM classify calls as fenced untrusted context. A document with no
+    entry, or an empty registry, makes exactly the calls it made before M4.
 
     `override_er_category` (2026-07-21 owner decision) flips who owns the
     posting account. Default False keeps the 2026-06-16 behaviour (the
@@ -235,19 +263,32 @@ def categorize_receipts(
 
     Pure function; does not mutate inputs.
     """
+    if entity_orgs is not None:
+        return [
+            _categorize_one_gl(
+                r, client, learned,
+                org_id=org_id_for_entity(r.legal_entity_id, entity_orgs),
+                judge_each_receipt=bool(
+                    judge_each_receipt and r.document_id in judge_each_receipt
+                ),
+                merchant_profile=(merchant_profiles or {}).get(r.document_id),
+            )
+            for r in receipts
+        ]
     return [
         _categorize_one(
             r, client, chart_of_accounts, learned,
             override_er_category=override_er_category,
-            registry_backed=bool(
-                registry_backed and r.document_id in registry_backed
-            ),
             judge_each_receipt=bool(
                 judge_each_receipt and r.document_id in judge_each_receipt
             ),
+            merchant_profile=(merchant_profiles or {}).get(r.document_id),
         )
         for r in receipts
     ]
+
+
+REGISTRY_DEFAULT_REASONING = "merchant registry default"
 
 
 def apply_registry_category(
@@ -256,18 +297,18 @@ def apply_registry_category(
     zoho_account: str | None,
     *,
     override_er_category: bool = False,
+    reasoning: str = REGISTRY_DEFAULT_REASONING,
 ) -> Receipt:
     """Stamp a deterministic REGISTRY categorization on every line of a
     receipt whose merchant carries a registry default category (2026-07-29).
 
-    Deterministic and LLM-preempting (the caller does not run the LLM for
-    these receipts), but since 2026-08-07 it sits BELOW a per-entity LEARNED
-    row: the caller only routes a receipt here when memory has nothing
-    entity-specific for that merchant. `confidence=1.0`,
-    `source=REGISTRY`. When the registry
-    also names a `zoho_account` it is kept (the ER account never clobbers it);
-    when it does not, the account resolves from the ER `zoho_category` / chart
-    exactly as the LLM path does, via `_carry_zoho_account`.
+    Deterministic and LLM-preempting: the caller does not run the LLM for
+    these receipts. `confidence=1.0`, `source=REGISTRY`. `zoho_account` is
+    whatever the caller resolved for this receipt's COMPANY (note item M1:
+    the company's rule first, the registry's own account second), and
+    `reasoning` says which; when neither names one, the account resolves
+    from the ER `zoho_category` / chart exactly as the LLM path does, via
+    `_carry_zoho_account`.
 
     No-op when the registry entry carries no category (naming-only merchant);
     the caller then runs the LLM as usual and only the canonical display name
@@ -275,11 +316,15 @@ def apply_registry_category(
     if not category:
         return receipt
     cat = Categorization(
-        category=category if category in EXPENSE_CATEGORIES else None,
+        # Same reason as `merchant_registry._match`: this is the second of two
+        # filters on one stored value, and the value reaching here has already
+        # passed that one. Fixing either alone leaves the leaf code dropped,
+        # so both move together.
+        category=recognize_category(category),
         zoho_account=zoho_account or None,
         confidence=1.0,
         source=ClassificationSource.REGISTRY,
-        reasoning="merchant registry default",
+        reasoning=reasoning,
     )
     items = receipt.line_items or (_synthesize_total_line(receipt),)
     stamped = replace(receipt, line_items=tuple(replace(li, categorization=cat) for li in items))
@@ -301,34 +346,57 @@ def categorize_receipts_with_registry(
     override_er_category: bool = False,
     cat_chart=None,
     scope_groups=None,
+    entity_orgs: "Mapping[str, str] | None" = None,
 ) -> tuple[list[Receipt], dict]:
     """Categorize a batch of receipt-first expenses with the merchant registry
-    as a deterministic tier above the LLM (2026-07-29) and below per-entity
-    memory (2026-08-07).
+    as the deterministic tier above the LLM (2026-07-29).
 
-    Tier order since item 115: LEARNED (a rule a person taught, or any rule
-    for a merchant the registry also has a default for) > REGISTRY > a
-    confident LINE read > LEARNED (a Zoho-seeded rule nobody validated) >
-    LLM / keyword vendor guess > REVIEW. A receipt with no readable line
-    items has no LINE tier, so there memory leads outright, as it has since
-    Phase 2.
+    Tier order since note item M1 (owner directive 2026-09-18, Dirk's rule:
+    binding a merchant to ONE category is right about 90% of the time, and
+    the exceptions vary by company on the ACCOUNT): a reviewer override >
+    REGISTRY (the merchant's default category, with the account the
+    (company, vendor) rule names, see `_registry_account`) > LEARNED (a rule
+    a person taught, on a merchant with no registry default) > a confident
+    LINE read > LEARNED (a Zoho-seeded rule nobody validated) > LLM /
+    keyword vendor guess > REVIEW. A receipt with no readable line items has
+    no LINE tier, so there memory leads outright, as it has since Phase 2.
+
+    This retires the 2026-08-07 order for the CATEGORY only: a per-company
+    learned row used to outrank the registry default outright, which meant
+    a merchant with a default was judged one way for a company with a rule
+    and another way for a company without one. The reason for that order
+    (the same merchant books to a different ACCOUNT per company) is kept
+    whole: the rule still decides the account. A merchant marked
+    `multi_category` resolves its name only and is judged per receipt.
 
     For each receipt it resolves a canonical merchant (stamping
-    `canonical_vendor` + `vendor_source="registry"` on every match — naming is
-    independent of categorization, so a merchant whose CATEGORY comes from
-    memory still displays the registry's canonical name). A match that carries
-    a default category AND has no learned row for this receipt's company is
-    stamped a REGISTRY categorization and SKIPS the LLM (deterministic-first);
-    the rest run through `categorize_receipts`, and through
-    `adjudicate_receipts` when `cat_chart` is supplied and
+    `canonical_vendor` + `vendor_source="registry"` on every match; naming is
+    independent of categorization). A match that carries a default category
+    is stamped a REGISTRY categorization and SKIPS the LLM
+    (deterministic-first); the rest run through `categorize_receipts`, and
+    through `adjudicate_receipts` when `cat_chart` is supplied and
     `override_er_category` is on. An empty / None registry behaves exactly
     like `categorize_receipts` alone.
 
     Returns `(receipts, registry_matches)` where `registry_matches` maps
     document_id -> MerchantMatch, for the grid's display vendor + provenance.
-    Order is preserved. Consulted in the statement-free expense paths only;
-    `reconcile()` never calls it."""
+    Order is preserved. Consulted in the expense paths and, since M1, for a
+    month's receiptless charges (`categorize_charges`); `reconcile()` itself
+    never calls it.
+
+    `entity_orgs` (Phase 1, item 3) runs the batch on the GL engine. The
+    registry stays the tier above the model, but its answer has to name a
+    leaf THIS receipt's entity may post to (`_registry_gl`): a default that
+    names no leaf (one of the eight buckets) falls through to the engine
+    rather than stamping a bucket, and no ER adjudication runs."""
     registry_matches: dict = {}
+    if registry and hasattr(learned, "with_identity"):
+        # Item 216 cause 3: memory recalls through the same merchant identity
+        # the registry resolves below, so the registry's aliases reach the
+        # rules stored under any of a merchant's spellings.
+        from .merchant_identity import MerchantIdentityResolver
+
+        learned = learned.with_identity(MerchantIdentityResolver(registry))
     if registry:
         for r in receipts:
             m = registry.resolve(r.vendor_clean, r.detected_vendor)
@@ -344,61 +412,127 @@ def categorize_receipts_with_registry(
             else r
             for r in receipts
         ]
-    # Precedence (2026-08-07, owner call on reviewer feedback r1c): a
-    # per-entity LEARNED row OUTRANKS the registry default. The registry
-    # holds one canonical answer per merchant, but the same merchant
-    # legitimately posts to different accounts per legal entity — Brisken's
-    # own Zoho history has `anthropic` under "Other Infra and IT Costs" for
-    # Corporate Services and "COGS - DEV Infrastructure" for Cloud Services,
-    # and the Zoho seed skipped Amazon / Microsoft / OpenAI precisely because
-    # their real postings disagree. So the registry now stamps only the
-    # merchants memory has nothing entity-specific on; where both exist the
-    # entity-specific fact wins and the receipt flows through
-    # `categorize_receipts`, which applies LEARNED on the vendor-fallback
-    # path (still below a confident line read — the Phase-2 invariant).
-    # `_company_recall` is the same predicate that will actually apply the
-    # row, so the two can never disagree about who wins.
-    #
-    # Item 115 closes the cycle this created. A receipt WITH line items used
-    # to fall past both: the learned row sent it here, and here the line read
-    # beat the learned row, so the merchant default it displaced never
-    # applied either. Those documents are named in `registry_backed`, and
-    # `categorize_receipts` applies the learned row over the line read for
-    # them. A rule recalled on the VENDOR alone (this receipt has no company)
-    # does not displace the registry: the registry's default is curated and
-    # company-independent, which is exactly what a company-less receipt needs.
-    rec_by_doc = {r.document_id: r for r in receipts}
+    # Note item M1 (2026-09-18): every merchant with a registry default is
+    # stamped here, whatever memory holds for it. The 2026-08-07 order let a
+    # per-company learned row outrank the default (Brisken's own books post
+    # `anthropic` to "Other Infra and IT Costs" for Corporate Services and
+    # to "COGS - DEV Infrastructure" for Cloud Services), and item 115 then
+    # had to route those receipts around the line read. Dirk's 2026-09-18
+    # clarification separates the two facts the old order conflated: the
+    # CATEGORY is the merchant's (one per merchant, the registry's), and
+    # what varies by company is the ACCOUNT, which the (company, vendor)
+    # rule still decides through `_registry_account`.
+    gl = entity_orgs is not None
+    # Item 250 (owner 2026-10-07, "decide when clear"): the account the
+    # sender's own note names decides before the merchant list. It is a
+    # person's answer about THIS receipt, where the list is a rule about the
+    # merchant; only the reviewer's own pick (applied on read) beats it. GL
+    # months only: the note's words are matched against a company's chart.
+    note_stamped = _note_accounts(receipts, client, entity_orgs) if gl else {}
     cat_docs = {
-        doc
-        for doc, m in registry_matches.items()
-        if m.category and _company_recall(rec_by_doc[doc], learned) is None
+        doc for doc, m in registry_matches.items()
+        if m.category and doc not in note_stamped
     }
-    registry_backed = frozenset(
-        doc for doc, m in registry_matches.items() if m.category
-    ) - cat_docs
+    gl_stamped: dict[str, Receipt] = dict(note_stamped)
+    if gl:
+        for r in receipts:
+            m = registry_matches.get(r.document_id)
+            if m is None or r.document_id in note_stamped:
+                continue
+            org_id = org_id_for_entity(r.legal_entity_id, entity_orgs)
+            # Items 180/181: a merchant with no default category still
+            # decides the account for a company its map names.
+            if r.document_id not in cat_docs and company_account(
+                getattr(m, "accounts", ()), org_id, entity_orgs
+            ) is None:
+                continue
+            stamped = _registry_gl(
+                r, m, learned, org_id, entity_orgs=entity_orgs,
+            )
+            if stamped is not None:
+                gl_stamped[r.document_id] = stamped
+        cat_docs = set(gl_stamped)
     to_llm = [r for r in receipts if r.document_id not in cat_docs]
     multi_category = frozenset(
         doc for doc, m in registry_matches.items() if m.multi_category
     )
+    # Note item M4: the merchant's free prose rides into the classify calls
+    # for every receipt that still needs judging. Only these do: a receipt
+    # the registry stamped a category on never reaches the model at all, so
+    # a profile on a merchant with a default category is background for the
+    # Memory page and the editor, not a prompt cost.
+    profiles = {
+        doc: m.profile
+        for doc, m in registry_matches.items()
+        if m.profile
+    }
     categorized = categorize_receipts(
         to_llm, client=client, chart_of_accounts=chart_of_accounts,
         learned=learned, override_er_category=override_er_category,
-        registry_backed=registry_backed,
         judge_each_receipt=multi_category,
+        merchant_profiles=profiles,
+        entity_orgs=entity_orgs,
     )
-    if override_er_category and cat_chart is not None:
+    if not gl and override_er_category and cat_chart is not None:
         categorized = adjudicate_receipts(
             categorized, cat_chart, scope_groups=scope_groups
         )
     by_doc = {r.document_id: r for r in categorized}
     for r in receipts:
-        if r.document_id in cat_docs:
+        if r.document_id in gl_stamped:
+            by_doc[r.document_id] = gl_stamped[r.document_id]
+        elif r.document_id in cat_docs:
             m = registry_matches[r.document_id]
+            account, reasoning = _registry_account(r, m, learned)
             by_doc[r.document_id] = apply_registry_category(
-                r, m.category, m.zoho_account,
+                r, m.category, account,
                 override_er_category=override_er_category,
+                reasoning=reasoning,
             )
     return [by_doc[r.document_id] for r in receipts], registry_matches
+
+
+def _registry_account(
+    receipt: Receipt, match, learned: "MerchantCategoryLookup | None"
+) -> tuple[str | None, str]:
+    """The posting account for a receipt whose merchant has a registry
+    default category, and the provenance sentence that names its source
+    (note item M1).
+
+    The (company, vendor) rule memory holds for this receipt decides the
+    account: the rule saved under the receipt's own company, else one saved
+    with no company, else (for a receipt with no company) the vendor's
+    rules when they agree on it (`MerchantCategoryLookup.recall`, item
+    115). A rule contributes its account only when it agrees with the
+    registry on the category or a person stands behind it (a sign-off
+    correction, a Memory-page edit or a validated row): a row seeded from
+    Zoho Books posting history under ANOTHER category is how the books
+    once posted, not an account for this category, so it is left alone.
+    With no rule, or a rule that names no account, the registry's own
+    account stands, which may be nothing.
+
+    Item 216 cause 3: the rule is recalled for the MATCHED merchant, not for
+    the receipt's own spelling, so the account and the registry answer about
+    the same merchant even when only the extracted brand resolved it."""
+    recall = _recall_for(receipt, learned, match)
+    if (
+        recall is None
+        or not recall.zoho_account
+        or (recall.category != match.category and not recall.taught_by_person)
+    ):
+        return match.zoho_account, REGISTRY_DEFAULT_REASONING
+    if recall.kind == RECALL_VENDOR_ONLY:
+        companies = ", ".join(
+            r.legal_entity_id or "no company" for r in recall.rows
+        )
+        rule = f"the rules for {companies}, which agree"
+    else:
+        company = recall.rows[0].legal_entity_id
+        rule = (
+            f"the rule saved for {company}" if company
+            else "the rule saved with no company"
+        )
+    return recall.zoho_account, f"{REGISTRY_DEFAULT_REASONING}; account from {rule}"
 
 
 def _categorize_one(
@@ -408,8 +542,8 @@ def _categorize_one(
     learned: "MerchantCategoryLookup | None" = None,
     *,
     override_er_category: bool = False,
-    registry_backed: bool = False,
     judge_each_receipt: bool = False,
+    merchant_profile: str | None = None,
 ) -> Receipt:
     """Apply the LD-2 tier rules to a single receipt."""
     recall = _recall_for(receipt, learned)
@@ -418,21 +552,22 @@ def _categorize_one(
     if has_lines:
         # LINE path (Tier 1). Item 115: memory IS consulted here now, but it
         # only leads when a person stands behind the rule (a correction saved
-        # at sign-off or the button, a Memory-page edit, a validated row) or
-        # when the merchant also carries a registry default the line read
-        # would otherwise have displaced. A Zoho-seeded row nobody has
-        # validated still sits below the line read (the Phase-2 invariant,
-        # kept: those rows are how the books posted, not what a person said
-        # about this merchant). A multi-category merchant is never flattened.
+        # at sign-off or the button, a Memory-page edit, a validated row). A
+        # Zoho-seeded row nobody has validated still sits below the line read
+        # (the Phase-2 invariant, kept: those rows are how the books posted,
+        # not what a person said about this merchant). A multi-category
+        # merchant is never flattened. A merchant with a registry default
+        # never arrives here (note item M1: the registry stamps it first).
         leads = (
             recall is not None
             and not judge_each_receipt
-            and (recall.taught_by_person or registry_backed)
+            and recall.taught_by_person
         )
         if not leads:
             if client is not None:
                 categorized = _classify_lines_via_llm(
-                    receipt.line_items, client, chart_of_accounts
+                    receipt.line_items, client, chart_of_accounts,
+                    merchant_profile,
                 )
             else:
                 categorized = tuple(
@@ -469,7 +604,7 @@ def _categorize_one(
     if client is not None:
         classified = _classify_vendor_via_llm(
             synthesized, receipt.detected_vendor, receipt.detected_total,
-            client, chart_of_accounts,
+            client, chart_of_accounts, merchant_profile,
         )
     else:
         classified = _classify_vendor_keyword(synthesized, receipt.detected_vendor)
@@ -522,25 +657,18 @@ def _carry_zoho_account(
 
 
 def _recall_for(
-    receipt: Receipt, learned: "MerchantCategoryLookup | None"
+    receipt: Receipt, learned: "MerchantCategoryLookup | None", match=None,
 ) -> "LearnedRecall | None":
-    """What memory remembers for this receipt's merchant, or None."""
-    if learned is None or not receipt.detected_vendor:
-        return None
-    return learned.recall(receipt.legal_entity_id, receipt.detected_vendor)
+    """What memory remembers for this receipt's merchant, or None.
 
-
-def _company_recall(
-    receipt: Receipt, learned: "MerchantCategoryLookup | None"
-) -> "LearnedRecall | None":
-    """The recall that outranks the merchant registry: one keyed on this
-    receipt's own company (or saved with no company at all). A recall the
-    VENDOR alone produced does not, so the registry's curated default still
-    stamps a company-less receipt."""
-    recall = _recall_for(receipt, learned)
-    if recall is None or recall.kind == RECALL_VENDOR_ONLY:
+    Memory keys on the merchant identity (item 216 cause 3,
+    `MerchantCategoryLookup`), so any spelling of the merchant reaches its
+    rule; with a registry `match` the matched canonical name is the one asked
+    about."""
+    vendor = getattr(match, "canonical_name", None) or receipt.detected_vendor
+    if learned is None or not vendor:
         return None
-    return recall
+    return learned.recall(receipt.legal_entity_id, vendor)
 
 
 def _learned_categorization(recall: "LearnedRecall") -> Categorization:
@@ -592,7 +720,14 @@ def _apply_learned_over_lines(
     wins: the same read the LINE tier would have paid for anyway, and when
     it disagrees the row says so (`decision = learned_over_line`) and the
     review state asks for a glance. A validated rule is applied without the
-    call: a person has already certified that answer for this merchant."""
+    call: a person has already certified that answer for this merchant.
+
+    Note item M4: this read deliberately gets NO merchant profile. Its job is
+    to be an INDEPENDENT second opinion on a remembered category, and prose
+    describing what the business usually buys from this merchant is evidence
+    for the same answer memory already holds. Feeding it in would teach the
+    detector to agree with itself, and the disagreement glance item 115
+    exists for would quietly stop firing."""
     cat = _learned_categorization(recall)
     if not recall.validated:
         if client is not None:
@@ -625,16 +760,600 @@ def _apply_learned_over_lines(
     )
 
 
+# ── Direct-to-GL engine (Phase 1, item 3) ───────────────────────────
+#
+# One invariant carries the whole path: `bool(cat.category)` is False
+# exactly when the engine REFUSED. A resolved line's `category` is the curated
+# leaf CODE (the cross-entity identity) and its `zoho_account` that leaf's
+# name in the receipt's own org; a refused line has `category=None`, no
+# account, source REVIEW and a named `refusal`. No placeholder string ever
+# stands in for a category, so the seventeen truthiness gates downstream read
+# a refusal as "uncategorized" and never as an answer.
+#
+# Every answer, whichever tier produced it, goes through
+# `resolve_posting_account`, so there is one place a reference becomes an
+# account and it is org-scoped: a Cloud Services name cannot resolve on a
+# Corporate Services receipt.
+
+
+def _refused_cat(
+    code: str, *, confidence: float = 0.0, detail: str = ""
+) -> Categorization:
+    text = refusal_text(code)
+    return Categorization(
+        category=None,
+        zoho_account=None,
+        confidence=confidence,
+        source=ClassificationSource.REVIEW,
+        reasoning=f"{text} ({detail})" if detail else text,
+        refusal=code,
+    )
+
+
+def _gl_categorization(
+    res: PostingResolution,
+    org_id: str,
+    *,
+    source: ClassificationSource,
+    confidence: float,
+    reasoning: str,
+    decision: str | None = None,
+) -> Categorization:
+    """A resolution as a line's categorization: the leaf, or the refusal."""
+    if not res.resolved:
+        return _refused_cat(
+            res.reason or ACCOUNT_UNRESOLVED, confidence=confidence,
+            detail=reasoning,
+        )
+    binding = curated_leaves.binding(res.code, org_id)
+    return Categorization(
+        category=res.code,
+        zoho_account=binding.name if binding is not None else None,
+        confidence=confidence,
+        source=source,
+        reasoning=reasoning,
+        decision=decision,
+    )
+
+
+def _stamp_lines(receipt: Receipt, cat: Categorization) -> Receipt:
+    items = receipt.line_items or (_synthesize_total_line(receipt),)
+    return replace(
+        receipt,
+        line_items=tuple(replace(li, categorization=cat) for li in items),
+    )
+
+
+def _gl_leaf_labels(org_id: str | None) -> tuple[str, ...]:
+    """This org's `"CODE name"` labels. Takes the ORG ID, never an entity
+    name: `llm_leaf_labels` answers a name with an empty tuple, silently, so
+    the caller must have resolved the org first (`org_id_for_entity`)."""
+    if not org_id or not org_id.isdigit():
+        return ()
+    return curated_leaves.llm_leaf_labels(org_id)
+
+
+def _gl_model_result(
+    result: ClassificationResult,
+    org_id: str,
+    *,
+    source_on_hit: ClassificationSource,
+    vendor_names=(),
+) -> Categorization:
+    """The model's pick as a leaf of THIS org, or a refusal. The reply is
+    resolved only within `org_id` (`code_of`), so a leaf the model names from
+    another entity's wording refuses rather than posting.
+
+    A summary account with postable accounts under it refuses too (owner,
+    2026-09-25). The model is no longer offered one (`llm_leaf_labels`); this
+    catches a reply that names one anyway. Only the model passes here: the
+    merchant list, a remembered rule and a person may still pick a parent."""
+    if result.category is None or result.confidence < REVIEW_THRESHOLD:
+        return _refused_cat(
+            ACCOUNT_UNRESOLVED, confidence=result.confidence,
+            detail=result.reasoning or "",
+        )
+    res = resolve_posting_account(
+        org_id=org_id, legal_entity_id=None, vendor=None,
+        llm_leaf=result.category or result.zoho_account,
+    )
+    if res.resolved and curated_leaves.has_postable_children(org_id, res.code):
+        return _refused_cat(
+            MODEL_PICKED_PARENT, confidence=result.confidence,
+            detail=f"{res.code}; {result.reasoning or ''}".rstrip("; "),
+        )
+    # Front 3 step 4: an account kept for one vendor's product lands only on
+    # that vendor's rows (`VENDOR_SPECIFIC_ACCOUNTS`).
+    if res.resolved and not vendor_may_post(res.code, vendor_names):
+        return _refused_cat(
+            ACCOUNT_VENDOR_SPECIFIC, confidence=result.confidence,
+            detail=f"{res.code}; {result.reasoning or ''}".rstrip("; "),
+        )
+    return _gl_categorization(
+        res, org_id, source=source_on_hit, confidence=result.confidence,
+        reasoning=result.reasoning,
+    )
+
+
+def _gl_read_lines(
+    items: tuple[LineItem, ...],
+    labels: tuple[str, ...],
+    org_id: str,
+    client: LLMClient,
+    merchant_profile: str | None = None,
+    vendor_names=(),
+) -> tuple[LineItem, ...]:
+    """Tier 3 on a receipt with readable lines: one batched call, the
+    entity's leaves as the only choices. `vendor_names` are the receipt's
+    names, for the vendor-specific account guard."""
+    assert labels, "an empty leaf list is a refusal, never a prompt"
+    inputs = [
+        LineItemInput(
+            description=it.description,
+            line_total=it.line_total,
+            quantity=it.quantity,
+        )
+        for it in items
+    ]
+    results = client.classify_line_items(
+        inputs, categories=list(labels), chart_of_accounts=None,
+        **_profile_kwarg(merchant_profile),
+    )
+    out = []
+    for i, item in enumerate(items):
+        cat = (
+            _gl_model_result(
+                results[i], org_id, source_on_hit=ClassificationSource.LINE,
+                vendor_names=vendor_names)
+            if i < len(results)
+            else _refused_cat(ACCOUNT_UNRESOLVED)
+        )
+        out.append(replace(item, categorization=cat))
+    return tuple(out)
+
+
+def _gl_learned(
+    receipt: Receipt,
+    recall: "LearnedRecall",
+    org_id: str,
+    learned: "MerchantCategoryLookup",
+    labels: tuple[str, ...],
+    client: LLMClient | None,
+    has_lines: bool,
+) -> Receipt | None:
+    """Tier 1, the (entity, vendor) rule a person taught. None when the rule
+    names no leaf (a bucket-only rule, or a vendor-only recall, which never
+    decides an account): the engine then asks the model, overriding nothing.
+
+    A rule naming a leaf this entity cannot post to REFUSES rather than
+    falling through (`posting_resolution`: the model must not overrule a
+    person). A rule nobody validated still gets the item-115 second read on a
+    receipt with lines, and says so when the lines disagree."""
+    res = resolve_posting_account(
+        org_id=org_id, legal_entity_id=receipt.legal_entity_id,
+        vendor=receipt.detected_vendor, lookup=learned,
+    )
+    if not res.resolved and res.code is None:
+        return None
+    reasoning = _learned_categorization(recall).reasoning
+    decision = None
+    if res.resolved and has_lines and not recall.validated and client is not None:
+        read = _gl_read_lines(receipt.line_items, labels, org_id, client)
+        disagreed = sorted({
+            li.categorization.category
+            for li in read
+            if li.categorization is not None
+            and li.categorization.category
+            and li.categorization.category != res.code
+        })
+        if disagreed:
+            reasoning = (
+                f"{reasoning}; the receipt's items read {', '.join(disagreed)}"
+            )
+            decision = DECISION_LEARNED_OVER_LINE
+    cat = _gl_categorization(
+        res, org_id, source=ClassificationSource.LEARNED, confidence=1.0,
+        reasoning=reasoning, decision=decision,
+    )
+    return _stamp_lines(receipt, cat)
+
+
+def _categorize_one_gl(
+    receipt: Receipt,
+    client: LLMClient | None,
+    learned: "MerchantCategoryLookup | None" = None,
+    *,
+    org_id: str | None,
+    judge_each_receipt: bool = False,
+    merchant_profile: str | None = None,
+) -> Receipt:
+    """The GL chain for one receipt: rule -> model -> refuse.
+
+    `org_id` is the receipt's entity already resolved to its Zoho org. An
+    entity with no org id, or one outside the curated set, refuses
+    `org_not_curated` before anything is asked, and so does an org whose leaf
+    list comes back empty: an empty list is a refusal, not a prompt.
+
+    The keyword stub has no leaf vocabulary, so without a client a receipt no
+    rule resolves refuses `account_unresolved` rather than being given a
+    bucket. The ER report's own account is not consulted: this path is the
+    tool's own judgment against Dirk's curated chart.
+    """
+    if not str(receipt.legal_entity_id or "").strip():
+        return _stamp_lines(receipt, _refused_cat(ENTITY_MISSING))
+    labels = _gl_leaf_labels(org_id)
+    if not curated_leaves.covers_org(org_id) or not labels:
+        return _stamp_lines(receipt, _refused_cat(curated_leaves.NOT_COVERED))
+
+    recall = _recall_for(receipt, learned)
+    has_lines = bool(receipt.line_items) and not _all_vague(receipt.line_items)
+    # Item 115, owner ruling 2026-09-27: a rule seeded from Zoho Books leads
+    # on a receipt with readable lines too, as a person's rule does. It is
+    # not validated, so `_gl_learned` still reads the lines and flags the row
+    # (`learned_over_line`) where they disagree. A multi-category merchant is
+    # still judged on each receipt's own lines.
+    leads = recall is not None and (not has_lines or not judge_each_receipt)
+    if leads:
+        taught = _gl_learned(
+            receipt, recall, org_id, learned, labels, client, has_lines)
+        if taught is not None:
+            return taught
+
+    if client is None:
+        return _stamp_lines(receipt, _refused_cat(ACCOUNT_UNRESOLVED))
+    names = _vendor_names(receipt)
+    if has_lines:
+        return replace(receipt, line_items=_gl_read_lines(
+            receipt.line_items, labels, org_id, client, merchant_profile,
+            vendor_names=names))
+    if not receipt.detected_vendor:
+        return _stamp_lines(receipt, _refused_cat(
+            ACCOUNT_UNRESOLVED, detail="no vendor and no line items"))
+    result = client.classify_by_vendor(
+        vendor=receipt.detected_vendor,
+        total=receipt.detected_total or Decimal("0"),
+        categories=list(labels),
+        chart_of_accounts=None,
+        **_profile_kwarg(merchant_profile),
+    )
+    return _stamp_lines(receipt, _gl_model_result(
+        result, org_id, source_on_hit=ClassificationSource.VENDOR,
+        vendor_names=names))
+
+
+def _vendor_names(receipt: Receipt) -> tuple:
+    """Every name a receipt goes by (extracted brand, printed name, the
+    registry's canonical), for the vendor-specific account guard."""
+    return (receipt.vendor_clean, receipt.detected_vendor, receipt.canonical_vendor)
+
+
+def _registry_gl(
+    receipt: Receipt, match, learned: "MerchantCategoryLookup | None",
+    org_id: str | None, *, entity_orgs: "Mapping[str, str] | None" = None,
+) -> Receipt | None:
+    """The registry tier on the GL engine, or None to hand the receipt to it.
+
+    Items 180/181: the merchant's own account for THIS company (its
+    per-company map, matched on the org) decides first. A person set it for
+    exactly this merchant and this company, which is more specific than
+    anything below. A code this org cannot post to refuses with its reason
+    rather than falling through, as a taught rule does: the model must not
+    overrule a person.
+
+    Otherwise the account the M1 order picks (`_registry_account`: the
+    company's rule, else the registry's own) is tried, then the default
+    category itself, each resolved within THIS org. The first that names a
+    leaf decides: postable stamps it, anything else refuses. A default naming
+    no leaf, and an uncovered org, return None; the engine then answers (and
+    an uncovered org refuses there, without a model call)."""
+    if not curated_leaves.covers_org(org_id):
+        return None
+    mapped = company_account(getattr(match, "accounts", ()), org_id, entity_orgs)
+    if mapped is not None:
+        return _stamp_lines(receipt, registry_mapped_categorization(org_id, *mapped))
+    if not match.category:
+        return None
+    account, reasoning = _registry_account(receipt, match, learned)
+    for ref in (account, match.category):
+        code = curated_leaves.code_of(ref, org_id)
+        if code is None:
+            continue
+        res = resolve_posting_account(
+            org_id=org_id, legal_entity_id=None, vendor=None, llm_leaf=code)
+        return _stamp_lines(receipt, _gl_categorization(
+            res, org_id, source=ClassificationSource.REGISTRY,
+            confidence=1.0, reasoning=reasoning,
+        ))
+    return None
+
+
+# Item 250: how sure the model must be that the note's own words name one
+# account before the note DECIDES it. Above the 0.6 suggestion floor
+# (`REVIEW_THRESHOLD`) on purpose: the prompt reserves 0.9+ for a note that
+# names a listed account, and "decide when clear" means exactly that case.
+NOTE_DECIDES_AT = 0.85
+
+
+def _note_accounts(
+    receipts: list[Receipt],
+    client: LLMClient | None,
+    entity_orgs: "Mapping[str, str] | None",
+) -> dict[str, Receipt]:
+    """`{document_id: receipt stamped NOTE}` for each receipt whose sender's
+    note names one account of its company's chart clearly (item 250, owner
+    2026-10-07).
+
+    Nothing is decided, and the receipt runs the normal chain, when: there
+    is no note, or nothing in it but company names and filler ("BTS only");
+    the company has no curated chart; the model answers null or below
+    `NOTE_DECIDES_AT`; or the answer fails the guards every model answer
+    meets (a leaf of THIS org, never a parent, never another vendor's
+    product account). A split note is offered only Corporate Services' own
+    never-allocated accounts (`CORPSERV_UNSPLIT_CODES`, owner: "own account,
+    never split"), and an answer outside them decides nothing. A failed call
+    decides nothing either: the note is extra evidence, never a gate."""
+    classify = getattr(client, "classify_by_note", None)
+    if classify is None:
+        return {}
+    out: dict[str, Receipt] = {}
+    for r in receipts:
+        note = (r.sender_note or "").strip()
+        if not note or not account_hint(note):
+            continue
+        org_id = org_id_for_entity(r.legal_entity_id, entity_orgs)
+        labels = _gl_leaf_labels(org_id)
+        if not curated_leaves.covers_org(org_id) or not labels:
+            continue
+        if r.sender_note_split:
+            labels = tuple(
+                label for label in labels
+                if label.split(" ", 1)[0] in CORPSERV_UNSPLIT_CODES
+            )
+            if not labels:
+                continue
+        try:
+            result = classify(
+                note=note,
+                vendor=r.vendor_clean or r.detected_vendor or "",
+                total=r.detected_total or Decimal("0"),
+                categories=list(labels),
+            )
+        except Exception:  # noqa: BLE001 - the note is extra evidence, never a gate
+            continue
+        if result.category is None or result.confidence < NOTE_DECIDES_AT:
+            continue
+        cat = _gl_model_result(
+            result, org_id, source_on_hit=ClassificationSource.NOTE,
+            vendor_names=_vendor_names(r),
+        )
+        if cat.source is not ClassificationSource.NOTE:
+            continue
+        if r.sender_note_split and cat.category not in CORPSERV_UNSPLIT_CODES:
+            continue
+        # Item 254: the model's confidence alone is not "clear". The note's
+        # own words must name the account it picked (`names_account`).
+        if not names_account(note, cat.zoho_account or result.category or ""):
+            continue
+        out[r.document_id] = _stamp_lines(r, replace(
+            cat, reasoning=f"The sender's note: {result.reasoning}".strip(),
+        ))
+    return out
+
+
+def registry_mapped_categorization(
+    org_id: str, label: str, code: str,
+) -> Categorization:
+    """The merchant's own account for one company (items 180/181), as a
+    line's categorization: the leaf, or the refusal naming why this org
+    cannot post to it. The one place both the ingest tier (`_registry_gl`)
+    and the read-time rule (`live_registry_accounts`) build it, so a row
+    reads the same before and after its month is re-categorized."""
+    reasoning = f"merchant registry account for {label}"
+    if not curated_leaves.is_postable(org_id, code):
+        return _refused_cat(
+            curated_leaves.refusal_reason(org_id, code),
+            detail=f"{reasoning}: {code}")
+    res = resolve_posting_account(
+        org_id=org_id, legal_entity_id=None, vendor=None, llm_leaf=code)
+    return _gl_categorization(
+        res, org_id, source=ClassificationSource.REGISTRY,
+        confidence=1.0, reasoning=reasoning,
+    )
+
+
+def _live_mapped(
+    registry, vendor_clean, vendor_raw, entity, entity_orgs,
+) -> Categorization | None:
+    """The per-company registry answer for one row as the list reads NOW,
+    or None when the merchant is unlisted, multi-category, or names no
+    account for this company."""
+    org_id = org_id_for_entity(entity, entity_orgs)
+    if not registry or not org_id or not curated_leaves.covers_org(org_id):
+        return None
+    match = registry.resolve(vendor_clean, vendor_raw)
+    if match is None:
+        return None
+    mapped = company_account(match.accounts, org_id, entity_orgs)
+    if mapped is None:
+        return None
+    return registry_mapped_categorization(org_id, *mapped)
+
+
+def _decided_by_person(cat: Categorization | None) -> bool:
+    """A reviewer's pick, or the account the sender's note named (item 250):
+    both are a person's answer, and the merchant list must not overwrite
+    either on read."""
+    return cat is not None and cat.source in (
+        ClassificationSource.EDITED, ClassificationSource.NOTE,
+    )
+
+
+def _stale_suggestion(
+    cat: Categorization | None, org_id: str | None, vendor_names,
+) -> Categorization | None:
+    """Front 3 steps 4 and 5: the refusal the engine gives TODAY for a model
+    suggestion stored before the rule existed, or None when the suggestion
+    still stands. A summary account with postable accounts under it
+    (`model_picked_parent`, owner 2026-09-25; 76 charges and 28 receipts
+    still suggested one) and an account kept for one vendor's product on
+    another vendor's row (`account_vendor_specific`; 57 rows on
+    E500010-10). Rules and people are never touched: only the model's
+    answer is re-read."""
+    if cat is None or not org_id or not is_suggestion_only(cat):
+        return None
+    code = cat.category
+    detail = f"{code}; {cat.reasoning or ''}".rstrip("; ")
+    if curated_leaves.has_postable_children(org_id, code):
+        return _refused_cat(
+            MODEL_PICKED_PARENT, confidence=cat.confidence, detail=detail)
+    if not vendor_may_post(code, vendor_names):
+        return _refused_cat(
+            ACCOUNT_VENDOR_SPECIFIC, confidence=cat.confidence, detail=detail)
+    return None
+
+
+def live_registry_accounts(
+    receipts: list[Receipt],
+    registry,
+    *,
+    entity_orgs: "Mapping[str, str] | None",
+    entity_by_doc: "Mapping[str, str] | None" = None,
+) -> tuple[list[Receipt], dict[str, Receipt]]:
+    """Front 3 step 1 (2026-09-25): a merchant's per-company account read at
+    VIEW time, not only when the receipt was categorized.
+
+    A receipt is categorized once, when it arrives, so an account the owner
+    set for a merchant afterwards (OpenAI and Anthropic, item 219) reached no
+    row already in a month until that month was re-run. This applies the
+    ingest tier's first rule (`_registry_gl`: the merchant's account for the
+    row's company decides before memory and the model) to the stored rows
+    as the list reads now, and changes nothing stored.
+
+    The company is the one the row shows (`entity_by_doc`, the card chain's
+    answer), else the receipt's own. A line a person set keeps its value (a
+    reviewer's pick is an override on top of this anyway); every other line
+    takes the merchant's account, as a re-categorization would give it. The
+    model's answer therefore never stays the posting and never becomes it:
+    it is replaced by a rule.
+
+    Where the list names no account for the row, the model's stored
+    suggestions are re-read against today's refusals instead
+    (`_stale_suggestion`, steps 4 and 5).
+
+    Returns `(receipts, stamped)`: the receipts with the rule applied and,
+    for each one it changed, the receipt as it was stored, so a view can say
+    what the row read before. A bucket month (`entity_orgs` None) returns the
+    input unchanged; an empty registry still runs the refusal re-read."""
+    if entity_orgs is None:
+        return receipts, {}
+    out: list[Receipt] = []
+    stamped: dict[str, Receipt] = {}
+    for r in receipts:
+        entity = (entity_by_doc or {}).get(r.document_id) or r.legal_entity_id
+        cat = _live_mapped(
+            registry, r.vendor_clean, r.detected_vendor, entity, entity_orgs)
+        if cat is None:
+            # Steps 4 and 5: no listed account, so re-read the model's
+            # stored suggestions against today's refusals.
+            org_id = org_id_for_entity(entity, entity_orgs)
+            names = _vendor_names(r)
+            lines = tuple(
+                replace(li, categorization=refused)
+                if (refused := _stale_suggestion(li.categorization, org_id, names))
+                else li
+                for li in r.line_items
+            )
+        else:
+            items = r.line_items or (_synthesize_total_line(r),)
+            lines = tuple(
+                li if _decided_by_person(li.categorization)
+                else replace(li, categorization=cat)
+                for li in items
+            )
+        if lines == tuple(r.line_items):
+            out.append(r)
+            continue
+        stamped[r.document_id] = r
+        out.append(replace(r, line_items=lines))
+    return out, stamped
+
+
+def live_registry_charge_accounts(
+    charge_cats: "Mapping[str, Categorization]",
+    transactions,
+    charge_ids,
+    registry,
+    *,
+    entity_orgs: "Mapping[str, str] | None",
+) -> tuple[dict, dict]:
+    """`live_registry_accounts` for a month's receiptless charges: the
+    bank's description resolved the way `categorize_charges` resolves it,
+    against the charge's own company. `charge_cats` maps transaction id to
+    the stored categorization; `charge_ids` is the unmatched set it was
+    built over (`outcome.unmatched_transactions`), so a charge that has
+    since been paired never gains one. Returns `(charge_cats, stamped)`,
+    `stamped` holding each replaced categorization (None where the charge
+    had none)."""
+    if entity_orgs is None:
+        return dict(charge_cats), {}
+    from .categorize_charges import build_charge_pseudo_receipt
+
+    by_id = {t.transaction_id: t for t in transactions}
+    out = dict(charge_cats)
+    stamped: dict = {}
+    for tx_id in charge_ids:
+        old = charge_cats.get(tx_id)
+        tx = by_id.get(tx_id)
+        if tx is None or _decided_by_person(old):
+            continue
+        pseudo = build_charge_pseudo_receipt(tx)
+        cat = _live_mapped(
+            registry, pseudo.vendor_clean, pseudo.detected_vendor,
+            tx.legal_entity_id, entity_orgs,
+        )
+        if cat is None:
+            # Steps 4 and 5, on the charge's own company and bank text.
+            cat = _stale_suggestion(
+                old, org_id_for_entity(tx.legal_entity_id, entity_orgs),
+                (pseudo.detected_vendor,),
+            )
+        if cat is None or cat == old:
+            continue
+        stamped[tx_id] = old
+        out[tx_id] = cat
+    return out, stamped
+
+
 # ── LLM-path implementations (slice 2) ──────────────────────────────
+
+
+def _profile_kwarg(merchant_profile: str | None) -> dict:
+    """`{"merchant_profile": ...}` when the merchant has prose, else `{}`
+    (note item M4).
+
+    The parallel-field contract applied to a call signature: a merchant with
+    no profile produces the exact call the categorizer made before M4, so no
+    existing `LLMClient` implementation — the mock, a test fake, a provider
+    subclass written against the old Protocol — has to change to keep
+    working. Only a merchant somebody wrote a profile for sees the new
+    keyword."""
+    text = str(merchant_profile or "").strip()
+    return {"merchant_profile": text} if text else {}
 
 
 def _classify_lines_via_llm(
     items: tuple[LineItem, ...],
     client: LLMClient,
     chart_of_accounts: list[str] | None = None,
+    merchant_profile: str | None = None,
 ) -> tuple[LineItem, ...]:
     """Tier 1 via LLM. One batched call per receipt regardless of
-    line-item count (cost discipline)."""
+    line-item count (cost discipline).
+
+    `merchant_profile` (note item M4) is the registry's free prose about this
+    receipt's merchant. It is forwarded ONLY when the merchant actually has
+    one, so a client implementation that predates M4 keeps being called with
+    exactly the arguments it already accepts."""
     inputs = [
         LineItemInput(
             description=it.description,
@@ -646,6 +1365,7 @@ def _classify_lines_via_llm(
     results = client.classify_line_items(
         inputs, categories=list(EXPENSE_CATEGORIES),
         chart_of_accounts=chart_of_accounts,
+        **_profile_kwarg(merchant_profile),
     )
 
     out: list[LineItem] = []
@@ -667,8 +1387,12 @@ def _classify_vendor_via_llm(
     total: Decimal | None,
     client: LLMClient,
     chart_of_accounts: list[str] | None = None,
+    merchant_profile: str | None = None,
 ) -> LineItem:
-    """Tier 2 via LLM. Single call with vendor name + total."""
+    """Tier 2 via LLM. Single call with vendor name + total, plus the
+    merchant's profile when the registry carries one (note item M4). This is
+    the tier the prose helps most: the vendor name is otherwise the only
+    clue this path has."""
     if not vendor:
         return replace(
             item,
@@ -683,6 +1407,7 @@ def _classify_vendor_via_llm(
         total=total or Decimal("0"),
         categories=list(EXPENSE_CATEGORIES),
         chart_of_accounts=chart_of_accounts,
+        **_profile_kwarg(merchant_profile),
     )
     return replace(
         item,

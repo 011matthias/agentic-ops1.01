@@ -177,6 +177,14 @@ CANONICAL_HOOKS = {
                     "timeout": 10000,
                 },
                 {
+                    # Item 127: score the six real labelled months before a
+                    # `flyctl deploy` of brisken-expense-recon; ask on a drop.
+                    # 120 s because the check itself is budgeted at 100 s.
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/recon-accuracy-deploy-gate.py"),
+                    "timeout": 120000,
+                },
+                {
                     "type": "command",
                     "command": _cmd(".claude/hooks/cd-guard.py"),
                     "timeout": 10000,
@@ -401,6 +409,7 @@ EXPECTED_HOOK_SCRIPTS = {
     "instantly-invasive-gate.py",
     "no-auto-commit-gate.py",
     "ruff-push-gate.py",
+    "recon-accuracy-deploy-gate.py",
     "cd-guard.py",
     "heredoc-size-gate.py",
     "msys-mangle-gate.py",

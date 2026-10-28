@@ -212,6 +212,7 @@ def _to_receipt(
         detected_time=extraction.time,
         invoice_number=extraction.invoice_number,
         receipt_number=extraction.receipt_number,
+        document_kind=extraction.document_kind,
         detected_tax=_parse_decimal_lenient(extraction.tax),
         tax_label=extraction.tax_label,
         # Folder OCR has no ER "payment_mode"; the receipt's own card/tender
