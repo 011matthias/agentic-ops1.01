@@ -128,18 +128,20 @@ git -C <repo> worktree add --detach <somewhere-new> origin/main
 # confirm the commit you mean is there
 git -C <somewhere-new> log --oneline -1
 
-M=<somewhere-new>/workspace/clients/brisken/automations/expense-reconciliation
-MSYS_NO_PATHCONV=1 flyctl deploy "$M" --config "$M/fly.toml" \
-  -a brisken-expense-recon --remote-only
+uv run <somewhere-new>/workspace/clients/brisken/automations/expense-reconciliation/deploy.py
 ```
 
+`deploy.py` refuses a stale or dirty tree and a `fly.toml` smaller than the
+live machine, then verifies the result (`docs/operating.md`, "Deploy").
+
 **To roll back to a release that worked**, take its image from the release
-list and deploy that image rather than rebuilding:
+list and deploy that image rather than rebuilding. The rollback keeps the
+current `fly.toml`, so it cannot shrink the machine:
 
 ```bash
 MSYS_NO_PATHCONV=1 flyctl releases -a brisken-expense-recon --image
-MSYS_NO_PATHCONV=1 flyctl deploy -a brisken-expense-recon \
-  -i registry.fly.io/brisken-expense-recon:deployment-<ID-from-that-list>
+uv run <somewhere-new>/workspace/clients/brisken/automations/expense-reconciliation/deploy.py \
+  --image registry.fly.io/brisken-expense-recon:deployment-<ID-from-that-list>
 ```
 
 Rolling back the image does not roll back the data on the volume.
@@ -173,7 +175,12 @@ fixable from the repository:
    `EXPENSE_RECON_BACKUP` is not among the app's secrets, verified
    2026-09-20, so the schedule never starts. The copies that do exist are
    the live volume and Fly's own 5-day snapshots, both inside that same
-   personal account. Turning it on is one secret.
+   personal account. **Turning it on is not one secret.** Measured on the
+   live volume 2026-09-21, the data folder is 144.0 MB against the
+   backup's 100 MB default ceiling, so it would refuse every round and
+   log a warning nothing reads; `EXPENSE_RECON_BACKUP_SITE` is unset as
+   well. It needs a SharePoint target, `EXPENSE_RECON_BACKUP_MAX_BYTES`
+   raised past the real size, and only then `EXPENSE_RECON_BACKUP=1`.
 3. **No restore has ever been rehearsed.** `docs/backup-and-restore.md`
    says so in its own opening line. The restore path is written down and
    has never been run, so treat section 5 and any restore as a first

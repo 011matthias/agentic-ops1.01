@@ -4,10 +4,490 @@ workstream: p1-expense-reconciliation
 group: ""
 spec: p1
 state: active
-updated: 2026-09-20
+updated: 2026-10-07
 ---
 
 # Brisken / Expense Reconciliation (p1)
+**2026-10-07: the months page's card filter tab was slow to load; `/api/cards/status` now caches each month's receipt-card counts per run (backlog item 190's cost note), backend LIVE (PR #1595, merge `25356dce`, live in `2636b226` since 15:28 UTC), SPA unchanged.** Live, read-only: right after a write (the login's rate-limit row), the roll-up rebuilt in 0.164 s while the control `/api/expense-batches` (same folder memo, no per-run cache) paid 1.215 s, then 0.09 s on repeat, which proves the write really invalidated both. Cold Chrome drive of `/months`: rows and strip in 0.63 s, picking 9693 left exactly the 7 months the API names (January drops), All restored 8, 0 writes attempted. Local bench on the 10-07 08:19 backup: 1.85 s cold (the old cost of every rebuild), 0.072 s after an unrelated write, 0.150 s after an edit that moved a receipt between cards, each body byte-identical to a fresh app's build. The receipt side of the roll-up (item 190) rebuilds every month's full Expenses-page view on every call, which the folder-level memo re-triggers on any write anywhere (a job's progress, a login), so the ~2.2 s cost landed on whoever opened the filter while someone else was working a month. Each run's counts are now kept under a content version of that run's own inputs (snapshot, decisions, overrides, edits, resolutions) plus the registry and card-memory counter shared by one build, so a write to one month no longer recounts the others. Not the month's `updated_at` timestamp (first sketch): every stamp in this store is second-precision, so a create-then-edit inside one second would read stale; `tests/test_card_status_memo.py::test_an_edit_inside_a_month_is_read_fresh` caught that on the first pass. Tests `tests/test_card_status_per_run_cache.py` (regress-checked), full card-status + `month_updated_at` family green (79 tests).
+**2026-10-07: duplicate clicks ("Delete this copy", "Not a copy") about 2x faster, backend LIVE (PR #1583 Fly v281, PR #1590 Fly v284 on `0541288a`); SPA prompt `docs/lovable-duplicate-click-reply-views-prompt.md` handed to the owner, NOT pasted.** Owner: "removing duplicates takes way too long to load". Both clicks re-match the whole month inside the request; on September (216 charges x 112 receipts since the 10-05 statement) the matcher scored 26,163 vendor pairs for 3,710 distinct ones, twice per re-match. Memoized (no output change, payloads byte-identical): Delete 3.88 -> 1.75 s, Not a copy 5.28 -> 2.73 s locally. Then `?views=1` makes both replies carry the two page GETs (`views.batch` / `views.run`) so the SPA stops refetching the month after the click; modest on the server (Delete 3.96/4.41 -> 3.83/3.71 s to the final grid), one screen update instead of two, and Not a copy starts refreshing the reconciliation line it left stale. Live: September duplicate layer and both page GETs (Sept + Oct) hash-identical before/after each deploy; the click itself is not timed live (a write on Criss's month). What remains of the wait is the re-match itself (~1.5-2.7 s locally).
+**2026-10-07: every page fits the screen with nothing cut off (backlog item 247, owner directive), SPA prompt `docs/lovable-responsive-full-visibility-prompt.md` written and proven (PR #1581), NOT pasted; handed to the owner in chat.** Live regression found first: the owner's own Lovable change that morning (`aef936db`) is PUBLISHED, and its `overflow-x-clip` on `<main>` cuts the Expenses grid off below 1920 px (Legal entity / Paid through / Receipt / Actions unreachable), because the grid's `<fieldset>` is as wide as its ~1,700 px content. Proven on a scratch clone of SPA `0ac4b07` + the prompt against a local API over the 2026-10-06 backup (zero prod load): 1,379 views (21 routes x EN/PT x 7 widths x tiles/tabs/expanded/dialogs) went from 7,664 clipped / 1,053 off-screen / 1,705 truncated / 445 side-scroll / 102 page-overflow to zero. Mechanism: `src/lib/fit-tables.ts` turns any table into labelled cards when whole words no longer fit; buttons and select triggers wrap; `truncate` becomes `break-words`. Verify after publish by bundle strings (`data-stacked`, `data-full`, `h-auto min-h-`, `overflow-x-clip` absent) then a read-only drive of August at 390 / 1920 px.
+**2026-10-07: "Save corrections to memory" saves only the ticked lines, and a save overwrites the rule for that case (backlog item 246, owner directive), backend LIVE (PR #1580, Fly v280 on `68beb63a`), SPA prompt `docs/lovable-save-memory-ticks-prompt.md` not pasted.** Live check, 0 writes: all 8 months' plans read before and after the deploy agree except where the month itself moved (May's edits, July's new receipts); a malformed `keep` answers 400 where a fake run's well-formed body answers 404; the published Save dialog on May renders "Replaces the rule saved as railway corporation" (headless drive, every non-GET aborted, none attempted). The next save of May replaces two other-spelling rules (Lovable Labs Incorporated, Railway Corporation), same category, account carried over. The button takes Publish's `keep` / `skip` ids; each lesson carries `effect` / `replaces` / `already_saved`, so the dialog can say which lines replace a rule and skip what the month already saved. A category save now also deletes the same merchant's rules under other spellings in that company (journaled, undoable), which recall had left answering after a save. Measured before building (read-only, 2026-10-07): the matcher reads only the Memory tab's vendor aliases and FX means, both 0 rows live, so 0% of matching uses memory; the 108 category rules decided 1 of 888 receipt lines.
+**2026-10-07: 2838's subcards are back on the months strip (PR #1575, Fly v279, backend only, no SPA prompt).** They disappeared on 10-01, when October was created with receipts and no statement: the card roll-up reads the newest month first, and October's receipt-only entries kept a blank identity for every card they touched, so `/api/cards/status` linked no parent and five Chase cards read as not in Settings. The first month that knows a card now names it. Live after the deploy: 2838 opens 3876 / 3645 / 0340, no card figure moved; driven cold and read-only.
+**2026-10-07: the senders' notes now classify the receipts already in the months too (backlog items 252-254, owner "change existing rows, reread if need be"); APPLIED LIVE on Fly `4887af16`.** 71 receipts across May to October carry their note (24 re-read from the archived mail), 19 moved company, 17 got the account the note names. Two fixes found in the dry runs before any write: a note-moved receipt keeps its card's charge (item 253, owner "pair by card, book by note"; it would have cost 5 pairs), and an account counts as clear only when the note's own words name it (item 254; the model had filed "Nicolas/Lydar" and Railway hosting under travel). SPA prompts not pasted: `lovable-sender-note-classify-prompt.md`, `lovable-sender-notes-trigger-prompt.md`.
+
+**2026-10-07: the sender's note classifies the receipt (backlog item 250, owner directive); backend LIVE (PR #1589, Fly on `27ab0ec4`), SPA prompt `docs/lovable-sender-note-classify-prompt.md` NOT pasted.** A note from one of our senders (tenant or `intake.known_senders`, no untrusted flags, not just a signature) sets the company over the card (`entity_source: "sender_note"`, only Criss's row pick beats it), books a "split" whole in Corporate Services on its own never-allocated account, and decides the account when its words name one clearly (source NOTE, never learned). Read at arrival only: no existing row changed. Until the paste, the published hint under a note still says "Nothing was decided from it."
+
+**2026-10-07: Email intake becomes Receipt overview (backlog item 248, Dirk via the owner); backend LIVE (PR #1587, Fly on `501edf7d`), SPA prompt not pasted.** `GET /api/receipts/overview` lists every receipt the tool holds, one row each, from every source (378 on the 2026-10-07 backup, where the mail page showed mails only), with statuses read off each month's own verdicts. The SPA half (`docs/lovable-receipt-overview-prompt.md`, full code inside) renames the page, adds a TanStack Table v8 receipt table with fuzzy search and a filter on every column, and keeps the old mail log as an Emails tab. Found on the way: item 249, mail parked as a "duplicate" because it shares Criss's signature image (nothing lost so far).
+**2026-10-02: categorization re-scored live (2026-09-27 23:47 UTC payloads, before items 239/240): what it answers is right, too little is answered.** `tools/recon-categorization-score.py --fetch --pull-zoho` against Criss's postings: 82 of 100 answered rows agree (rules 68/68, model 14/32; 21/100 on 09-25). Receipts July to September: 67 of 186 decided by a rule, 37 a suggestion only, 82 blank, 0 picked by a person. The 119 not decided: 33 have no company (17 wait for a statement), the rest are merchants with no rule for their company (never booked by Criss, split across accounts, or 1-2 bookings held out of the 3+ map tier). Dirk's six account calls (comms log 2026-09-28) have no reply in Matthias's inbox as of 10-02. Nothing learns until a person picks and a GL month is published. Items 239/240 re-read every receipt and re-matched all seven months on 09-28, so re-score before quoting these figures.
+**2026-09-28: the card-account questions went to Dirk (owner order, Graph send-by-id from matthias.silva, verified in Sent Items 08:42 UTC; verbatim in `context/comms-log.md`). No answer as of 2026-10-02.** Six calls: Lovable (Pro plans renew on the 5th and go to IT; the Business plan renews on the 21st, mostly Marketing, and is paid on the Consulting card since August), the Microsoft charges back since July 2026 (75.60 a month, 718.20), Google Workspace/Cloud on Google Ads, Consulting AI tools and hosting, AWS in Cloud Services, the never-booked tools. The split vendors read by booking sequence, not by share: OpenAI, Network Solutions, Namecheap and Rize/Fireflies each switched account ONCE and have held it since (sent as FYI, not asked); "the account since her last switch, at least 2 bookings in a row" answered 7 of 20 July-September split bookings and all 7 agreed, while `derive_account_map.py`'s 80%-of-24-months rule abstained on all of them. Microsoft and Lovable are several products under one name; Lovable gets 2 of 9 under that rule and needs the receipt's plan line. Cost centers were drafted in and removed before the send, so item 118's list is still un-asked.
+**2026-09-27/28: the months list follows the card filter (items 236 + 238, LIVE, SPA published).** With a card picked, Receipts, Needs category and Set aside are that card's own per month (2838 without its subcards), and the chips lost their number. Set-aside files now file under the card their reading names. The list's Needs category now counts each month page's box (it read 4 fewer on the GL months: stale model suggestions the page refuses), kept in memory until the next write. Live: all 7 months add up, cards plus No card to the All row, on all three columns.
+**2026-09-29: feedback notes #109 and #110 itemized as backlog items 244-245, one SPA prompt, not pasted.** #109: the `/months` header tabs scroll sideways behind a hidden scrollbar (PT clips "Comparar" and "Configurações", EN "Settings"); the prompt gives them their own wrapping row. #110 asked what "Paid by bank transfer" does: it moves a receipt to Bills (out of the card side and the total, into `bills.csv`, nothing posts), and a card-paid receipt moved there by mistake returns once its statement charge is matched to it, now pinned by a route test. The prompt adds a tooltip saying so. `docs/lovable-nav-no-scroll-bill-tip-prompt.md`, one new key; both halves proven on a scratch SPA clone against the live API, 0 writes.
+**2026-09-28: feedback notes #107 and #108 itemized as backlog items 241-242, one SPA prompt, not pasted (PR #1541).** Both on August's Expenses page and SPA only: the "4 statements" toggle under a month's tabs becomes an outline button (icon, turning chevron, amber edge when a statement carries an advisory), and the Totals tile's currency amounts go from 12 px to 20 px bold beside the 24 px Expenses count. `docs/lovable-statements-button-totals-prompt.md`; no backend change, no new key. Same PR: items 231 and 232-235 marked PUBLISHED in PROMPT-STATUS (their keys are in the published bundle; the unpublished `receipts_reread` key is not, as the control).
+
+**2026-09-27 (night): the Receipts page opens a dropped zip (backlog item 237, owner directive), backend live `fc8db9cc` (PR #1514), SPA prompt `docs/lovable-receipts-drop-zip-prompt.md` NOT pasted.** Each member files by its own printed month with that month's content dedupe and a `from_zip` row; a zip refused whole reads `zip-unreadable` / `zip-too-many-files` / `zip-no-space` with a `reason_label`. Trigger: Nicolas mailed a 108-PDF zip spanning Jan-Sep (held `held_body_only`: mail never opens a zip, empty body); 105 of its PDFs are byte-identical to live rows, 3 are missing (two August BENCH receipts, one LinkedIn invoice) and he was emailed to send those three. The month upload also opens zips but files the whole zip into one month, so a mixed zip must never go there. Until the prompt is pasted the page filters zips out client-side.
+
+**2026-09-27 (night): feedback notes #99-#106 itemized as backlog items 232-235, one SPA prompt, not pasted (PR #1511).** All eight sit on September's Matching page and are SPA strings, so there is no backend change. `docs/lovable-matching-header-prompt.md`: the two opening sentences go; loaded statements fold behind "View all statements loaded (N)", each read by its card's last four digits (joined from `coverage[].statements`, the backend's own attribution, because a PDF upload names no card); "Showing card N" becomes a blue box, and a card with no statement gets an amber box with its Add button beside it; the uncovered cards fold behind an amber button; the still-open and booked-without-receipt amounts sit in amber boxes, amount in bold. The feedback store ends at #106, and no note is open.
+
+**2026-09-27 (evening): note #97 itemized, and the duplicate panel's reason labels found gated (items 231 + 223).** Note #97 is backlog item 231, SPA prompt `docs/lovable-quiet-done-tiles-prompt.md` (PR #1503): a month's Categorized / Ready / Private counts become small chips and the attention tiles stay big under "Needs a look". The SPA shows a duplicate group's reason only for bases in its `BASIS_KEYS` set, which the published bundle still holds at the first seven, so 12 live groups (July 6 + 1, August 1, September 4) read "Decided by the tool" and `intake_twin` would too; `docs/lovable-duplicate-reasons-gate-prompt.md` opens the gate (PR #1507). Both prompts not pasted. Notes #99-#106 (September Matching page header, 2026-09-27 20:28-20:33 UTC) are not itemized.
+
+**2026-09-27: every photo reading is costed (backlog item 227).** The vision model that reads photographed receipts and mail bodies (gpt-5-mini) had no price, so the app's AI-cost figures left out about 93% of the real spend. It now carries OpenAI's list price (USD 0.25 input, 0.025 cached, 2.00 output per million tokens), and a test fails on any configured model without one. Readings from the deploy on are costed; stored figures stay as recorded.
+
+**2026-09-27: copies front, step 6 (backlog item 223, front 4 closed); no live row moves.** When one mail delivers a purchase's invoice and its payment receipt naming one invoice number with one amount, the intake records the pair at arrival (`submitted_by.twin_of`) and the duplicate check starts from it (reason `intake_twin`). This closes the case where nothing else joined the two (vendor spelled two ways, different numbers, no text layer) and both counted. Predicted on the step-4 readings: ten July-September mails would be recorded, all ten already count once; no stored file carries the record. SPA: one more label in the pending `docs/lovable-copies-kind-prompt.md`. Front 4 has no open step; step 7's reapply per month stays the owner's call. Deployed with item 227 as Fly v270 (`987e0b52`, PRs #1496 + #1500): every duplicate group, per-row count and total on July, August and September unchanged, as predicted; cold SPA drive passed.
+
+**2026-09-27 (later): feedback note #98 done on the owner's yes (settings `intake.aliases.nicolas` = "Nicolas Neumann"; a whole-settings diff showed only that path changed); note #97 (make the positive filter states small and visually distinct from what needs attention) is open, first in the next session's queue. Published-bundle audit: 13 prompts marked "not pasted" were live (PROMPT-STATUS corrected, PR #1494); still to paste: `lovable-attach-month-filter-prompt.md`, `lovable-statement-colour-prompt.md`, and the `duplicates_reapply` line of `lovable-copies-kind-prompt.md`.**
+
+**2026-09-27: feedback notes #91 and #92 answered (items 225 + 226).** 225: memory-plan lessons say what the next receipt gets, cards by Settings label and person, and merchant-list card lessons name the receipts they were seen on (PR #1487, Fly v265; April's Publish checklist renders them; SPA prompt `docs/lovable-memory-plan-sentences-prompt.md` for the Save dialog, not pasted). 226: the Matching page's per-workbook "Statement" download buttons go; the workbook stays downloadable from the Expenses statements table (SPA only, `docs/lovable-statement-downloads-off-matching-prompt.md`, PR #1484, not pasted). The store held 96 notes by the end of the session: #93 (statements again, covered by 226) and #94-#96 became backlog items 228-230, not started.
+
+**2026-09-27: copies front, steps 4, 5 and 7 (backlog item 223, front 4); no live row moved at deploy.** (4) The receipt reader also says what a document calls itself (`document_kind`: invoice / receipt / reminder / statement / other), asked in the response schema only; which copy of a purchase counts reads it first, a reminder is never the copy that counts, and alone it asks a person (`reads_as_reminder`). Only receipts arriving from the deploy on carry it. A/B on the owner's yes (USD 2.32 on Dirk's key): 53 of 3,366 stable readings moved, 0 dates, totals, types or cards, 1 currency to null on a slip that prints none (owner chose to ship). (5) A reference another month shows with the same money a billing cycle apart (Railway `77H7ITO0`, Rize `5ZK1BCDG`) no longer twins two bills inside a month; computed at re-match and at a receipt add, stored per month, never loaded at read. (7) `POST /api/runs/{id}/duplicates/reapply` previews (`dry_run`) and runs a month's re-match to apply changed duplicate rules; built and tested, run on nothing: running it on September or July is an owner decision. Open: step 6 (intake records an Invoice/Receipt pair at arrival). New item 227: the app prices gpt-5-mini (every photo reading) at zero. SPA: one more key in the pending `docs/lovable-copies-kind-prompt.md`.
+
+**2026-09-27: lines that do not add up, a seeded rule may lead, and the first per-company account map (item 224 steps 6-8 + item 115 + item 216), PR #1481, Fly v264.** `expenses[].line_sum_gap` / `line_sum_note` on 13 / 9 / 10 live rows (net-of-tax lines agree; a split receipt with a gap would read `line_sum_split` and its CSV rows say `(lines do not add up)`; none live). On a GL month a Zoho-seeded rule now leads on a lined receipt and the second read flags disagreement (about 41 receipts at their next categorization). Two owner-approved settings writes: the Lovable entries merged into "Lovable Labs" (34 -> 33), then 34 accounts on 32 new merchants from Criss's own postings (3+ to one account), 15 receipts and 43 charges now read a rule answer. SPA delta is item 4 of the pending `docs/lovable-identity-live-prompt.md` (not pasted).
+
+**2026-09-25: the posting account reads the merchant list as it is now (backlog item 224 steps 1-5, front 3), PR #1477, live Fly v262 2026-09-27, driven cold on September.** The grid, the run payload and the reviewer files resolve each row's merchant live (`vendor.stamped` keeps the stored view, `merchant {name, match}` is new) and a merchant's account for the row's company decides as a rule (`posting_category.stamped`); a bank-descriptor resolver tier and a containment guard on close spelling; the model may not land on E500010-10 unless the merchant is Zoho; stored parent / ZOHO ERP suggestions read as refusals. Predicted on the live payloads (16:49 UTC): 21 receipts move to the owner's OpenAI / Anthropic accounts and all 21 then post, 46 receiptless charges and 5 matched charges move, 24 join a Criss posting and all agree. Read-time only: nothing stored changes, no re-categorize. Open: line-sum check, Lovable's two entries, the descriptor measurement over 314 lines; owner decisions: item 115, the Lovable merge, the write plan.
+
+**2026-09-25: refused rows re-run on July, August and September (owner order; item 219's decided OpenAI / Anthropic accounts), and the categorization score now runs end to end (PR #1460).** `POST /api/runs/{id}/recategorize-refused` per month after a green read-only readiness check (both entries `accounts_locked`, months GL and unpublished): lines answered July 46 of 101, August 6 of 46, September 10 of 67; charges 8 of 13, 3 of 6, 0 of 0; AI cost 0.016 USD. Still refused: no company (entity_missing), Lovable (waits on Dirk), org not curated. Score against Criss's postings (fresh Zoho pull 15:29 UTC): 21/100 -> **38/120**, rules 11/12 -> 22/23 (all 11 new rule answers agree), model 10/88 -> 16/97, no answer 34 -> 14; every posting predates the switch. The 20 receiptless OpenAI / Anthropic charges still carry a model suggestion and take the decided account at each month's next natural re-match (no re-match forced, owner's choice); 3 receipts with a model suggestion are reached by neither path. Re-measure: `uv run tools/recon-categorization-score.py --fetch --pull-zoho --payload-dir .scratch/recon-score-<date> --batch 50622baec444 --batch 074a7b8905d7 --batch 51a22ad72864`.
+
+**2026-09-25: OpenAI and Anthropic have decided accounts that post as a rule and cannot drift (backlog item 219, owner raised the gate), backend live `9d945667` (PR #1457), settings written on the owner's yes, no SPA paste needed.** A merchant entry's `accounts_locked` marks its per-company accounts as decided: no learner re-points them, and a booking against one comes back on the Publish checklist as one unticked "Change the default for <vendor> in <company>?" lesson, the only learner path that changes it. Written: Anthropic and a new OpenAI entry, Cloud Services `E700030-19`, Corporate Services `E700030-30`, locked, with the bank-descriptor aliases the resolver missed; Lovable and Consulting stay with Criss until Dirk answers. Offline proof: 46 of the 52 gated guessed charges decided (19 of 19 joined agree with Criss; baseline 15), 20 of the 31 gated receipts (baseline 23, the 3 Lovable held). Live score map section: 32 rows answered, 32 agree. Nothing re-matched; charges change at each month's next natural re-match. The first write made the new OpenAI entry vouch a single card (`vouches_one_card` counts `cards_seen <= 1`), which lent Criss's minority card 3645 to 6 September receipts at read time; a second owner-approved write set `OpenAI.cards_seen` to the two observed cards and all 224 receipts read as before. The `<= 1` rule stays open (item 219).
+
+**2026-09-25: invoices paid by bank transfer leave the card queue for a Bills section (backlog item 218, item 216 cause 4 / session C), backend live `a8a6809b` (PR #1444), SPA prompt `docs/lovable-bills-path-prompt.md` not pasted.** Every row carries `payment_path` card or bill, decided at read time: a stated wire / transfer / boleto / PIX method naming no card, or Criss's settled-outside bank-transfer record, moves a row by itself; a document that only prints the supplier's bank details gets a suggestion; a person moves either way. Bills leave the card counts, totals and `expenses.csv` and go out as `bills.csv`. Live: only July moves (Tricarico; `n_expenses` 71 to 70, BRL total 30,425.80 to 3,222.46), Redis 0004 and Crossmedia 0008 carry the suggestion, driven cold. Not routed by supplier name: SAP and Redis are also card-charged monthly. The Redis reminder 0070 keeps the reviewer's "Not a copy" ruling (owner).
+
+**2026-09-25: a duplicate's real expense is its payment receipt, and each pair shows its controls once (backlog item 217, owner notes #89 + #90), backend live `e47f2a8d` (PR #1429), SPA published and driven.** A re-match keeps the receipt over its invoice as the counted, matched copy, except a copy a charge already holds stays kept. Nothing moved at deploy: September's 19 pairs read as before until its next natural re-match, when 12 switch to the receipt and the 7 held pairs stay; totals do not move. The Expenses tab now shows one Compare copies, one Delete the duplicate and one Not a copy per pair (19 each, was 38), labelled "Real expense" and "Duplicate, not in the total". Item 209's bound units (line below) were published the same night.
+
+**2026-09-25: per-company account map derived (item 216 Build 2 data half; offline, no code, no settings write).** From Criss's 2,234 card postings in `zoho-books-24mo.json`: out of sample (learned before July, scored Jul-Sep) the map answers 100 of 148 and agrees on 98 (Cloud 28/28, CorpServ 69/71, open rows 23/23), 21 abstain as splits. Write plan: 46 accounts on 44 merchants, gated three excluded, Google Workspace/Cloud held for Dirk's question 3; validated by `normalize_merchants_setting`, NOT executed (owner yes per action, after Dirk answers). Through `categorize_receipts_with_registry` it decides 26 of 164 guessed charges (13 join Books, 13 agree) and 4 of 55 unsure receipts; 14 more charges miss because the resolver discounts Chase's trailing URL/state words (Build 3). Outputs and `derive_account_map.py` in gitignored `context/expense-reconciliation/`; draft for Dirk (11 questions) in `context/drafts/account-map-questions-to-dirk.md`, unsent.
+
+**2026-09-25: categorization measured against Criss's own Zoho bookings (backlog item 216, PR #1427; analysis only, no code, no live write).** On the GL months the engine agrees with her account on 21 of 97 answered charges: rules 11/11 on real codes, model 10/85. Five root causes named, four owner rulings taken (account map from her history after Dirk answers the split vendors; a receiptless charge takes an account from a rule or a person only; the correction path is the first build; a model pick may not land on a parent). Owner direction: builds fix root causes, never symptoms. Checkpoint `docs/2026-09-25 - Brisken Recon Categorization Analysis/`.
+
+**2026-09-25: the months card strip and month pages are faster, backend live `f5a9802e` (PR #1423), SPA half NOT pasted.** Owner: the strip "is lagging and loading way later than the rest", months "pretty slow to open". `GET /api/cards/status` builds every month's Expenses page and each build re-read what all months share (the all-months statement evidence, the registry's card wording, every alias and digit key). Now read once per request / per distinct input; all 16 read payloads byte-identical before and after. Live: the roll-up 2.30 s -> 1.35 s standalone; published SPA driven cold after deploy, strip and rows render, July opens in 1.4 s, no write. SPA half `docs/lovable-card-scope-no-rollup-prompt.md`: a full load of a month stops fetching the roll-up (July 2.2-3.0 s -> 1.8-1.9 s on a local build). Then, on the owner's "memo + warm-up" (PR #1426, live `a5ab93ce`): the roll-up is kept until anything in the data folder changes (SQLite change counters, file mtimes, the day) and rebuilt in the background 20 s after writes go quiet (`EXPENSE_RECON_CARD_STATUS_WARM=1`). Live: the first roll-up request after a login answers in 0.03-0.06 s, ahead of the months list (0.36-0.42 s); published SPA driven cold, strip and July render, no write.
+
+**2026-09-25: a receipt another month's charge paid now converts at that charge** (backlog item 212; Shipped row 134). A foreign-currency receipt settled by the next month's statement already showed that charge's card; the CSV `Exchange Rate` and the month report now use that charge's amount too instead of the ECB rate. Nothing moves live today: the three receipts another month settled are all in USD.
+
+**2026-09-25: a statement attach keeps only the month's own charges (backlog item 215, owner decision), backend live `418c3c6d` (PR #1412), SPA half NOT pasted.** Criss can upload her lifetime SharePoint card sheets into a month: a file that prints post dates keeps only the rows posted in that month, drops rows a neighbouring month (or another of its files) already holds under a different reading, and records what it left out on `statements[].month_filter` and the job reply; a file the month keeps nothing of is refused. Cycle PDFs (no post date) and her monthly workbooks fold whole as before. A restart-killed attach's upload is now discarded at boot. Live drill on two scratch TEST months, deleted after; no live month written. Prompt: `docs/lovable-attach-month-filter-prompt.md`.
+
+**2026-09-25: shorter review lines (backlog item 213, owner note #87), backend live `c5a426aa`, SPA half NOT pasted.** The waiting line names the cards only when one or two wait; three more reasons keep their instruction and lose the explanation (47 live rows, 0 counts moved). The published SPA writes the waiting line itself, so September's 13 waiting rows still read 284-346 characters until `automations/expense-reconciliation/docs/lovable-short-review-lines-prompt.md` is pasted.
+
+**2026-09-25: suggested duplicates stay bound together until someone releases them (backlog item 209), SPA prompt written, design approved on screenshots, NOT pasted.** Expenses: one unit per suggested duplicate (main as a full row, presumed copies folded under it), placed in its most urgent copy's section; the "Show duplicates" filter shows only units. Matching: each presumed copy sits directly under the row showing its main. No backend change: presumed copies were already out of matching and "Not a copy" already re-includes both receipts (read live). Prompt `automations/expense-reconciliation/docs/lovable-duplicate-groups-prompt.md`, verified on a scratch clone of Lovable `9b822f1` (PROMPT-STATUS row).
+
+**2026-09-25: a copy is no longer lent a card its twin's charge disputes** (backlog item 204 step 4 follow-up; Shipped row 132). July's copy of the Lovable 200.00 purchase showed card 1176 from the account's later purchases although the purchase was settled on 2838; it now stays blank.
+
+**2026-09-25: card history loaded into April to September** (backlog item 204, D2 / D3; owner yes on the prediction, no code). From Criss's SharePoint sheets, only the charges no month held, cut by post month: 13 files, 9693 and 1176 across all six months plus the whole 2838 family for May and June. May and June are statement months now (121 and 165 charges; 16 and 17 receipts settled, 2 and 3 proposed). September settled 1 to 10 (the 9693 OpenAI / Anthropic rows through Sep 15). April, July and August gained one each. Needs-company: May 1, June 2, September 17. August's Lovable invoice `H0LHY2WQ-0032` moved from a 3645 BASE44 charge to 1176 LOVABLE (Consulting). The re-match also sent April SJCOROA and August E A LOCAÇÕES to review (current-code FX judgment and the D5 guard). Weekly loads wait on item 215, where the attach keeps only the month's own charges (owner decision).
+
+**2026-09-25: month pages are fast again** (backlog item 204 step 4 follow-up; Shipped row 131). The billing-account card re-read every month on every page (~28 s), which made the app fail its health check and the month page show "Failed to fetch". Each month's evidence is now reused until that month's own data changes.
+
+**2026-09-25: a decided copy is no longer offered a card** (backlog item 204, build 5 follow-up; Shipped row 130). A row set aside as a copy keeps its waiting status but loses `card_suggestion`, since a click there wrote an override on a row that counts for nothing and the original carries the same suggestion. Live before: 2 of 6 suggestions sat on copies (May and July Lovable 200.00).
+
+**2026-09-25: case 9 step 4 shipped, the billing account's card** (backlog
+item 204, build 4; Shipped row 129). A receipt that prints no card and carries
+a Stripe invoice number takes the card its billing account was paid with on at
+least two other purchases and on no other card (`card_source: "account"`,
+company and person with it). Derived on every read, never memorized; a pick, a
+printed number and the statement outrank it; one pick decides nothing (D6).
+Live (v239, `3831e6cb`): the nine May / June rows all read 3876; seven now
+through their own statement charge (the April-June sheets landed 01:18-01:22
+UTC the same night) and two through the account (May Anthropic 99.95 and 90.00
+EUR); September's Anthropic 184.35 reads card-9693 through build 1's twin. v237
+had lent May's Lovable invoice 2838 (decided copies dropped from the evidence);
+fixed forward in #1389, and that row now reads its statement card 3645. The
+SPA's source line waits on `docs/lovable-account-card-prompt.md`.
+
+**2026-09-25: each card's paid-through account is checked (backlog item 172).** Settings' card list now says, per card, whether its Zoho account is a real, active card account in its company's chart, and which account it most likely meant when not (`cards_effective[].account_check`, held to item 184's standard). No card was edited; card 3645's value stays Dirk's. The on-screen line waits on `docs/lovable-card-account-check-prompt.md`.
+
+**2026-09-25: Publish shows what it will remember (backlog item 183 half A).** `memory-plan` lists one lesson per learning row or merchant-list entry, with an id, a plain description and the rows it came from; Publish takes the ticked ids (`keep` / `skip`) and writes only those, through the plan's own recorded writes. Corrections start ticked, disagreements are offered unticked one option each, OpenAI / Anthropic / Lovable never reach the merchant list, and on a Zoho-account month a kept account correction fills that company's `accounts` entry. Closed on the way: the merchant-list learner taught the model's category after a Confirm or an account-only fix. The checklist itself waits on `docs/lovable-publish-checklist-prompt.md`; until then Publish applies the defaults.
+
+**2026-09-25: a merchant can hold one Zoho account per company (backlog items 180/181).** On a Zoho-account month, a receipt or card charge from that merchant books to its company's account with no AI call; Settings lists which merchants still need one (`needs_account`). No live merchant has an account yet: the per-vendor suggestions are with the owner for Dirk. July to September pick them up only through the new refused-rows re-run, on an owner order. The Settings screen half is a Lovable prompt, not pasted.
+
+**2026-09-25: case 9 build 3 shipped, the card flows back** (item 204 step 3,
+Shipped row 126). A receipt a neighbour month's charge settled now shows that
+charge's card, company and person (`card_source: "settled_charge"`) with
+`settled_by` naming the borrower, on the grid, CSV, month PDF and in the
+learner. 0 live rows move today: the two borrowed receipts (August OpenAI,
+borrowed by September) already print 9693, and July's borrowed FENIX receipt
+is in review, so it has no claim. Open: under D1's calendar-month exports a
+receipt dated the day before its charge's 1st-of-month date falls outside the
+borrower's window and is never borrowed (backlog item 211;
+the FX twin not following the claim is item 212).
+
+**2026-09-25: case 9 build 2 (step 6, owner D5) shipped: a receipt with no
+card evidence is not booked to a charge whose merchant words disagree.** The
+pair keeps its place as the charge's top candidate but waits in review
+(`review_code` `no_card_vendor_disagrees`) and lends no card. The LLM FX
+judge now leaves non-FX review pairs untouched (owner ruling in session).
+Measured on live July and August: August's Lovable invoice on BASE44 50.00
+(the one wrong booking) goes to review, and so do three pairs the labels
+call excluded or leave unlabelled; clean right bookings and the six bundles
+(70/95) are unchanged. Rows move at each month's next natural re-match. The
+Lovable prompt (`docs/lovable-no-card-vendor-guard-prompt.md`) is published
+(bundle, 2026-09-25 ~01:47 UTC; not driven).
+
+**2026-09-25: the private-card list, a personal card confirmed private once**
+(backlog item 208, owner direction 2026-09-24 fusing cases 2 + 4 of the
+card-attribution map). `settings["private_cards"]` is its own key, read live
+by every month; a printed number on it makes the row private, reimbursed to
+the listed person, on every surface a row Criss confirmed reaches (report,
+CSV, counts, boxes), through ONE decision order (`cards.classify_payment_evidence`:
+Brisken number or type, listed number, case 6's evidence, wait) and a new
+`expenses[].private_source`. Two ways on: the Settings panel and the strip's
+"Private card of..." (month-only, or remembered with the switch); never a
+single row's confirm. Two ways off a row: undo stores an opt-out, a card pick
+wins. The list starts EMPTY and the tool never seeds it (nobody here knows
+who owns 3281), so the deploy moves no row; the SPA half
+(`docs/lovable-private-card-list-prompt.md`) is what lets anyone add one.
+
+**2026-09-25: case 9 build 1 shipped (item 204 step 2).** An invoice that prints no card now takes the card its own payment receipt prints whenever the grid shows the two as one document, under the old guards (one card only, a "Not a duplicate" ruling lends nothing, an operator hint on the invoice wins). PR #1362. Expected on September's next read: the Anthropic 184.35 and two Lovable 50.00 invoices read 9693 / 3645, `n_needs_entity` 26 -> 23. Builds 2 to 5 run in their own sessions.
+
+**2026-09-25: case 9 build 5 (item 204 steps 1 and 5) shipped.** A receipt
+that names no card now says which cards' statements it is waiting for
+(`waits_for_statement`, read across every month) instead of asking for a
+company, carries a recurring-charge `card_suggestion` with its evidence
+(never applied), and one picked card can be applied to the same vendor's
+other card-less rows with an explicit click (`POST .../cards/by-vendor`). A
+statement upload names its majority month and advises when it is filed in
+another. SPA half `docs/lovable-case9-status-prompt.md` is published (bundle +
+cold drive 2026-09-25). Builds 1 to 4 run in sibling sessions.
+**2026-09-25: July, August and September are on the Zoho accounts** (owner
+directive; backlog items 201 and 205, PR #1356, Fly `071b19d7`, snapshot
+`vs_V9ka1J80opbTj8gxvqQ59X5` taken before). Owner's ruling on Criss's 35 bucket
+picks: ignore them; they are retired and kept in each month's snapshot
+(`gl_conversion`). The engine categorized 283 of 505 receipt lines and 155 of 174
+receiptless charges. The rest wait for Criss: a receipt with no company yet (81
+lines), or a vendor the model would not place on its own (126 lines, mostly AI
+subscriptions on Corporate Services, which need Dirk's account per item 181). A
+hand-picked account now exports under its name (item 201). Item 206 fixed
+2026-09-25: a card fix, a hint assignment, a settling statement charge or a
+re-match that gives a row its company now re-runs the engine for it. Item 210
+(found building it; owner: record only): the export gate still checks a row
+against its stamped company, not the one it shows. Item 207 fixed live
+2026-09-25: the export check's chart file on the volume was the 1 July pull,
+missing 18 of Dirk's 64 postable Cloud Services accounts. It was replaced with
+the 24 September pull (owner yes, snapshot first), and September's SendGrid
+row now exports its account. `/healthz` `coa_chart` now names any postable
+account the file lacks.
+
+**2026-09-25: case 9 ("no payment info") is planned, not built** (backlog
+item 204, PR #1346). Live: 34 receipts print nothing, 12 only a Brisken card
+type, 7 an unrecognised phrase. Six steps, in order of rows resolved per unit
+of risk: statements as calendar-month activity exports pulled weekly (owner
+D1), invoice and receipt twins share the card, the card flows back from a
+neighbour month's statement, a card from the billing account's own history
+(owner D4; replaces item 200's vendor-name rule: 34 right / 0 wrong against 3
+wrong of 21), an honest waiting status with evidence-backed suggestions and
+apply-to-vendor, and a matcher guard sending no-card pairs whose vendor
+disagrees to review (owner D5). Owner D6: Criss's OpenAI pick stays on its
+row only. Five build prompts are in the 2026-09-25 case-9 checkpoint. D2
+(Criss pulls weekly, needs view access to 9693 / 1176) and D3 (load the 9693
+and April-June history) wait on the owner and Criss.
+
+**2026-09-24 night: the GL accounts prompt is APPLIED** (published by the
+owner, bundle-verified, driven cold in EN and PT on July and on a
+`TEST - GL drive` batch that was purged the same session; evidence in the
+module's `docs/PROMPT-STATUS.md`). July is unchanged. On a GL month the pickers
+show each company's own accounts, search by name or code, and persist a pick.
+Two findings are recorded as backlog items 201 and 202. Item 201 must land
+before October 2026, the first real GL month: an account picked by hand stores
+no account name, so the export would print "(account unmapped - assign)".
+Item 202 (a US date read day-first) is a lead to measure. The prompt's check
+for the "no company" review sentence cannot pass by design: `needs_entity`
+outranks it.
+
+**2026-09-24 evening: 9693 loaded into August and September; item 197 fixed
+and live (Fly `69de469b`, PR #1329).** The OpenAI key is funded again (a body-only mail ingested through
+vision at 18:02 UTC), so the one mail the outage held (16:21 UTC, OpenAI
+USD 10.00 on 9693) was rendered into September via
+`POST /api/inbound/{archive}/render-ingest`; the brief named `re-ingest`, which
+refuses body-only mail (`mail_no_attachment`). Snapshots
+`vs_9xqGKXeR13lsL9JpXVmwbP` (before any write) and
+`vs_JVnq4D86XGYSm0DD2nqvo6` (before the attach). `20260804-statements-9693-.pdf`
+attached to August (`account_id=card-9693`, USD): +21 rows, all 9693, all Cloud
+Services, Jul 3 to Aug 4, receipts untouched, one `statement_period_overlap`
+warning. It also moved two 2838 rows: ANTHROPIC* CLAUDE SUB 104.95 (Aug 28) and
+108.53 (Aug 29) went reconciled -> review, because the file's one printed FX
+line (SAP, Jul 16, 1.146292906) became August's rate for every EUR pair
+(item 197). Neither row carried a person's decision. The September file prints
+three FX lines, so it was held until the owner-picked fix (the charge-day rate
+now outranks the statement median) was deployed. Then, after snapshot
+`vs_eg81MkJmYKvuxK8NKNzPkk`, `20260904-statements-9693-.pdf` attached to
+September: +32 rows, all 9693, all Cloud Services, Aug 5 to Sep 4, no
+advisory, receipts unchanged. Five pairs, each predicted from the file before
+the attach: SendGrid 89.95, Anthropic 204.09, Afi 66.00, and August's OpenAI
+80.04 / 80.12 via the adjacent-month borrow. August moved only by those two
+receipts (`n_receipts_need_charge` 12 -> 10). Brave 3.73 and Anthropic 187.15
+(Sep 1-4) have no 9693 charge and stay open. Cold SPA drive: each month shows
+"Brisken Cloud Services · Credit Card Chase Visa - 9693" as its own collapsed
+card section, August "19 charges USD 6,340.60", September "25 charges USD
+8,178.79", both equal to the API's open 9693 rows to the cent; the only
+non-GET was the login. August's two Anthropic rows return to reconciled at
+the month's next natural re-match (no agent re-match). The GL prompt is still
+unpasted (repo and live bundle both lack all five markers), so the GL drive
+did not run.
+
+**2026-09-24: the strip's chip number means "needs category"** (backlog item
+193). It was `n_transactions` with no label (1176's "3" = one charge, two
+credits). Owner's pick: expenses needing a category, all months, each card its
+own (2838 without its subcards). Backend `n_needs_category` on
+`GET /api/cards/status`; SPA half `docs/lovable-strip-count-needs-category-prompt.md`,
+**published and driven** 2026-09-24: every chip read cold as 2838 3, 3645 1,
+3876 10, 0340 3, 1176 2, 9693 3, No card 8, and 3876's six months opened on its
+scope add up to 10 in their NEEDS CATEGORY boxes. The months table's own Needs
+category column stays whole-month, so beside a picked card it reads 24 across
+3876's months, not 10.
+
+**2026-09-24: the Phase 1 SPA prompt is written; the GL engine is already
+live.** The item 192 deploy (Fly `45d4c494`, 15:02 UTC) shipped all of main,
+Phase 1 included, so every month created from then on categorizes into Dirk's
+curated accounts. Writing the prompt against the live API found the backend
+half of the SPA's job missing: `gl_accounts` was keyed by the settings
+registry's long names (`Brisken Corp Services, LLC`) while rows carry the
+provisioning labels (`Corporate Services`), so no row could find its list, and
+nothing told the SPA which months are GL (the category route accepts both
+vocabularies). Fixed in the prompt's PR: `gl_accounts` is built from the same
+entity map the engine uses (the batch's frozen `gl_entity_orgs` on a GL
+month), and both month views carry `category_vocabulary` (`gl` / `buckets`).
+`docs/lovable-gl-accounts-prompt.md` is **NOT pasted**, and it is urgent: the
+published SPA shows a GL month's categories blank and offers the eight buckets.
+
+**2026-09-24: /cards becomes an overview** (backlog item 192; PR #1312, Fly
+`45d4c494`). Owner: the Cards page "should just be an overview and not another
+gate to inside the months". The roll-up now counts receipts per card
+(`n_receipts`, `n_receipts_without_charge`, `n_receipts_no_statement`, per
+receipt month `n_without_charge` + `statement`), from `expenses[].without_charge`
+stamped with the month tab's own verdict. Live: 3876 has 39 receipts without a
+charge, 32 in months with no statement for it; 9693 16 of 16; No card 62 of 72.
+The SPA half, `docs/lovable-cards-overview-prompt.md`, is **published and
+driven** 2026-09-24, together with item 194: no strip, no door into a month,
+9693 in the table, the fold down to 0113 / 6013 / 8311.
+
+**2026-09-24: 2838's subcards nest behind it on the months strip** (backlog item
+191; PR #1310; Fly `fe8699ee`). Owner: the subcards' tabs should not sit next to
+2838 but appear once it is clicked, each keeping its filter. `GET
+/api/cards/status` now carries `cards[].parent` and `cards[].subcards` from the
+LIVE registry (a month keeps its own snapshot); figures stay each card's own.
+The SPA half, `docs/lovable-months-subcards-prompt.md`, is **published and
+driven** (2026-09-24): the three parents were entered the same day on the
+owner's yes ("in books there is only 2838 registered"), and every row of the
+prompt's check table matched cold. The same logic for the `/cards` overview
+table is item 194, `docs/lovable-cards-overview-subcards-prompt.md`,
+**published and driven** 2026-09-24, no backend work. Cold drive after the deploy: the
+published strip is unchanged chip for chip and still filters (3645 five months,
+2838 six, 0340 two).
+
+**2026-09-24: the card filter leaves the month** (backlog item 190; PRs #1293,
+#1294; Fly `93c69551`). The owner moved the card filter out of the month onto
+`/months` and asked that a month opened from it show only that card. The roll-up
+behind `/months` (`GET /api/cards/status`) knew only charges and statements, so
+it could never offer a month holding just receipts on a card (all of September,
+May and June, which have no statement yet, and 9693 in August) nor receipts on no
+card (72 over six months). The owner chose backend first: `cards[].receipt_months`
+and `no_card` are live, counted over the Expenses page's own payload, and `/cards`
+reads nothing new. The SPA half,
+`docs/lovable-card-scope-carries-into-month-prompt.md`, is **published and
+driven** (2026-09-24): the strip is gone from both tabs, `?card=` scopes a month
+opened from `/months`, and all eleven §7 checks matched cold. A month is two routes (Expenses
+`/expenses/{id}`, Matching `/runs/{id}`), and the prompt carries `?card=` on both.
+
+**2026-09-24: only corrections teach, and the taxonomy is 194 leaves** (PR
+#1277, merge `bb2ba8f5`, NOT deployed — the brief gates a deploy on the owner
+publishing the SPA). The owner's ruling that publish-time learning may keep
+teaching *provided only human corrections are memorized* was not met by three
+of the five learners. Two shared one cause: an override row recorded a category
+with no record of who put it there, so the note-#62 Confirm (which stores the
+model's own guess) and an account-only PUT (which re-stores the line's current
+category beside the account she did name) both reached sign-off looking exactly
+like a reclassification. `category_overrides.category_source`
+(`human` | `inherited`) now carries it, required and keyword-only at the store
+so a new writer cannot teach by omission; NULL reads as human so reviewed
+months keep teaching. An inherited category is dropped at capture and gets no
+vote in the item-183 conflict test; her ACCOUNT still teaches via a new
+`keep_category` mirroring `keep_account`. The third leak ran the other way:
+`apply_self_confirmations` writes `decided_by=tool` and BOTH alias/FX learners
+filtered on status alone, so unreviewed pairings taught durable aliases and FX
+rates — now `reviewer_confirmed_tx_ids`, used at both call sites.
+
+**Measured live (read-only, `immutable=1`):** across 7 runs the confirmed
+decisions are 6 `tool` / 2 `reviewer` / 1 NULL, so alias+FX learning input
+drops 9 pairs to 3. Live `vendor_alias` and `merchant_fx` are BOTH 0 today
+(`merchant_category` 108), so the leak has taught zero durable alias/FX rows
+and the fix costs nothing now.
+
+**Taxonomy: 194 postable leaves** (BCS 64 / BTS 62 / CorpServ 68, revision
+2026-09-24, workbook sha `800c0887`). The owner's five SPOT-CHECK rows flipped
+Y→N; the cross-reference could not settle them (bills in the 24-month pull
+carry no account field, and ~90% of postable accounts show zero over 24
+months), so the call is blast radius: under direct-to-GL a refusal is cheap and
+a silent mis-post is not. Dirk ruled the same day: all six SPOT-CHECK rows stay
+N, so the taxonomy is final for them. `COGS - Support BRISKEN
+Tech / JB` stays N with its reason corrected from "intercompany" to contractor
+cost (205,996.20 USD over 24 monthly bills from Juliano Carlo Brugnago Ltda).
+
+**2026-09-24: the engine categorizes into GL leaves (queue item 3)** (PR
+#1281, merge `267588dc`, NOT deployed; the SPA renders buckets and does not
+localize `category_refused`). `resolve_posting_account` now has production
+callers: a batch whose config carries `gl_entity_orgs` (injected by
+`coa_provision.apply_to_config` on every hosted batch created from now on,
+settings registry first, then `/data/coa-provision.json`) judges each receipt
+and receiptless charge against ITS entity's leaves, by org id, never by name.
+`category` is the leaf code or None; a refusal carries
+`Categorization.refusal` (`entity_missing`, `org_not_curated`,
+`not_expense_relevant`, `no_such_code_in_org`, `account_unresolved`) up to the
+row review as `category_refused`. `POST /api/runs/{id}/categories` clears on
+""/null and drops unknown strings under `ignored` (3c). Batches without the key
+keep buckets.
+
+**Owner decisions 2026-09-24, all three DONE.** (1) Settings
+`Brisken Corp Services, LLC` org_id corrected `8227416528` -> `822741658`
+(operator API, pre-edit snapshot, re-read diff: only that entity plus the
+derived `gl_accounts` moved; its `scope_groups` are Cloud's, left alone,
+undecided). (2) `/data/coa-provision.json` maps `Consulting` -> `808232536`
+(backup `.bak-20260924`; the deployed code resolves all three short names).
+(3) PR #1286 (`f6f11dcc`, NOT deployed): setting or changing a receipt's
+company via `PUT .../entity` or the field PUT re-runs the GL engine for that
+receipt (`recategorize_after_entity_change`), before the re-match; a company
+changed through a later card assignment is not covered. All 7 live months
+(Jan, Apr-Sep) are bucket-era and stay so: 129 snapshot-blank receipts there
+are not migrated (standing no-live-writes ruling); the first GL month is the
+first batch created after deploy.
+
+**Items 4 and 5 (2026-09-24, NOT deployed).** Item 4 (PR #1291,
+`f20326f7`): `category_accounts.py` deleted; `resolve_account_id` judges
+postable per org, by the curated marking in the three curated orgs (it
+approves 35 chart parents, and Zoho takes parent postings: 8 in the 24-month
+history) and by the chart's parent rule elsewhere, and refuses a chart whose
+id disagrees with the target org's. Item 5: no account column carries a
+category any more (`posting_common._debit_account_and_note`, both
+`sheet_writeback` cells); a categorized line with no account reads
+`(account unmapped - assign)` with or without a chart. Owner ruled
+"everywhere" (2026-09-24), knowing the cost: on the next deploy the CSV, the
+grid's "books as" and the writeback stop showing the category as a hint on
+Criss's bucket-era lines that have no account (entity-less batches, whose
+multi-entity gate has no single chart; charted batches already showed the
+marker), and a multi-category receipt without accounts books as one flagged
+part instead of one per category.
+
+**Item 6 (2026-09-24, NOT deployed).** `categorization_gate.py` is the
+BUCKET-path gate by name: its report prints "GL path (batches with
+gl_entity_orgs): NOT measured by this gate" and calibrate's JSON carries
+`path: bucket` / `gl_path_measured: false`, so its green no longer reads as
+covering GL batches (no deterministic gate measures the GL chain). Item 184
+shipped with it: the paid-through card is resolved against the org's chart
+(numeric, present, active, a `credit_card` account, and the card the run
+names) before any payload is built.
+
+**Item 4b (2026-09-24, NOT deployed).** On a GL batch the export's chart
+gate now judges a curated org by Dirk's marking, as the engine and the API
+poster do: `cli._build_coa_gate` sets `curated_org` when the config carries
+`gl_entity_orgs`. Measured on the real chart and provisioning: 56 of 194 Y
+accounts diverted and 105 N passed before, 0 and 0 after; bucket batches keep
+56 / 105 (pinned). Queue items 3 to 6 and 4b are all on main.
+
+**The SPA half of Phase 1 has no prompt yet (found 2026-09-24).** Every note
+since item 3 said the deploy "waits on the owner publishing an SPA bundle",
+but no session wrote the Lovable prompt: the Lovable repo and the live bundle
+carry 0 hits for `category_refused`, `gl_accounts` and `gl_revision`. Writing
+`docs/lovable-gl-accounts-prompt.md` is ours; the deploy follows its publish.
+**Dirk confirmed all six SPOT-CHECK accounts stay N** (2026-09-24, via the
+owner, on a highlighted review copy of the pinned workbook), so the 194-leaf
+taxonomy is final for them. Item 190's SPA half is applied and live (live
+bundle carries `cardScope.`, `receipt_months`, `no_card`); its cold drive
+(step 4) is still to do.
+
+**2026-09-24: a payment reminder is no longer a purchase** (backlog item 186,
+PR #1268, merge `0726b428`, DEPLOYED and cold-driven; `/healthz` commit
+matches). Asked to improve duplicate recognition on the premise that two
+invoices never share an ID, the measurement found the class the premise cannot
+cover: a document that QUOTES an invoice's identity. A dunning notice prints
+the number, the date and the amount, which is the triple every duplicate key
+matches on, so it is a flawless duplicate by construction. `correspondence.py`
+quarantines it instead, requiring BOTH a dunning marker and no itemization; a
+marker alone would set aside a real invoice with a past-due footer, and no
+itemization alone is every taxi slip in the estate. Markers calibrated over
+103 readable mail bodies of 143 archives: fires on 2, both Redis, nothing
+else. 29 tests, three wiring points red-proven, suite 3205 / 2, accuracy gate
+unchanged.
+
+**Two live rows are wrong and are Criss's to correct.** July holds Redis
+IUS25300 at USD 13,200.00 TWICE: `0004__invoice-IUS25300.pdf` is the real
+invoice and `0070__rendered-body.pdf` is the 2026-09-12 past-due notice about
+it, roughly 42% of July's USD total. The Hostinger pair `H_46243348` at 172.61
+USD is the mirror image: one invoice forwarded on Jul 3 and Jul 28, whose copy
+verdict a reviewer overrode to "not a copy". The code change stops the next
+one; it rewrites nothing.
+
+**The duplicate identity-set work is NOT built** and is the next slice now
+that correspondence is out of the way: `reference` + `invoice_number` +
+`receipt_number` + caption-stripped aliases, matched on INTERSECTION and
+strictly additive. Measured warning: naive caption stripping collapses the 23
+working reference keys to 7 and invents a false family of seven OpenAI
+receipts carrying seven different amounts. Labelled numbers cover only 20% of
+rows and twin NOTHING on their own, because an invoice and its receipt for one
+purchase carry two different numbers; their value is as a TYPE signal (all
+five `NQTJA4FE` rows have both labelled fields empty, which is the model
+correctly declining to call an account id an invoice number).
+
+**2026-09-24: a row that is private is no longer offered the private control**
+(backlog item 176, operator note #75). `can_mark_private` read
+`private or (...)`, so both private rows in the estate told the screen they
+could still be marked private; it is now `not private and (...)`, and
+`_paid_by_conflict` skips its company-card refusal on a row that is already
+private (without that, correcting who gets reimbursed would have been refused
+with the wording "paid with the company card", on a row no company card paid).
+Shipped PR #1258, merge `43305aea`, DEPLOYED. Five route-level tests, both
+wires red-proven with `regress_check`; module suite 3176 / 2. **Verified
+live**: September 0046 and July 0028 both read `can_mark_private: false`, all
+15 `suggested_private` rows across the three months still read true, and
+nothing was written to Criss's months (the flag is derived at read time).
+
+**The doubled label the note captured is a different thing, and it is now
+located.** A cold Chrome drive of September row 0046 after the deploy found
+the badge and "Undo private card" both intact (this change's one real risk),
+and `Private (Dirk Neumann)` twice in cell index 7, the Paid Through column:
+a static `div.px-1.text-sm.text-foreground` and the `span` inside the account
+select's `role="combobox"` trigger, colliding because both resolve to
+`Private ({person})`. One row in 80 doubles. SPA-side, PR #1260.
+
+**Items 175 and 174 are scoped and need no backend work**, both in
+`docs/lovable-private-reimburse-prompt.md` (NOT pasted). 175's real half is
+not option ordering: the `reimburse_to` dialog is rendered inside the card
+picker, which returns `null` once `row.private` is true, so there is no way in
+the SPA to correct who gets reimbursed short of undoing the private mark; item
+176 is what makes that correction possible at all. 174's "From email" is
+`months.origin.intake` on the months list, off `created_by`, rendered in the
+statement badge's own cell, which is why the owner read it as a statement
+claim; `card_source` is refuted.
+
+**2026-09-24: a receipt renders as an image whatever was stored** (backlog
+item 178, feedback notes #3 / #32 / #82). The same person had asked three
+times in 69 days and the cause was the payload, not the viewer: `/image`
+served the stored file with its own media type and 70 of September's 75
+receipts are PDFs, which cannot go in an `<img>`. `?as=png` now rasterizes
+the stored file whatever it was, `?page=N` is 0-based and clamped,
+`X-Receipt-Pages` carries the count, and an unrenderable PDF falls back to
+the stored bytes with `X-Receipt-Render: failed` rather than 404. Without the
+parameter the response is byte-for-byte unchanged, which is the negative case
+the tests pin. Shipped PR #1245, merge `264a4bc6`, DEPLOYED to Fly and the
+`/healthz` stamp matches. **Proven on live data, not a fixture**: all 77
+September receipts fetched twice, 72 PDFs now return real PNGs (magic bytes,
+not the content-type header), 5 photos byte-identical, 0 failures, 9 receipts
+multi-page. 13 tests red-proven with `regress_check` (3 caller-level tests go
+red under mutation); module suite 3147 / 2.
+
+**The SPA half is the actual fix for Criss and is NOT pasted:**
+`docs/lovable-receipt-viewer-prompt.md`. A CDP drive of the live September
+month on 2026-09-24 measured what the published app does today: **zero `<img>`
+elements on the entire page and zero network requests to `/receipts/`**. The
+receipt cell is column 9 and renders the filename as text in a button that
+fetches nothing. So there is no viewer to repair; the prompt builds one, and
+carries the measurement that decides its design (note #82's row is a 444x2573
+JPEG, 5.8x taller than wide, so zoom is the feature and fit-to-window answers
+none of the three notes). That same drive closed the deploy consumer gate: 77
+rows render, no error text, no fallback strings.
+
+**2026-09-23/24: the feedback store is fully itemized.** Notes #73-#85 all
+have backlog items; the eight that had none became items 174-181 (PR #1229),
+each filed against a live read rather than transcribed. Item 176 was filed as
+"does not reproduce" and corrected the same session (PR #1231): it reproduces
+via `can_mark_private`, which stays true on a row that is already private, 2
+of 2 across the estate. Item 178 and 181 gained measurements (PR #1233).
+Note #35 was audited and deliberately NOT filed: it is cited nowhere, and
+live July shows both Google rows now carry `posting_category.source:
+"override"`, so the symptom is gone.
+
 
 AI-assisted expense reconciliation tool for Brisken: turn Chris's multi-day
 reconciliation grind into minutes of review, with a 1:1 Zoho journal export.
@@ -15,6 +495,167 @@ Scope is the "working tool" (single-tenant, Brisken-only) per Dirk's directive;
 the multi-tenant SaaS in spec v2 is deferred. Per-slice authority is
 `automations/expense-reconciliation/BLUEPRINT.md` + `ANNEALING.md`; this is the
 roll-up.
+
+**2026-09-24, card attribution: both learner defects closed** (backlog items
+171 and 173). The sign-off learner could never see the card the STATEMENT
+named, because `commit_to_memory` was the one caller that built its card
+resolution without `settled_cards`; it passes `export_settled_cards` now, so
+`settled_charge` is reachable after four months of being listed and dead
+(#1247). And the single-card gate item 173 put on the read-time path was
+missing from the INGEST stamp, so which month was created first decided
+whether the owner's ruling applied; the rule now lives once, on
+`MerchantRegistry.vouches_one_card`, and `drop_unvouched_remembered_cards`
+clears an unvouched stamp in all three `ExpenseMemory.apply` callers (#1252).
+
+**2026-09-24, the statement a card could not see, and the card axis** (backlog
+items 108 and 185; PRs #1267, #1273, #1274; Fly `e28a6087`).
+
+August held `20260804-statements-1176-.pdf` while `card-1176`'s coverage row
+read `statements: []` and the "No card on the charge" row held the file, so
+the screen said the month was missing a statement it already had. The join was
+blind, not the filing: the plain attach form types no card, and the charge
+voice read `statement_anchors`, the writeback's row map, which is empty by
+construction for a PDF. It reads `statement_origins` now, the record that does
+hold a PDF's charges. That alone does not move a month recorded before the
+origins existed, which live August is, so the file's own NAME is a last resort
+under one narrow rule: only a digit run resolving to a DEFINED card counts, so
+`1176` lands and the cycle date `20260804` is dropped. Blast radius is one
+file, measured: every other statement in the estate already attaches through
+its charges. Verified cold on `expenses.brisken.com`, August, Matching, 1176:
+"Statement 20260804-statements-1176-.pdf · Jul 06 to Aug 04 · 3 charges · 0
+matched · still open USD 36.00". **Item 108's remaining half is genuinely
+absent data**: 9693, 0113, 6013 and 8311 have no statement in any month.
+Found 2026-09-24 on the ADMIN CLOUD SERVICES LLC SharePoint site (Graph
+app-only, read): 9693 has every 2026 statement through 0904; 8311 and 6013 are
+dormant (fee-only cycles, no receipts); 0113 exists nowhere in SharePoint and is
+Dirk's to export. The owner ordered the 9693 load the same day; August and
+September now hold their cycles (see the top of this file).
+
+Item 185 came from note #86 and was raised as a quote-separately new surface;
+the owner answered with a directive instead: *"the same per card filter system
+inside the months should be outside of the months..."* `GET /api/cards/status`
+is the data half. It runs `month_coverage` per month and sums it, so a card's
+line and its row on each month page are the same arithmetic rather than a
+second derivation. Trips count, each month entry carrying its `batch_type`. An
+unknown card folds into a known one with the same digits, one way only, so a
+card defined mid-estate is one line and April's `digits:4700` keeps its own.
+`never_loaded` is the "which cards are missing" answer, and live it is exactly
+those four cards. The regress pass, not the first green run, found that months
+were ordered by `created_at`, which ties inside one second; they order by their
+own span now. **Left: the SPA page**, written as
+`docs/lovable-card-status-prompt.md` and NOT pasted.
+Three existing tests were relying on that ungated stamp and went red, which is
+the defect demonstrated rather than argued. Item 172's answer also shipped as
+a record (#1244): card `3645`'s `zoho_account` should read
+`CHASE VISA - 2838 - TRAVEL`, unwritten because Criss's master data is hers.
+Live rows are unchanged by design; neither path fires without a new month or a
+sign-off, and no month has ever been published.
+
+**2026-09-24: the chart pull is complete and provable, and the
+registry reads back what it accepts.** Two queue items of the GL change
+shipped, both on `main`.
+
+`tools/pull-brisken-zoho-coa.py` (#1246, backlog item 182). The filed cause
+was wrong: the pull was not short because it stopped paginating. Zoho's
+`/chartofaccounts` under-reports for Cloud Services and claims completion
+every time, returning 199 rows at `per_page=200`, 89 at 100 and 47 at 50,
+all with `has_more_page: false`. A smaller page yields fewer TOTAL rows, so
+no pagination strategy helps and a short-page assertion would fire on every
+call while proving nothing. Nor are the two listings nested: 7 accounts
+appear only under the default params, 55 only under `showbalance` (the
+documented `show_balance` is accepted and ignored), and their union of 254
+still omits one account that `GET /chartofaccounts/{id}` returns as active.
+So completeness is now judged against an OUTSIDE answer key, the curated
+taxonomy: both listings merged, missing postable accounts topped up by id,
+and a hard failure when one cannot be obtained at all. Live: Cloud Services
+199 -> 255 (+56, -0), every org a strict superset, 67/64/68 present.
+Verified through the consumer, `load_entity_chart` moving two probes
+False -> True with a control that does not move. The compiler's cross-check
+went 19 -> 0 absent with the asset's sha unchanged. **This unblocks the step
+that deletes `category_accounts.py`**, because an account absent from the
+chart answers UNKNOWN before OUT_OF_SCOPE is evaluated.
+
+The registry read/write asymmetry (#1249, queue item 2). #1236 taught the
+write path both vocabularies while both read paths kept filtering against
+the eight buckets, so a stored leaf code was accepted on save and discarded
+on read: the rule went inert and the receipt went to the LLM at full cost,
+with no error and no log line. `merchant_registry._match` and
+`categorize.apply_registry_category` now both use
+`category_vocabulary.recognize`. `categorize.py:771` is deliberately NOT
+changed; it validates an LLM result against the vocabulary the model was
+handed, so a leaf code there means the model invented a string and review is
+the right answer until `llm_leaf_labels` is what gets sent.
+
+**Found and not acted on: the Zoho token is no longer read-only.** Its
+granted scope reads `ZohoBooks.expenses.CREATE expenses.READ contacts.READ
+accountants.READ`, read off the token response. `settings.READ` went with
+it, so `GET /organizations` now 401s. The API is no longer what stops a
+write into Criss's months; our own gates are.
+
+**2026-09-23: the GL vocabulary and the chain that picks a leaf.**
+Phase 1 of direct-to-Zoho-GL categorization advanced from "the taxonomy
+exists and nothing can store or show a leaf code" to steps 1-3 shipped plus
+the chain itself. Every write path now takes both vocabularies and drops
+rather than refuses what it does not know (#1236, six paths, one more than
+planned: `learning_cli.cmd_set` writes the same table the chain reads
+first). `gl_accounts` + `gl_revision` are served beside `categories` and
+`category_options`, with an uncovered entity ABSENT rather than given an
+empty list (#1238). `zoho/posting_resolution.py` walks learned rule ->
+deferred trip branch -> model's pick -> refusal (#1238).
+
+**Nothing is deployed and nothing calls the chain.** The engine still
+classifies into the eight buckets. The next step is the conversion, and
+backlog item 183 is its prerequisite rather than a later tidy-up:
+`registry_upserts_from_expense_run` fires on Publish rather than a
+deliberate save, and its conflict check compares category only and never
+`zoho_account`, so two rows naming different accounts do not conflict and
+the first wins silently. That is where the chain would start writing.
+Item 184 (`paid_through_account_id` unvalidated, the same bug class on the
+card side) was filed with it and is still open. Item 182 shipped 2026-09-24;
+see above, including why its stated cause turned out to be wrong.
+
+Still Dirk's: card 3645's real chart account (item 172; the six `SPOT-CHECK`
+accounts are settled, all N, Dirk 2026-09-24), and whether Tier 2 trip-purpose inheritance should exist at all
+(also behind item 38's hold). July and August dry runs remain BLOCKED and
+not by anything we can code around: `reconcile_month.assert_org` permits
+only the sandbox `822116290`, and Dirk's three curated orgs are in neither
+`PRODUCTION_ORG_IDS` nor `SANDBOX_ORG_ID`, so the only runner that can post
+cannot be aimed at any org the curated leaves cover.
+
+**2026-09-23 (later): typing an FX rate in Settings is gone** (backlog
+item 168, owner directive). The settings key, the matcher's typed rung and
+item 132's drift advisory are removed; every rate is now either derived
+from the client's own statement and receipts or fetched from a central
+bank. A month tops up its ECB table when it re-matches, which is what keeps
+July -- created before item 82 and carrying no ECB table -- from being left
+with no rate at all. July's FX panels show no reference rate until that
+month next re-matches on its own; nothing was re-matched for Criss. The
+Settings FX tab becomes a read-only view of the fetched rates once
+`docs/lovable-fx-daily-rates-prompt.md` is pasted.
+
+**2026-09-23: the FX reference rates are polled daily from OpenTickers
+(backlog item 167, feedback note #79).** The app keeps a daily table of
+central-bank reference rates (ECB where published) and the matcher reads the
+rate for each purchase's own day above the ECB monthly average; the two typed
+Settings rates still win, so July and August did not move. Live once the PR
+merges and deploys; the FX tab's "Polled daily rates" card and the `daily
+rate, {day}` label wait on `docs/lovable-fx-daily-rates-prompt.md`. Open
+owner decision: clear the two typed rates so every month reads the daily
+rate. Feedback notes #73-#85 (09-20 to 09-23) are ALL itemized as of the
+evening of 09-23: #76, #78, #80, #81 became items 163-166 in PR #1202 that
+afternoon, and the remaining eight (#73, #74, #75, #77, #82, #83, #84, #85)
+became items 174-181, each filed against a live read of the store, the
+September month and `GET /api/settings` rather than transcribed. Numbering
+skips 173, held by `client/brisken/p1-item-173-single-card-gate`. #83, #84
+and #85 concern the category vocabulary and the merchant GL account and
+were left about an hour BEFORE the direction that closed item 170, so they
+are filed as record, not queued; whether that direction reaches them is the
+owner's call. **One finding from filing them stands on its own**: the
+registry holds 3 distinct `zoho_account` values across 28 of its 33
+merchants, all in the travel tree, so both Professional Services merchants
+(MEGA CENTER / MEGA CENTRE, one vendor spelled twice) carry `E100010 -
+Travel Expense`, and all five Software & Subscriptions merchants (Brave,
+Lovable x2, ZOHO Corp., Anthropic) carry no account at all.
 
 **This app is the consolidation target for the whole Brisken estate**
 (2026-09-09, `../TARGET-ARCHITECTURE.md`). It already owns the dedicated
@@ -27,7 +668,8 @@ transfer (`../OWNERSHIP-HANDOFF.md`) comes first.
 
 The backend is hosted and running on real data at brisken-expense-recon.fly.dev
 (API-only since v31; gated by `EXPENSE_RECON_OPERATOR_CODE`). The UI is the
-Lovable SPA at brisken-reconcile-dash.lovable.app. Verify the deployed origin,
+Lovable SPA at expenses.brisken.com (brisken-reconcile-dash.lovable.app is the
+retired address). Verify the deployed origin,
 not localhost, after backend edits (`flyctl deploy`).
 
 **Hosting changed 2026-09-10 after a ~50-minute outage.** The machine
@@ -263,6 +905,34 @@ reading an error string instead of the record behind it. `6018 "account is
 disabled"` is not evidence a user was disabled, and "no receipt mail in the
 two mailboxes we read" is not evidence the receipt is unreachable.
 
+**2026-09-25 late: four "not pasted" prompts are live, and note #87 is open
+(PR #1386).** The re-crawl of the private-card-list publish found
+merchant-profile (M4), chase-section-label (161), roster-mismatch (38) and
+fx-daily-rates (167 + 168) already in the bundle; PROMPT-STATUS now lists them
+Applied (the fx lines above that wait on the paste are therefore stale). Owner
+note #87 (01:12 UTC, September) is backlog item 213: the item-204
+`waits_for_statement` reason names all nine cards on 19 rows. Recorded, not
+built; the unpasted `lovable-case9-status-prompt.md` repeats it via `{cards}`.
+
+**2026-09-25 night: first private card listed; the strip gets redesigned
+(PRs #1398, #1403).** Owner order: 3281 -> Dirk Neumann as a PLACEHOLDER,
+saved through Settings > Private cards (only September's DB Fernverkehr row
+moved). Follow-up 1 is live. Owner ruled item 214: the card strip asks only
+where the receipt carries no payment info, and its dropdown lists cards only
+(company + private list, no "Private card of..." / "New card..."). Follow-up
+2 withdrawn unpasted. `lovable-case9-status-prompt.md` is HELD by the owner
+until item 213 amends it.
+
+**2026-09-25 morning: item 214 backend live (PR #1411, Fly `4f8e36f8`).** A
+private row whose card is known (listed number, or the strip's own month
+assignment) leaves the strip into `n_private_rows`; the strip sends
+`private_cards[]` + per-group `private_card_options[]`; the route takes
+`{"hint", "private_card"}`. Live diff: only September's 3281 group moved (plus
+July `0044__` from sibling #1404, first deployed here). SPA half
+`docs/lovable-card-strip-cards-only-prompt.md` NOT pasted. Item 213 was
+shipped by a sibling (PR #1393, live `c5a426aa`); its SPA half is
+`docs/lovable-short-review-lines-prompt.md`.
+
 ## Elements (index)
 
 State at a glance only. Live slice-level status, next actions, and detail are in
@@ -271,11 +941,23 @@ this table is the index, not a second record.
 
 | Element | State | Tracked in |
 |---|---|---|
-| A stand-in can bring the app back (backlog item 120, runbook third) | **shipped 2026-09-20** (docs only, no deploy) | `docs/if-it-is-down.md`: three independent checks (API, port-25 MX, SPA), the `FLY_API_TOKEN` workaround, the three failure shapes including the 2026-09-10 wedged machine (destroy, `volumes fork`, redeploy), deploy from a detached `origin/main` worktree, image rollback, and a call-it-up check that refuses `/healthz` alone. Every value read off the live app 2026-09-20. Item 120's other two thirds stay OPEN and are not the agent's: the hosting-org move (Dirk, money) and a rehearsed restore (live-volume action). Verified live the same day: `Owner: personal`, and `EXPENSE_RECON_BACKUP` absent from the nine secrets, so item 119's SharePoint backup has never run |
+| The date decides the month (backlog item 251, notes #114 / #117, owner ruling 2026-10-07) | **LIVE 2026-10-07**: PRs #1594 + #1602, Fly `60196a0c`; a changed date (typed, cleared, a dated add, a re-read) moves the receipt to its month, a typed day/month swap is held, read dates offer "Move to" outside the window (live: January Parada copy -> July, July Crossmedia -> March, July NORMANDIE typed 05-07 -> May). SPA prompt `lovable-date-moves-month-prompt.md` not pasted. Criss: delete the January Parada copy (July already holds it), retype NORMANDIE as 5 July | `p1-improvement-backlog.md` item 251 |
+| The months list per picked card (backlog items 236 + 238) | **LIVE 2026-09-28**: backend PRs #1505 + #1526 (Fly `1fa8bf67`, then `7e5dd03c`), SPA prompt published by the owner and driven cold (2838, 3876, No card each equal their `GET /api/cards/status` entries) | `docs/lovable-months-card-figures-prompt.md`; `grid_posting` + `batch_list_summary` in `web/service.py`; tests `test_months_card_figures_item_236.py`, `test_months_list_needs_category_item_238.py` |
+| "Send to Zoho" button in the app (owner decision 2026-09-28: in the app, pressed by Criss; replaces the operator-run CLI as the month-end path) | **backend LIVE** (PR #1530, deployed e38e29e7), switched OFF on Fly; SPA button pending (`docs/lovable-zoho-send-button-prompt.md`, NOT PASTED); switch-on for the sandbox approved by the owner 2026-09-28 but refused by the auto-mode classifier as a prod read, so it waits on an explicit owner go for the three server steps | `GET/POST /api/runs/{id}/zoho-send` in `web/zoho_send.py`, the one web module allowed to reach the posting package, and only through `reconcile_month.run_month` (sandbox `assert_org`, `EXPENSE_RECON_ZOHO_POST=1`, ledger, occupancy). The preview hands a `confirm` value (`plan_fingerprint`); a month edited after the preview aborts before the first write. Download and send share one export builder. 11 route tests (`test_web_zoho_send.py`), `regress_check` TEST BITES on 5 wiring points. Go-live needs: Zoho creds as Fly secrets, the switch set, and `context/zoho-post-ledger-testbts.sqlite` copied to the Fly data root. Production stays read-only (2026-09-24 ruling) until Brisken signs off an `ORG_PROFILES` row. Correction: the "token is read-only" line in the row below is stale; `expenses.CREATE` was granted 2026-09-24 | `docs/zoho-month-end-posting.md` ("Sending from the app"), `docs/api-contract.md` (last section) |
+| Categorization accuracy and its root causes (backlog item 216) | **MEASURED 2026-09-25**; Build 1 (cause 1) **LIVE** (PR #1437, Fly `63325aee`: `answer_origin` person / rule / suggestion read by the statement sheet, the journal's receiptless rows, the row review and the report colour; Criss's own charge pick no longer prints `(confirm)`; the "0 corrections" premise was wrong, 35 picks existed until the GL conversion retired them); Build 2 step 1 **LIVE** (PR #1447, Fly `2820e33c`: the model is offered leaf accounts only, 53 / 51 / 55 per company, parents read from the chart's parent names; a parent it names anyway refuses `model_picked_parent`; the merchant list and a person may still pick one; charges re-asked at each month's next re-match), step 2 **LIVE** (PR #1451, Fly `e3f0eb1f`: on a GL month the model's answer moves from `posting_category` to `suggested_category` on both views, reads `check` / `model_suggestion` (one-click confirmable, stored `inherited`), and every file prints `suggested: <account>`, which the poster and the journal check refuse; a person's receipt pick reads EDITED in the export (it read LINE); live September: 36 suggestion rows, none a posting; 85 model-only expenses on the backup print `suggested:`), step 4 SPA prompt `docs/lovable-model-suggests-prompt.md` **PUBLISHED** (SPA `630e9a4` 15:01 UTC, re-pasted after the 13:50 audit found it missing; September live: 31 "Suggested" badges + 31 "Confirm <account>" buttons on Expenses, badges on Matching's charge tabs, not on its default receipts tab), SPA prompt `docs/lovable-model-picked-parent-prompt.md` **PUBLISHED** (SPA `779f4ed`), step 3 **LIVE** (PR #1455, Fly `2b6eeb7f`: `summary.categories_by_origin` `{person, rule, suggestion, none}` on both payloads, read off the rows, sums to `rows[]` / `n_expenses`; `n_charges_category_guessed` keeps its meaning, the guesses that block the month, whose 0 / 0 / 1 was right; live September grid 0 / 1 / 31 / 36, run 0 / 1 / 43 / 7; SPA prompt `docs/lovable-categories-by-origin-prompt.md` **PUBLISHED** (SPA `68b1f09`; September's "Who answered the categories" lines equal both payloads, hidden inside a card tab)); D (merchant identity) **LIVE** (PR #1441, Fly `8102be21`; the three live plans read identical before and after deploy, as predicted: no category corrections and no person-confirmed pairing with a registry side yet; memory-save preview driven cold on August, no write: `merchant_identity.resolve`, memory folds rules by identity at read time, capture keys on it; registry reach on the 55 unsure receipts 13 -> 35, memory 14 -> 41, 17 charges gain a rule answer at the next re-match (11 right vs Criss, 0 wrong, 6 unbooked); a person-confirmed pairing offers its unresolved spelling as a "new spelling" registry lesson on the Publish checklist, refused for OpenAI / Anthropic / Lovable; record in backlog item 216 "Cause 3"); A score tool **SHIPPED** (PR #1435, `tools/recon-categorization-score.py`, reproduces 21/97 on the live months; rerun after every Zoho re-pull); prompts for five parallel sessions handed over (main: Build 1 + Build 2 code; A score tool; B account map + Dirk's draft; C wire invoices out of the card queue, **LIVE** as item 218 (PR #1444, Fly `a8a6809b`; SPA prompt not pasted); D merchant identity, lands after Build 1): 21/97 vs Criss; model is treated as the source of an account; identity keyed on raw text; wire invoices in the card queue; counts hide quality | item 216; checkpoint 2026-09-25 (next steps = the five structural builds) |
+| Hosting size + the only deploy path | **LIVE 2026-09-25**: machine `shared-cpu-4x` / 1024 MB (owner order, #1395); deploys only via the module's `deploy.py` (#1414) | CPU-throttle outage: one shared vCPU at its 6.25% baseline (steal 92.7%) made `/healthz` 2-27 s, the 5 s check failed and the Fly proxy refused every request. `deploy.py` refuses a module that differs from origin/main, a dirty module, or a `fly.toml` smaller than the live machine, then stamps and verifies; `recon-accuracy-deploy-gate.py` denies a direct `flyctl deploy` of the app (staged into the primary checkout so running sessions have it). Recipe: `docs/operating.md` "Deploy" |
+| Which card, entity and person paid a receipt, and which category it gets (backlog items 169-172) | **item 169 SHIPPED + DEPLOYED 2026-09-23; 171-172 open; 170 CLOSED by owner direction** | The instrument this work had never had is now in the repo: `tools/recon-attribution-replay.py` replays a month through `build_expense_view` itself and scores card, entity, person and category by link, against the statement's own `Card` column on confirmed pairs and against the reviewer's own fixes held out. It was proven before it was trusted (a fabricated rule moved the count by exactly the rows it touched). **Item 169 shipped** (PR #1220, merge `ee5b45c4`, Fly machine `7843d54b579598`): the remembered card is read live instead of off the stamp ingest left, so a correction taught after a month was ingested reaches it. Live: September card-less **26 -> 14**, no legal entity **25 -> 13**, no person **25 -> 13**; July and August unmoved. Verified by API read and a cold-Chrome SPA drive. Three of the four facts item 169 predicted were worth **zero rows**, **one row**, and **the wrong diagnosis** -- the instrument is what separated them. **Item 170 is CLOSED** by owner direction 2026-09-23 ("no working on expense category definition anymore"); its measurement is kept as record only, and the prepared alias `PUT /api/settings` diff is NOT to be sent. For the record it measured 7 live rows, and found the registry CATEGORY frozen at ingest the same way the card was. **Item 171** (the sign-off learner cannot see `settled_charge`, 24 rows, zero live effect) and **item 172** (card 3645's `zoho_account` holds another card's label) are filed. Detail: the backlog's items 169-172 |
+| The learning loop: a memory save previews, records and undoes (backlog item 163, feedback note #81) | **shipped, deployed and applied 2026-09-23** (PR #1202 merge `dedd7260`, Fly commit `dedd726002e4`; SPA half applied and driven EN + PT, PR #1208) | The 2026-09-23 wave (notes #76 / #78 / #80 / #81) is one subject, grouped under "The learning loop" in the backlog: a correction should become a rule, the rule should be inspectable and editable, and saving it should be legible and reversible. Note #81 shipped: `learning/commits.py` computes the writes a save WOULD make by running the real learners against a recording stand-in, so `GET /api/runs/{id}/memory-plan` cannot describe a different save from the one that happens; `GET /api/memory/commits` is the ledger (which month, when, which trigger, what it taught, which rows, whether undone); `POST /api/memory/commits/{id}/undo` restores every row to the pre-image the journal kept, restores the merchant registry, and clears the month's digest so the next publish teaches again. Only the newest un-undone save can be undone, because saves stack on the same rows. **Why it ranked first of the four**: measured live the same day, the three months hold 153 rows over 62 vendors, 88 of the 113 rows on a repeat vendor still carry a model guess or nothing, and exactly ONE row in the whole estate reads `learned` — the recall side has been fixed twice (items 115, 149) while the teach side still depended on a button whose effects nobody could see or take back. Items 164 / 165 / 166 carry the rest of the wave. SPA half `docs/lovable-memory-journal-prompt.md` (not pasted) |
+| The posting path refuses an unassigned card or entity, and two double-counts are named | **shipped 2026-09-23** (pending PR; sandbox only, nothing deployed) | `(paid-through - assign)` / `(entity - assign)` in the `Paid Through` / `Legal Entity` cells are now the hard refusal `card_or_entity_unassigned`, reported apart from `account_unresolved`. Both columns are COSMETIC in the payload today, so this corrects no mis-post now; it makes them load-bearing before per-org multi-card routing reads them. Two ordering calls, each proven with `tools/regress_check.py`: the ledger is now read BEFORE the payload is built (so both rehearsed months keep a byte-identical refusal mix), and inside the build the stale-date guard still outranks the new one. On a FRESH ledger, the production case: July 41 -> 30 postable (11 held, carrying 96% of the month's value) and August 19 -> 17. **Read-only finding, nothing written:** August's two USD 576.00 charges are ONE charge, and July's Hostinger `H_46243348` at 345.22 is backed by one 172.61 statement line; TEST-BTS is overstated by 748.61. Correcting either needs the sandbox expense and its ledger row deleted, so it is the owner's call. Detail: `docs/zoho-month-end-posting.md`, the two 2026-09-23 sections. |
+| The posting path refuses a reference whose rows disagree on the date | **shipped 2026-09-23** (pending PR; sandbox only, nothing deployed) | Closes the structural half of the Hostinger double-count. `group_by_reference` reads a shared `Reference#` as ONE purchase split across accounts; Hostinger reuses its invoice number, so `H_46243348` merged documents dated 2026-07-03 and 2026-07-28 into one expense of USD 345.22 stamped with the earlier date, against exactly one 172.61 statement line. Rows spanning more than `MAX_REFERENCE_DATE_SPREAD_DAYS` (2) now refuse as `conflicting_reference_dates`. **Compound keying was rejected, and the reason is in the code comment so it is not re-litigated**: it would POST BOTH when one has no statement line, it re-keys the ledger for every reference, and nothing but a human with the statement can tell two real charges from one charge documented twice. Placed FIRST inside the build (the stale-date check reads row[0]'s date only, so while the rows disagree which date it judges is an accident of CSV order) and ungated by `period`; the #1211 ledger-first order still outranks it. Both orderings regression-proven: moving the guard below the stale check reddens exactly one test, replacing the spread with `None` reddens four. **Measured, not predicted.** Against the durable ledger both months are byte-identical (July 41/3/2, August 19/1, 0 postable), because `H_46243348` is already posted and the ledger answers first. On a FRESH ledger the postable count did NOT move as predicted: July stays **30** (USD 2,104.73), because Hostinger also carries an unassigned card and was already held by `card_or_entity_unassigned`, which goes 11 -> 10 as the row changes bucket. Confirmed by differential probe (guard disabled, same source, `H_46243348` returns to the unassigned list), not inferred. So the guard buys the reviewer the right question in place of the wrong one, and becomes count-changing the moment that card is assigned. The 172.61 itself stays the owner's call. |
+| Month-end Zoho posting engine (Dirk's month-end requirement) | **PROVEN in sandbox 2026-09-23**: 41 of 46 July purchases posted to TEST-BTS and readback-verified field by field, USD 56,340.44 exact | Sandbox only, org 822116290. Four PRs: #1193 `f4f31d32` per-org category-to-account map (fallback below the vendor rule, production orgs deliberately unmapped, every target asserted a LEAF because Zoho refuses parent accounts); #1194 `93ca41c0` the 13 USD rows; #1197 `85f1540f` vendor into the audit envelope plus native-currency support; #1199 `ffc7df8c` statement-currency conversion and the stale-date guard. **Gap 1 root cause** was not missing categories: `posting_common._debit_account_and_note` passes `cat.zoho_account or cat.category` through when no chart is loaded, and the July export took that branch. **Gap 2 is a billing tier**: TEST-BTS is `plan_name='FREE'`, which rejects any expense in a non-base currency, so EUR and BRL post by CONVERSION at the CSV's own `Exchange Rate` (`amount x rate`, total converted once with the residual on the largest line, `Original: {cur} {amt} @ {rate}` in the note). Confirm production is on a paid tier before assuming native currency there. **Measured Zoho behaviours**: `vendor_name` is silently discarded without a contact (0 of 13, hence the envelope); `description` must be under 500 chars (two Brazilian grocery receipts hit 523 and 630, now trimmed prose-first at `MAX_DESCRIPTION_CHARS=499`). Durable ledger at `context/zoho-post-ledger-testbts.sqlite`; both duplicate defenses verified (ledger refuses a re-plan, occupancy went CLEAR to ALREADY_OCCUPIED). **Unified runner shipped 2026-09-23** (`python -m expense_recon.zoho.reconcile_month --month --csv --ledger [--env-file] [--dry-run]`, `client/brisken/reconcile-month`): one command for ingest, occupancy, live chart, plan with conversion and period window, send-by-id plan assertion with the tie-out read from the plan, `execute_expense_post` unchanged, readback by id against `build_expense_payload`, plain-text summary with non-zero exit on any mismatch. Sandbox-only by assertion; the resume rule keeps `ALREADY_OCCUPIED` non-fatal only when the ledger already holds one of the batch's references. July known-answer dry run reproduced 0 / 41 / 3 / 2 exactly against live TEST-BTS; 42 runner-level tests, three `regress_check` bites, suite 2967 / 2. **AUGUST POSTED THROUGH THE RUNNER 2026-09-23** (PR #1206 + the August run): 19 of 19 posted, 19 of 19 readback clean, stored total USD 2,758.91 MATCH, occupancy `CLEAR` before and `ALREADY_OCCUPIED` after, ledger 41 -> 60 posted. Card census measured the delta at exactly 2,758.91 (60,482.18 -> 63,241.09) and the whole card reconciles to the cent (4,297.74 trial - 156.00 purged + 56,340.44 July + 2,758.91 August). Two defects were found and fixed first: synthetic references (`NNNN__rendered-body.pdf`) are a per-batch index that collides across months, so they are now period-scoped and the durable ledger was migrated (a read-time fallback to the bare key CANNOT disambiguate: from August it finds July's row, which is how the first attempt failed on live data after passing its own tests); and `plan_reset` gained `only_ids` so one stray row can be pulled without destroying the July rehearsal. The batch page's 25 vs the export's 20 is NOT missing money: 5 documents carry `counts_in_total: False` and each is a second copy (invoice + receipt, or a mail rendered twice) of a charge already exported, at an identical amount. OPEN and with Criss: the 2 date-guard exceptions (ref 360172592 dated 2026-03-30, ref 00000031010 with an EMPTY date cell) and 3 account-resolution refusals |
+| A stand-in can deploy, verify, explain and recover the app (backlog item 120, the docs-and-observability half) | **shipped 2026-09-20/21** (PRs #1156 to #1160, #1163; #1156 deployed Fly v195) | Five pieces, each verified against the live app rather than the checkout. **`/healthz` now says which build it is**: `server.commit` baked into the image by the Dockerfile `ARG GIT_COMMIT`, `server.image` from `FLY_IMAGE_REF`. Neither is a file anybody edits and the commit rides INSIDE the artifact, so it cannot drift from the code it was built with; a deploy that omits the build arg reports `""`, declining to answer rather than answering wrongly. Proved end to end: deployed `640be61b`, `/healthz` returned `640be61b6264b8cdd01c96d631a5ccac2d68aee6`. Parallel fields only, and the real consumer was driven, not assumed: `tools/recon_uptime_probe.py` against the live app returned api/mx/spa all OK, exit 0; the SPA reads `/healthz` nowhere (0 references across all five bundles), so its drive is the did-the-deploy-break-the-screen check, done cold and rendering all 7 months. **`docs/operating.md`** carries what the down-card did not: read live state, audit a publish, the labels, the notifier, and the deploy command with the stamp. **`docs/screen-field-map.md`** routes a wrong on-screen value to the function that made it, keyed on names because `service.py` went 11,729 to 15,408 lines in three days and every offset in item 120's own evidence moved (`build_view` is at 3219, not 952). **README cut 559 to 119 lines**: it still opened as the multi-tenant SaaS build, claimed 98 tests against 2714, listed four packages against nine, and documented a `EXPENSE_RECON_ACCESS_CODE` secret with zero references left in `src/`. **The doc reconciliation is CLOSED as superseded**: ANNEALING E4 and SPEC-GAP-REGISTER item 1 are one ask, TARGET-ARCHITECTURE P5 is the hosting migration and not doc work at all, and the v2 spec now carries a header saying it is the design for a different product rather than being rewritten. Two findings from writing it: **there is no publish log** (`published_by` / `published_at` / `published_override` are current state, unpublish clears all three, and publishing writes no decision-history entry) and **no month has ever been published**. Still OPEN and not the agent's: the hosting-org move (Dirk, money) and a rehearsed restore. **All three loose ends CLOSED 2026-09-21.** (1) `client_errors` gains `server_commit` + `server_image`, stamped when the report ARRIVES so a row keeps the build that served it however many deploys later it is read (PR #1170; `commit` is a SQLite keyword, hence `server_*`; migration via the existing `_migrate` ALTER; old rows read `""` because a back-fill could only write the build doing the back-filling; 2718 passed, both wires regressed red; NOT yet deployed, so live rows gain the column at the next deploy). (2) The notifier has its own self-updating clone (PR #1173) after the stale checkout was found to have cost 89 hours without item 113's re-match FAILURE alerts, 2026-09-17 17:10 to 2026-09-21 10:19; verified by behaviour, task ran 18:16:32Z result 0 and its own log line names `commit=8be609b6`, the `origin/main` tip, with the shared tree's HEAD unchanged and clean. (3) **The SharePoint backup is LIVE** (owner directive): daily to `ExpenseTool` on MARKETING, first copy 127.2 MB. It took THREE settings, not the one both items called it: 146 MB on `/data` against a 100 MB default ceiling meant `EXPENSE_RECON_BACKUP=1` alone would have run and refused every time while reading as enabled. Proved app-only SharePoint writes work (`Sites.ReadWrite.All`, granted 09-10), correcting `rule_brisken_graph_first`. Still OPEN and unchanged: `Owner: personal`, and no restore has ever been rehearsed, so the copy is verified to exist and not verified to work |
 | "Add receipts" does add the receipt (backlog item 159, feedback note #70) | **closed 2026-09-20, does not reproduce** (no code, no deploy) | Cold drive: the button opens a modal ("Add more receipts", the note's own `section`) holding a real file input; no second tab, and the component's bundle carries no receipts-view route and no `window.open`. Driven end to end on a scratch batch the owner approved, created and deleted in the same session: the only non-GET calls were the login and `POST /api/expense-batches/{id}/receipts`, the batch went 0 -> 1 expense with the receipt read correctly, and after the delete both routes 404 with no trace in `/api/memory` or `/api/settings`. The month the note names is gone and the note predates item 148's rework of this path. Reopen with the control named and what appeared after the click |
 | The chase section says what it lists (backlog item 161, feedback note #72) | **shipped 2026-09-20** (pending PR; SPA copy only, no deploy) | The item filed it as two contradictory figures (85.3% over a list of 65). A cold drive of `/runs/0603bb0e6f38` refuted that: neither 85.3 nor 14.9 is rendered on the page, whose only percentage is an unrelated 3.3%. What is really there is one population named twice four lines apart - the box "Charges without a receipt · 65" over the section "Receipts to chase (65)", whose table headers are `Date/Vendor/Amount/Card` against the receipts table's `Date/Vendor/Total/Document`. Counts verified sound first: `receipt_chase` groups sum to `n_charges_need_receipt` exactly on every month that has one (April 65, August 61, July 0). No backend half; SPA copy in `docs/lovable-chase-section-label-prompt.md`, not pasted |
 | The row names the line that still needs a category (backlog item 160, feedback note #71) | **shipped 2026-09-20** (pending PR) | July's Microsoft Corporation 718.20 showed a settled `posting_category` AND "One or more receipt lines still need a category"; read live, both were true (line 2, 25.20, "(illegible)", carries none, which `books_as[1].unassigned` already said). So the message is correct and reads as a mistake because it names nothing beside a filled field. `expenses[].uncategorized_lines` names them (index, description, amount), built from `uncategorized_line_indexes`, the one predicate `_matched_category_review` also reads, so the row cannot name a line the verdict is not about. Backend only: `reason_code` is what the SPA localizes, so the English hint is deliberately unchanged. Both wiring points red-proven by hand at anchors that refuse to sit in the wrong `def`. SPA half `docs/lovable-uncategorized-lines-prompt.md` APPLIED and DRIVEN 2026-09-20 evening: July's Microsoft Corporation 718.20 renders "1 of 2 receipt lines still needs a category: 25.20." with `(illegible) 25.20 · Needs a category` on the line, and the old generic sentence is gone from the page. CLOSED |
 | The tool's own verdict carries the statement id too (backlog item 158) | **shipped 2026-09-20** (PR #1129; test-only, no deploy) | `set_tool_decision` was the one of item 152's five `decisions` writers no fixture reached, and a T3 docstring asserted the opposite, so the gap read as covered. Reached through the item-76 self-confirm rule inside `rematch_month` on statement attach; `tests/test_tool_decision_statement_id_158.py` (3, route-level) asserts the premise separately before the stamp, so it cannot pass over an empty table. Red-proven at an anchor that refuses to sit outside `set_tool_decision` (the call is textually identical in all five writers). No behaviour change: the wire already worked |
+| Receipts with nothing to land on say what they wait for (backlog item 220, front 2) | **steps 1 + 2 shipped 2026-09-25, steps 3 + 4 shipped 2026-09-27, Fly v267, statement_expected false on 0113 / 6013 / 8311 (owner-approved write, verified)** (read-time; SPA prompt `docs/lovable-receipt-waits-prompt.md` not pasted); **step 5 shipped 2026-09-27 (PR #1495, Fly v268, live as predicted, August Expenses driven): one `entity_key` per company in matcher scope, hand-match guard, per-row advisory, five-name picker**; **step 6 + item 211 shipped 2026-09-27 (PR #1512, live in Fly v272, image probe 404 -> 200 as predicted): colliding neighbour receipts borrowed under a pool id, claims keyed (home run, id), home-row card carried, 3-day start edge on calendar-month periods only; replay 0 rows move**; **step 7 shipped 2026-09-28 (PR #1525, Fly v274, live as predicted, Expenses driven): a confirmed-private row with no company reads `private_no_company`, not "Set the company"; read time, no count moves; Jul 0028 + Sep 0024 predicted**; front 2 queue empty | `unmatched_receipts[].reason_code` reads the card before the date edge, new `statement_not_loaded_for_date` + `waits_for_statements`, `summary.n_receipts_waiting_statement` / `receipts_waiting_cards`; predicted Jul 5 / Aug 0 / Sep 49 rows move, waiting 7 / 0 / 46. Backlog item 220 lists steps 3-7 and the three owner decisions |
+| Pairs in Reconciled that still need a click (backlog item 222, front 5) | **steps 1-5 shipped 2026-09-25** (read-time except the judge, which re-judges at each month's next natural re-match; SPA prompt `docs/lovable-review-cause-prompt.md` not pasted); **step 6 shipped 2026-09-27** (`exact_vendor_lookalike_guard`, PR #1479, Fly v263, 0 live pairs move); owner decisions answered 2026-09-25 | FX judge on the tool's evidence; `review.cause`; booked charges out of review; PDF payoffs `payment`; `reverses_transaction_id` | see backlog item 222 |
 
 | Mail intake: the whole message is walked, and the sender's note reaches the row (backlog item 155) | **shipped + deployed 2026-09-20** (PR #1123, merge `a2276f06`, Fly v191) | `body_render.operator_note` cuts a body at the LAST forward-header block and `_provenance_entry` carries what is above it onto every file the mail delivered; `expenses[].operator_note` lifts it to the row. Measured over the live archive with the shipped function: 92 stored `.eml`, 86 readable bodies, 71 with a boundary, **30 with a note** (the item named 5). Display only, never routing (untrusted inbound), asserted as a differential. Still not built by evidence: HEIC conversion, a nested-.eml unpacker (`msg.walk()` already descends, pinned), rendering a body beside an attachment. SPA half `docs/lovable-operator-note-prompt.md`, not pasted. Live rows show nothing yet and that is the design: provenance is frozen in the run snapshot at ingest, so the field appears on mail arriving from v191 on, not on the 85 receipts already in the three months. The deployed build was proven to carry the function in-machine (94 archives, 32 notes, both differential cases correct); a cold drive of `/expenses/51a22ad72864` renders normally with one non-GET (the login) |
 | Receipt identity on every surface (backlog item 153) | **shipped 2026-09-18** (PR #1109, merge `16de8a1b`, live on Fly v189) | `set_aside[].document_id` beside `file` in `set_aside_view`, from the entry's stored receipt (absent on a legacy parse-issue entry). The audit across live July, August and September is in `docs/api-contract.md`: every other surface already carried the id. No SPA change |
@@ -287,6 +969,7 @@ this table is the index, not a second record.
 | Re-match visible on the month (backlog item 129, notes #53 #54) | **shipped + deployed 2026-09-18** (PR #1103); **SPA prompt APPLIED by the owner and VERIFIED live 2026-09-18 evening** | `last_rematch` / `rematch_pending` on both month payloads; `docs/lovable-rematch-visible-prompt.md` + PROMPT-STATUS Not-applied row. After deploy: August payload carries `last_rematch.trigger`; verified: August payload carries `last_rematch` (`expense_edit`, 9 of 114, 1 to review) and the header renders it field for field, cold in EN and PT ("Last matched Sep 17, 2026, 01:35 PM (an expense was edited): 9 of 114 charges paired, 1 to review."), one non-GET per drive (login). `rematch_pending` is null live, so the queued and failed lines wait on the next pending re-match |
 | Merchant-to-category is the default; account varies by company (backlog item 149, note item M1) | **shipped 2026-09-18** (pending PR; not deployed) | The registry default stamps every receipt of its merchant before any line read; the (company, vendor) rule decides the ACCOUNT (its own company, else no-company, else the vendor's rules when they agree; a seeded rule under another category waits for validation); `provenance` names the rule. `GET /api/memory` `by_vendor[]` shows one line per company under each vendor, with the registry merchant and the category its receipts read; `categories[].seeded`. Receiptless charges consult the registry on re-match. Owner-gated: the live registry write for OpenAI / Anthropic / Lovable (diff shown, yes required) and Dirk's 3x3 account table. SPA half `docs/lovable-memory-by-company-prompt.md`, not pasted |
 | A dropped pile is read in parallel (backlog item 148) | **shipped 2026-09-18** (pending PR; not deployed) | The routing pass reads the dropped files on a bounded pool (`_DROP_READ_WORKERS = 6`) instead of end to end, and reports `reading receipts (7/40)` through the job's existing `stage` (the published SPA renders that string verbatim, so nothing to paste). Stub at 0.2s per read, 40 files: 8.21s -> 1.42s reading, filing unchanged at 0.11s. The ledger is byte-identical to the serial one for the same folder, a read that raises is still that file's problem alone, and a typed `month` still reads nothing. The `_MATERIALIZE_LOCK` span and the ingest behind it stay sequential |
+| Month-end import into Zoho Books (owner direction 2026-09-22, REVERSES the 2026-08-22 decoupling) | **in build** on `client/brisken/zoho-month-end-injection`; blocked for live posting on a Zoho scope grant | Dirk needs the reconciled month imported into Zoho Books at month end; the owner chose API injection over a CSV hand-off. Backlog item 23 rounds 4 and 5 are OFF (they would delete the journal artifact and rename `zoho_expense_export.py`). Restored from `5e2ff99e^`: `zoho/client.py`, `zoho/idempotent.py` (the 4.8 ledger whose whole job is that no entry posts twice), `zoho_post_cli.py` and the `zoho-post` dispatch, repointed at the post-#881 `posting_common` homes; 70 of 70 of their tests green, `regress_check` on the CLI dispatch reported TEST BITES. `test_no_zoho_connection.py` is superseded by `test_zoho_posting_is_gated.py`, which keeps the two guarantees that survive the reversal: the hosted web layer can never reach Zoho (posting stays a CLI action behind the four 4.8 gates, so no deploy can write to Criss's books) and a run config still cannot pull a chart mid-run. **Live findings, read-only probe 2026-09-22:** there is NO bank feed (0 of 39 sampled rows carry `imported_transactions`), so this file's own "charges from the card feed" note was an inference the record contradicts; Corporate Services' 108 July rows were hand-entered across 13 days to 09-08 (bursts of 23, 19, 45), August holds 5 and September 9. July must never be injected. The token is read-only, so `ZohoBooks.expenses.CREATE` plus contacts scope is an owner action in the Zoho console before anything can post. Independent read of the TEST-BTS test: 9 rows and the 4,297.74 tie-out confirmed exactly, but the audit string is on 7 of 9 (the AWS split uses a different description format) and 6 of 9 rows landed on the `Office Infra and Admin` fallback, so numeric `account_id` resolution is the load-bearing fix, not a polish item | backlog item 23 (reversal block at the top) |
 | A card can sit under an account (backlog item 147) | **shipped 2026-09-18** (pending PR; not deployed) | The registry entry takes an optional `parent` holding another card's key, validated one level deep on save with five named codes, and `card_sections[]` renders the tree on both month pages and in both PDFs: an account first, its subcards behind it, its figures the sum of itself plus them, its own card's figures kept in `own`, and a statement covering the account named once instead of once per card. Owner 2026-09-18: "only 2838 has subcards, no where else", "just do it, no quoting". Parentage is data a person sets; nothing infers it. **The registry has no committed seed** (`settings["cards"]` lives only in the app's SQLite, default `{}`), so the owner sets the three parents once in Settings, Cards and the tree appears on the next read. SPA half `docs/lovable-card-accounts-prompt.md`, not pasted |
 | The card strip counts the rows the boxes count (backlog item 146) | **shipped + deployed 2026-09-18** (PR #1086, Fly v181). Live July now reads 13 / 13, 14 / 14, 7 / 7, 0 / 0 and August is unmoved, exactly the prediction. **Visible effect on Criss's screen: none**, which the item as filed got wrong and this row said too until a post-merge bundle read: the SPA reads `summary` for all four counters and `card_review` for none (every occurrence across the 44 chunks is `i.summary.<field>`). A contract fix, not a screen fix | `build_card_review` takes the month's decided copies and its four box-twin counters skip them, so the strip and `summary` cannot answer the same question differently. Live July before the fix: `n_needs_person` 13 against 15, `n_needs_entity` 14 against 16, `n_suggested_private` 7 against 9, each gap exactly the two decided copies; August agreed on all four already. Predicted live effect: July's strip reads 13 / 14 / 7, August unmoved. The grouping still counts copies on purpose (the assignment surface has no twin to disagree with) |
 | Item 144's review-reason copy | **APPLIED and DRIVEN 2026-09-18, EN and PT; CLOSED** | July's Tricarico row of 2026-07-31 (BRL 27,203.34) reads the prompt's own sentence in both languages instead of the backend prose, with no generic paying-card reason on the page, and the row's state beside it unchanged: "Paid by bank transfer", the paid-through picker, no person question. July `summary.n_needs_person` still 13. **Found by the re-crawl, not by being told**: the owner had already published it and the prompt was minutes from a second hand-over |
@@ -307,7 +990,7 @@ this table is the index, not a second record.
 | Report totals in `Decimal`, and an unreadable amount captioned + counted instead of dropped (backlog item 65, from item 49 / storage-description section 12 row 13) | **shipped** 2026-09-15 | Both PDF total sites and the new `output/_pdf_common.py` money helpers; `summary.n_amounts_unreadable` on the batch payload. Live check first: both months' printed totals already equalled a Decimal sum to the cent with zero unreadable rows, so what shipped is the arithmetic class plus defence in depth on a public builder. Backlog Shipped row 35; SPA half `docs/lovable-amounts-unreadable-prompt.md` (Pending) |
 | 2026-09-06 owner program: company months vs trips (declared, both reconcile), mail materializes the month, person attribution via the card, unknown payment methods suggest a private expense | **CLOSED 2026-09-07**: all four rounds merged in order (#686/#687/#688/#685) and deployed (v103-v106); the R2 flip is LIVE (dismissals landed, flag ON 2026-09-07, #695); all four Lovable prompts applied + bundle-verified 2026-09-07; the travel alias is SET (`travel`) and the TEST- alias drill PASSED 2026-09-07 (see the R3 row); the owner-side remainder is DATA entry (person per card, 0340/3645/1672 identities - item 26/40), of which the ENTITY half landed 2026-09-08 from the owner's ALL BANKS list: registry 6 cards -> 15, Consulting charted, unresolved rows across the three open batches 30/40 -> 28/40; persons and the remaining identities are still owner-side - see the loop brief's post-program ranking | backlog items 38-42 + the re-ranked loop brief (PRs #672 / #674 + the 2026-09-06 capture PR: item 42 refusals split, R2 rollout protocol, person-timing rule, ride-along assignments). Supersedes the 2026-08-24 "pre-creating months intrudes" ruling (noted in place) |
 | R3 of the program: trip entity + declared batch_type + travel-alias routing (item 38 surface half) | **shipped + deployed** (PR #688 merged third per program order, Fly v105 2026-09-07; healthz + `/api/trips` `{"trips": []}` + `n_pooled_travel: 0` verified live, SPA months + inbound driven clean). §5 bundle-verified 2026-09-07 (settings chunk round-trips `travel_alias` in the intake save); alias SET to `travel` the same day (owner pick, operator-API write, round-trip verified, person aliases untouched) and the full TEST- alias drill PASSED live: mailed a TEST- receipt to travel@expenses.brisken.com via the MX, rested as `pool_kind: travel` / "Travel, waiting for its trip" WITHOUT minting a month (auto-materialize ON), trip suggestion named the one TEST- trip, join-trip materialized the trip batch (`created_batch: true`, batch_type `trip`, vision-read 23.50 EUR taxi receipt, absent from the months screen), batch delete pooled the mail back (`pooled_back: 1`), fixtures removed to zero (0 trips, 3 months, pool 0, drill archive dismissed). Travel routing is LIVE | Trips CRUD at `/api/trips` (batch materializes on first join, create-with-receipt, one batch per trip under a creation slot); `batch_type` declared at creation, absent = company, month routing structurally blind to trips; travel mail rests with an exactly-one-trip suggestion, joining is a click (`POST /api/inbound/{archive}/join-trip`); roster-mismatch flag on trip rows via R1's person field; rebase interplay pinned (item 39's materializer never touches travel mail). Adversarial review: 10 findings fixed pre-PR. Final merged tree: suite 1478/2, calibrate OK, eight RED-proofs. `docs/lovable-trips-prompt.md` applied + bundle-verified 2026-09-07 |
-| R4 of the program: cross-batch settlement + trip report (item 38 deep half) | **shipped + deployed** (PR #685 merged LAST per program order, Fly v106 2026-09-07; live TEST- drill: a trip receipt settled a month statement charge, a second month could NOT re-settle it, trip report rendered with title/range/roster/person section, Playwright drove the published workbench showing the settled row at 99%; fixtures removed to zero, live state 0 batches / 0 trips) | receipt_claims registry (PK receipt_run_id+document_id) makes one-receipt-one-charge global: advisory read excludes foreign-settled receipts, commit-lock re-check downgrades raced pairings, UNIQUE backstop, reviewer sync (reject releases, re-pick moves, cross-run steal 409s), cascades on delete. trip_pool_for_month spans a month's pool over date-overlapping trips (private-confirmed / claimed / id-colliding excluded); borrowed receipts ride the snapshot as copies only; trip create + add re-match overlapping months. settled_by provenance both ways (absent-unless-set). Trip report sections per person (roster order, off-roster flagged, continuous numbering). Load-bearing pin held: zero trips = machinery inert (stubbed-vs-live byte-compare). Suite 1496/2, six RED-proofs. docs/lovable-r4-settled-by-prompt.md applied + bundle-verified 2026-09-07 |
+| R4 of the program: cross-batch settlement + trip report (item 38 deep half) | **shipped + deployed** (PR #685 merged LAST per program order, Fly v106 2026-09-07; live TEST- drill: a trip receipt settled a month statement charge, a second month could NOT re-settle it, trip report rendered with title/range/roster/person section, Playwright drove the published workbench showing the settled row at 99%; fixtures removed to zero, live state 0 batches / 0 trips) | receipt_claims registry (PK receipt_run_id+document_id) makes one-receipt-one-charge global: advisory read excludes foreign-settled receipts, commit-lock re-check downgrades raced pairings, UNIQUE backstop, reviewer sync (reject releases, re-pick moves, cross-run steal 409s), cascades on delete. trip_pool_for_month spans a month's pool over date-overlapping trips (private-confirmed / claimed / id-colliding excluded); borrowed receipts ride the snapshot as copies only; trip create + add re-match overlapping months. settled_by provenance both ways (absent-unless-set). Trip report sections per person (roster order, off-roster flagged, continuous numbering). Load-bearing pin held: zero trips = machinery inert (stubbed-vs-live byte-compare). Suite 1496/2, six RED-proofs. docs/lovable-r4-settled-by-prompt.md applied + bundle-verified 2026-09-07. **RE-PROVEN ON REAL DATA 2026-09-21 (R4.0).** Until this round the 2026-09-07 drill was the only evidence and it ran on manufactured fixtures that were deleted the same day; live, `GET /api/trips` was `{"trips": []}` and stored `cost_centers` was `null`, so the feature pair was code-live and data-dead. Re-run on a read-only copy of the live store (sftp of `/data/recon-web.sqlite`, no LLM call, copy deleted after): four cost centers authored, one trip 2026-07-20..07-31 with two travelers and cost center Brazil, three receipts, two of which match real unmatched July charges (ESPETINHO DO RAMOS 5.15 / 2026-07-25, PRESSMASTER DMCC 135.00 / 2026-07-23). All seven behaviours `tests/test_trip_settlement.py` asserts hold on the real months: July AND August both re-matched with `rematch_log` trigger `trip` (August's charge span starts 2026-07-06, so a July trip legitimately lends to both), claims keyed on the trip batch, `settled_by` both directions, the per-person PDF with roster order and the off-roster caption, `cost_center: Brazil` / `cost_center_source: trip` on all three rows, and the trip absent from `/api/expense-batches`. Cold SPA drive (published bundle, login gate, every API call routed to the copy, 13 rewrites and 0 leaks): the Trips screen, the trip batch page and July's "Settled by trip TEST - Brazil July 2026" badge all render. **Two defects found, both LIFECYCLE, neither in the match path.** (1) `PUT /api/trips` moving the range off July, and deleting the trip batch, each leave July untouched: no re-match, borrowed copies retained, `n_reconciled` reads 33 where 31 is true, and `rows[].settled_by` still names the deleted run. It is staleness, not corruption: the claims ARE released on delete and July's next re-match heals it completely (33 -> 31, badges gone, borrowed set back to June's one adjacent receipt), but nothing schedules that re-match. The plan's predicted orphan-claim re-creation did NOT occur. (2) `roster_mismatch` / `n_roster_mismatch` render nowhere: the API reports `n_roster_mismatch: 1` for the off-roster traveler and the PDF captions her "(not on the trip roster)", while the trip page shows no marker. Also checked and REFUTED: the "Paid through" column printing one card under three different person headings is faithful, because the live registry genuinely maps 3876, 0340 and 2838 to the same Zoho account. Also measured: authoring four cost centers turns `needs_cost_center` on for 183 rows across the seven months and resolves none. **R4.1 SHIPPED 2026-09-21** on the owner's ruling ("must be done because later on if expenses and items in statement dont line up we will have a problem"): four entrances owe the re-match inside their own lock span and pay it outside, the paying loop records a per-month failure instead of aborting the rest, a rename carries onto the batch label and the borrowing months' badges, the candidate filter skips legacy statement-mode runs, `learning_db_path` is threaded through both trip entrances, and the trip-batch create slot is released on any failure. 12 route-level tests, eight wires red-proven, suite 2714 -> 2726. The owner also ruled the trip report's missing cost center ON HOLD pending a joint design (current state written up in `docs/trip-reports-and-cost-centers-today.md`), ordered the `roster_mismatch` renderer (`docs/lovable-roster-mismatch-prompt.md`, Pending), confirmed the card registry is correct, and answered the three open questions: the trip entity survives, Dirk will author the cost centers, and a real trip may be created live |
 | Receipt entry decoupled from month creation: the Receipts drop page | **shipped + deployed + consumer-driven** (2026-09-08 owner directive; backlog item 44. PR #709 merged + Fly-deployed; consumer drive PASSED 2026-09-08: TEST- drop materialized June 2026 (`created_by: drop`, `month_source: receipt`), published SPA driven COLD via agent-browser (login gate through to the months list, real "June 2026" label + 1 receipt, batch page rendered 2026-06-11 / TEST-DRILL CAFE / 18.90 EUR, no fallback strings), fixture deleted, live state back to 3 real months / pool 0. Browser tooling healed by `agent-browser install` (fresh Chrome 152) after the 2026-09-08 dual outage) | `POST /api/receipts` is the ONE manual entrance: each dropped FILE routes on its own dates through the same `resolve_receipt_month` brain mail uses, materializing absent months (`created_by: "drop"`, unconditional — the flag gates a STRANGER's mail, not an operator's own drop), then claiming their pooled mail. A file with no readable date RESTS as `needs_month` rather than falling to the arrival month (a silent guess is what item 29's routing rebuild removed); the release valve is an explicit `month` override, believed like a typed date. Zips refused, one file per receipt. `POST /api/expense-batches` now 400s files on a company month and creates it EMPTY — the container a statement lands in (January: 78 of 80 charges had no receipt), with the empty refusal surviving as opt-in `allow_empty` that never sanctions an all-rejected upload (the mail materializer's floor). Trip creates unchanged. The per-file ledger rides a new `jobs.result` column, read from `GET /jobs/{id}`. 31 test modules' create fixtures converted to create-empty-then-add; suite 1497. Same day (item 45): per-ingest cap raised 80 → 500 and a >cap month group now ledgers its overflow `rejected`/`upload-cap` BEFORE the ingest call (pre-fix the tail was silently skipped while rows read `filed`); both mutation-proven. SPA v1 (drop page, badge, empty state) APPLIED by owner mid-day 2026-09-08, bundle-verified same evening (chunk-receipts reads n_filed/n_needs_month; /api/receipts + "Recibos"/"Dos recibos" in i18n). Pending: the DELTA in the reworked `docs/lovable-receipts-drop-prompt.md` — cap copy + chunking, item-46 create-UI removal, nav redesign, Open-month release (after publish: bundle re-audit + browser drive, update PROMPT-STATUS.md) |
 | Cost centers: expenses attributed to projects and purposes | **BUILD STARTED 2026-09-10, steps 1-5 of 6 shipped; backend COMPLETE, Lovable prompt written** (owner order "start building"). `src/expense_recon/cost_centers.py`: the owner-authored registry (`settings["cost_centers"]` = {name: {kind, note, active}}, whole-map replace at the settings edge like merchants/cards/entities), the resolution chain override > trip > merchant > card, and the settings wiring (SETTINGS_DEFAULTS key, PUT validation, derived read-only `cost_center_options` on GET). 24 tests across `test_cost_centers.py` (registry) and `test_cost_centers_api.py` (through the API, so the WIRING is pinned and not only the helper); suite 1511 -> 1535, ruff clean. Both mutations proven to bite: disabling the empty-registry short-circuit reddens the two contract tests, disabling the PUT branch reddens the API suite. Two judgment calls beyond the design: a name differing only in case is refused at the edge rather than silently overwriting, and an INACTIVE centre still accepts a reviewer override while refusing to be applied by a default. **Step 2 shipped 2026-09-11**: the three CARRIERS (card `default_cost_center`, merchant-registry `cost_center`, and a real `cost_center` column on trips with the idempotent ALTER the deployed volume needs) plus the RESOLUTION onto the row. `resolve_batch_row_cost_centers` runs the chain over the same card pass `person` uses; every row carries `cost_center`, `cost_center_source`, `cost_center_source_label`, `needs_cost_center`; `n_needs_cost_center` sits beside `n_needs_person` and `cost_center_options` beside `entity_options`. The override joins `EXPENSE_HEADER_FIELDS`, so it rides the existing field-override path into `edited_fields` with no second mechanism. 29 further tests (`test_cost_center_carriers.py`, `test_cost_center_resolution.py`), all through the settings PUT / the trips routes / `GET /api/expense-batches/{id}`; suite 1535 -> 1564, ruff clean. Regress-checked at six wiring points, each green->red->green. Three decisions worth carrying: (a) the empty-registry contract now has exactly ONE home -- the first draft guarded it in both `registry.resolve` and the service, which made neither load-bearing, so the service now guards only the expensive merchant sweep; (b) a name is validated ONLY at the row override (400 on an undefined name, stored in the registry's own spelling), never at the three carriers, because their screens are edited independently and the edit ORDER must not matter; (c) both registries are read LIVE from settings rather than the batch config snapshot, so the day the owner defines the first cost center the existing months resolve without a refresh pass (the card default is the exception: it rides the card snapshot like `person`). Re-pinned in the same round per rule 4: `test_view_contract.py` (whose fixture now DEFINES a cost center, so `cost_center_options[]` is observed FILLED -- pinning it against an empty list would have pinned the path and not the element kind) and `docs/api-contract.md`. **The step-2d question is answered by the spec itself and needed no owner call**: the prior session flagged that the design never says how a trip carries a cost center, but item 47's API-contract section states it outright ("trip object gains `cost_center`; POST / PUT /api/trips accept it"), so a real column was built rather than the same-name interpretation. **Step 3 shipped 2026-09-15**: the month report grouped by cost center. `build_expense_report` partitions a COMPANY month's listing on the row's resolved cost center through the same `sections` slices item 38 built for per-person trip reports (the builder's section dict gained a generic `caption` / `label` pair beside item 38's `person` / `on_roster`, plus a `sections_heading` / `sections_note` rendered once above the partition). Named centres in name order, captioned `Name (kind)` with their own sums; unassigned rows form the FINAL section, captioned as unassigned, never hidden; the stated limit rides the note as `COST_CENTER_SCOPE_NOTE` in `cost_centers.py`, one constant for both surfaces so the totals route (step 5) carries the identical wording. The route hands the report the LIVE settings, as the grid reads them. The report does NOT re-check the registry: it partitions only when the chain resolves or flags a row, so a month with no cost center defined stays the flat listing it was and that decision derives from the contract's single home in `CostCenterRegistry.resolve`; a trip report is unchanged whatever the registry holds. 5 route-level tests (`test_cost_center_report.py`, every one through `GET /runs/{id}/expense-report.pdf`) plus one builder test; suite 1564 -> 1570, ruff clean. Regress-checked at three wiring points, each green -> red -> green: the partition gate in `build_expense_report`, the empty-registry short-circuit in `resolve` (which reddens the flat-listing test THROUGH the report, proving the report's silence is derived and not duplicated), and the route's `settings=` argument. One test was dropped rather than faked: a split receipt across two sections needs mock classification responses at the API level, which no existing test wires; slice alignment is pinned at builder level instead. **Step 5 shipped 2026-09-15**: `GET /api/cost-centers/totals?from=&to=`, the only surface that aggregates ACROSS batches. `build_cost_center_totals` scans every expense batch (months and trips), takes the export's own rows (`_expense_export_inputs`), resolves each through the same chain the grid and the report run, leaves confirmed private rows out (reimbursements owed, not company spend), and emits per centre `{name, kind, active, n_rows, n_batches, totals}` name-sorted plus an explicit `unassigned` bucket, `n_batches` (scanned), `n_rows`, `n_undated` (a row with no date cannot be excluded by a range, so it always counts and is declared), and `note` = `COST_CENTER_SCOPE_NOTE` verbatim. Every ACTIVE centre is listed at zero; an inactive one only while history sits on it. Range inclusive on the row's edited date; malformed or inverted range is a 400 with prose. With no cost center defined the list is empty and everything is unassigned: the roll-up states the fact, the row flag stays silent. Also closed the step-2 gap the Lovable prompt exposed: refresh-master-data now emits `row_cost_centers` (item 40's `row_persons` contract) counting rows whose RESOLVED cost center the card-default refresh moved, computed with the batch's real trip on both sides. 7 route-level tests (`test_cost_center_totals.py`) + 1 refresh test in `test_cost_center_resolution.py`; suite 1570 -> 1578, ruff clean. Regress-checked green -> red -> green at four points: the route's range arguments, the private-row exclusion (8-space anchor, totals only), the trip's cost center into the roll-up, and the refresh count. Contract re-pinned in `docs/api-contract.md` (totals subsection + the carriers bullet). **Step 6 written, not applied**: the Lovable half is promoted to `docs/lovable-cost-centers-prompt.md` (registered in PROMPT-STATUS as not applied; §1 Settings > Cost centers and §2 the card field ship FIRST because both maps are whole-map replace and a stale bundle erases them on save; nobody types a cost center until the published bundle proves the round-trip). On `client/brisken/p1-cost-centers` in worktree `C:/Users/neuma_p1qrsic/Repo/agentic-ops1-cc`, PUSHED, no PR yet: the backend is complete, so the next move is the PR (CI-gated auto-merge) and then the Fly deploy, which is what gates the prompt paste. **Step 3 of D2 (learned merchant -> cost centre) shipped 2026-09-20** with note item M4, closing backlog item 118's code half: `registry_cost_center_upserts_from_expense_run` folds the month's EXPLICIT per-row picks into the merchant entry at sign-off, beside the category and card halves, skipping a merchant whose picks disagree and writing only a name Dirk has defined and left active (item 47 D1: the tool never learns a NAME). `memory.learned.registry` gains `cost_centers_set` / `cost_centers_skipped_conflict`. Item 118's OTHER half is owner data and stays open: the live registry is still `{}`, so nothing can be picked or learned until Dirk adds his four names in Settings. Item 118's own "reviewer corrections" claim that sign-off ERASES merchant `cost_center` entries was true before item 116 and is not true now | **design answered** (2026-09-08 owner directive; backlog item 47). Four decisions taken in an owner round: the cost-center list is OWNER-AUTHORED only (`settings["cost_centers"]`, whole-map replace like `cards`/`merchants`; the tool never invents or learns a NAME) — decided against the recommended grow-while-reviewing option, so the empty-registry case is load-bearing: an empty list must resolve nothing AND flag nothing, or the field ships and every row in every month reads `needs_cost_center`. Resolution is override > trip > learned merchant > card `default_cost_center` > unresolved; person is deliberately NOT a resolver (it cannot separate Dirk's own "Nicolas in Brazil" from "Nicolas on Lidar") and only ranks the picker, and category is not one either (co-varying the two dimensions destroys the point of cutting the money a second way). v1 refuses splits, with per-line-item (the `books_as` fan-out) as the v2 shape if a real shared cost appears. Surface ships in two steps: month-report listing grouped by cost center first (nearly free — `build_expense_report_pdf` already takes the `sections` partition item 38 built for per-person trip reports), then a cross-month `GET /api/cost-centers/totals` (the only genuinely new surface: all 57 routes enumerated, nothing aggregates across batches). Stated limit carried on both surfaces: this tool sees card and receipt spend only, never contractor invoices or salaries, so a cost-center figure is not a total project cost. All API fields PARALLEL (rule 1) with a `cost_center_source_label` beside the enum per rule 5. Lovable half DRAFTED inside item 47, deliberately not in `docs/lovable-*.md` (PROMPT-STATUS audits that folder as pasteable and every field is unbuilt) | backlog item 47 (the answered design, API-contract implications and the drafted Lovable half all live in that block) |
 | Statement ingest (CSV + XLSX) | done | BLUEPRINT (ingest) |
@@ -333,7 +1016,7 @@ this table is the index, not a second record.
 | A statement that holds no charge is refused, on both the attach and the re-read | **shipped + deployed 2026-09-15** (backlog item 51, PR #859, Fly v128) | `service.statement_read_nothing` + two guards. `execute_statement_attach` refuses before the fold when the upload parsed no charge, so the month keeps its exact state: no charge, no `statements[]` entry, no `statement_anchors` entry, and no graduation to the workbench. That last one is what the drill had understated: `rematch_month` stamps `has_statement: True` on commit, so an empty file used to turn an open month into a reconciliation holding zero charges, which reads on screen like a month that reconciled. The reason rides the job's existing `error` status, the channel the re-read already refuses on, so the SPA needs nothing. Keyed on `n_rows` and never on `n_new`: the same file twice adds no NEW charge and still lands. `reread_statements` refuses the same shape, where it would REPLACE a live month's charges with nothing, exempting an entry already recorded as `n_rows: 0` so no legacy month is wedged (live probe: none of the 6 months holds one). Tests: `test_statement_zero_rows.py` (7, all through the routes); both wiring points regress-checked RED first. Contract section in `docs/api-contract.md` |
 | A month's pool reaches the months either side of it | **shipped 2026-09-15** (backlog item 61) | `service.adjacent_pool_for_month` joins the trip pool inside `rematch_month`: neighbours are decided by LABEL (`month_from_label`, previous and next), eligibility by this statement's OWN period (`statement_period_for_month`, min..max of its charges; the label's calendar month widened by 3 days only where no statement exists). Borrowed copies ride the existing `borrowed_receipts` / `receipt_sources` keys with `kind: "adjacent"`, so the claims protocol is untouched and one receipt still settles one charge. `rows[].candidates[].from_batch` names where a borrowed candidate lives (new, parallel, absent on own-pool candidates, and it names a TRIP borrow too) + `summary.n_adjacent_borrowed`. Live evidence: August holds two 08-31 Google receipts (71.64 / 75.09) whose charges post 09-01, and its own 08-01 Google 71.64 charge has no candidate at all. Tests: `test_adjacent_month_pool.py` (6, four route-level); one regress proof RED first. SPA half: `docs/lovable-adjacent-month-prompt.md` (owner applies) |
 | Sign canonicalization + refunds bucket + deterministic FX (Tier-1) | done (PR #285) | BLUEPRINT 3.15; no-LLM 0/36->29/36 on Criss's April |
-| Dev notifier: operator "run now" uploads fire an email | **live + scheduled 2026-07-22** | `tools/brisken-recon-notify.py`. Was doubly broken: unscheduled AND dead since the v31 cutover (logged in via the deleted `POST /login`, and all 4 mail links pointed into the deleted HTML UI, including the publish ping that goes to the USER). PR #373 moves it to `/api/login` + bearer, handles the throttle's 429, and points links at `APP_URL` (the SPA). Registered as Windows task `BriskenReconNotify` (15-min repeat), `LastTaskResult 0` over two fires, 0 missed; state baselined so the first fire did not mail the backlog. NOTE: the task runs from the PRIMARY clone (it needs the gitignored `context/.env`), which currently carries the fix as an uncommitted local edit identical to main — `git checkout -- tools/brisken-recon-notify.py` before pulling there |
+| Dev notifier: operator "run now" uploads fire an email | **live + scheduled 2026-07-22** | `tools/brisken-recon-notify.py`. Was doubly broken: unscheduled AND dead since the v31 cutover (logged in via the deleted `POST /login`, and all 4 mail links pointed into the deleted HTML UI, including the publish ping that goes to the USER). PR #373 moves it to `/api/login` + bearer, handles the throttle's 429, and points links at `APP_URL` (the SPA). Registered as Windows task `BriskenReconNotify` (15-min repeat), `LastTaskResult 0` over two fires, 0 missed; state baselined so the first fire did not mail the backlog. NOTE (superseded 2026-09-21, PR #1173): the task ran from the PRIMARY clone because it needs the gitignored `context/.env`. It now runs `tools/brisken-recon-notify-run.py` from the dedicated clone `Repo\agentic-ops1-notify`, which fast-forwards itself and reads that same `.env` and state file where they already are |
 | Mail intake routing (the month pool) | live (PRs #599 + #601, deployed Fly v87 2026-08-24); **live 2026-09-06: ALL month batches deleted (post demo-test), 23 mails pooled (Aug 12 / Jul 5 / Sep 6), 7 more stranded "month deleted" awaiting per-archive re-ingest; the whole intake stream waits on a manual month-open (which itself needs a manual first-receipt upload — empty batch refused). Read-only audit: `%TEMP%/claude/recon-probe/manual_input_audit.py`; ranked findings in `docs/2026-09-06 - Expense-Recon Manual-Input Analysis/Checkpoint.md`** | Emailed receipts route by the month PRINTED on the receipt, not by whichever batch is open; mail whose month has no batch rests in the pool (`pooled`) and is claimed automatically on batch create / rename / boot / replay. Deleting a month pools its mail back. Arrival extraction warms the content-addressed cache, so the read costs nothing extra at batch time. `intake_mail.py` (`route_archived`, `claim_pooled`, `pool_deleted_batch`, `resolve_receipt_month`); SPA half `docs/lovable-month-pool-prompt.md` |
 | Intake trust: who we recognise | live (this round, 2026-08-24); **the `known_senders` list is EMPTY on production — Dirk's `dirk_.neumann@icloud.com` still gets no ack until it is listed** | Backlog item 30 (a) + (c). Settings `intake.known_senders` names outside addresses that count as ours; `graph_notify.send_mail` takes an explicit per-call `allow_external` and asserts the structural recipient guard BEFORE consulting it. A known sender's body-only mail now renders ON ARRIVAL (all six mails held on 2026-08-24 delivered no file at all: a forwarded vendor receipt IS the body), reusing the operator render path unchanged; a render failure alerts, because nobody watches an automatic render. Strangers still hold — the mailbox takes mail from anyone and we do not pay a vision call per newsletter. Settings editor `docs/lovable-known-senders-prompt.md` (owner applies). Item 30 (b) shipped the same day: every refusal is written down (`inbound/refusals.jsonl`, DATA-stage guards included) and surfaced as `n_refused` + `refusals[]`, so "did anything bounce?" is answerable for the first time |
 | Published SPA parity (audited 2026-08-24) | live at brisken-reconcile-dash.lovable.app; intake page is **`/inbound`**, not `/intakes` | Driven against the deployed API. LIVE: the two report-PDF buttons, body-only View/Add-as-PDF/Dismiss, month-pool sections 1/2/4/5/6 (the "Arriving" mislabel is GONE — the SPA uses its own status map, not `status_label`), intake quick-wins, READY tile, cards R3. NOT applied: month-pool section 0 (`status_kind`/`status_label`, the durability fix) and section 12 (refusals strip), `known_senders` editor, and the `open-intake` cleanup — **the stale "Accepted senders" editor is still live and the backend has ignored `intake.senders` since #587, so it silently discards input**. Unverified: re-ingest, issue codes. Audit trap: per-row actions are an icon-only `button[aria-label="Actions"]` menu, so a button-text scan reports none |
@@ -433,8 +1116,17 @@ this table is the index, not a second record.
 | A decision history with a name on every line (backlog item 104, audit 2026-09-17) | **shipped 2026-09-18** (PR #1081, Fly v180; SPA fold + Undo button `docs/lovable-decision-history-prompt.md`, NOT pasted) | Append-only `decision_history`; one line per change that moved a value, at twelve write sites (the item said four). `who` is the signed session token's label, not the server environment, so Criss and the developer are distinguishable. `GET /api/runs/{id}/history` and a per-line undo refused with `history_superseded` when the row has moved since. Duplicate rulings recorded but not undone here. Credential half DECLINED by the owner 2026-09-18. Every existing month starts empty, which is the truth for a period nothing recorded |
 | One currency for a month's receipts (backlog item 98, audit 2026-09-17) | **shipped 2026-09-18** (PR #1076, Fly v179) | `output/single_currency.py`: a settled receipt converts at its own charge, everything else at the matcher's reference rate, a row nobody can price is named rather than counted as zero. `expenses.csv` fills the existing `Exchange Rate` column and states the total; the month report prints each figure and rate under the amount. Live July USD 58,187.69, August USD 2,808.91, both as predicted. Silent on a month already in one currency. The report PDF was not driven live (that route writes render outcomes into the run, item 67) |
 | A statement upload has an identity (backlog item 150, note item T2, owner 2026-09-18) | **shipped 2026-09-18** (pending PR; no SPA change, nothing renders the id yet) | `statements[].statement_id` = sha256 of the stored bytes (16 hex), parallel and absent on entries written before it; `coverage[].statement_ids[]` beside the file names; `statement_anchors` keyed by id as well as by file; `?statement_id=` on the writeback route. The same bytes twice share one id, a corrected file gets a new one, a re-read keeps it. Live July and August gain ids at their next re-read, which this item does not trigger |
-| The description counts, and the no-card fallback is defined once (backlog item 151, owner note X1, 2026-09-18) | **shipped 2026-09-18** (PR pending, Fly release pending; SPA line `docs/lovable-no-card-evidence-prompt.md`, NOT pasted) | `strip_reference_tokens` keeps an order or invoice number inside the bank description out of the merchant comparison (July Microsoft `vendor_pct` 50 to 100 at the next re-match, crossing the self-confirm floor); `card_evidence(tx, receipt)` is the one definition of where a pair's cards came from, on every candidate; a receipt naming no card is matched across every card and asks for review with `review_code: no_card_rival_on_other_card` when a deterministic rival sits on another card. Measured on July, August, September and the six bundles: 0 class moves, labelled-wrong unchanged, bundles 70/95. Description-token promotion and masked card fragments: measured dead ends, not built. Next: the owner's re-match of July shows the Microsoft row confirming itself; September's statement is the first live test of the review clause |
+| The description counts, and the no-card fallback is defined once (backlog item 151, owner note X1, 2026-09-18) | **shipped 2026-09-18** (PR #1096, merge `232c7d53`, Fly v186; SPA line `docs/lovable-no-card-evidence-prompt.md` applied, bundle-verified 2026-09-20) + **live July re-matched 2026-09-20 22:10 UTC on the owner's order** | `strip_reference_tokens` keeps an order or invoice number inside the bank description out of the merchant comparison (July Microsoft `vendor_pct` 50 to 100 at the next re-match, crossing the self-confirm floor); `card_evidence(tx, receipt)` is the one definition of where a pair's cards came from, on every candidate; a receipt naming no card is matched across every card and asks for review with `review_code: no_card_rival_on_other_card` when a deterministic rival sits on another card. Measured on July, August, September and the six bundles: 0 class moves, labelled-wrong unchanged, bundles 70/95. Description-token promotion and masked card fragments: measured dead ends, not built. Live July re-match (owner order, `refresh-master-data`, the one route that re-matches a month; 0 master-data changes, 13 judgments reused, 0 new): Microsoft 718.20 `vendor_pct` 50 to 100 and score 92 to 100, Amazon 315.56 `vendor_pct` 57 to 100 and score 80 to 87; 31 reconciled / 7 review / 73 unmatched unchanged, no row changed bucket, no decision or expense touched. Nothing self-confirmed and nothing needed to: both rows were already reconciled (Microsoft `turn: posted`, Amazon confirmed), so the 2026-09-18 line "waiting for a click" overstated it. August not re-matched (its two no-card pairs are already reconciled). Next: September's statement is the first live test of the review clause |
 | The reader sees every colour, and infers nothing from the new ones (backlog item 162, owner directive 2026-09-20) | **shipped 2026-09-20** (pending PR; SPA swatches `docs/lovable-statement-colour-prompt.md`, NOT pasted) | `colour_family` is total over the RGB cube and returns one of twelve stable names from HSV hue bands, replacing the ad-hoc RGB inequalities; `_FAMILY_ENTRY_STATUS` maps only yellow and gray to the two existing verdicts, so a newly named family is recorded and votes on nothing. `rows[].fills[]` carries `{column, index, hex, family}` per coloured cell, over every column rather than only the mapped ones. Measured live first: 174 of 452 filled cells across July and August were invisible (88 blue, 85 orange, 1 green), all in a THIRD annotation channel in the `Card` column beside the yellow `Amount` and gray `Description`. **0 of 452 cells change verdict**, proven by running both classifiers over both stored workbooks. A statement is parsed at upload, so July and August carry no `fills` until Criss next has them read; the deploy is verified in-machine, not on the live payloads. The 1-1 tie-break (41 of July's 112 rows read `posted` from a tie) is untouched and is an owner decision |
+| Private needs positive evidence (backlog item 203, owner ruling 2026-09-24, card-attribution case 6; supersedes item 41's trigger) | **shipped 2026-09-25** (no SPA change: the chip hides on `suggested_private: false`) | `cards.positive_non_brisken_evidence`: a private expense is suggested only on a number or ending no Brisken card has, cash, or a network / kind / issuer the registry does not carry; every other hint waits for the statement, vendor memory and Criss's assignment. Glued words read (`payment_words`), "a card was used" words made generic (never learned as aliases). Live census: 9 rows lose the suggestion, 0 gain. Private-card-list session must fold it into its order. `docs/api-contract.md` "Private needs positive evidence" |
+| A Brisken card type is not a private-expense signal (backlog item 198, owner ruling 2026-09-24) | **shipped 2026-09-24** (PR #1334, Fly v223; no SPA change: the chip hides on `suggested_private: false`) | A generic tender hint naming only a network / kind the batch's active cards carry (read from label + account wording: visa, mastercard, credit) no longer suggests private; non-card tenders and types Brisken lacks still do. Read-time: live `n_suggested_private` April 8->5, May 4->3, June 5->3, July 8->3, August 1, September 7->6, exactly the prediction. Since superseded in wiring by item 203's positive-evidence rule (#1340, v225), which keeps these rows unsuggested |
+| A two-digit card ending printed in other words names its card (backlog item 199, case 3 of the card-attribution map, owner 2026-09-24) | **shipped 2026-09-24** (PR #1335, Fly v224, live-verified) | `cards._ENDING_LEADS`: explicit lead phrases in EN/PT/DE/FR/ES on diacritic-folded text, an amount guard and a second-ending rule. September's GoDaddy (446.99 EUR, "ending with the last two digits: 38") now reads card-2838; the census over 88 live hints moved that one hint only. A shared ending (76, 13) stays a contest for review (vendor history, item 200, closed not built) |
+| A statement PDF keeps its company through a re-read (backlog item 195 + leftover 3 of items 196/197) | **shipped 2026-09-25** (no SPA change) | A PDF entry records the account it was filed under; a re-read never lends a PDF `config.statement`'s account; with no account, a PDF takes the company its printed cards resolve to (blank on two companies or an unnamed card), never the literal "card". The overlap advisory no longer calls two unrecorded accounts "the same account". Live August's two PDF entries (1176, 9693) still read `account_id: ""` and the 9693 advisory stays until the month's next re-read; no row moves on the deploy |
+| Outage leftovers: stale intake error, dead-attach file (backlog items 196/197 leftovers) | **shipped 2026-09-25** (no SPA change) | An `ingested` intake-log row no longer presents a failed first try's `error` (read-side; the archive keeps it): live, one row of 146. A statement attach whose job fails before its commit removes the file it saved, so a retry keeps its name (no more `--2.pdf`); a recorded file is never removed. Item 196's own decision (land deterministic rows when the model is down) is untouched and sibling-owned |
+| Charges with nothing behind them say what they are (backlog item 221, front 1 of the 2026-09-25 gap-map round) | **shipped 2026-09-25** (PR #1468; SPA prompt `docs/lovable-chase-honesty-prompt.md` not pasted) | Charge reasons name every closing verdict (`closed_recurring`, `no_receipt_expected`, reviewer `already_booked`) with a `reason_label`; `n_already_posted` counts booked purchases only; `summary.n_cards_uncovered` (3 / 4 / 7 live) and the Publish refusal name the cards with nothing loaded; the chase carries `date_range` / `charge_month` and asks carry an age (`overdue_days`, default 14) with a per-holder mark-all; `python -m expense_recon.zoho.booked_report` lists open charges Zoho already holds (0 / 11 / 11) and colour-closed charges it does not (read-only). Inbound-mail link not built: 0 resting mails live. Live 2026-09-25 (owner-approved): 22 open charges Zoho holds marked already booked (Aug need-receipt 57 -> 46, Sep 28 -> 17); chase holder map filled for Dirk and Nicolas, chase still disabled |
+| Copies the ladder never saw: one number read two ways, the mail body (backlog item 223 steps 2-3, front 4 of the 2026-09-25 gap map) | **shipped 2026-09-25** (SPA copy prompt `docs/lovable-copies-kind-prompt.md` pending) | Three new duplicate `basis` values, `reference_digits` / `misread_digit` / `body_twin`, decided by the tool at read time (no-statement months) and in the re-match pool; a rendered mail body is never kept unless a charge holds it. The BENCH / EXP charge-named files are real receipts (31 hold a charge), not a load to delete. Steps 4-7 (document kind in the schema, cross-month account guard, intake pairing, a re-apply route) open |
+| Gemini as the receipt reader (backlog item 239, Dirk 2026-09-27, owner 2026-09-28: build, test, then switch) | **LIVE 2026-09-28 (Fly v276): Gemini 3.8 Flash reads every receipt; OpenAI is the fallback** | `EXPENSE_RECON_GEMINI_READS` (`images` / `all`) hands receipt reading to Gemini with the same prompt, fences, schema and cache; falls back to OpenAI on any failure; `/healthz` `receipt_reader` shows the state. Next: A/B on the 251 stored documents, then switch on where Gemini wins |
+| Gemini re-reads the stored receipts (backlog item 240, owner 2026-09-28: preview, then apply) | **APPLIED 2026-09-28, all seven months** (route Fly v277, PR #1538) | Production dry run per month, the owner's per-month yes, then the real run: 54 receipts written and 2 set-aside pages joined, 5 receipts skipped at his yes; pairs April 15 to 19, July 41 to 46, August 35 to 38; every reading identical to its dry run; no human confirmation touched; cold SPA drive renders the new values. Per-month table in backlog item 240. Follow-up item 243 BUILT 2026-09-29: a slip printing the corporate card's second number 1672 keeps its 2838 charge once Criss adds 1672 to the 2838 card in Settings > Cards |
 
 ## Open decisions / gates
 

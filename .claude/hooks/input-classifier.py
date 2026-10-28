@@ -116,6 +116,40 @@ def b1_primer() -> str:
         return ""
 
 
+HEADER_PRIMER = (
+    "[SESSION HEADER] This prompt names a scope, which is exactly the case "
+    "rule_session-start step 7 makes the header mandatory for. Before other "
+    "work: output the session header block (scope, skills, open specs, comms "
+    "age, memories loaded BY NAME) and call `python tools/rename-chat.py "
+    "\"{{scope}}--{{task-desc}}\"`. Four sessions skipped it (2026-09-09, 09-15, "
+    "09-16, 09-17), each self-caught only at checkpoint; the header is what "
+    "makes a memory-loading gap visible while the session can still act on it."
+)
+
+# A scope word in the first prompt is what makes scope "evident" per
+# rule_session-start. Kept to the live clients and the system scopes rather
+# than any capitalised word, so an unrelated prompt stays silent.
+SCOPE_WORDS = re.compile(
+    r"\b(brisken|meji|meji-media|wimmer|warme|volabyg|jochen|vinted|upwork|"
+    r"unpauseai|platform|local-web|openclaw|recon|lead desk|onepilot)\b",
+    re.I,
+)
+
+
+def header_primer(prompt: str) -> str:
+    """Fire once per session, on a prompt whose scope is evident. Silent
+    otherwise; silent for the rest of the session once claimed."""
+    if session_state is None or not prompt or not SCOPE_WORDS.search(prompt):
+        return ""
+    try:
+        if not session_state.mark_once("session_header_primed"):
+            return ""
+    except Exception:
+        return ""
+    log_fire("HEADER-PRIMER")
+    return HEADER_PRIMER
+
+
 def main() -> int:
     try:
         raw = sys.stdin.read()
@@ -144,6 +178,10 @@ def main() -> int:
     primer = b1_primer()
     if primer:
         blocks.append(primer)
+
+    header = header_primer(event.get("prompt") or "")
+    if header:
+        blocks.append(header)
 
     # One emit per event: the harness reads a single JSON object, so both
     # advisories share one additionalContext when they fire together.

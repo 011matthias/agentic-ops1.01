@@ -129,6 +129,19 @@ def heredocs(cmd: str) -> list[dict]:
     return found
 
 
+# A PowerShell here-string (`@'...'@` / `@"..."@`) handed to the POSIX Bash
+# tool. Bash does not parse it: the leading `@` becomes the first word of the
+# payload, which is how a commit whose subject was literally `@` squash-landed
+# on main (register 2026-07-22, after 2026-06-10 and 2026-06-12 x2, all fixed
+# `documented`). The opener must end its line and the terminator must open one,
+# which no ordinary Bash command does.
+_PS_HERESTRING = re.compile(r"@(['\"])[ \t]*\r?\n.*?^[ \t]*\1@", re.S | re.M)
+
+
+def herestring(cmd: str) -> re.Match | None:
+    return _PS_HERESTRING.search(cmd)
+
+
 def classify(cmd: str) -> tuple[str, dict] | None:
     """(kind, heredoc) for the first deny-class heredoc in `cmd`, else None."""
     for hd in heredocs(cmd):
@@ -163,6 +176,17 @@ REASONS = {
         "`<<{tag}` ({lines} lines). Nested triple quotes inside a heredoc are "
         "where the shell tokenizer gives up -- this is the documented "
         "'unexpected EOF' shape. " + REMEDY
+    ),
+    "herestring": (
+        "POWERSHELL HERE-STRING IN THE BASH TOOL intercepted (`@{quote}` ... "
+        "`{quote}@`). Bash is POSIX sh and does not parse here-strings of this "
+        "form: the leading `@` is read as the first word of the payload. On "
+        "2026-07-22 that put a commit whose subject was literally `@` onto "
+        "main, after the same failure on 2026-06-10 and twice on 2026-06-12; "
+        "every fix was `documented` and none held. For a commit message pass "
+        "repeated `-m` flags; for any other multi-line payload use a POSIX "
+        "heredoc (`<<'EOF'`) or the Write tool. If you meant to run PowerShell, "
+        "use the PowerShell tool, where this syntax is valid."
     ),
     "backslash": (
         "HEREDOC CARRIES A DOUBLE BACKSLASH into a Python payload, intercepted "
@@ -205,17 +229,22 @@ def main() -> int:
     if payload.get("tool_name") not in ("Bash", "PowerShell"):
         return 0
     cmd = ((payload.get("tool_input") or {}).get("command")) or ""
-    if "<<" not in cmd:
-        return 0
 
-    hit = classify(cmd)
-    if hit is None:
-        return 0
-    kind, hd = hit
-
-    reason = REASONS[kind].format(
-        tag=hd["tag"], lines=hd["lines"], cap=MAX_HEREDOC_LINES
-    )
+    # A here-string is valid PowerShell, so this arm is Bash-only.
+    hs = herestring(cmd) if payload.get("tool_name") == "Bash" else None
+    if hs is not None:
+        kind, hd = "herestring", {"tag": "@", "lines": 0}
+        reason = REASONS[kind].format(quote=hs.group(1))
+    else:
+        if "<<" not in cmd:
+            return 0
+        hit = classify(cmd)
+        if hit is None:
+            return 0
+        kind, hd = hit
+        reason = REASONS[kind].format(
+            tag=hd["tag"], lines=hd["lines"], cap=MAX_HEREDOC_LINES
+        )
 
     if os.environ.get("HEREDOC_GATE_ALLOW"):
         log(f"OVERRIDE kind={kind} tag={hd['tag']} lines={hd['lines']}")

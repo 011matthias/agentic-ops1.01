@@ -21,8 +21,10 @@ paths. Come back here only when the data itself has to be recovered.
 | The SharePoint copy | the site in `EXPENSE_RECON_BACKUP_SITE`, folder `EXPENSE_RECON_BACKUP_FOLDER` | Brisken | as often as the schedule runs |
 
 The third row is what this round added, and it is the only copy Brisken
-itself holds. It is **off until someone turns it on**: with
-`EXPENSE_RECON_BACKUP` unset the app starts no backup thread.
+itself holds. **It is on since 2026-09-21** (owner directive), writing to
+the `ExpenseTool` folder the owner created on the MARKETING site. The first
+copy is `expense-recon-data-20260921T181135Z.zip`, 127.2 MB, taken 42
+seconds after the restart that switched it on.
 
 ## Taking a copy
 
@@ -45,7 +47,7 @@ Settings, all environment variables:
 | `EXPENSE_RECON_BACKUP_FOLDER` | folder inside the site's default document library (default `Expense Reconciliation Backups`); created on the first upload |
 | `EXPENSE_RECON_BACKUP` | `1` turns the in-app schedule on. Unset = off |
 | `EXPENSE_RECON_BACKUP_INTERVAL_HOURS` | how often the schedule runs (default 24) |
-| `EXPENSE_RECON_BACKUP_MAX_BYTES` | refuse above this size (default 100 MB; the folder is about 95 MB) |
+| `EXPENSE_RECON_BACKUP_MAX_BYTES` | refuse above this size (default 100 MB). **Set to 400 MB on 2026-09-21**, because the data folder had already passed the default: 146 MB on the volume, and the first archive alone was 127.2 MB. Left at the default, the schedule would have started and refused every run |
 
 The credential is the app-only Graph registration the estate already holds
 (`BRISKEN_TENANT_ID`, `BRISKEN_GRAPH_CLIENT_ID`,
@@ -104,19 +106,32 @@ readable database rather than as "database disk image is malformed".
 - **Nothing is deleted from SharePoint.** Copies accumulate; pruning old
   ones is a manual act until somebody asks for retention.
 - **No restore has been rehearsed** (see the top of this page).
-- **The schedule is off.** Turning it on is `EXPENSE_RECON_BACKUP=1` plus
-  a site in `EXPENSE_RECON_BACKUP_SITE`, both Fly env or secrets.
+- ~~The schedule is off.~~ On since 2026-09-21, daily. Turning it on took
+  three settings, not the one this line implied: without
+  `EXPENSE_RECON_BACKUP_MAX_BYTES` raised, `run_backup` refuses on the size
+  ceiling before it ever reaches SharePoint, so the schedule would have run
+  and copied nothing while reading as enabled. Anyone reusing this on
+  another volume should check the folder size against the ceiling FIRST.
 - **Snapshot retention is still five days.** Raising it is a Fly-side
   change, not a code one.
 - **Nothing takes a copy before a schema change.** The deploy step in the
   README should gain a `backup --go` line once the schedule is on.
 
-## The target, as of 2026-09-17
+## The target, as of 2026-09-21
 
-The app-only credential resolves `brisken.sharepoint.com:/sites/MARKETING`
-and its default document library, and can list it (verified read-only the
-day this shipped; the backup folder did not exist yet, which reads as an
-empty folder rather than an error). Whether the copies should live on the
-MARKETING site or somewhere finance-owned is the owner's call: any site
-the credential can reach works, and the variable is the only thing that
-changes.
+`brisken.sharepoint.com:/sites/MARKETING`, folder **`ExpenseTool`**, which
+the owner created and named on 2026-09-21. App-only throughout: the
+credential resolves the site, resolves the default document library
+(`Documents`), lists 18 root folders and writes into `ExpenseTool`. No
+delegated token is involved, which retires the workaround
+`rule_brisken_graph_first` still described.
+
+One trap worth naming, because it cost a false alarm while this was being
+checked. `list_folder` turns any Graph 404 into `[]`, so `backup --check`
+prints "0 file(s)" both for an empty folder and for a folder that is not
+there, and the same swallow covers a 404 raised while resolving the drive.
+That is the right behaviour for a first run, but it means a "0 files"
+answer is not by itself evidence that the target is reachable. Prove the
+instrument before believing it: list the drive root and confirm it returns
+folders you recognise. It did, which is why the empty answer here was read
+as a genuinely empty folder rather than as a broken credential.

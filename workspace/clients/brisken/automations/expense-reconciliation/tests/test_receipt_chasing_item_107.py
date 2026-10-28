@@ -394,18 +394,26 @@ def test_the_composer_returns_the_mail_and_nothing_sends(client, monkeypatch):
     assert dirk["to"] == DIRK_ADDRESS
     assert dirk["from_address"] == "receipts@expenses.brisken.com"
     assert dirk["reply_to"] == "receipts@expenses.brisken.com"
-    assert dirk["subject"] == "August 2026: 1 receipt still missing"
+    # Front 1 step 3: the subject names the date the charge carries.
+    assert dirk["subject"] == (
+        "August 2026: 1 receipt still missing (charge dated 2026-08-06)"
+    )
     assert "OBSIDIAN" in dirk["body"] and "Corporate card 2838" in dirk["body"]
     assert "receipts@expenses.brisken.com" in dirk["body"]
     assert "blocked" not in dirk
     # Both languages, composed together, so the page never has to translate a
     # body the backend wrote.
-    assert dirk["subject_pt"] == "August 2026: 1 recibo ainda faltando"
+    assert dirk["subject_pt"] == (
+        "August 2026: 1 recibo ainda faltando (lançamento de 2026-08-06)"
+    )
     assert "OBSIDIAN" in dirk["body_pt"]
     assert "Responda a este e-mail" in dirk["body_pt"]
 
     nicolas = next(m for m in body["mails"] if m["holder"] == NICOLAS)
-    assert nicolas["subject"] == "August 2026: 2 receipts still missing"
+    assert nicolas["subject"] == (
+        "August 2026: 2 receipts still missing "
+        "(charges dated 2026-08-05 to 2026-08-07)"
+    )
     assert "platform.openai.com" in nicolas["body"]
     assert "platform.openai.com" in nicolas["body_pt"]
 

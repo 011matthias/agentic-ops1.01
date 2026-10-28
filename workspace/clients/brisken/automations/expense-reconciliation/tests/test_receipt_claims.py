@@ -20,9 +20,13 @@ The protocol under test:
   machinery changes NOTHING — a month reconciles identically with the
   claims code active and with it stubbed out.
 
-Today no production path puts one run's receipt in another run's pool, so
-the cross-run cases inject foreign claims directly into the store — exactly
-the rows the trip-spanning pool (R4b) will write.
+The cross-run cases here inject foreign claims directly into the store,
+which was the only way to reach them when this module was written. Two
+production paths write those rows now: the trip-spanning pool (R4b, same
+commit as this module) and the adjacent-month pool (item 61). The
+end-to-end cases that drive them through the real routes live in
+`tests/test_trip_settlement.py`; what stays here is the protocol itself,
+isolated from whichever pool happens to lend the receipt.
 """
 from __future__ import annotations
 

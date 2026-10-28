@@ -167,7 +167,25 @@ def row_type_of(tx) -> str:
     stamped = getattr(tx, "row_type", None)
     if stamped in ROW_TYPES and (stamped in CREDIT_ROW_TYPES) == bool(tx.is_credit):
         return stamped
+    # Front 5 (2026-09-25): a Type-less source (the Chase PDF) printed the
+    # cardholder paying the card down as "Payment Thank You-Mobile", and the
+    # sign path called it a refund (live August 4 rows USD 13,848.16,
+    # September 2 rows USD 4,660.00). The descriptor is on the stored charge,
+    # so a month read before this reads right with no re-read. Display only:
+    # `is_credit`, the refunds bucket and matching are untouched.
+    if tx.is_credit and PAYOFF_DESCRIPTOR.search(
+        getattr(tx, "vendor_from_statement", "") or ""
+    ):
+        return ROW_TYPE_PAYMENT
     return ROW_TYPE_REFUND if tx.is_credit else ROW_TYPE_PURCHASE
+
+
+# The words a card statement prints on the cardholder's own payment to the
+# card (Chase: "Payment Thank You-Mobile", "AUTOMATIC PAYMENT - THANK",
+# "AUTOPAY"), read only on a credit that no Type label classified.
+PAYOFF_DESCRIPTOR = re.compile(
+    r"\b(?:payment\s+thank\s+you|automatic\s+payment|autopay)\b", re.I
+)
 
 
 # The headers the column guess maps to `type` (`inspect.guess_column_map`),

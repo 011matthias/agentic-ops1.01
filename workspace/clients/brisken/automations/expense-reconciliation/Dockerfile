@@ -49,10 +49,8 @@ RUN uv export --frozen --no-dev --extra web --no-emit-project \
 # it empty, and /healthz then reports "" rather than a guess. Absent, never
 # wrong; FLY_IMAGE_REF still names the release either way.
 #
-# The deploy command that sets it, with the clean-tree guard that keeps the
-# stamp honest, is in docs/operating.md ("Deploy"). Short version:
-#   flyctl deploy . -a brisken-expense-recon --remote-only \
-#     --build-arg GIT_COMMIT=$(git rev-parse HEAD)
+# deploy.py in this module sets it (and refuses a stale or dirty tree);
+# see docs/operating.md ("Deploy").
 ARG GIT_COMMIT=""
 ENV EXPENSE_RECON_COMMIT=$GIT_COMMIT
 

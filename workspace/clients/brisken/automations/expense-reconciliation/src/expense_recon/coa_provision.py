@@ -210,6 +210,61 @@ def coa_validation_for_all_entities(
     return {"enabled": True, "entities": entries}
 
 
+# The run-config key the GL categorization engine reads (Phase 1, item 3).
+# Its PRESENCE is what opts a run into direct-to-GL categorization; a run
+# without it (every CLI run, every batch created before this key existed)
+# keeps the bucket path, so a month is never categorized in two vocabularies.
+GL_ENTITY_ORGS_KEY = "gl_entity_orgs"
+
+
+def entity_org_ids(
+    settings: dict | None, provisioning: dict | None
+) -> dict[str, str]:
+    """Entity label -> Zoho org id, for every entity either source names.
+
+    Same precedence as `coa_validation_from_settings`, per label: the
+    settings registry first, the /data provisioning file second. A label
+    neither source gives an org id is ABSENT, which the engine reads as "not
+    covered" and refuses on; it never falls back to another entity's org.
+
+    This exists so the org id, never the legal-entity NAME, is what reaches
+    `curated_leaves.llm_leaf_labels`: a name there returns no labels, silently,
+    and every row would refuse with no error.
+    """
+    labels: set[str] = set()
+    for source in (settings, provisioning):
+        for key in ((source or {}).get("entities") or {}):
+            if str(key).strip():
+                labels.add(str(key).strip())
+    out: dict[str, str] = {}
+    for label in sorted(labels):
+        ent = entity_from_settings(settings, label)
+        org = str((ent or {}).get("org_id") or "").strip()
+        if not org:
+            ent = entity_from_settings(provisioning, label)
+            org = str((ent or {}).get("org_id") or "").strip()
+        if org:
+            out[label] = org
+    return out
+
+
+def org_id_for_entity(
+    entity_label: str | None, entity_orgs: dict[str, str] | None
+) -> str | None:
+    """The org id for one receipt's legal entity, or None.
+
+    Case-insensitive and whitespace-trimmed, like every other entity lookup
+    here. None for a blank label and for a label the map does not carry.
+    """
+    key = str(entity_label or "").strip().lower()
+    if not key:
+        return None
+    for label, org in (entity_orgs or {}).items():
+        if str(label).strip().lower() == key:
+            return str(org).strip() or None
+    return None
+
+
 def apply_to_config(
     cfg: dict,
     entity_label: str,
@@ -230,10 +285,17 @@ def apply_to_config(
     must not be able to break a run.
     """
     try:
-        if cfg.get("coa_validation") is not None:
-            return cfg  # respect an explicit block; don't clobber
         prov_path = path if path is not None else os.environ.get(PROVISION_ENV)
         provisioning = load_provisioning(prov_path) if prov_path else None
+        # The GL engine's entity -> org map, for EVERY entity rather than
+        # the run's own: a batch's receipts can resolve to another company
+        # through the paying card, and each must be judged against its own
+        # chart. Injected even when an explicit gate block is kept below.
+        entity_orgs = entity_org_ids(settings, provisioning)
+        if entity_orgs and GL_ENTITY_ORGS_KEY not in cfg:
+            cfg = {**cfg, GL_ENTITY_ORGS_KEY: entity_orgs}
+        if cfg.get("coa_validation") is not None:
+            return cfg  # respect an explicit block; don't clobber
         if entity_label.strip():
             block = coa_validation_from_settings(entity_label, settings, provisioning)
         else:

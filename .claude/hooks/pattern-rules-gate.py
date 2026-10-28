@@ -231,7 +231,7 @@ def main() -> int:
         text = last_assistant_text(payload.get("transcript_path", ""))
         if not text.strip():
             return 0
-        fields = {"final_text": _strip_code()(text)}
+        fields = {"final_text": _strip_code()(text), "final_text_raw": text}
     elif event == "prompt" and wanted:
         fields = {"user_prompt": _strip_code()(fields["user_prompt"])}
 

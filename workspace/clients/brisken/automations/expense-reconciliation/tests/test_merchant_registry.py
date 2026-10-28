@@ -137,9 +137,27 @@ def test_normalize_drops_blank_and_dedupes_aliases():
     assert out["Uber"]["zoho_account"] == "E1"
 
 
-def test_normalize_rejects_bad_category():
-    with pytest.raises(ValueError):
-        normalize_merchants_setting({"X": {"category": "Not A Category"}})
+def test_normalize_drops_a_category_from_neither_vocabulary():
+    """Dropped, not refused, and the caller can learn which merchant lost it.
+
+    A settings save replaces the whole merchant map, so refusing here 400'd
+    the entire save (cards and entities tabs included) over one stored
+    string the server no longer knows.
+    """
+    dropped: list[tuple[str, str]] = []
+    out = normalize_merchants_setting(
+        {"X": {"category": "Not A Category", "aliases": ["xco"]}},
+        dropped=dropped,
+    )
+    assert out["X"]["category"] is None
+    assert out["X"]["aliases"] == ["xco"], "the rest of the entry survives"
+    assert dropped == [("X", "Not A Category")]
+
+
+def test_normalize_drops_silently_when_no_sink_is_given():
+    """The internal callers (memory at sign-off, the seed) pass no sink."""
+    out = normalize_merchants_setting({"X": {"category": "Not A Category"}})
+    assert out["X"]["category"] is None
 
 
 def test_normalize_rejects_non_dict_entry():

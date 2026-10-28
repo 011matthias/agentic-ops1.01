@@ -42,7 +42,7 @@ receives after `jsonable_encoder`.
 | `coverage[].digits[]` · `coverage[].statements[]` | string |
 | `expenses[]` | object |
 | `expenses[].line_items[]` | object |
-| `expenses[].books_as[]` | object `{account, unassigned, amount}` |
+| `expenses[].books_as[]` | object `{account, unassigned, amount}`, plus `suggested: true` on a part whose `account` is the export's `suggested: <account>` cell (item 216 Build 2 step 2; ABSENT otherwise) |
 | `expenses[].edited_fields[]` | string |
 | `expenses[].boxes[]` | string, a count name without `n_` (item 84) |
 | `expenses[].category_variance.categories[]` | string |
@@ -52,12 +52,15 @@ receives after `jsonable_encoder`.
 | `card_review.unresolved_hints[].documents[]` | string |
 | `card_review.resolved[]` | object |
 | `card_review.resolved[].hints[]` | string |
+| `card_review.private_cards[]` | object `{digits, person, label}` (item 214) |
+| `card_review.unresolved_hints[].private_card_options[]` | string, a listed card's four digits (item 214) |
 | `summary.upload_issues[]` | string (English prose; unchanged by design) |
 | `summary.upload_issue_details[]` | object `{code, file, suffix, limit}` |
 | `account_options[]` · `category_options[]` · `entity_options[]` | string (`entity_options` follows the operator's `entity_order`; see PUT /api/settings) |
 | `cost_center_options[]` | object `{name, kind, note}` (item 47: OBJECTS, unlike its three sibling option lists) |
 | `card_sections[]` | object (item 138, the Expenses page's card tabs) |
 | `card_sections[].digits[]` · `card_sections[].statements[]` | string |
+| `gl_accounts.*[]` | object `{code, name, category}`; `*` is an entity label (see "GL vocabulary" below) |
 
 ### Run
 
@@ -85,6 +88,145 @@ receives after `jsonable_encoder`.
 | `card_sections[]` | object (item 138, the Matching page's card tabs) |
 | `card_sections[].digits[]` · `card_sections[].statements[]` | string |
 | `rows[].fills[]` | object `{column, index, hex, family}` (item 162: the row's coloured cells, named not interpreted; ABSENT when the row has no readable fill) |
+
+## GL vocabulary (Phase 1)
+
+A month is categorized in exactly one vocabulary. Both month views
+(`GET /api/expense-batches/{id}`, `GET /api/runs/{id}`) say which:
+
+| Field | Shape | Meaning |
+|---|---|---|
+| `category_vocabulary` | `"gl"` or `"buckets"` | `"gl"` when the batch was created on the GL engine (its config carries `gl_entity_orgs`). A line's `category` is then a curated leaf CODE (`E100010-31`) and the picker is `gl_accounts[entity]`. `"buckets"` for every earlier month: the eight names and `category_options`, unchanged. |
+| `gl_accounts` | object, entity label -> `[{code, name, category}]` | The curated leaves each entity may post to, keyed by the same labels a row's `legal_entity_id` carries (the batch's own frozen map on a GL month; settings + provisioning otherwise). `name` is that entity's wording and is presentation only; `category` is the branch to group under. An entity ABSENT from the map is not covered by the curated chart, which is a different fact from an empty list. |
+| `gl_revision` | string | The compiled taxonomy's revision (`2026-09-24`), so a stale client is diagnosable. |
+
+`GET /api/settings` and the settings save reply carry `gl_accounts` and
+`gl_revision` too, built from today's map.
+
+The category write routes take either vocabulary on any batch: a bucket name
+stays itself, a leaf code stays itself, a `"CODE name"` label is stored as the
+code, `""` / `null` clears, and anything else is dropped and named under
+`ignored`. Because both are accepted, the SPA must choose the picker from
+`category_vocabulary`, never from the entity.
+
+A refused line: the row's `review` reads `state: "pick"`,
+`reason_code: "category_refused"`, and carries `refusal`, one of
+`entity_missing`, `org_not_curated`, `no_such_code_in_org`,
+`not_expense_relevant`, `account_unresolved`, `model_picked_parent` (plus
+the unreachable `trip_purpose_inheritance_deferred`). `reason` holds the
+English sentence. `model_picked_parent` (item 216 Build 2): the model named a
+summary account that has postable accounts under it in that company. The model
+is offered leaf accounts only, so this is a backstop; a person or the merchant
+list may still pick a parent, and the picker (`gl_accounts`) still lists them.
+Pinned by `tests/test_gl_engine.py` (`REFUSAL_CODES_PIN`,
+`CATEGORY_VOCABULARY_PIN`).
+
+A hand-picked code carries no stored account; every view and export reads the
+code's account name from the curated chart of the company the row shows (item
+201). A code that company cannot post to stays `(account unmapped - assign)`.
+
+### Switching a bucket-era month (operator only, owner directive 2026-09-25)
+
+`POST /api/runs/{id}/convert-to-gl`, body `{"confirm": "<month label or run
+id>"}`, answers `{"ok": true, "job_id"}`; poll `GET /jobs/{id}`. On `done`,
+`result` holds `n_receipts`, `n_lines`, `n_lines_categorized`,
+`line_refusals`, `n_borrowed`, `n_charges`, `n_charges_categorized`,
+`charge_refusals`, `n_overrides_retired` and `llm_cost_usd`. The month then
+reads `category_vocabulary: "gl"`: every receipt line and receiptless charge
+is re-categorized by the engine for the company the row shows, the reviewer's
+bucket picks are removed (kept under the snapshot's `gl_conversion` with the
+previous categorizations), and the config gains `gl_entity_orgs` plus the
+export gate a new month gets. Nothing is written when it fails. The SPA offers
+no control for it.
+
+| Code | Status | When |
+|---|---|---|
+| `convert_confirm_required` | 400 | no `confirm` |
+| `convert_confirm_mismatch` | 400 | `confirm` is not the label or run id |
+| `month_already_gl` | 409 | the month already uses the Zoho accounts |
+| `month_published` | 409 | the month is published |
+| `trip_not_convertible` | 409 | a trip batch |
+| `gl_not_provisioned`, `llm_unavailable`, `month_changed_during_conversion` | job error, prefixed to `error` | no company has a Zoho org; no model client; the month changed while the model ran (run it again) |
+
+### A merchant's account per company (items 180/181, 2026-09-25)
+
+`settings.merchants[name].accounts` is optional: `{company label: leaf code}`,
+codes only. On a GL month the receipt's own company's entry decides the
+account first (matched on the company's Zoho org, so either spelling of a
+company works), before the company's learned rule, the merchant's single
+`zoho_account` and its default category; a code that company cannot post to
+refuses with its reason, and the model is never asked. A merchant with no
+default category still books by its map. A bucket month never reads it, and a
+`multi_category` merchant ignores it.
+
+`PUT /api/settings`: a value that is not a leaf code (a bucket, a name) is
+dropped and named in `ignored` as `merchants.<name>.accounts.<company>`; a
+`"CODE name"` label is stored as its code; keys are stored under the company's
+picker spelling (`account_companies[].label`). **An entry that omits
+`accounts` keeps the stored map**; `{}` or `null` clears it.
+
+`GET /api/settings` (and the PUT reply) adds three derived, read-only keys:
+
+| Key | Shape |
+|---|---|
+| `account_companies` | `[{label, org_id, labels}]`, one per company the curated chart covers; `label` is the one spelling to show and save under |
+| `merchant_accounts` | `{merchant: [{company, label, org_id, code, name, postable, reason}]}` for every merchant with a map; `name` is that company's wording |
+| `needs_account` | `[{merchant, company, org_id, n_rows, months}]`: registry merchants booked (receipt rows as the grid shows them, and receiptless charges) to a company on a GL month with no account for it; up to 120 s old per month, filtered against the current map on every read |
+
+`POST /api/runs/{id}/recategorize-refused`, body `{"confirm": "<month label or
+run id>"}`, re-runs the engine on a GL month's REFUSED receipt lines and
+refused receiptless charges only, for the company each row shows; a line a
+person picked is left alone. Answers `{"ok": true, "job_id"}`; the job's
+`result` holds `n_lines_refused`, `n_lines_resolved`, `n_charges_refused`,
+`n_charges_resolved`, `line_refusals_after`, `charge_refusals_after`,
+`llm_cost_usd`; each run is logged under the snapshot's `gl_reruns` with the
+refusals it replaced. Codes: `rerun_confirm_required` / `rerun_confirm_mismatch`
+(400), `month_not_gl`, `month_published`, `trip_not_convertible` (409),
+`month_changed_during_conversion` (job error). Operator only; a write on the
+month, so it runs on an owner order.
+
+### Decided accounts: `accounts_locked` (item 219, 2026-09-25)
+
+`settings.merchants[name].accounts_locked` is optional, `true` or absent. It
+marks the entry's `accounts` as decided: no learner changes a locked entry's
+`accounts`, `zoho_account` or `category`, and its answers post as a rule
+(`origin: "rule"`) exactly as any map entry does. Settings may still change a
+locked account (that is the on-purpose route). **An entry that omits the key
+keeps the stored flag**; only an explicit `false` clears it. A person's pick on
+a row still wins on that row.
+
+`GET /api/runs/{id}/memory-plan` `lessons[]` gains `kind: "drift"`: on a GL
+month, rows of a locked merchant booked in a company to a postable account
+other than the decided one, one lesson per account, `default_keep: false`,
+`owner_gated: false`, id `drift:<merchant>|<company label>:<code>`,
+`conflict_group` `drift:<merchant>|<company label>`, `key: {merchant, company,
+account}`. Its `description` reads "Change the default for <merchant> in
+<company> to <account>? N of this month's M <merchant> rows there were booked
+to it; the decided account is <account>." Ticking it (`POST .../publish`
+`keep`) sets that one company's account and writes the memory rule the same
+rows teach; that rule is never offered as its own lesson for a decided cell.
+Two drift lessons of one group ticked together write nothing and are named in
+`learned.lessons.unresolved_conflicts`. Rows that agree with the decision keep
+their ordinary lesson. The publish summary's `registry` block gains
+`skipped_locked` (groups of a locked merchant the learner left alone).
+
+OpenAI, Anthropic and Lovable keep `owner_gated` on their `registry:` lesson
+whether or not they are locked; a drift lesson about them is not gated.
+
+Item 225 (note #91, 2026-09-27): a correction lesson's `description` says what
+the next receipt gets, with the vendor as the receipt prints it ("From now on,
+ERICK SPORTS receipts go to the company Brisken Holding, LLC.", "... in
+<company> are filled in as paid with <card label> (<person>)"; the four
+remembered fields read "paid with", "paid through", "named", "with the tax
+line"). A card is named by its Settings `label` and `person`, never its key
+(the bare key only for a card nobody defined). A `registry:` lesson whose card
+fields change reads "paid with <card>, so its next receipt gets that card",
+"paid with <A> and <B>, so no card is filled in for it", or "... so the card it
+had learned (<card>) is no longer filled in", followed by "Seen on N
+receipts: ..."; those receipts (the ones whose card the learner observed,
+`registry_card_observations`) are appended to its `sources`. The phrases
+"new spelling", "account in <company>", and the "From N corrected rows" suffix
+are unchanged. Descriptions are English only.
 
 ## `parse_issues` specifically
 
@@ -187,7 +329,8 @@ name answers the same one:
 | `n_charges_need_receipt` | run payload only: how many purchase charges hold no receipt and no verdict that closes them (item 99). Not `n_unmatched_tx`, which also counts booked charges and fee lines. A gray-filled charge is booked through recurring and does not count (owner ruling 2026-09-17) |
 | `n_charges_closed_recurring` | run payload only: how many charges holding no receipt the gray fill closed (owner ruling 2026-09-17): purchases it took out of `n_charges_need_receipt` and fee lines whose guessed category it took out of `n_charges_category_guessed`. Never blocks the month; it keeps the closure visible. A subscription mark the tool derived from history closes nothing and is not counted |
 | `n_receipts_need_charge` | run payload only: how many receipts no charge holds anywhere and nothing set aside (item 99): `n_unmatched_rec` minus the receipts another month's charge settled (`settled_by`) and the confirmed private expenses (flag AND `reimburse_to`) |
-| `n_charges_category_guessed` | run payload only: how many charges that need no receipt still carry the tool's guessed category (item 99). A charge that needs a receipt is counted under `n_charges_need_receipt` alone; a gray-filled charge is not counted, its category lives in the Zoho recurring entry |
+| `n_charges_category_guessed` | run payload only: how many charges that need no receipt still carry the tool's guessed category (item 99). A charge that needs a receipt is counted under `n_charges_need_receipt` alone; a gray-filled charge is not counted, its category lives in the Zoho recurring entry. It counts the guesses that BLOCK the month, not every guess: `categories_by_origin` counts who answered |
+| `categories_by_origin` | both payloads: `{person, rule, suggestion, none}`, who answered each row's category (item 216 Build 2 step 3). Sums to `rows[]` on the run payload and to `n_expenses` on the expense payload. See "Who answered: `categories_by_origin`" |
 
 `service.categorized_counts` is the single implementation of the categorized
 rule; `service.batch_list_summary` derives the list screen's counts from the
@@ -388,7 +531,12 @@ one event to the month's snapshot (`rematch_log`, capped at 50):
 
 `trigger` is one of `statement` (attach), `reread`, `receipts` (mail, drop,
 folder), `cards`, `master_data`, `set_aside`, `trip`, and since item 112
-`adjacent_receipts` (a neighbouring month's arrival). Since item 103 the four
+`adjacent_receipts` (a neighbouring month's arrival), and since item 223 step 7
+`duplicates_reapply` (the operator re-applying the duplicate rules to a
+matched month, see the last section), and since item 240 `receipts_reread`
+(the operator reading a month's stored receipts again), and since item 252
+`sender_notes` (the operator applying our senders' notes to a month's stored
+receipts, when a receipt's company moved). Since item 103 the four
 counts are the effective ones the month's page shows at that moment (see "The
 four charge counters count the effective verdict"), not the raw outcome the
 matcher produced. Oldest first. The
@@ -776,6 +924,24 @@ Both are absent on older rows, and a consumer must read them defensively:
 they exist so the day budget can re-seed what strangers have spent today
 after a restart, not as a new part of the row's meaning.
 
+**An `ingested` row carries no `entries[].error` (2026-09-25, leftover of
+item 196).** A mail whose first try failed (the 2026-09-24 429 on a render)
+and that was ingested afterwards used to keep the failure's text on its row,
+so a surface showing `error` showed a failure beside "Added". The archive
+meta and the acceptance row logged at the time still hold the text; the
+overlay stops presenting it once the status is `ingested`. Every other
+status keeps its `error`, which is the only thing saying why a held mail is
+held. Live, one row of 146 changed: `20260924T162158-0f4f64aa`.
+
+**A statement attach whose job fails leaves no file behind (same date,
+same item).** `POST /api/expense-batches/{id}/statement` saves the upload
+before the job runs. A job that fails before its commit now removes that
+file, so the operator's retry keeps the file's name (the dead 2026-09-24
+attempt made August's retry `20260804-statements-9693--2.pdf`). A file the
+month's `statements[]` names is never removed: a failure after the commit
+leaves charges pointing into it. No field changes. A server restart in the
+middle of an attach still leaves its file; nothing sweeps that case.
+
 ### The travel pool (item 38, added 2026-09-06)
 
 Mail addressed to the TRAVEL alias (settings `intake.travel_alias`, unset
@@ -829,14 +995,41 @@ uses, materializing absent months unconditionally (`created_by:
 "drop"`; the auto-materialize flag gates MAIL only). A file with no
 readable plausible date is `needs_month` and NOT ingested; the optional
 form field `month` ("YYYY-MM") is the operator override and files every
-file in that call (`month_source: "operator"`). Zips are not expanded
-here (`rejected` / `unsupported-type`) — one file per receipt.
+file in that call (`month_source: "operator"`).
+
+**Zips (item 237, 2026-09-27).** A `.zip` dropped here is opened on the
+server and every member files on its own row, exactly as if its files
+had been dropped one by one: its own month verdict, the destination
+month's content dedupe (so a mixed backfill zip re-sending receipts the
+tool holds adds nothing twice), and a `files[]` row under the member's
+own name (folders flatten; `__MACOSX` forks, dotfiles and folder entries
+make no row). The zip itself gets no row once opened, and every member
+row carries `from_zip` (the zip's name; absent on a file dropped on its
+own). A `needs_month` member cannot be re-sent alone by the page, which
+holds the zip and not the file, so `from_zip` is what tells the page to
+say "take it out of the zip" instead of offering the month picker. A
+member type the page does not take is `rejected` / `unsupported-type`,
+and so is a zip INSIDE the zip (never opened recursively); a member that
+cannot be read (damaged entry, password) is `rejected` / `empty-file`; a
+member name longer than 100 characters is cut, keeping its extension. A
+zip refused WHOLE keeps one row under its own name and nothing in it is
+read: `zip-unreadable` (not a readable zip), `zip-too-many-files` with
+`limit` (its members would take the drop's unpacked total, counted
+across every zip in the drop, past `FOLDER_MAX_FILES`; checked before
+anything is written), or `zip-no-space` (unpacking would take the
+volume below the mailbox's free-disk floor). Per rule 5 the three new
+codes ship a parallel `reason_label` (English prose); the other reasons
+carry none. Only a file the operator dropped is opened. A restart
+mid-drop (item 114) deletes whatever an interrupted pass unpacked from a
+zip still present and unpacks it again; a failure while writing members
+fails the drop as a whole (job `error`, nothing filed).
 
 The reply is `{ok, job_id, n_files}`; the outcome rides the JOB row:
 `GET /jobs/{id}` gains a `result` field (parallel, absent on every
 other job kind) —
 `{files: [{file, status: filed|needs_month|rejected|failed, month?,
-month_source?, batch_id?, reason?, limit?, mixed_months?}], months:
+month_source?, batch_id?, reason?, reason_label?, limit?, mixed_months?,
+from_zip?}], months:
 [{month, label, batch_id?, created_batch, n_files, n_added, issues?,
 error?, has_statement?, rematch?}], n_filed, n_needs_month, n_rejected}`
 (`has_statement` / `rematch` since note #53, section at the end). `n_added < n_files` on
@@ -1093,7 +1286,7 @@ document back on every surface below at once.
 | Surface | What changed |
 |---|---|
 | `GET /api/expense-batches/{id}` (and `GET /api/runs/{id}` for a month with no statement) | the copy's row stays, `duplicate` marker included, and carries `counts_in_total: false`; ABSENT on every row that counts, so an older payload reads as "counts". `summary.n_expenses` leaves copies out, `summary.n_receipts` keeps every row, `summary.n_copies_set_aside` (int, always) is the difference, `summary.totals_by_ccy` leaves copies out, and `summary.copies_set_aside_by_ccy` (object `{currency: amount}`, `{}` when none) is what they add up to. `n_amounts_unreadable` no longer counts a copy. The copy's `boxes` is `[]` (amended the same day): it is in no Expenses box, so every box count (`n_categorized`, `n_uncategorized`, `n_ready`, `n_needs_company_or_person`, `n_suggested_private`, ...) leaves it out and `n_categorized + n_uncategorized == n_expenses`. See "The Expenses view's boxes open their rows" for why the to-do boxes go too |
-| `GET /api/expense-batches` (months list) | `summary.n_expenses` leaves copies out, `summary.n_copies_set_aside` beside it; `n_categorized` / `n_uncategorized` count the same expenses, so they agree with the batch page and sum to `n_expenses` |
+| `GET /api/expense-batches` (months list) | `summary.n_expenses` leaves copies out, `summary.n_copies_set_aside` beside it; `n_categorized` / `n_uncategorized` count the same expenses, so they agree with the batch page and sum to `n_expenses`. Item 238: each expense is categorized or not exactly as its row's box on the page (`grid_posting` over the grid's card chain: live merchant accounts, stale model suggestions read as refusals, the row's company, the chart gate), and the response body is kept in memory under the card roll-up's data key, rebuilt on the first read after any write |
 | `GET /runs/{id}/expenses.csv` | no row for a copy. Under the rows, after one blank row, a single first-column line: `Copies set aside, not counted above: N documents that repeat another (USD 263.59; EUR 32.00): <vendor> <date> <currency> <amount>; ...`. Amounts sit inside the sentence, never in `Expense Amount`, so a column sum cannot count a copy again. Absent when there are no copies (the file is byte-identical to before) |
 | `GET /runs/{id}/expense-report.pdf` | the listing, its header count and totals, the cost-center / trip sections and the reimbursements leave copies out. Under the listing: `Copies set aside: N documents repeat an expense listed above, not counted in the listing or the totals (USD 263.59 · EUR 32.00). Their pages follow the original's.`, then one line per copy, `<vendor> · <date> · <currency> <amount> · copy of expense <n>`. The copy's pages follow the original's, captioned `Expense <n> (copy set aside) · <vendor>` |
 | `GET /api/cost-centers/totals` | copies are in no centre, not in `unassigned`, not in `n_rows` / `n_undated`. New `copies_set_aside`: `{n_rows, n_batches, totals}`, same shape as `unassigned`, inside the same date range |
@@ -1328,11 +1521,19 @@ private expenses that will require reimbursement to the person who
 expensed." SUGGESTED, never stamped; nothing auto-books. All fields are
 PARALLEL (rule 1).
 
+**The trigger is superseded (owner ruling 2026-09-24, card-attribution
+case 6):** "not defined in the system" became "positively not Brisken's".
+A hint the registry does not know now suggests private only on positive
+evidence (a number or ending no Brisken card has, cash, a network / kind /
+issuer Brisken's cards do not carry); everything else waits. See "Private
+needs positive evidence" below. The rest of this section stands: suggested
+never stamped, `reimburse_to`, the reimbursements section.
+
 **Expense rows** gain:
 
 | Field | Type | Meaning |
 |---|---|---|
-| `expenses[].suggested_private` | boolean | a non-empty payment hint resolves to no registered card (not ambiguous, not confirmed), so this reads as private money until someone decides. An entity override no longer clears it (2026-09-17); a bank-transfer tender and a receipt settled outside the card never raise it (residual R3, see "A wire is not a card") |
+| `expenses[].suggested_private` | boolean | a non-empty payment hint resolves to no registered card (not ambiguous, not confirmed) AND, since 2026-09-24, carries positive evidence the payment was not Brisken's ("Private needs positive evidence"), so this reads as private money until someone decides. An entity override no longer clears it (2026-09-17); a bank-transfer tender and a receipt settled outside the card never raise it (residual R3, see "A wire is not a card") |
 | `expenses[].can_mark_private` | boolean | whether the private-card option applies to the row (2026-09-17): true when no defined company card paid it (no card and not a two-card contest, or a card only remembered from an earlier month) and on every confirmed private row. False when a company card paid, and (item 144) when the reviewer settled the row outside the card system, where a private card is as untrue as a company one; the write routes refuse to mark either private. Absent on older builds: treat as `card == null \|\| private` |
 | `expenses[].private` | boolean | the operator confirmed it: a reimbursement row |
 | `expenses[].reimburse_to` | string | who gets reimbursed; `""` unless confirmed |
@@ -1427,6 +1628,331 @@ their receipts stay in the evidence pages. The CSV keeps them as rows
 (mixed-entity ruling: one file) with `Legal Entity` = `(private expense)`
 and `Paid Through` = `Private ({person})` — the same strings the grid
 shows.
+
+## A Brisken card type is not a private-expense signal (added 2026-09-24)
+
+Owner ruling 2026-09-24 (card-attribution case 5): a receipt that prints
+only a card type Brisken's own cards have ("VISA CREDIT", "Cartão de
+Crédito", "TEF", "credit card") is not evidence of a non-Brisken card, so
+it is no longer suggested private. This supersedes the digit-less "Cartao de
+Credito" example of item 41; the rest of item 41 stands. No new field.
+
+The rule (since case 6 the Brisken-type half of
+`cards.positive_non_brisken_evidence`, which replaced
+`names_registry_card_type` the same day; decided once in
+`resolve_batch_row_cards`): a hint `is_generic_tender` calls generic
+suggests private only when it holds a non-card tender word (cash, bar,
+dinheiro, check, cheque, paypal, pix, wire, transfer, bank, boleto,
+transferencia, uberweisung), or a network or kind that no ACTIVE card in the
+batch's registry snapshot carries. Networks: visa; mastercard/master;
+amex/american express; elo; maestro; discover; diners; girocard/girokarte/ec.
+Kinds: credit/credito/kredit/kreditkarte; debit/debito/lastschrift. Every
+other tender word (card, cartao, karte, compra, tef, contactless, chip,
+apple, google, pay, de, dias, a short number) is neutral. The registry's
+networks and kinds are READ from each active card's `label` +
+`zoho_account` wording, never stored (the Settings editor replaces the whole
+cards map on save); live that is {visa, mastercard} and {credit}, the
+Mastercard coming from 0113's "GSBANK Apple Master Card". A registry that
+yields neither (empty, or labels with no such word) changes nothing.
+
+On such a row: `suggested_private` false (so the strip entry, both
+`n_suggested_private` counts, the `suggested_private` box and the review
+reason follow), `reimburse_to_prefill` empty, `can_mark_private` unchanged
+(still true), and the review falls to the ordinary `needs_entity` /
+`needs_person` question. The type word never selects a card, even when only
+one card has the network (owner ruling 2026-08-21); the card chain (a
+settled statement charge, a remembered card, the merchant registry, an
+assigned hint) runs as before. Printed numbers, two-digit endings and
+unrecognised phrases ("VENDA CREDITO VISA", "CreditCard", "Link") are out
+of scope. Read-time: every month moves on deploy with no re-match. Pinned
+route-level in `tests/test_card_type_not_private.py`. Case 6 (next section)
+narrows two statements here the same day: of the non-card tenders only
+cash is evidence now, and an empty or type-less registry is not special (it
+carries no Visa, so "VISA CREDIT" still suggests while a bare "card" or
+"TEF" waits).
+
+## Private needs positive evidence (added 2026-09-24)
+
+Owner ruling 2026-09-24 (card-attribution case 6), answering whether
+unrecognised payment phrases belong with the receipts that wait for the
+statement and vendor memory: "yes very good, that is excellent". It flips
+the default of item 41: a private expense is SUGGESTED only on positive
+evidence that the payment did not come from Brisken. "Not defined in the
+system" became "positively not Brisken's". Item 41 otherwise stands
+(suggested never stamped, `reimburse_to`, the reimbursements section). No
+new field, no SPA change: the chip already hides when the flag is false.
+
+**The rule** (`cards.positive_non_brisken_evidence(hint, cards) -> reason |
+None`, pure, decided once in `resolve_batch_row_cards` as the last term of
+`suggested_private`). Evidence, first match wins:
+
+| Reason | What the hint carries |
+|---|---|
+| `number` | a 3+ digit card number naming no active card in the batch's registry snapshot. A number always outranks words ("DEBIT-MASTERCARD 3281" is decided by 3281); a number or alias that names a Brisken card, or two of them, is no evidence |
+| `ending` | a masked two-digit ending (`masked_short_ending`) no active card ends in |
+| `cash` | a cash word: cash, dinheiro, bargeld, espèces, contanti, em espécie (the settled-outside chip's cash tender, pinned equal by test) and "bar" as a whole word |
+| `network` | girocard/girokarte/ec, maestro, amex/"american express", elo, diners, discover, or visa / mastercard, when no active card carries it, read ANYWHERE in the hint ("Zahlung mit girocard"). Live, Brisken carries visa and mastercard |
+| `kind` | debit/debito/lastschrift (or credit), when no active card carries it. Live, Brisken's cards are credit only, so "Visa Debit" is a debit card and suggests |
+| `issuer` | a name from `NON_BRISKEN_ISSUERS` (nubank, revolut, n26, wise, sparkasse, volksbank, raiffeisen, commerzbank, dkb, comdirect, ing, itau, bradesco, santander, caixa, banco do brasil, banco inter, c6 bank, picpay, mercado pago) that no active card's wording names, as whole words. "db" and "deutsche bank" are never matched: DB on these receipts is Deutsche Bahn |
+
+Brisken's networks, kinds and issuers are READ from each active card's
+`label` + `zoho_account`, never stored (`registry_card_types`,
+`registry_issuers`); live the issuers are Chase, GSBANK / Goldman Sachs,
+Apple and the United co-brand.
+
+**Conflict means wait.** A hint naming, within networks, kinds or issuers,
+one that is Brisken's and one that is not ("credit or debit card", a
+checkout's list of options, "Chase or Nubank"), or a cash word beside
+anything Brisken's ("Visa ou Dinheiro"), is no evidence. Networks and kinds
+are different dimensions of one card, so "Visa Debit" is not a conflict.
+
+**Neutral, never evidence:** POS acquirers and wallets print the terminal
+operator, not the card: cielo, rede, stone, getnet, pagseguro, sumup,
+adyen, worldline, stripe, square, apple pay, google pay
+(`NEUTRAL_PAYMENT_NAMES`, taken out of the hint before issuers are read).
+
+**Everything else waits.** "saved payment method", "Link", "VENDA CREDITO
+VISA", "OUTRO", "CreditCard", a Brisken card type, and a phrase nobody has
+seen yet: `suggested_private` false, `can_mark_private` still true, and the
+card chain runs exactly as for a receipt that printed nothing (the settled
+statement charge, the remembered card, the merchant's card, Criss's
+assignment in the unknown-cards panel). Unchanged: a bank transfer and a
+receipt settled outside the card never suggest (`bank_transfer_tender`,
+settled-outside); PayPal, PIX, boleto and cheque keep their settled-outside
+chip and are no private evidence.
+
+**Glued words are read** (`cards.payment_words`, used by
+`is_generic_tender`, `registry_card_types` and the evidence rule):
+diacritics fold, a token splits at a lower-to-upper case boundary
+("CreditCard" -> credit card, "girocardOLV" -> girocard olv), and girocard,
+mastercard, maestro, credit, debit, kredit, cartao, credito, debito split
+off the front of a longer token when 3+ letters remain ("CREDITCARD").
+Shorter words (bar, ec, pay, de, elo, visa) never prefix-split, so
+"Barbecue", "Caspari", "Paypalito", "Visagem" and "Decathlon" stay single
+words. A token that is itself a known word stays whole ("PayPal",
+"PagSeguro").
+
+**Vocabulary.** `GENERIC_TENDER_WORDS` gains the "a card was used" words:
+saved, payment, method, link, venda, outro, outros, kartenzahlung,
+erhalten, olv, stored, wallet, pagamento, recebido, forma, paid, received.
+So "saved payment method", "Link", "VENDA CREDITO VISA", "OUTRO",
+"Kartenzahlung erhalten", "CreditCard" and "girocardOLV" read `generic:
+true` in the strip (listed under "No card number on the receipt"), assign
+month-only, and "Remember for future months" refuses them as aliases
+(owner ruling 2026-08-21). An unknown identifying word ("CorpServ") is still
+learned. A stored registry alias built only from these words would go
+silent at read time and 400 `card_alias_generic` on the next Settings save;
+live on 2026-09-24 the aliases are Corp, Cloud, Personal and Consulting, so
+none is.
+
+**The private-card list shipped the next day** (2026-09-25, item 208, next
+section): `cards.classify_payment_evidence` folds this rule in as step 4 of
+one decision order (a number on the list is private outright, step 3, and
+everything this section leaves unmatched waits), and
+`resolve_batch_row_cards` reaches both through that one entry point.
+
+Read-time: every month moves on deploy with no re-match. Pinned in
+`tests/test_private_needs_evidence.py` (the classification table is the
+contract) and route-level through the batch payload and the cards route.
+
+## Whose money paid: the decision order, and the private-card list (added 2026-09-25, item 208)
+
+Owner direction 2026-09-24, on cases 2 and 4 of the card-attribution map:
+"fuze items 2 and 4 together, fix a) by setting up private card
+memory/registry and b) any credit card types or numbers that dont belong to
+brisken will then be suggested as private expenses". Half (b) is case 6
+above. Half (a) is `settings["private_cards"]`: a card that is NOT
+Brisken's, known by its last four digits and the person it belongs to. A
+personal card that recurs (3281 on the DB Fernverkehr receipts) is listed
+once and every receipt printing it, in every month, is a private expense
+reimbursed to that person, with no per-row confirmation.
+
+**The decision order** (`service.resolve_batch_row_cards`, one place). The
+row's own decisions come first and outrank everything, exactly as before:
+a per-row card pick (`card_key`), a row Criss confirmed private (`private`
+`"1"` + `reimburse_to`), a settled-outside disposition, and the per-row
+opt-out below. Then the month's own hint assignments
+(`expense.card_hints` to a card, `expense.private_hints` to a person). Then
+`cards.classify_payment_evidence(hint, cards, private_cards, hints)`, one
+entry point for steps 1-4; first match wins:
+
+| Step | The hint | Result |
+|---|---|---|
+| 1 | a printed number (or an assigned hint) naming a Brisken card | that card (unchanged) |
+| 2 | a Brisken card type with no number ("VISA CREDIT") | no private label; the statement, the remembered card and the merchant card decide (case 5, unchanged) |
+| 3 | a printed number on the private-card list (NEW) | `private`, reimburse the listed person, `private_source: "private_card_list"` |
+| 4 | positive evidence of a non-Brisken card (case 6, unchanged) | `suggested_private` |
+| 5-7 | not a card, nothing printed, any phrase with no positive evidence | waits for the statement charge, vendor memory and Criss's assignment (unchanged) |
+
+A number always outranks a type word in the same hint: "DEBIT-MASTERCARD
+3281" is decided by 3281, so step 3 is read before step 4's `number`
+reason. A two-digit ending is never looked up on the list (an entry needs
+the full last 4, and the matcher's extraction reads 3+ digit runs only);
+one that two Brisken cards share (76 on 3876 and 1176) stays unguessed and
+is not private. For every row not on the list the change is a pure
+refactor: the live census over all seven months moved no row.
+
+**The list.** `GET /api/settings` carries `private_cards`, `{}` until
+somebody lists a card; `PUT /api/settings {"private_cards": {...}}` is a
+whole-key replace like `cards` and `merchants`. It is a SEPARATE key on
+purpose: every company-card consumer iterates `cards`, and the Cards
+editor's whole-map save would erase a field added there (`store.set_settings`
+merges top-level keys shallowly, so a `cards` save keeps the list; pinned).
+The tool never seeds it.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `private_cards.<last4>` | object | the key is the card's last four digits, a leading zero kept ("0340"); any 4+ digit run is accepted on write and normalized to its last four (`cards.private_card_digits`: "***3281" and "3281" are one entry) |
+| `.person` | string | required, trimmed: who is reimbursed. Free text, like `reimburse_to` (there is no person directory) |
+| `.note` | string | free text, `""` when absent |
+| `.active` | boolean | `false` switches the entry off without deleting it; an inactive entry decides nothing and the row falls back to case 6's suggestion |
+
+Refused with 400 and a `code` (`setting: "private_cards"`):
+`private_card_digits_short` (no 4+ digit run: a two-digit ending, a word),
+`private_card_person_required`, `private_card_duplicate` (two keys
+normalize to one number), `invalid_body`, and
+`private_card_is_company_card` when an ACTIVE company card in the composed
+registry carries the number. The reverse holds with the SAME code on
+`setting: "cards"`: a `cards` save (and the strip's card learning, and a
+`new_cards` entry) may not put a number the active list holds on a company
+card. A card is Brisken's or private, never both, which is the rule the
+per-row routes already enforce.
+
+**Read live.** The list is read from settings at view time
+(`private_cards=` on `resolve_batch_row_cards`, passed by the Expenses
+payload, the CSV, the month report, the cost-center roll-up, the run
+payload's readiness count and the neighbouring-month pools), never
+snapshotted into the batch (pinned: the batch config carries no copy). An
+entry reaches every existing month at once, with no refresh and no write to
+any month.
+
+**What a matching row reads**, on every surface exactly like a row Criss
+confirmed: `private: true`, `reimburse_to` the listed person,
+`person_source: "private"`, `suggested_private: false`,
+`can_mark_private: false`, `card: null`, no company required
+(`needs_entity` false, the `private` box), `posting_paid_through`
+`Private ({person})`; the CSV writes `(private expense)` and
+`Private ({person})`; the month report lists it under "Reimbursements owed"
+with the per-person sum; `n_private` counts it and `n_suggested_private`
+does not; the card strip drops the row from `unresolved_hints` and counts
+it in `n_private_rows` (item 214, owner ruling 2026-09-25, superseding the
+2026-09-24 "the strip keeps its group" line). Every consumer of `private` and
+`reimburse_to` reads the resolution: `service._private_reimbursements` now
+takes the card resolution rather than `field_overrides` (the month report,
+the CSV, `completeness_counts`' `private_docs` and the two pools that used
+to read the overrides directly moved with it). Nothing under `matching/`
+reads either field.
+
+| Field (NEW, parallel) | Type | Meaning |
+|---|---|---|
+| `expenses[].private_source` | string | who made the row private: `"row"` (Criss confirmed it on the row), `"month"` (the strip's "Private card of..." for this month, `expense.private_hints`), `"private_card_list"` (a listed number), `""` on a row that is not private. Closed literal, pinned in `tests/test_view_contract.py` against `cards.PRIVATE_SOURCES`; `bool(private_source) == private` on every row. The SPA adds "(from the private card list)" to the badge on the third value and calls the same undo route |
+
+**Two row exits** (both pinned):
+
+* **Undo.** `POST .../expenses/{id}/private {"private": false}` on a row the
+  list (or the month's assignment) made private stores an explicit
+  per-row opt-out, `private: "0"` in the field overrides, so the list no
+  longer applies to that row; a plain clear would be undone at the next
+  read. The row then reads what the printed number earns on its own (case
+  6's suggestion, `can_mark_private` true), and Criss can still confirm it
+  herself (source `"row"`). A row only she marked clears as before
+  (`private: null`), so the suggestion returns. The generic field PUT
+  accepts `private` `"0"` for the same opt-out.
+* **Company-card pick.** `PUT .../expenses/{id} {"field": "card_key"}` on a
+  list-derived (or month-derived) row is NOT refused with `private_card`:
+  the pick wins (`card_source: "override"`, `private: false`,
+  `private_source: ""`). The `private_card` refusal stays for a row Criss
+  confirmed herself (`private_source: "row"`).
+
+**Guard.** A printed number on the list never takes a card from the settled
+charge, the remembered card or the merchant card: the printed-number guard
+already blocks those for any printed number, and is pinned (a listed
+number beside a merchant that lends `corp-3645` stays private with
+`card: null`, while the same merchant's number-less receipt takes the card).
+The matcher's bake passes no list: a listed number names no Brisken card,
+so the card it would scope on is `null` either way.
+
+**Two ways onto the list, both explicit** (owner ruling 2026-09-24: only
+corrections are memorized; a per-row confirmation is a decision about that
+row and never writes the list):
+
+* Settings: the "Private cards" panel (`docs/lovable-private-card-list-prompt.md`).
+* The unknown-card strip: `POST /api/expense-batches/{id}/cards`
+  assignments accept `{"hint": ..., "private_to": "<person>"}` in place of
+  `"card"`. Exactly one of the two: both is `assignment_two_targets`,
+  neither is `assignment_incomplete`. The month record
+  `expense.private_hints[hint] = person` is written whatever `learn` says
+  (as `card_hints` is for a card; a hint reassigned to a card leaves it,
+  and vice versa). With `learn: true` (the existing "Remember for future
+  months" switch) the hint's last 4 are ALSO written to
+  `settings["private_cards"]` under the person (`note` kept if the entry
+  existed, `active: true`); learning refuses a hint with no 4+ digit run
+  (`private_card_needs_digits`: a generic word names no card, month-only
+  still applies) and a number an active company card carries
+  (`private_card_is_company_card`). The reply's `results[]` entry is
+  `{hint, private_to, n_rows, learned, digits}` (`digits` the four written,
+  `""` when not learned) beside the card entries' `{hint, card, n_rows,
+  learned}`; `learned_to_settings` is the request's `learn`.
+
+**Supersession.** The 2026-08-22 ruling "personal tenders are never
+learned" was about tender WORDS and stands (`learnable_hint_tokens` still
+refuses them); a card NUMBER on the list is an explicit owner-directed
+registry under the 2026-09-24 direction. Item 41's trigger was already
+superseded by case 6.
+
+Pinned route-level in `tests/test_private_card_list.py`; the golden rows
+of `tests/test_private_needs_evidence.py` pass through
+`classify_payment_evidence` with an empty list unchanged.
+
+### The strip asks only without payment info; its dropdown holds cards (item 214, 2026-09-25)
+
+Owner ruling 2026-09-25, verbatim: "yes it should show assign to card, if
+the payment info is not in the receipt. dropdown should only consist of
+cards"; "expenses that are suggested a private have only private cards in
+drop down unless user clicks that its not private"; "New card..." removed.
+
+**Who leaves the strip.** A private row whose card question is already
+answered leaves `card_review.unresolved_hints` and is counted in the NEW
+`card_review.n_private_rows`: the receipt PRINTS a number on the private
+list (whoever made the row private), or the strip itself assigned its hint
+for the month (`private_source: "month"`). A row Criss made private by hand
+on a receipt that prints no listed number stays: which card paid is still
+open (July `0028__` "DEBIT MASTERCARD" and September `0046__`
+"Kartenzahlung erhalten" stay; September `0024__`, 3281, leaves). A company
+card still resolves into `resolved[]` as before. `n_private_rows +
+n_unresolved_rows + n_resolved_rows + n_no_hint` is every row.
+
+| Field (NEW, parallel) | Type | Meaning |
+|---|---|---|
+| `card_review.n_private_rows` | int | hinted rows off the strip because they are private and their card is known |
+| `card_review.private_cards[]` | object | the ACTIVE `settings.private_cards` entries, ordered by person then number: `{digits, person, label}`, `label` = `"3281 · Dirk Neumann (private)"`. `[]` with an empty list |
+| `card_review.unresolved_hints[].private_card_options[]` | string | the `digits` of the listed cards the route below accepts for this group (`cards.private_card_fits_hint`): every one on a group printing no number, only the matching one on a numbered group, which in practice is none (a listed number resolves and leaves), so the SPA points at Settings > Private cards there |
+
+**The pick.** `POST /api/expense-batches/{id}/cards` assignments also
+accept `{"hint": ..., "private_card": "3281"}` (the listed card's digits;
+any spelling `private_card_digits` normalizes). Exactly one of `card`,
+`private_card`, `private_to` (more is `assignment_two_targets`, none is
+`assignment_incomplete`). It writes the month record
+`expense.private_hints[hint] = <that card's person>` and nothing else:
+`learn` is ignored for it (the card is on the list already), so the reply's
+entry is `{hint, private_to: <person>, n_rows, learned: false, digits: "",
+private_card: "3281"}`. Refused with 400:
+`private_card_not_listed` (not on the list, or switched off) and
+`private_card_number_mismatch` (the receipt prints another number: a
+printed number outranks a pick; that number goes on the list in Settings).
+`private_to` stays accepted as before, so the published "Private card of..."
+keeps working until the SPA moves to the pick.
+
+**"Not private" needs no route.** On a group with `suggested_private: true`
+the SPA offers only `private_card_options` until the reviewer says it is not
+private; that toggle is screen state, and the company card she then picks
+is the ordinary `{"hint", "card"}` assignment, which resolves the group and
+clears the suggestion. Nothing is stored for the toggle alone, so an
+unfinished "Not private" leaves the question open, which is true.
+
+Pinned in `tests/test_card_strip_private_item_214.py` (route-level; four
+wires proven RED by `tools/regress_check.py`: the strip drop, the resolver's
+`listed_private`, the route's pick branch, the payload's `private_cards=`).
 
 ## Cost centers: which project or purpose the money belongs to (added 2026-09-10)
 
@@ -1666,13 +2192,21 @@ month's next re-match. One receipt still settles exactly one charge.
 ### The id collision, stated
 
 Receipt ids are position-prefixed per batch (`0000__a.jpg`), so two
-different receipts can share an id across batches. The month's own copy
-wins and the colliding neighbour receipt is simply not borrowed. This bites
-harder than it does on trips because neighbouring months are ingested the
-same way: July and August shared four ids on 2026-09-15, all
-`NNNN__rendered-body.pdf`. Offering two receipts under one id would corrupt
-the matcher's consumption set and the view's lookup, which is worse than a
-narrower pool.
+different receipts can share an id across batches: July and August shared
+four `NNNN__rendered-body.pdf` ids on 2026-09-15. Since item 220 step 6
+(2026-09-27) the colliding neighbour receipt is borrowed under its own pool
+id, `{home run id}~{its id}` (`borrowed_pool_id`), and that is the id
+`rows[].chosen_document_id`, `candidates[].document_id` and the
+`receipt_sources` key carry. Its `receipt_sources` entry, and so `from_batch`
+and `settled_by`, add `document_id`: the id the receipt has in its home month.
+ABSENT on every other borrowed receipt, whose pool id is its own id. The claim
+is written on (home run, home id), so the home month's `settled_by` reads as
+before, and `GET /api/runs/{borrowing run}/receipts/{pool id}/image` serves the
+home month's file (any borrowed receipt's id does, since the same change).
+
+Item 211 (same PR): a period that opens on the 1st, a calendar-month export,
+borrows receipts printed up to 3 days before it (`ADJACENT_START_EDGE_DAYS`,
+`adjacent_borrow_window`); a card-cycle period is not widened.
 
 ## Report totals are formed in Decimal (added 2026-09-15, item 65)
 
@@ -1804,6 +2338,36 @@ receipts. The old paths remain as ordered fallbacks for pre-2026-09-15
 entries: the config's map for the upload it still describes, then a fresh
 guess. A re-read re-records both on the entries it rebuilds, so a month
 repairs its own record the first time it is re-read.
+
+### A PDF entry's `account_id`, and the company its charges carry (added 2026-09-25, item 195)
+
+No new key. `statements[].account_id` on a PDF upload now holds the account
+the upload was filed under (what the attach dialog sends as `account_id`,
+the chosen card's key). Until now every PDF entry recorded `""`: a PDF's
+config block has no account key, because its parser reads the cards off the
+page. A workbook entry is unchanged.
+
+A Chase PDF's charges take ONE company from the upload, and they print no
+`card_last4`, so the match-time stamp (item 59) never touches them. Where
+that company comes from:
+
+| The upload | Its charges' `legal_entity_id` |
+|---|---|
+| filed under an account (the SPA always sends one) | the registry entity of that account, at the attach and at every re-read |
+| filed under no account, or recorded before this shipped | the registry entity every card the file prints resolves to; blank when they resolve to two companies or any card resolves to none |
+
+Before this, the second row read the literal `"card"`, a company no receipt
+carries, and a re-read of a PDF recorded with no account borrowed
+`config.statement`'s account, which describes whichever file arrived last:
+a PDF re-read after August's workbook would have taken Corporate Services.
+Blank is counted in `summary.n_charges_no_entity` like any charge without a
+company.
+
+The `statement_period_overlap` advisory no longer treats two uploads with no
+recorded account as the same account. The live August entry for
+`20260804-statements-9693--2.pdf` still carries the old sentence ("on the
+same account" as the 1176 file); an advisory is written when its entry is,
+so it clears at the month's next re-read.
 
 ### A Type label the parser does not recognise (item 64)
 
@@ -2073,6 +2637,8 @@ moment the report arrived.
 | `server.machine` | string | `FLY_MACHINE_ID`; `""` off Fly, never invented |
 | `server.region` | string | `FLY_REGION`; `""` off Fly |
 | `server.app` | string | `FLY_APP_NAME`; `""` off Fly |
+| `server.commit` | string | the commit this image was built from, baked in by the Dockerfile `ARG GIT_COMMIT` (item 120, 2026-09-20). `""` when a deploy omitted the build arg, which declines to answer rather than answering wrongly |
+| `server.image` | string | `FLY_IMAGE_REF`, the image the machine actually booted; the same string `flyctl releases --image` prints, so it is the join from a running process back to a release |
 | `server.started_at` | string | wall-clock ISO time this process started |
 | `server.uptime_s` | number | seconds since start, on the monotonic clock |
 
@@ -2144,6 +2710,21 @@ could reach the app AFTER the failure, so an empty list is not proof that
 nothing failed. The table keeps the newest 500 rows; it shares a 1GB volume
 with receipts, and a diagnostic log that can grow without limit is a second
 fault. Pinned by `tests/test_client_error_probe.py`.
+
+**Which build served the failure** (item 120, 2026-09-21). Each row carries
+`server_commit` and `server_image`, stamped from the same snapshot as
+`machine` at the moment the report ARRIVED. That is the distinction to hold
+on to when reading the payload: the top-level `server` block is the process
+answering your read, and the row's own fields are the process that took the
+report, which after any deploy is a different build. Before these columns a
+failure could be tied to a build only while its serving process was still up.
+
+Two properties a reader can rely on. Rows written before the migration read
+`""`, and so does a row served by a build deployed without `--build-arg`;
+absence is stated rather than guessed, because a plausible-looking commit
+would send an investigation to the wrong release. And the columns are named
+`server_*` rather than `commit` / `image` because `commit` is a SQLite
+keyword and cannot be a bare column name.
 
 ## Edits on a month with a statement: the five routes reopen + `rematch` (item 70, 2026-09-15)
 
@@ -2580,16 +3161,21 @@ believed, and nothing looked at where the row lives.
 "month_move": {"month": "2026-07", "label": "July 2026", "batch_id": "50622baec444"}
 ```
 
-Present only when the row's date was TYPED by the reviewer (or the whole
-expense was entered by hand) AND falls outside the batch's window (its month
-plus one either side, the item-25 window) AND the batch is a company month.
-ABSENT otherwise, never null. `batch_id` names the month the move would join,
-and is absent when that month does not exist yet (the move creates it).
-`label` is the English label a created month gets; localize from `month`.
-A machine reading outside the window never offers a move: it stays the
-`date_outside_period` review state. A receipt attached to a charge by hand
-(`manual:` id that is not a typed-in add) is never offered.
-`summary.n_month_moves` (int, every expense payload) counts the offers.
+Present when the row's date, typed OR read from the receipt (item 251; until
+2026-10-07 only a typed date), names another month: a READ date only when it
+falls outside the batch's window (its month plus one either side, the item-25
+window), a TYPED date whenever its month differs (a typed date moves on the
+edit, so one still here was held back) AND the batch is a company month
+AND the date is one the drop would file (not more than a day in the future,
+not more than 366 days from the batch's month). ABSENT otherwise, never null.
+`batch_id` names the month the move would join, and is absent when that
+month does not exist yet (the move creates it). `label` is the English label
+a created month gets; localize from `month`. A machine reading outside the
+window keeps its `date_outside_period` review state beside the offer. A
+receipt attached to a charge by hand (`manual:` id that is not a typed-in
+add) is never offered. `summary.n_month_moves` (int, every expense payload)
+counts the offers. Since item 251 a date EDIT no longer waits for this offer
+(next section); the offer is what a row nobody touched shows.
 
 **The move**, `POST /api/runs/{run_id}/expenses/{document_id}/move`, body
 `{"month": "YYYY-MM"}` optional (default: the row's offer). Reply:
@@ -2614,7 +3200,56 @@ creates carries `created_by: "move"` and claims its pooled mail afterwards.
 Both months re-match when they hold a statement. Refusals: 400 for a trip, a
 malformed month, the batch's own month, an expense already removed, or no
 offer and no named month; 404 for an unknown expense. The source month is
-never deleted, even when the move empties it.
+never deleted, even when the move empties it. A copy the target month itself
+deleted or moved away does not count as "already there" (item 251: moving a
+receipt back into the month it left used to keep the dead copy and lose the
+live one).
+
+## The date decides the month: `moved` on a date edit (item 251, 2026-10-07)
+
+Owner: "the baseline data on the dates that is extracted from receipts is the
+foundation for how the receipts get sent to months. So if user changes date,
+then the month changes accordingly." A date that CHANGES carries the receipt
+into the calendar month it names (the month the drop files a receipt in),
+through the move above, in the same request:
+
+- `PUT /api/runs/{id}/expenses/{doc}` with `field: "date"`, setting OR
+  clearing a typed date (clearing hands the decision back to the reading);
+- `POST /api/runs/{id}/expenses` with a `date`;
+- a real re-read (`POST /api/runs/{id}/receipts/reread`, `dry_run: false`)
+  that takes a new date, unless the reviewer typed a date over the reading.
+
+The edit/add reply gains one of three parallel keys, each ABSENT otherwise:
+
+```json
+"moved": {"...": "the move's own reply, as POST .../move answers it"},
+"move_held": {"held": "month_published", "month": "2026-04", "label": "April 2026", "batch_id": "..."},
+"move_held": {"held": "day_month_swap", "month": "2026-05", "label": "May 2026", "date": "2026-05-07", "swap": "2026-07-05"},
+"move_error": {"error": "...", "code": "file_missing_on_disk"}
+```
+
+With `moved`, `summary` is the month the row LEFT and the edit's own re-match
+is not run again (the move re-matched both months). `move_held` keeps the
+receipt where it is with its offer, for one of two reasons (`held`):
+`month_published`, the source or the target month is published; or
+`day_month_swap` (owner 2026-10-07), a TYPED date that, with day and month
+exchanged (`swap`), falls in this month while the date as typed does not. A
+browser's date picker follows the browser's locale, not the app's, so a
+day-first "05/07" in a month-first picker is stored as 7 May; July's
+NORMANDIE SEINE toll (file 2026-07-05) was typed as 2026-05-07 the morning
+the rule shipped. The offer's one click still moves it if the date is right.
+`move_error`: the move refused; the date edit is saved and the row keeps its
+offer. Nothing moves for a trip, a batch with no knowable month, a receipt
+attached to a charge by hand, or a date the offer would not name either (a
+day or more in the future, more than 366 days from the batch's month).
+
+The re-read reports it too: each `readings.changes[]` entry whose new date
+names another month carries `moves_to` (`"YYYY-MM"`) on the dry run and the
+real run alike (absent when a typed date keeps the receipt); the real run's
+result carries `moved[]` (`document_id`, `display`, `batch_id`, `label`,
+`month`, `moved_as`, `created_batch`, `already_in_batch`) and, when any
+were kept, `move_held[]`. The dry run never moves: a move copies the file
+into the target month's folder and can open a month.
 
 **Printed identifiers** (item 77 amendment, note #45), `expenses[]`, parallel,
 strings, ABSENT when the receipt did not print them and on every receipt read
@@ -2698,6 +3333,37 @@ Pinned by `tests/test_view_contract.py`
 `tests/test_web_duplicates.py` (charge groups gone, the resolution mapping,
 the index alignment). SPA half: `docs/lovable-duplicates-decided-prompt.md`,
 folded into item 79's month page.
+
+## Which copy is the real expense: the kept copy (item 217, 2026-09-25)
+
+No new field. What changed is WHICH member of a duplicate group is
+`members[0]`, i.e. the copy every existing field treats as kept:
+`duplicate.is_extra: false`, `duplicate.of`, counted in `totals_by_ccy`,
+offered to the matcher, and not in `copies_set_aside`.
+
+A re-match chooses it, first rule that applies:
+
+1. the one member a charge holds in the month as it stood before the re-match
+   (the last outcome with the reviewer's decisions applied; two or more held
+   means nothing moves);
+2. the one payment receipt in a group that also holds its invoice, when every
+   member reads the same total and currency. A receipt is a document whose
+   extraction read a `receipt_number`, or, failing both numbers, whose file
+   name starts with `Receipt`; an invoice reads an `invoice_number` without a
+   receipt number, or its file name starts with `Invoice`;
+3. the first member by document id (the old rule).
+
+The choice is stored in the month's snapshot as `duplicate_kept` (group id ->
+document id) and every view reads it, so a page and the last match agree. A
+month with a statement and no stored choice (every month matched before
+2026-09-25) keeps rule 3 until its next re-match. A month with no statement is
+never matched, so nothing can hold a copy and rules 2 and 3 apply as the page
+is read. `duplicate_groups[].group_id` hashes the sorted members and does not
+move, so every stored ruling keeps its group.
+
+Why rule 1: a confirmed decision names the exact document it settled.
+Swapping the copy a charge holds would leave that decision claiming the
+invoice while the receipt became a second counted expense.
 
 ## Whose turn a row is, and who decided it: `turn` + `decided_by` + `decided_rule` (item 76, 2026-09-16)
 
@@ -3153,6 +3819,147 @@ Route-level in `tests/test_ecb_month_rates.py`; the shape in
 (`test_fx_reference_rate_period_rides_only_on_the_ecb_source`). Renders in
 `docs/lovable-ecb-rates-prompt.md`.
 
+## FX rates polled daily from OpenTickers: `opentickers_day`, `fx_daily_rates`, `POST /api/fx/poll` (feedback note #79, 2026-09-23)
+
+Owner directive 2026-09-23, anchored on Settings > FX reference rates: "fx
+rates should be polled daily via open tickers API". The two rulings of item
+82 and item 90 stand: a rate typed in Settings still wins, for every month.
+
+**Where the rates live.** The store table `fx_daily_rates` holds one row per
+(day, currency): units of the currency per one EUR, the provider's digits as
+text, and the source (`ECB` when OpenTickers carries the ECB record for the
+day, else `median:<sources>`). The run config carries the days a month can
+reach as `matching.fx_daily_rates`, the same shape as the ECB table keyed by
+DAY, refreshed from the store on EVERY re-match (`service.apply_fx_daily_rates`,
+called first thing in `rematch_month`) and committed with the run, so the FX
+block, the single-currency document and a pulled-down `run.local.json` read
+the table the matcher did:
+
+```json
+"matching": {
+  "fx_reference_rates": {"EUR:USD": "1.162275"},
+  "fx_ecb_monthly_rates": {"2026-07": {"USD": "1.1417478260869562", "...": "..."}},
+  "fx_daily_rates": {
+    "2026-07-01": {"USD": "1.144", "BRL": "5.86"},
+    "2026-07-02": {"USD": "1.143", "BRL": "5.845"}
+  }
+}
+```
+
+**The poll.** One daemon thread (`web/fx_daily_rates.py`, the backup
+scheduler's shape) runs a round at boot and every 24 h: once, a backfill from
+the month before the earliest labelled month to today through
+`/exchange_rates/historical` (the account's plan allows it, checked
+2026-09-23; a 403 is remembered and the round keeps to `/latest`), then
+`/exchange_rates/latest` for every currency the estate needs
+(`needed_currencies`: USD and BRL by default, plus every currency a typed
+pair or a card names and every month's statement currency). Fail-open: a
+failed fetch leaves the table as it was and the next round tries again;
+nothing waits on the provider. OFF unless `OPENTICKERS_API_KEY` is set
+(`EXPENSE_RECON_FX_POLL=0` also switches it off).
+
+**How the matcher reads them.** `MatchingConfig.daily_rate`: the cross
+through EUR on the CHARGE's `transaction_date`, or the nearest day inside
+`fx_daily_rate_max_gap_days` (4; earlier wins a tie, so a Saturday purchase
+reads Friday's fix), six decimals. The rungs, in order: `configured`,
+`statement`, `receipts`, `opentickers_day`, then `ecb_month`. The daily rate
+sits above the monthly average because a day is the grain the card locked
+the rate at (Visa and Mastercard fix it at authorization), and below the
+self-derived rates on item 82's bundle evidence. Its clean band is
+`fx_ecb_match_pct` (2%), shared with `ecb_month`. The reason reads
+`OpenTickers daily reference rate 1.143 (2026-07-02)`.
+
+**`fx.reference_rate_source`** gains `opentickers_day`.
+
+**`fx.reference_rate_period`** is present for `opentickers_day` too, as a
+DAY, `YYYY-MM-DD` (the day whose rate was used, which differs from the
+charge's date when that day had no fix); for `ecb_month` it stays
+`YYYY-MM`; absent on every other source, never null.
+
+**`GET /api/settings`** gains the derived, read-only key `fx_daily_rates`
+(`SETTINGS_DERIVED_KEYS`; a PUT carrying it answers `ignored`):
+`{provider: "opentickers", enabled, poll_interval_hours: 24,
+last_fetched_at, last_error, backfilled_from, history_refused, n_days,
+first_day, last_day, currencies[], latest: {day, per_eur{}, pairs{}}}`.
+`latest.pairs` uses the typed rates' `FROM:TO` keys (every ordered pair
+among the polled currencies and EUR, six decimals) so the screen can set
+the two side by side; `latest` is `{}` until the first successful round.
+
+**`POST /api/fx/poll`**, new: runs one round now and answers its summary
+`{ok, n_stored, currencies, backfilled_from, errors[], fetched_at, n_days,
+first_day, last_day}`; `ok: false` with `errors[]` when the provider
+failed; `409 {"error", "code": "fx_poll_disabled"}` when no key is set.
+
+**Setup advisory.** `fx_rate_missing` is quiet for a currency the month's
+daily table crosses into the card currency; its message now names all three
+sources it looked at.
+
+**What it did not change live.** July `50622baec444` and August
+`074a7b8905d7` carry the typed Settings rates, which win, so their matching
+and every FX block are unchanged by this deploy. A month whose config holds
+no typed rate for a pair reads the daily rate on its next re-match.
+
+Route-level in `tests/test_fx_daily_rates.py` (the provider stub answers the
+live record shape of 2026-09-23); the rung order and the day window at unit
+level in the same file; `regress_check` proved the re-match wiring bites.
+Renders in `docs/lovable-fx-daily-rates-prompt.md`.
+
+## Typed FX rates retired: `fx_reference_rates` is gone (owner 2026-09-23)
+
+Owner directive, the afternoon note #79 shipped: "no more typing them in
+settings you can remove that function entirely, we will only rely on these
+daily rates API stuff."
+
+**The settings key is retired.** `GET /api/settings` no longer returns
+`fx_reference_rates`; `PUT` accepts it, reports it in `ignored` and stores
+nothing (a 400 would break the published SPA, which keeps sending the key
+on every FX-tab save until its removal prompt is applied); and `RunStore`
+deletes it from the stored row on open, so the two rates the live estate
+carried (EUR:USD 1.162275, BRL:USD 0.192448) are gone rather than hidden.
+`store.RETIRED_SETTINGS_KEYS` is the list; `SETTINGS_WRITABLE_KEYS` and
+`SETTINGS_MAP_KEYS` no longer name it.
+
+**The matcher rung is retired.** `_reference_rate_for` runs
+`statement` -> `receipts` -> `opentickers_day` -> `ecb_month`; the
+`configured` source can no longer occur and `fx.reference_rate_source`
+can no longer read `settings`. `MatchingConfig` has no
+`fx_reference_rates` field and no `fx_reference_rate()`. The key stays
+PARSEABLE and is dropped (`_RETIRED_TUNABLES`), because every month
+created before today has it frozen in its stored config and the shipped
+scorer asset still carries it: refusing it would make both unloadable.
+A stored copy is therefore inert, not obeyed, and no client data was
+rewritten.
+
+**`apply_master_data` no longer writes rates into a run config.** A
+month's rates are fetched: `apply_fx_daily_rates` on every re-match, and
+`apply_ecb_rates` at creation, at statement attach, and now also
+`top_up_ecb_rates` on every re-match for any month the stored table does
+not already cover. That top-up is what keeps the retirement safe: July
+2026 was created before item 82 shipped, so its config carried the typed
+rates and NO ECB table, and without it the month would have been left
+with no rate on any rung.
+
+**Item 132's `fx_rate_drift` advisory is gone**, along with its code: it
+existed to say a typed rate had drifted from the ECB's. `fx_rate_missing`
+stays, and its message now names the two fetched sources that came up
+empty instead of telling the operator to set a rate. Its `setting` field
+still reads `fx_reference_rates`, kept as the stable identifier the SPA
+already maps; it is a label, not a live settings key.
+
+**What it did not change:** the self-derived rungs (`statement`,
+`receipts`) read the client's own documents and were never typed, so they
+stay, and stay above the fetched rates on item 82's bundle evidence. The
+labelled-bundle accuracy gate is unchanged (the shipped asset carries
+`"fx_reference_rates": {}`, so no bundle ever matched through the rung).
+
+Route and unit level in `tests/test_ecb_band_item_132.py`
+(`test_a_rate_typed_in_settings_is_no_longer_read_from_a_stored_config`),
+`tests/test_settings_put_contract.py`
+(`test_a_retired_key_is_accepted_and_ignored_never_refused`),
+`tests/test_ecb_month_rates.py`, `tests/test_fx_daily_rates.py`,
+`tests/test_master_data_settings.py`. Renders in
+`docs/lovable-fx-daily-rates-prompt.md`.
+
 ## What a settings save wrote: `applied` + `ignored` (item 91, 2026-09-17)
 
 The settings screen saves ONE group per request and always has: the page
@@ -3267,6 +4074,28 @@ group is the two digits (`"76"`), and a masked BIN is no longer shown as the
 card's number: `42463153XXXXXX38` groups as `38`, not `42463153`.
 
 Tests: `tests/test_card_short_ending.py` (unit + the batch route).
+
+**More wordings (item 199, 2026-09-24).** The ending words are now a list of
+explicit lead phrases (`cards._ENDING_LEADS`), matched case-insensitively on
+diacritic-folded text:
+
+| Language | Leads |
+|---|---|
+| EN | `ending` (`in` / `with`, `the digits`), `ends in` / `ends with`, `(the) last two digits` / `last 2 digits`, `last digits` |
+| PT | `final` (so `com final`), `terminado em` / `terminada em`, `terminação` (`em`), `(os) últimos dois dígitos` / `últimos 2 dígitos` |
+| DE | `endet auf`, `endend auf`, `(mit) Endung`, `Endziffern`, `letzte(n) zwei Ziffern` / `Stellen` (or `2`) |
+| FR | `(se) terminant par`, `finissant par`, `(les) deux derniers chiffres` / `2 derniers chiffres`, `derniers chiffres` |
+| ES | `termina en` / `terminada en`, `(los) últimos dos dígitos` / `últimos 2 dígitos` |
+
+A lead is followed only by separators (`:`, `.`, `…`, spaces) and the two
+digits, never by other words, so `ending balance 38` and `final total 38`
+name nothing. Two digits followed by a decimal separator and a digit are an
+amount (`valor final 38,00`, `Total final: 38.50`), never an ending, and a
+number after a list word counts as a second ending, so `last two digits: 38
+and 49` names nothing. Live case: September's GoDaddy (446.99 EUR) printed
+`We have billed your Visa card ending with the last two digits: 38` and now
+reads `card-2838`, `card_ending: "38"`, Corporate Services, not suggested
+private. No field changes shape.
 
 ## A receipt arriving into an existing month reads today's card list (note #54, audit item 108, 2026-09-17)
 
@@ -4041,6 +4870,47 @@ present, also when `card_sections` is empty:
 The receipts the Matching page shows as settled outside come from the expense
 payload, so they read `expenses[].card_section`.
 
+**`without_charge`** (bool, item 192, 2026-09-24), on every element of the
+expense payload's `expenses[]`: no charge holds this receipt. It is the set
+the card tab's `n_receipts_without_charge` counts (the report view's
+`unmatched_receipts`), stamped per row because a month with fewer than two
+cards has no sections to carry it.
+
+### The card overview's receipt figures: `GET /api/cards/status` (item 192)
+
+Parallel to item 185's charge figures and item 190's `receipt_months` /
+`no_card`, nothing existing changes:
+
+- `cards[].receipt_months[]` adds `n_without_charge` (of that month's
+  `n_expenses` on the card, the rows `expenses[].without_charge` marks) and
+  `statement` (bool: the card has a statement in that month).
+- `cards[]` adds `n_receipts`, `n_receipts_without_charge` and
+  `n_receipts_no_statement` (receipts in months where the card has no
+  statement: waiting for one, not unmatched). Each card's own, like every
+  figure here; an account does not add its subcards'.
+- `no_card` adds `n_without_charge`; its months carry `n_without_charge` and
+  no `statement` (no card has none to hold).
+- Item 193: `n_needs_category` on each `receipt_months[]` entry, each card
+  (its own) and `no_card` (and its months): the expenses in the NEEDS
+  CATEGORY box (`"uncategorized"` in `expenses[].boxes`), so per month the
+  cards plus No card equal `summary.n_uncategorized`. It was the number the
+  months strip showed beside each card until item 236 took the number off.
+- Item 236: `n_set_aside` on each `receipt_months[]` entry, each card (its
+  own) and `no_card` (and its months): the files the quarantine still holds
+  back (`set_aside[]` not restored), so per month the cards plus No card
+  equal `summary.n_set_aside`. With `n_expenses` and `n_needs_category` these
+  are the months list's three columns for a picked card. A set-aside file
+  files under the card its own reading resolves to (the chain an unheld
+  receipt follows), else No card; a legacy entry, which kept no reading,
+  always reads No card. The month's payload says where each went:
+  `GET /api/expense-batches/{id}` `set_aside[].card_section` (`""` = no
+  card). A card whose only file in a month is a set-aside one gets a
+  `receipt_months[]` entry with `n_expenses` 0.
+
+`never_loaded` keeps its meaning (no charge and no statement anywhere), which
+the months strip's disclosure uses. The overview folds away only a card that
+is `never_loaded` with `n_receipts` 0, and the footnote (`note`) says so.
+
 Which pool each page files by: the Matching page by the receipts its view was
 built on (the snapshot's, the chain `cards_differ` reads), the Expenses page by
 the month report's pool (`_expense_export_inputs`, where a copy may borrow its
@@ -4197,6 +5067,67 @@ every live mail would carry `blocked: "no_address"` today. Route-level in
 `tests/test_receipt_chasing_item_107.py`; pins in `tests/test_view_contract.py`
 and `tests/test_settings_put_contract.py`. SPA half:
 `docs/lovable-receipt-chasing-prompt.md`.
+## A memory save is a plan, a journal and an undo (item 163, 2026-09-23)
+
+Feedback note #81, on the "Save corrections to memory" button: *"based on
+what? this should be reversible for now, and state explicitly where these
+are saved so user can manage this"*. Three routes answer the three asks, and
+one mechanism backs all of them: the writes a save would make are computed
+as a list BEFORE anything is written.
+
+**`GET /api/runs/{id}/memory-plan`** says what pressing save would do, and
+writes nothing. The plan is produced by running the real learners against
+`learning.RecordingStore`, which accepts the same `record_*` calls and keeps
+them, so the preview cannot describe a different save from the one that
+happens. `writes[]` carries `{table, key, value, surface}` per write,
+`keys[]` the distinct rows, `counts` per table, and `registry` the
+per-merchant `{before, after}` of the same save.
+
+```json
+{"writes": [{"table": "field_correction",
+             "key": {"legal_entity_id": "Corporate Services",
+                     "vendor_norm": "staples", "field": "paid_through"},
+             "value": "1010 Chase", "surface": "memory"}],
+ "counts": {"field_correction": 1}, "registry": {}, "learned": {...}}
+```
+
+**Language (item 255).** Every `lessons[]` entry carries its sentence in each
+language the window offers: `descriptions: {"en": ..., "pt": ...}` and
+`description_pt` (the same Portuguese). `?lang=pt` also puts the Portuguese
+in `description`; no `lang`, `en`, or a language we do not write keeps
+English there. Vendor, company, account and card names are printed as stored
+in both languages. `replaces[]` entries gain `value_pt` beside `value`. The
+save takes lesson ids, never sentences, so the language changes nothing
+written.
+
+**`GET /api/memory/commits`** is the ledger: one entry per save, newest
+first, with the month that taught it, the trigger (`button` / `publish`),
+what it learned, every row it touched with the surface that manages it, and
+`reverted_at` once it has been undone. `surface` is named in
+`service.MEMORY_TABLE_SURFACE` rather than in the SPA, so the answer to
+"where is this saved" cannot drift from the code that saves it.
+
+**`POST /api/memory/commits/{id}/undo`** puts one save back. Every learning
+row returns to the pre-image the journal recorded (a row the save CREATED is
+deleted), the merchant registry returns to the map that preceded the save,
+and the month's `memory_commits` digest is cleared so the next publish
+teaches those corrections again instead of answering `unchanged` over a
+memory that no longer holds them.
+
+Two limits, stated because neither is enforceable in code here. The undo
+restores the pre-image, so a rule EDITED BY HAND on the Memory page after
+the save is overwritten by the undo rather than kept. And the learning store
+and the run store are two SQLite files, so a failure between applying a save
+and journalling it leaves writes that no entry describes; the publish path
+catches it and names it in `memory.error` rather than failing the publish.
+
+Both write paths now return `journal_id` (`POST .../commit-memory`, and
+`memory.journal_id` on publish), so a caller undoes exactly the save it
+made. Refusals: `memory_journal_not_found` (404),
+`memory_journal_already_reverted` (409), and `memory_journal_not_latest`
+(409, carrying `latest_id`) -- saves stack on the same rows, so restoring an
+older pre-image would silently discard a newer save's values.
+
 ## A corrected category comes back next month: what memory decides now (item 115, 2026-09-17)
 
 The sign-off promise is that a category Criss fixes arrives pre-filled the
@@ -4461,6 +5392,9 @@ already started, not a refusal of a request, and nothing keyed off it.
 | `memory_rows_required` | 400 | a bulk validate with no rows | rows must be a non-empty list of {legal_entity_id, vendor} | |
 | `memory_rows_invalid` | 400 | a bulk validate whose rows all failed normalization | no valid rows in the list | |
 | `comment_required` | 400 | a feedback note with no comment | comment is required | |
+| `memory_journal_not_found` | 404 | undoing a save that is not there | no such memory save | |
+| `memory_journal_already_reverted` | 409 | undoing a save that was already undone | this memory save was already undone | `reverted_at` |
+| `memory_journal_not_latest` | 409 | undoing a save a later save has written over | only the most recent memory save can be undone; undo save N first | `latest_id` |
 
 ### Mail intake
 
@@ -5215,10 +6149,10 @@ tests) now holds each as a literal against its source of truth:
 | Vocabulary | Source of truth | Pinned values |
 |---|---|---|
 | `rows[].row_type` | `ingest._common.ROW_TYPES` and every `ROW_TYPE_*` constant | `purchase` · `payment` · `refund` · `reversal` · `fee` · `interest` |
-| `review.state` / `review.reason_code` (both payloads) | the literals every `_review(...)` call in `web/service.py` passes (no single constant exists; read with `ast`, a non-literal code fails the pin) | states `ready` · `check` · `pick` · `none`; codes `uncategorized` · `partial_uncategorized` · `category_account_mismatch` · `vendor_guess` · `unknown_provenance` · `uncertain_match` · `receiptless_suggested` · `missing_fields` · `date_outside_period` · `suggested_private` · `needs_entity` · `needs_entity_settled_outside` · `untrusted_instructions` · `invoice_read_as_statement` · `needs_person` · `needs_cost_center` |
+| `review.state` / `review.reason_code` (both payloads) | the literals every `_review(...)` call in `web/service.py` passes (no single constant exists; read with `ast`, a non-literal code fails the pin) | states `ready` · `check` · `pick` · `none`; codes `uncategorized` · `partial_uncategorized` · `category_account_mismatch` · `vendor_guess` · `unknown_provenance` · `model_suggestion` · `uncertain_match` · `receiptless_suggested` · `missing_fields` · `date_outside_period` · `suggested_private` · `needs_entity` · `needs_entity_settled_outside` · `untrusted_instructions` · `invoice_read_as_statement` · `needs_person` · `needs_cost_center` · `reads_as_reminder` |
 | unmatched `reason_code` | `unmatched_reasons.RECEIPT_REASON_CODES` / `CHARGE_REASON_CODES` | the nine codes in "The unmatched lists say what they hold" |
 | `summary.month_health.state` (+ `reason`, `suspects[]`) | every `HEALTH_*` / `REASON_*` / `SUSPECT_*` constant in `web/month_health.py` | `ok` · `broken`; `zero_match_with_exact_pairs`; `sign` · `currency` · `entity` · `card` · `unknown` |
-| `rematch_log[].trigger` | the `trigger=` literals every `web/*.py` module passes to a re-match call (no single constant exists; read with `ast`) | `statement` · `reread` · `receipts` · `cards` · `master_data` · `set_aside` · `trip` · `adjacent_receipts` · `expense_edit` · `resume` · `duplicates` · `month_move` |
+| `rematch_log[].trigger` | the `trigger=` literals every `web/*.py` module passes to a re-match call (no single constant exists; read with `ast`) | `statement` · `reread` · `receipts` · `cards` · `master_data` · `set_aside` · `trip` · `adjacent_receipts` · `expense_edit` · `resume` · `duplicates` · `month_move` · `duplicates_reapply` (item 223 step 7) |
 
 A new backend value fails CI until the pin and the SPA label move together:
 the failure names the value, and the change that adds it edits the literal in
@@ -5549,11 +6483,15 @@ At publish, beside the category/alias upsert (item 116's whole-entry rule),
 `registry_card_upserts_from_expense_run` folds the month's resolved cards
 into the registry:
 
-* every receipt whose card came from `override`, `hint`, `settled_charge` or
-  `learned` adds that card to its merchant's `cards_seen`. A row carried by
-  `merchant` adds nothing, on purpose: a card the registry lent is not
-  evidence about the merchant, and feeding it back would let one observation
-  harden into a fact.
+* every receipt whose card came from `override`, `hint` or `settled_charge`
+  adds that card to its merchant's `cards_seen`. A row carried by `merchant`
+  adds nothing, on purpose: a card the registry lent is not evidence about
+  the merchant, and feeding it back would let one observation harden into a
+  fact. Nor does a row carried by `learned` (removed 2026-09-25, the side
+  finding of item 200): a remembered card is the tool's own memory, and
+  counting it let a remembered card confirm itself into `cards_seen` and a
+  learned `card_key` at sign-off, against the 2026-09-24 ruling that only
+  corrections may be memorized.
 * `card_key` is written only while `cards_seen` holds exactly ONE card and
   the entry has no key yet, and is marked `card_key_learned: true`.
 * a second card DROPS a learned key in the same pass. Two cards are a fact
@@ -5593,16 +6531,112 @@ carried no prose of its own. It rides in provenance too, at
 `submitted_by.operator_note`, which is where it is recorded; the row key is
 a LIFT of that, exactly as `untrusted_instructions` is lifted.
 
-**Display only, and this is the whole of its contract.** Mail text is
-untrusted inbound ([[rule_untrusted_inbound]]): this string chooses no
-entity, no category, no cost center, no card and no recipient, it reaches
-no model as instruction, and nothing in the tool branches on it. The
-reviewer reads it and decides. `test_the_note_decides_nothing` is the
-differential that says so rather than promising it: two identical receipts,
-one of whose mails names an entity, a cost center, a category and a card in
-the plainest words it could, land on identical `legal_entity_id`,
-`entity_source`, `person`, `posting_category`, `card_source`,
-`cost_center` and `private`.
+**This string is shown as written.** It never selects a recipient, a cost
+center or a card. Since item 250 (owner 2026-10-07) a note from one of OUR
+senders also classifies the receipt; that reading is the next section. A
+stranger's note stays display only ([[rule_untrusted_inbound]]):
+`test_a_strangers_note_decides_nothing` is the differential, two identical
+receipts from an outside address, one of whose mails names a company
+("BTS"), a cost center, a category and a card in the plainest words it
+could, landing on identical `legal_entity_id`, `entity_source`, `person`,
+`posting_category`, `card_source`, `cost_center` and `private`.
+
+### What our senders' notes decide (item 250)
+
+Owner rulings 2026-10-07. A note counts only when all of these hold
+(`intake_mail.trusted_sender_notes`): the address is ours (the Brisken
+tenant or `intake.known_senders`), the mail raised no
+`untrusted_instructions`, and something is left once the signature is cut
+(a line naming one of the intake aliases' people starts the signature; 14 of
+the 72 live notes are only Criss's). It is read once, at arrival, and rides
+on the receipt (`sender_note`, `sender_note_entity`, `sender_note_split`,
+serialized with it), so a receipt that arrived before the deploy carries
+none.
+
+* **Company.** `BCS` = Cloud Services, `BTS` = Consulting, `CorpServ` /
+  `Corp Serv` = Corporate Services (the curated chart's own tab names). One
+  named company sets `legal_entity_id` with `entity_source: "sender_note"`,
+  over the paying card: the card stays the card (`card`, `person`,
+  `posting_paid_through` unchanged), the company moves. Only the reviewer's
+  own pick (`entity_source: "override"`) beats it. Two companies with no
+  "split" decide nothing; "BTA" and project names decide nothing.
+  **Pairing follows the card, not the note** (item 253, owner 2026-10-07):
+  the matcher treats a company only the note named as no company
+  (`matching.deterministic.pairing_entity`), so the receipt still pairs with
+  its own card's charge; its card scope still binds it. A reviewer's own
+  company pick scopes the match exactly as before.
+* **Split.** "split", "shared" or "50/50" books the whole amount in
+  Corporate Services; the tool never divides a charge.
+* **Account.** When something is left besides company names and filler, one
+  model call (`classify_by_note`, the note fenced as data) is asked which of
+  the company's leaves the note's words name. At confidence 0.85 or more,
+  passing the guards every model answer meets, and only when the note's own
+  words name that account (`sender_note.names_account`, item 254: one
+  meaningful word in common, so "Nicolas/Lydar" or "Verve.Works" name no
+  account however sure the model is), it decides: source
+  `NOTE`, origin `person`, `posting_category.source: "note"`, posted like a
+  reviewer's pick and never re-guessed by the merchant list. A split note is
+  offered only Corporate Services' own never-allocated accounts (allocation
+  rule "N/A" on Dirk's marked chart: the `CorpServ | ...` family, owner
+  "own account, never split"). Anything less clear decides nothing and the
+  receipt runs the usual chain.
+* **Never learned.** Nothing a note decides is written to the override
+  tables the Publish learners read; only corrections are memorized
+  (owner 2026-09-24).
+
+### Applying them to the receipts already in a month: `POST /api/runs/{run_id}/sender-notes/apply` (item 252)
+
+Owner 2026-10-07: "change existing rows, reread if need be". Operator only;
+the SPA offers no control for it. Same shape as item 240's re-read.
+
+Body: `{"confirm": "<month label or run id>", "dry_run": true|false}`, both
+required, for a dry run too. Both answer `{"ok": true, "dry_run": ...,
+"job_id": "..."}`; poll `GET /jobs/{job_id}`.
+
+| Refusal | Status | `code` |
+|---|---|---|
+| no such run | 404 | `run_not_found` |
+| not an expense batch / published / a re-match running or owed / no receipt came by mail | 409 | `not_an_expense_batch` / `month_published` / `rematch_running` / `sender_notes_no_receipts` |
+| confirm missing or wrong | 400 | `sender_notes_confirm_required` / `sender_notes_confirm_mismatch` |
+| `dry_run` not a JSON boolean | 400 | `sender_notes_dry_run_required` |
+
+**Which note.** For each receipt in the pool with a provenance entry: the
+entry's `operator_note`, else (every receipt ingested before 2026-09-20) the
+note read again from its mail, the archive the entry names, else the one
+archive whose log row lists the document for this month. No archive, or two,
+means no note. A note read again carries its mail's agent-directed text
+flags: the ones the archive recorded, else a fresh scan of its subject and
+body. Then item 250's own filter (`trusted_sender_notes`) and stamp, on both
+`receipts` and `extracted_receipts`; a receipt already carrying the same note
+fields is unchanged, so a second run writes nothing.
+
+**What it writes.** The note fields and the company they decide; a note read
+again into `intake_provenance` (with its flags), so the row shows
+`operator_note`; and categories only where the note can move them, on a GL
+month: a row whose shown company moved is categorized again for that company,
+and a row whose note asks an account question keeps its old answer unless the
+new one is the note's (source `NOTE`). Nothing goes into the reviewer's
+tables, so her picks stay on top and Publish learns nothing from a note. A
+`sender_notes_applied` record is appended to the snapshot. A month with a
+statement re-matches (trigger `sender_notes`) when a company moved, because
+the company scopes the match: a card-paid receipt moved to another company
+no longer pairs with that card's charge, as with a person's company pick.
+
+Job `result`:
+
+| Path | Meaning |
+|---|---|
+| `counts` | `{receipts, mailed, notes_found, notes_recorded, notes_reread, trusted, stamped, company_changed, account_by_note, unchanged, display_restored}`; `unchanged` = trusted notes whose receipt already carries them |
+| `skipped[]` | `{document_id, why: "no_archive" \| "archive_ambiguous" \| "archive_missing"}`: a mailed receipt with no recorded note whose mail could not be named with certainty |
+| `documents[]` | one per receipt whose stored fields change: `{document_id, vendor, note, note_reread, company_changed, recategorized: "company" \| "account" \| null, account_by_note, fields[], before, after}`. `before` / `after` are `{vendor, legal_entity_id, entity_source, posting_category, suggested_category, review_reason_code, operator_note}` read off the Expenses view, the two categories as `{category, zoho_account, source}` or `null` |
+| `display_restored[]` | documents whose provenance gained the note read again (strangers' notes included: shown, never acted on) |
+| `rematch_owed` (dry run) | whether a re-match is part of the run |
+| `consequences` (dry run) / `applied` (real run) | item 240's shape: `pairs`, `confirmed`, `expenses`, `duplicates`. Its `expenses[]` reads keys an Expenses row does not carry (`entity`, `category`, `zoho_account`), so a moved company or category shows in `documents[]`, not there |
+| `consequences.rematch_alone` / `rematch_error` | as item 240 when a re-match is owed (measured on two throwaway copies); `null` otherwise, when the view is built on the new snapshot in memory |
+| `written[]` / `gone[]` / `rematch` (real run) | receipts written; receipts someone changed between the plan and the write (left alone); the re-match's own answer or `null` |
+| `cost_usd` | model spend, when a category was asked again |
+
+Tests: `tests/test_sender_note_backfill_252.py`.
 
 ### Where the text ends and the quote begins
 
@@ -5899,3 +6933,1492 @@ Pinned as `rows[].fills[]` (`object`) in `tests/test_view_contract.py`, in
 the run payload only. `expenses[]` gets nothing: an expense is a receipt, and
 a receipt has no workbook row. The SPA's half is
 `docs/lovable-statement-colour-prompt.md`.
+
+## A trip lifecycle change owes its months a re-match (R4.1, 2026-09-21)
+
+R4b made a month's candidate pool span overlapping trips. It told those
+months when a RECEIPT joined the trip, and nothing else. Measured on a copy
+of the live store 2026-09-21: moving a trip's dates off July, and deleting
+the trip's batch, each left July untouched, reporting 33 charges reconciled
+where 31 was true and still rendering `settled_by` badges naming a run that
+no longer existed. The claims were released correctly and July's next
+re-match healed it completely; nothing scheduled that next re-match.
+
+**Four entrances now owe the debt**, all with the existing
+`rematch_pending` shape and trigger `"trip"`:
+
+| Change | Which months | Reply |
+|---|---|---|
+| a receipt joins a trip (create or add) | every month the trip's range overlaps | `months_rematched` (unchanged) |
+| `PUT /api/trips/{id}` moves `start`/`end` | the UNION of the months the OLD range covered and the NEW one does | `months_rematched` |
+| `POST /api/runs/{id}/delete` on a trip batch | every month borrowing from it, chosen BEFORE the delete | `months_rematched` |
+| `DELETE /api/runs/{id}/expenses/{doc}` on a trip receipt | the same | (none; the existing reply is unchanged) |
+
+`months_rematched` is a parallel field on the trip PUT and the delete
+replies: absent unless a month actually re-matched, so a company-month
+delete and a roster-only trip edit answer byte-identically to before.
+
+**A roster or cost-center edit owes nothing.** Neither moves which months
+may borrow, and the grid resolves both from the live trip on every read.
+Only a DATE change re-matches.
+
+**The debt is written before the lock is released.** Each entrance stamps
+the mark inside its own `_BATCH_ADD_LOCK` span and pays it outside, so a
+restart in between leaves the debt on the month and
+`resume_pending_rematches` finishes it at boot, rather than leaving a month
+whose counts silently disagree with its receipts.
+
+**The paying loop records a per-month failure instead of raising.** It
+mirrors `rematch_neighbour_months`: a month that raises gets the error on
+its own mark and the REMAINING months are still paid. Before this, a raise
+on the first month aborted every month after it.
+
+**A rename carries.** `PUT /api/trips/{id}` changing `name` re-labels the
+trip's batch and rewrites the stored `receipt_sources[].label` on every
+borrowing month, so the batch header, the delete confirm (which is keyed on
+the label) and the `settled_by` badge stop naming the trip's creation-time
+name. Only a leading occurrence is replaced, so an operator's own suffix
+survives.
+
+**Candidate months are expense-generation runs only.** A legacy
+statement-mode run cannot borrow from a trip, so re-matching it on every
+trip change was work with no effect. The neighbour path has carried the
+same filter since item 112.
+
+Tests: `tests/test_trip_lifecycle_rematch.py` (12, route-level), eight
+wiring points proven red under `tools/regress_check.py`.
+
+## An invoice takes the card its own receipt prints (backlog item 204 step 2, case 9, 2026-09-25)
+
+No field is added or retyped. What changes is WHICH rows the existing
+fields fill: `expenses[].payment_hint`, `card`, `card_source`,
+`legal_entity_id`, `entity_source`, `person` and `person_source` on a copy
+that prints no card, the export's `Legal Entity` for that row, and the card
+scope the matcher gives it at the next re-match.
+
+**The rule.** A copy that names no card carries the card its twin prints
+when the two sit in a group the app SHOWS as one document: the groups behind
+`expenses[].duplicate` (not ruled "Not a duplicate", not decided `distinct`).
+Until now only a group sharing one document number lent a card. A Stripe
+vendor's invoice (`HMVWDWIL-0032`, prints no card) and its receipt
+(`2811-8284-7349`, prints "Visa - 3645") carry two numbers, so the invoice
+read "No legal entity yet" beside a twin the grid already marked as its
+copy (`basis: "printed_reference"`, the receipt prints the invoice's
+number). A vendor/date twin (`basis: "vendor_date"`) lends too.
+
+**Unchanged guards.** Copies naming different cards lend nothing. A group
+ruled `ignore` lends nothing. A member whose payment mode is an
+operator-assigned hint (`POST /api/expense-batches/{id}/cards`) keeps it.
+The entity lends only when exactly one is named. New with this item: a copy
+two shown groups would lend two different cards (or entities) receives
+neither, because a blank prompts review and a wrong card books the row to
+the wrong entity and person.
+
+**Never lent across a group the ladder keeps apart.** Three invoices from
+one vendor on one day for one amount with three document numbers
+(`basis: "distinct_reference"`, no row marked a copy) share nothing. The
+three OpenAI 80.12 of 16 September 2026 are that case.
+
+**Where it runs.** The grid (`GET /api/expense-batches/{id}`), the export
+(`_expense_export_inputs`: the CSV and the month report) and the re-match
+bake all pass the same evidence-backed verdicts (`duplicate_decisions`: file
+digests, text layers, the last statement check). A caller without them
+(`recon-match-attribution.py`, the months list's copy count) decides the
+groups without file evidence and so lends less, never more. Rows move on
+the next read; the matcher scope moves at the month's next natural re-match.
+
+Tests: `tests/test_twin_card_c9.py` (9, route-level through the grid, the
+CSV and one re-match). `test_reference_duplicates.py`'s unit test that
+pinned "a vendor/date pair lends nothing" is flipped to the new rule. Four
+wiring points proven red under `tools/regress_check.py` (the group source
+in `inherit_card_from_copies`, and each of the three service call lines).
+
+## A no-card pair whose merchant disagrees waits in review: `review_code` `no_card_vendor_disagrees` (item 204 step 6, owner D5, 2026-09-25)
+
+A pair whose receipt carries no card evidence (`card_evidence.receipt` is
+`none`: nothing printed, picked, assigned or remembered) and whose merchant
+words disagree (`vendor_pct` below 50, `_vendor_score` below 0.5) is no
+longer booked. It keeps its assignment, so the charge and the receipt are
+consumed exactly as before and the pair is still the charge's top
+candidate, but it comes back in the review bucket instead of reconciled:
+
+- `rows[].effective_bucket` is `review` (was `reconciled`), `status` is
+  `pending`, and `candidates[0]` is the pair with `requires_review` `true`,
+  `review_code` `no_card_vendor_disagrees`, `match_type` unchanged (`exact`
+  or `probable`, never rewritten to `fx_judgment`), and `reason` ending
+  "Review: the receipt names no card and the charge's merchant words do not
+  match its vendor (40%), so the pair is not booked until someone confirms
+  it."
+- Because the row is not reconciled, the receipt is not settled by it: on
+  `GET /api/expense-batches/{id}` the expense keeps `card: null` and
+  `card_source` whatever the rest of the chain gives (`none` when nothing
+  else names a card), where it used to show the charge's card, company and
+  person (`settled_charge`).
+- One click confirms it, like any review row; `Confirm all matched` does not
+  (item 76 skips `requires_review`).
+
+A pair that already carries `no_card_rival_on_other_card` keeps that code
+and goes to review too. A receipt with a printed card number, a pick, a
+hint or a remembered card is never held back for this reason, whatever the
+merchant words say. The pair is kept exactly as the matcher built it: the
+LLM FX judgment layer judges FX pairs only (`cli._apply_judgment` passes a
+non-`fx_judgment` entry through untouched), so it neither re-words nor
+unbinds it.
+
+`review_code` stays ABSENT on every candidate the matcher did not flag. On
+`Match.review_code` in the snapshot the new value rides beside the old one.
+Knob `no_card_vendor_guard` (default true, mirrored in
+`config/match-tuning.json`); false restores booking. No threshold moved.
+
+Measured 2026-09-25 on replays of live July and August 2026 with their
+labels (`tools/recon-match-attribution.py`, no model call): four receipts
+move from matched to review, none leaves a right booking. August `0025`
+(Lovable invoice on BASE44 50.00, 3645, labelled no charge) goes from
+`wrong_exact_no_charge` to `review_no_charge`; July `0034` (Erste Fracht 21
+EUR on HOTEL AM TIERGARTEN 24.02) and `0066` (Mega Center 14.90 BRL on
+48.247.796 BEATRYZ) go from `matched_unverifiable` to `excluded_ambiguous`;
+August `0033` (E A LOCACOES 340 BRL on B91*E A LOCACOES 65.63, unlabelled)
+goes to review. Wrong bookings 1 to 0, clean right 26 / 6 unchanged. The six
+scorer bundles are unchanged (70/95, 0 wrong, SCORE 76.0): every bundle
+receipt carries a Zoho payment mode. Rows move at each month's next natural
+re-match; no agent re-match.
+
+Tests: `tests/test_no_card_vendor_guard_c9.py` (matcher, judgment layer and
+route-level), wiring proven red under `tools/regress_check.py`.
+
+## A receipt a neighbour month settled carries that charge's card (item 204, case 9 build 3)
+
+No new field. `card`, `card_source`, `legal_entity_id`, `person` and their
+`*_source` siblings on `GET /api/expense-batches/{id}` `expenses[]` now also
+answer for a receipt that ANOTHER month's charge settled, the one that already
+carries `settled_by: {run_id, label, transaction_id}` naming that month.
+
+| The receipt | `card_source` | `settled_by` |
+|---|---|---|
+| a charge of its own month settles it | `settled_charge` (item 111, unchanged) | absent |
+| a neighbour month's charge settles it (deterministic match or confirmed pick) | `settled_charge`, that charge's card | the neighbour month |
+| a neighbour month only PROPOSES it (review bucket) | unchanged (no claim exists) | absent |
+| the pairing was rejected, or the neighbour month was deleted | unchanged | absent |
+
+The link sits exactly where item 111's does in the card chain: below a card
+picked on the row, a card resolved from the printed payment method, a printed
+card number and a confirmed private expense; above a remembered card and the
+merchant registry. `can_mark_private` is false, as for any settled row.
+
+The card key is the neighbour charge's card resolved in the RECEIPT's batch
+registry, so a card that registry cannot name lends nothing. The same map
+feeds `GET /runs/{id}/expenses.csv`, `GET /runs/{id}/expense-report.pdf` and
+the sign-off learner (`merchants[].cards_seen`), so all four agree.
+
+Tests: `tests/test_card_flows_back_c9.py` (8, route-level).
+
+## A receipt that names no card: `waits_for_statements`, `card_suggestion`, apply-to-vendor, `month_suggestion` (backlog item 204, case 9 build 5, 2026-09-25)
+
+All additive, all absent (never null or `[]`) when they do not apply.
+Logic in `card_suggestion.py`; the view builders read one lazily loaded
+`EvidenceSource` per request (every expense batch's `statements[]`, their
+printed charges and the live registry's active cards), so a month with no
+card-less row reads nothing extra.
+
+**Coverage by date.** A card's statement covers a day when an upload that
+printed that card spans it (`statements[].period_start..period_end`), in ANY
+month. An upload that printed one card of a family (`Card.parent`) covers the
+whole family for its span, because one Chase activity export carries every
+subcard of the account.
+
+- `expenses[].waits_for_statements: [card label]` (sorted): on a row with no
+  card, not private or suggested private, no printed card digits, not settled
+  outside, the active cards whose loaded statements do not cover its date.
+- `expenses[].review.reason_code: "waits_for_statement"` with
+  `review.waits_for_statements`: ranked directly before `needs_entity` and in
+  its place (entity empty only). When every active card covers the date,
+  `needs_entity` stands.
+- `unmatched_receipts[].reason_code`: a receipt that printed no card and whose
+  date some active card does not cover reads `card_statement_not_loaded`
+  (before: only with printed digits). No new code value.
+
+**Suggestion.** `expenses[].card_suggestion: {card_key, label, evidence:
+[{month, date, amount, currency, description}]}` on the same rows, when every
+loaded charge within 45 days whose description carries the vendor's first
+word (3+ characters) and whose amount in the receipt's currency is within 3%
+lies on ONE registry card. Never sets `card`; measured 44 right / 8 wrong as
+an automatic rule, so it is a suggestion only (items 173, D6).
+
+**Apply to this vendor.** `POST /api/expense-batches/{run_id}/cards/by-vendor
+{vendor, card_key[, dry_run]}` writes the row PUT's own override
+(`field=card_key`, after the same `prepare_row_card_fix`) to every row of that
+display vendor (trimmed, case-insensitive) with no card, not private or
+suggested private, no printed digits, not settled outside, and counting (a
+decided copy does not). Reply `{ok, vendor, card_key, documents, n_changed,
+summary[, rematch]}`; re-matches a statement month when anything changed.
+`dry_run: true` writes nothing and names the rows it would change. Refusals:
+`vendor_and_card_required`, `card_not_defined`, `card_inactive`,
+`invalid_body`, `run_not_found`, `not_an_expense_batch`. Idempotent.
+
+**Statement month.** `statements[].month_suggestion: {month, label_month,
+n_dates, n_in_month}` (the receipt side's `period_suggestion` shape): the month
+holding most of the file's dated charges; absent when none or on a tie;
+`label_month` null on a trip. When the two differ, the entry's `advisory`
+reads `statement_month_differs` (`advisory_detail` fields `month`,
+`label_month`, `n_in_month`, `n_dates`), ranked after the two doubling
+advisories. Nothing is moved or refused.
+
+Tests: `tests/test_case9_status_c9.py` (route-level, all four rules and their
+negatives), `tests/test_view_contract.py`
+(`test_case9_row_fields_are_absent_or_well_formed`).
+
+## A receipt with no card takes its billing account's card: `card_source: "account"` (backlog item 204 step 4, owner decision D4, 2026-09-25)
+
+A subscription invoice prints a Stripe-shaped number, an 8-character customer
+prefix and a counter (`WWT1PNYP-0016`). The prefix is the billing ACCOUNT: one
+login, paying with one card at a time. Keyed on it, a card memory scored 34
+right, 0 wrong, 30 silent over 64 checkable receipts (leave-one-out); keyed on
+the vendor NAME (item 200, not built) it gave the wrong person 3 times in 21.
+
+### The rule (`src/expense_recon/billing_account.py`)
+
+| Part | Rule |
+|---|---|
+| Key | `invoice_number`, else the receipt's reference (`expenses[].reference`), matching `^[A-Z0-9]{8}[- ]?\d{4}$` with a prefix that is not all digits. A Stripe receipt number (`2642-9215-3921`) is never a key; a POS or grocery receipt has none |
+| Purchase | the prefix plus the counter, so an invoice and its receipt are ONE purchase, whichever month each landed in. A decided copy (`counts_in_total: false`) is never a purchase of its own, but what it prints is its purchase's evidence (the grid's twin inheritance applies first): live, the Stripe receipt that prints the card is the decided copy |
+| Counts | a printed Brisken card number (`card_source: hint`, digits of the card, not a hint word the batch assigned, not a two-digit ending), the settling charge (`settled_charge`), a reviewer's pick (`override`) |
+| Only contradicts | a two-digit ending (`card_ending`), a hint word assigned to a card |
+| Never evidence | `learned`, `merchant`, `account` itself, a confirmed private row, a row settled outside the card system |
+| Decision | at least 2 OTHER purchases of the account on one card and none naming any other card, across every expense batch (test batches named `TEST` / `UTIL` left out); derived on every read, never stored |
+
+The purchase being judged never votes for itself (leave-one-out). A reviewer's
+pick stays on its own row (D6): one pick is one purchase of evidence, which
+decides nothing, so September's OpenAI rows beside Criss's pick stay blank.
+
+### Where it sits in the row's card chain
+
+`resolve_batch_row_cards` gains a trailing `account_cards=` and ONE link:
+
+1. `override`; 2. `hint`; 3. `settled_charge`; 4. **`account`** (NEW);
+5. `learned`; 6. `merchant`; 7. `none`.
+
+Links 3-6 share the item-87 guard: the receipt prints no card number, names no
+hint the batch resolves and is not confirmed private. The card's `entity` and
+`person` ride it (`entity_source: "card"`, `person_source: "card"`).
+`can_mark_private` stays **true**, as on `learned` and `merchant`: the rule is
+memory about the account, not a decision about this row. `account` is not in
+`CARD_SCOPE_SOURCES`, so it never scopes matching.
+
+`expenses[].card_source` gains `account` as a value, a rule-5 change: the pin
+in `tests/test_view_contract.py` moves with it, and the SPA label needs
+`docs/lovable-account-card-prompt.md`. No other field changes.
+
+### Which surfaces resolve it
+
+Every surface that resolves the chain with live settings: the Expenses grid,
+the Zoho CSV and the month PDF (their shared export pass, only when the caller
+passes the month's settled cards, so the matcher's neighbour and trip pools
+never see it), the month PDF's card pass and card sections, the Expenses card
+tabs (`expenses[].card_section`), the cost-center roll-up, the
+refresh-master-data preview, and through the tabs `GET /api/cards/status`. Not
+the matcher's bake, not the run workbench's own card pass, and not the
+sign-off learner: `_CARD_OBSERVATION_SOURCES` is `{override, hint,
+settled_charge}` (`learned` left it in #1353), so an account-carded row never
+teaches `cards_seen` or a learned `card_key`.
+
+**One index per request.** The app enters a lazy scope per request
+(`billing_account.request_scope`); nothing is read until a card-less row that
+carries an account key reaches the link, and then the store is read once for
+the whole request, however many months and surfaces it resolves. Outside a
+request (a CLI caller, a unit test calling the service directly) the link is
+silent. A batch whose evidence cannot be read empties the whole index (partial
+evidence can hide a contradicting card); the link goes silent, never the page.
+
+Tests: `tests/test_account_card_c9.py` (16; 14 route-level through
+`GET /api/expense-batches/{id}`, the CSV, `/api/cards/status` and
+`POST /api/runs/{id}/publish`); seven wiring and rule points proven red under
+`tools/regress_check.py`.
+
+## Shorter review lines (backlog item 213, owner note #87, 2026-09-25)
+
+Prose only; every `reason_code`, structured field and count is unchanged.
+
+- `waits_for_statement`: `review.reason` names the waiting cards only when
+  there are one or two (`service.WAITS_NAMED_MAX`): "No card on this receipt;
+  waiting for the statement of {cards}." Three or more read "No card on this
+  receipt, and no statement is loaded for its date yet." The full sorted list
+  stays on `review.waits_for_statements` and `expenses[].waits_for_statements`.
+  The SPA composes its own line from that list, so the same threshold is in
+  `docs/lovable-short-review-lines-prompt.md`.
+- `date_outside_period`, `suggested_private`, `needs_entity_settled_outside`:
+  the explanation clauses are gone, each instruction is kept (correct or keep
+  the date; confirm private and name who is reimbursed, or assign or register
+  the card; set the entity on the row).
+
+Tests: `tests/test_reason_copy_item_213.py` (route-level for the waiting line).
+
+## A statement attach keeps only the month's own charges: `statements[].month_filter` (backlog item 215, owner decision 2026-09-25)
+
+`POST /api/expense-batches/{id}/statement` on a company month (a label naming
+a month, not a trip) with a file that prints post dates (every Chase activity
+export: the SharePoint lifetime sheets and Criss's monthly workbooks) now
+folds only the rows that are that month's own:
+
+- **Post date decides.** A row stays when its post date falls in the label's
+  calendar month; a row whose post-date cell is empty uses its own
+  transaction date. Criss's July and August workbooks post 112/112 and
+  111/111 rows in their month, so they still fold whole.
+- **A file that prints no post date folds whole**, as before: a Chase cycle
+  PDF spans two calendar months by design (August's 9693 PDF runs Jul 3 to
+  Aug 4), and cut by transaction date its July rows would land nowhere. Item
+  204's `month_suggestion` still advises on such a file.
+- **A charge already held under another reading is left out.** An in-month
+  row is dropped when the month (from another of its files) or a neighbouring
+  company month (previous or next, by label) already holds the same charge on
+  the same card with a different id. Sameness across readings is card
+  identity (the coverage key, so account `9693` from a cycle PDF and
+  `card-9693` from a SharePoint export are one card) + transaction date +
+  amount + currency, counted as a multiset (two identical coffees are two
+  charges). A row the month holds under the SAME reading (same id) is not
+  left out; it is the fold's ordinary re-supply and shows as `n_rows - n_new`.
+- **A label naming no month folds the whole file**, as before, and records no
+  `month_filter`.
+
+**On the entry.** `statements[].month_filter: {month, n_file_rows, n_kept,
+n_left_out, outside_month: {"YYYY-MM": n}, already_held: {"YYYY-MM": n}}`.
+`outside_month` is keyed by the month a left-out row belongs to,
+`already_held` by the month that holds it (the month's own key when another of
+its files does). Parallel and ABSENT on every entry attached before
+2026-09-25 and on a file without post dates. Where present it replaces
+`month_suggestion` (never both): every
+kept row is the month's own. `n_rows`, `period_start` / `period_end` and the
+anchors describe the KEPT rows; `n_file_rows` is what the file printed.
+
+**On the reply.** The attach job (`GET /jobs/{id}`) carries
+`result.month_filter` (same object) on `done`, and when anything was left out
+its `stage` carries the sentence the SPA already renders for warnings:
+`warning: Kept 3 of this file's 724 charges for April 2026: 700 belong to
+other months (February 2024 to August 2026); 21 are already in May 2026.`
+
+**Refusal.** A file the month keeps nothing of fails the job with
+`statement_outside_month` (sentence in `error`; `result: {code, month,
+n_file_rows, outside_month, already_held}`). The month is unchanged, no entry
+is written, and the upload is discarded (item 196's path).
+
+**Re-read.** `POST /api/expense-batches/{id}/statements/reread` applies the
+filter only to entries that carry `month_filter`, against the files re-read
+before them and today's neighbours, and records it again; an entry from
+before the guard re-reads whole.
+
+**A restart-killed attach.** The route writes
+`{work_dir}/.attach-pending/{job_id}.json` naming its upload; the job removes
+it when it ends either way. At boot, every marker left belongs to an attach a
+restart cut off: its upload is discarded when the month never recorded it,
+and the marker goes. The work dir cannot be swept by suffix, because
+`report.xlsx`, `zoho_journal.csv`, `reconciled.csv` and `expenses.csv` live
+beside the uploads.
+
+Tests: `tests/test_attach_month_guard_item_215.py` (13, route-level through
+the attach, job poll, re-read and a second `create_app` boot).
+
+## The model suggests, a rule or a person decides: `suggested_category` (item 216 Build 2 step 2, owner ruling 2026-09-25)
+
+On a GL month (`category_vocabulary: "gl"`) the model's answer, whether it
+read the receipt's lines (`LINE`) or the bank's description (`VENDOR`), is a
+suggestion and never a posting. A merchant-list or remembered rule and a
+person's pick post as before. Bucket-era months (April to June) are unchanged.
+
+**Both payloads.** `posting_category` holds only what a person or a rule
+answered, and is `null` when the model answered everything. The model's
+answer moves to a parallel field, ABSENT when there is none:
+
+| Field | Shape |
+|---|---|
+| `expenses[].suggested_category` (grid) · `rows[].suggested_category` (run) | the `posting_category` shape: `{category, zoho_account, source, origin}`, `origin` always `"suggestion"`; `source` coarse (`llm`) on the grid, fine (`LINE` / `VENDOR`) on the run |
+| `expenses[].books_as[].suggested` | `true` on a part whose `account` is `suggested: <account>`, ABSENT otherwise |
+
+A receipt mixing decided and model lines carries both fields. The run row's
+`charge_category` is unchanged (it keeps the model's guess with its `origin`),
+and `posting_category_proposed` (item 70) now says both fields came from the
+candidate.
+
+**The review.** A receipt whose lines the model read reads `state: "check"`,
+`reason_code: "model_suggestion"`, and `category_confirmable: true`. One click
+on `POST /api/runs/{id}/expenses/{doc}/confirm-category` stores each line
+`category_source: "inherited"` (never taught at sign-off), and the row posts:
+`posting_category.origin: "person"`, no `suggested_category`, the category
+question gone. These rows no longer read `ready`, so "Confirm all Ready" leaves
+them alone. `vendor_guess` and a receiptless `receiptless_suggested` are
+unchanged.
+
+**The files.** Every account cell the model answered reads `suggested:
+<account>`: `expenses.csv` (`Expense Account`), the statement sheet (in place
+of `<account> (confirm)`), `report.xlsx` (`Posting account`, yellow, listed on
+Needs Review, source `LINE (suggestion)`), `reconciled.csv` (`AI posting
+account`, `Charge posting account`) and the reconciliation PDF's account
+column. The API poster (`zoho.accounts.resolve_account_id`) and the journal
+check refuse the cell as `unresolved_placeholder`.
+
+A person's category pick on a receipt now reads `EDITED` in the export and
+`report.xlsx`, as a charge pick always did (it read `LINE`, the model's own
+tier). Measured on the 2026-09-25 03:05 backup: 85 expenses print
+`suggested:` (July 27, August 27, September 31), 32 leave `ready`, 80 are
+one-click confirmable (the other 5 still have a line with no category), and a
+Confirm on one turns its row back into the account.
+
+Tests: `tests/test_model_suggests_item_216_build2_step2.py` (7, three
+route-level: a receipt upload + the confirm route, the category PUT, and a
+statement's receiptless guess through the run view, `reconciled.csv`,
+`report.xlsx`, the statement sheet and the PDF).
+
+### Who answered: `categories_by_origin` (item 216 Build 2 step 3)
+
+Both payloads carry `summary.categories_by_origin`, an object with exactly
+four int keys, every one always present:
+
+| Key | Rows counted |
+|---|---|
+| `person` | a reviewer answered every line (a pick, or a Confirm) |
+| `rule` | the merchant list or a remembered rule answered, and no line is the model's |
+| `suggestion` | the row carries `suggested_category`, or (on a bucket-era month) its `posting_category.origin` is `suggestion` |
+| `none` | no category at all |
+
+It is read off each row's own `posting_category` / `suggested_category`, so
+the count equals the rows. A row counts once, under its least decided answer:
+a receipt mixing a rule's line and a model line is a `suggestion`. Run
+payload: over `rows[]` (every charge, matched or not, a yellow or gray one
+included), so the four sum to `rows[].length`. Expense payload: over the rows
+`n_expenses` counts (a decided copy and a bill are in none), so the four sum
+to `n_expenses`. A route that replies with the run summary (the charge
+category PUT) carries it too.
+
+`n_charges_category_guessed` is not this count and keeps its meaning: the
+guesses that still block the month. Measured on the 2026-09-25 03:05 backup,
+the three GL months carry 164 receiptless guesses (July 45, August 89,
+September 30) while it reads 0 / 0 / 1, correctly: July's 45 sit on charges
+Criss already booked (25 yellow) or booked through recurring (20 gray), and
+the 76 open ones are counted under `n_charges_need_receipt`. The split reads:
+
+| Month | Run payload (person / rule / suggestion / none) | Expense payload |
+|---|---|---|
+| July | 0 / 11 / 68 / 41 | 0 / 9 / 27 / 34 |
+| August | 0 / 7 / 109 / 27 | 0 / 4 / 27 / 19 |
+| September | 0 / 1 / 43 / 7 | 0 / 1 / 31 / 36 |
+
+Tests: `tests/test_counts_by_origin_item_216_build2_step3.py` (2, route-level:
+a receipt upload with a decided copy, a move to Bills and a Confirm on the
+grid; a statement with an open, a ruled, a gray and a yellow charge plus the
+charge category PUT on the run view) and
+`test_view_contract.py::test_categories_by_origin_partitions_the_rows_each_payload_counts`.
+
+## Bills path (item 218)
+
+Build 4, owner decisions 2026-09-25. An invoice no company card paid (a
+supplier bill paid by wire, SEPA, ACH, boleto or PIX) left the card queue only
+one click at a time (item 62) and otherwise sat there waiting for a statement
+that will never cover it. Each expense row now names the path it was paid
+through. A **bill** stays visible in its month, in a Bills section, and leaves
+the card side: the card counts and boxes, the card strip, `waits_for_statements`,
+the month's total, `expenses.csv`, the Zoho journal and the month report's
+listing. It goes out as its own `bills.csv` for Criss to book by hand in Zoho.
+Nothing posts anywhere. The rules live in `src/expense_recon/payment_path.py`
+(pure); the service reads them at view time, never by re-matching.
+
+### Row fields (Expenses payload)
+
+| Key | Type | Meaning |
+|---|---|---|
+| `expenses[].payment_path` | `"card"` \| `"bill"` | always present |
+| `expenses[].payment_path_source` | `"person"` \| `"settled_outside"` \| `"stated"` \| `"statement"` \| `""` | always present, parallel to `payment_path` |
+| `expenses[].bill_suggestion` | `{"evidence": str}` | absent unless offered (below) |
+
+A bill row also carries `counts_in_total: false` (item 94's key: the row stays,
+the money does not count), `boxes: []`, no `waits_for_statements`, no
+`card_suggestion`, `can_mark_private: false`, `card_section: ""` and
+`without_charge: false`, and `review` = `{"state": "none", "reason_code":
+"bill", "reason": "Paid by bank transfer, so no card statement will cover it.
+..."}`. `bill` is a new `review.reason_code`; per rule 5 the English `reason`
+is its human-readable label (pinned in `test_view_contract.py`). `none` is an
+existing state, so `n_review` never counts a bill.
+
+### Sources and precedence
+
+1. A charge of this month holds the receipt (the effective outcome does not
+   list it as unmatched): `card`, source `statement`. A statement charge is
+   proof a card paid it, item 62's "the match wins". Consulted only for a row
+   carrying a bill signal, so `statement` names a charge that overrode one; a
+   held row with no signal reads source `""`.
+2. A person's `payment_path` override: `card` or `bill`, source `person`.
+3. The item-62 disposition says `how: "bank_transfer"`: `bill`, source
+   `settled_outside`. `cash`, `paypal` and `other` do not make a bill.
+4. The document's stated payment method (`payment_mode`) reads as wire / bank
+   transfer / electronic funds transfer / transferência / Überweisung / SEPA /
+   ACH / virement / bonifico / boleto / PIX and names no card: `bill`, source
+   `stated`. A superset of `bank_transfer_tender`. Not a bill: a mode naming a
+   card ("Electronic Funds Transfer ...2838", "Visa", four digits in a row),
+   TEF (the Brazilian card terminal), and an invoice's payment OFFER ("Pay
+   $15.00 with a bank transfer"), which only suggests (the one live instance
+   posted to a card).
+5. Otherwise `card`, source `""`.
+
+There is no supplier list: SAP and Redis are also charged to Brisken cards
+every month.
+
+### The two settled-outside maps
+
+The stored item-62 map is unchanged. A person's move of a row to `card`
+overrules its `bank_transfer` disposition: `expenses[].settled_outside` stops
+displaying it and `summary.n_settled_outside` stops counting it (the stored
+entry is not deleted; clearing the move brings it back). Every reconciliation
+and exemption consumer reads the EFFECTIVE map: the displayed dispositions plus
+a derived `{"how": "bank_transfer", "note": "", "at": null, "derived": source}`
+for each bill without a stored one. The later explicit decision wins both
+ways: marking a row settled outside by bank transfer clears a person's earlier
+`card` move on it.
+
+### Summary (both payloads)
+
+| Key | Meaning |
+|---|---|
+| `summary.n_bills` | bill rows, a decided copy excluded |
+| `summary.bills_by_ccy` | their amounts per currency, formatted as `copies_set_aside_by_ccy` |
+
+Expenses payload: `n_expenses`, `totals_by_ccy`, every box count, the card
+strip (`card_review`, grouping and counters) and `n_amounts_unreadable` leave
+bills out, and `n_receipts == n_expenses + n_copies_set_aside + n_bills`. A
+decided copy that is also a bill counts once, as a copy; its row still reads
+`payment_path: "bill"`. `card_sections` never lists a bill. The months list
+(`GET /api/expense-batches`) carries the same `n_expenses` and `n_bills`.
+
+Matching payload (`GET /api/runs/{id}`): a bill leaves `unmatched_receipts`,
+month health's pair scan and the matchable pool, so `n_receipts_need_charge`
+and `month_complete` never wait on one. `n_settled_outside` keeps counting the
+displayed dispositions only.
+
+### Moving a row
+
+```
+PUT /api/runs/{run_id}/expenses/{document_id}
+    {"field": "payment_path", "value": "bill" | "card" | null}
+```
+
+The existing field edit, so the move lands in `edited_fields`. `null` or `""`
+clears it. Read at view time only: no re-match, no re-categorization.
+
+| Code | HTTP | When |
+|---|---|---|
+| `invalid_payment_path` | 400 | a value other than `bill`, `card` or empty |
+| `bill_held_by_charge` | 400 | `bill` on a receipt a charge of this month holds; reject that match first (`document_id` rides beside) |
+
+### The suggestion: `bill_suggestion`
+
+Offered on an open card row only: no card resolved, not private or suggested
+private, no settled-outside disposition, not moved back to the card by a
+person, not held by a charge, not a decided copy. The evidence is the first
+line (at most 120 characters) of `ocr_text` printing payment bank details (an
+IBAN label or IBAN-shaped string, SWIFT or BIC, ABA, a routing number,
+wire-transfer instructions, a bank account number, "Bankverbindung", "dados
+bancários"), else the payment mode when it is an invoice's bank-payment offer.
+"Remittance" alone never fires. Never applied: one click is the PUT above.
+
+### Exports
+
+- `GET /runs/{run_id}/bills.csv` (also served at `/api/runs/{run_id}/bills.csv`,
+  one handler), saved as `bills-{run_id}.csv`. Columns: `Date`, `Supplier`,
+  `Invoice number`, `Amount` (plain, `27203.34`), `Currency`, `Company` (the
+  company the grid shows), `How decided` ("The invoice states a bank payment" /
+  "Marked paid by bank transfer" / "Moved to Bills by hand"), `Evidence` (the
+  stated method, or the disposition's note), `Document` (the stored file's
+  name). One row per bill, decided copies excluded; a month with none writes
+  the header alone.
+- `expenses.csv` writes no bill row. The Zoho journal (`zoho.csv`) and
+  `reconciled.csv` are per statement line, and a bill holds none by the
+  precedence above, so neither can carry one.
+- The month report (`expense-report.pdf`) leaves bills out of the listing,
+  every card section and the month's total, and prints them in a "Bills (paid
+  by bank transfer)" section after the reimbursements with its own
+  per-currency total; numbering continues and each bill's pages stay in the
+  evidence, captioned "bill, paid by bank transfer".
+- The reconciliation report captions a bill "Paid by bank transfer" through
+  the effective map.
+
+Tests: `tests/test_bills_path_218.py` (route-level: the drop, the mail intake,
+both payloads, the PUT, the settled-outside route, the three CSVs and both
+PDFs, plus a no-signal month rendered with the path unwired to prove every
+old key unchanged) and `tests/test_payment_path_218.py` (the rules, negative
+cases as the contract). Renders in `docs/lovable-bills-path-prompt.md`.
+
+
+## Front 5 (2026-09-25): why a pair still needs a click
+
+Parallel fields on `GET /api/runs/{run_id}` rows, all ABSENT (never null)
+when they do not apply. Read-time: a stored month shows them after the
+deploy, with no re-match.
+
+### `rows[].review.cause` and `rows[].review.cause_detail`
+
+`review.reason_code` stays `uncertain_match` on a review row, and `reason`
+keeps its English sentence. Beside them, on a pending row the reviewer still
+has to act on (not posted, not decided):
+
+| `cause` | When | `cause_detail` keys (besides `document_id`) |
+|---|---|---|
+| `merchant_disagrees` | the receipt names no card and the merchant words disagree (item 204 D5) | `vendor_pct` |
+| `no_card_rival` | the receipt names no card and a charge on another card also fits | `rival` (text, as the reason printed it) |
+| `model_doubts` | the model answered "likely NOT the same purchase" | `model_p`, `model_reasoning` (the model's own sentence, English) |
+| `fx_review_zone` | the converted receipt is outside the clean band, or the pair has no rate to check | `gap_pct`, `rate_source` when there is a rate; `model_p` when judged |
+| `rival_agrees` | another charge or receipt fits just as cleanly (the uniqueness gate), or two identical receipts | `rival_charges` `[{transaction_id, vendor, amount, currency, date}]`, `rival_receipts` `[{document_id, vendor, total, currency, date}]` (up to 3 each, from the candidates on the page), `rival` (text the matcher printed, since this release), `model_p` when judged |
+| `probable_date_gap` | a same-currency pair up to 20% apart and 2-5 days off; set on a Reconciled row too, which is why it cannot confirm itself | `date_gap_days`, `amount_diff` (charge minus receipt, `+0.50`) |
+
+`document_id` is the candidate the cause is about. A key inside
+`cause_detail` is absent when the page has no value for it. First match wins,
+top to bottom.
+
+### `rows[].reverses_transaction_id`
+
+On a `row_type: "refund"` row (a merchant's credit, not the cardholder's
+`payment`): the `transaction_id` of the one earlier purchase on the page with
+the same currency and absolute amount, the merchant agreeing (vendor
+similarity 0.75) and dated up to 90 days before. Absent when there is none or
+more than one. Advisory: no bucket, count or decision reads it.
+
+### Changed readings (no new key)
+
+- `rows[].row_type`: a credit on a statement with no Type column (the Chase
+  PDF) whose description is a card payoff ("Payment Thank You", "Automatic
+  Payment", "Autopay") reads `payment`, not `refund`. `effective_bucket` stays
+  `refund`.
+- A charge already booked (`entry_status: "posted"`, or status
+  `already_posted`) that the matcher held for review now counts in
+  `effective_bucket: "unmatched"` (with the booked-no-receipt charges), not
+  `review`: `summary.n_review` no longer counts it. Its `candidates` stay.
+- `candidates[].review_code` gains `uniqueness_rival` (a clean rate-derived
+  pair demoted because a look-alike agrees just as cleanly); its `reason`
+  names the rival. Such a pair with card 100, vendor 75+ and a clean band is
+  not sent to the model.
+- A model verdict's `reason` prints the tool's conversion ("52.79 BRL = 10.31
+  USD at the tool's rate 0.195341, -0.80% from the charge"), not the model's
+  estimate; it re-judges at each month's next natural re-match (the cache key
+  carries the prompt version).
+- Self-confirm and "Confirm all matched" (`confirmable_pair`, owner
+  2026-09-25, item 76 revisited): an `fx_reference` pair on
+  `reference_rate_source` `opentickers_day` or `ecb_month`, within 1%
+  (`reference_gap_pct`), card agreeing or unknown (`card_pct` 100 / 50, no
+  `cards_differ`), vendor 75+ and not review-flagged now confirms like an
+  exact pair; `summary.n_confirm_matched` counts it.
+
+Tests: `tests/test_front5_clicks.py` (route-level), pinned in
+`tests/test_view_contract.py`. Renders in `docs/lovable-review-cause-prompt.md`.
+
+## Receipts that wait for a statement (item 220, front 2)
+
+`GET /api/runs/{id}` only. Parallel fields; nothing existing is retyped.
+
+### `unmatched_receipts[].reason_code`
+
+One new value, `statement_not_loaded_for_date`: the receipt's card has
+statements loaded, but none reaches the receipt's date. The rule now reads
+the CARD before the date edge whenever the estate's statement evidence is
+available (`card_suggestion.reason_coverage`):
+
+- the card the card chain resolved for the row (printed, picked, assigned,
+  remembered, lent by a settled charge) decides; with no card, every active
+  card does (the set `expenses[].waits_for_statements` reads);
+- every card it waits on has no statement loaded in any month:
+  `card_statement_not_loaded`; otherwise, when some card's statements stop
+  short of the date: `statement_not_loaded_for_date`;
+- the date is covered: a resolved card with no charge on this page reads
+  `charge_in_neighbouring_period` (another month's statement holds its
+  date); else the two-day edge of the month span reads
+  `charge_in_neighbouring_period`, and anything inside it
+  `no_charge_on_any_loaded_statement`.
+
+Without evidence, or when the receipt printed digits no registry card names
+(August's Google invoices print account numbers), the pre-220 date-first
+order applies unchanged. `not_a_card_charge` gained the German till words
+`Bar` / `Barzahlung` / `Bargeld`, `girocard` fused to its mode
+(`girocardOLV`) and `Kartenzahlung erhalten`, all word-bounded.
+
+### `unmatched_receipts[].waits_for_statements`
+
+`string[]` of card labels the receipt waits on. Present only with reason
+`card_statement_not_loaded` or `statement_not_loaded_for_date` (when the
+evidence decided); ABSENT otherwise, never null or `[]`.
+
+### Summary
+
+- `summary.n_receipts_waiting_statement`: number, always present. The subset
+  of `n_receipts_need_charge` whose reason is one of the two waiting codes.
+  `n_receipts_need_charge` keeps its one question.
+- `summary.receipts_waiting_cards`: `string[]`, the union of those rows'
+  `waits_for_statements`, sorted. ABSENT when the count is 0.
+- The publish refusal (`month_not_complete`) carries
+  `readiness.n_receipts_waiting_statement`, and its sentence splits the
+  receipts: "N receipts wait for a statement (cards ...); M receipts have no
+  charge on any loaded statement". With nothing waiting it reads as before.
+
+Tests: `tests/test_receipt_waits_item_220.py` (route-level run payload and
+publish refusal, the rule and the regex, negative cases included); pinned in
+`tests/test_view_contract.py`. Renders in `docs/lovable-receipt-waits-prompt.md`.
+
+
+## Charges with nothing behind them say what they are (front 1, 2026-09-25)
+
+The charge side of a month disagreed with itself. Measured on the live
+payloads 2026-09-25: July's 24 and August's 40 gray-closed charges read
+`no_receipt_found` while the month gate counted them closed;
+`n_already_posted` counted card payments (July 93 with 3 "Payment Thank You"
+lines) and ignored a reviewer's already-booked click; "0 charges need a
+receipt" said nothing about the 3 / 4 / 7 active cards with no statement
+(July / August / September); the chase called 14 July-dated charges August's
+and 19 August-dated charges September's; and an ask had no age. Run payload
+and routes only; every field below is parallel (rule 1) and nothing existing
+changed type.
+
+### Two new charge `reason_code` values, with a label (rule 5)
+
+The charge table in "The unmatched lists say what they hold" grows two rows
+and one source for `already_booked`. First rule that applies wins:
+
+| Code | Rule |
+|---|---|
+| `not_a_purchase` | unchanged |
+| `receipt_held_by_another_charge` | unchanged |
+| `already_booked` | `entry_status` is `posted` (yellow) OR the row's `section` is `posted` (the reviewer's `already_posted` verdict, which the code never read before) |
+| `closed_recurring` | **new**: the gray fill closed it (`month_readiness.charge_booked_recurring`: `entry_status` `subscription` and `entry_status_source` not `derived`) |
+| `no_receipt_expected` | **new**: a reviewer marked no receipt will exist (item 107's reason) |
+| `no_receipt_found` | none of the above; exactly the charges `charge_needs_receipt` counts |
+
+A derived subscription mark stays `no_receipt_found`: it is the tool's guess
+and closes nothing. Every element that carries a charge `reason_code`
+(`unmatched_transactions[]` and `rows[]` with `effective_bucket`
+`unmatched`) now also carries `reason_label`, the English sentence
+(`unmatched_reasons.CHARGE_REASON_TEXT`), so an SPA that has no case for a
+code prints the backend's words, not somebody else's. The closed-set pin is
+`UNMATCHED_CHARGE_REASON_CODES_PIN` (now six charge codes, eleven in all).
+The reconciliation PDF's Status column reads `booked as recurring` /
+`no receipt expected` for the two new codes (was `no receipt`).
+
+Predicted on the 2026-09-25 payloads and to be checked after deploy: July 24
+rows `no_receipt_found` -> `closed_recurring` (0 left open), August 40,
+September 0; no other row moves; 0 reviewer verdicts and 0 no-receipt marks
+exist live.
+
+### `summary.n_already_posted` counts booked purchases
+
+It now counts rows whose `section` is `posted` (yellow OR the reviewer's
+verdict) and whose `row_type` is `purchase`. Same question ("how many charges
+are already booked"), without the card payments: July 93 -> 90, August 1 ->
+0 (its only yellow row is the -7,823.16 payment), September 1 -> 1.
+
+### `summary.n_cards_uncovered` + `summary.cards_uncovered[]`
+
+| Path | Type | Meaning |
+|---|---|---|
+| `summary.n_cards_uncovered` | int | active registry cards (a `coverage[]` entry with a `card_key`) with no statement AND no charge in this month |
+| `summary.cards_uncovered[]` | string | their labels, sorted; `[]` when every card has something loaded |
+
+Advisory, not a Publish gate (whether Publish refuses on it is an owner
+decision). A card with charges but no recorded upload arrived under another
+card's file and is not counted; a dormant card is counted, because nothing
+can tell dormant from missing. When Publish refuses an incomplete month the
+error sentence adds "N active cards have no statement loaded for this month
+(labels), so none of their charges is counted above.", and `readiness`
+carries `n_cards_uncovered`. Live 2026-09-25: July 3 (0113, 6013, 8311),
+August 4 (+0340), September 7 (+2838, 3645, 3876). July's 9693 is covered by
+a two-day export (6 charges, 07-01) and so is not counted.
+
+### The chase names its dates and ages its asks
+
+| Path | Type | Meaning |
+|---|---|---|
+| `receipt_chase[].date_range` | object `{start, end}` | the first and last date of the group's charges (ISO); absent when no charge carries a date |
+| `receipt_chase[].charges[].charge_month` | string `YYYY-MM` | the charge's own calendar month (may differ from the run's) |
+| `receipt_chase[].n_overdue` | int | the group's asks at or past the threshold |
+| `receipt_chase[].charges[].days_since_requested` | int | whole days since `receipt_requested_at` (UTC, read time); ABSENT when never asked |
+| `receipt_chase[].charges[].overdue` | bool | `days_since_requested >= settings.receipt_requests.overdue_days` (default 14); ABSENT when never asked |
+
+`settings.receipt_requests.overdue_days` is an optional whole number 1..365;
+anything else answers 400 at `PUT /api/settings`.
+
+The composed mail (`GET /api/runs/{id}/receipt-requests`, `mails[]`) names
+the dates: `subject` is "August 2026: 57 receipts still missing (charges
+dated 2026-07-03 to 2026-08-04)", the body opens "57 charges on your card,
+dated 2026-07-03 to 2026-08-04, have no receipt ...", and when a holder's
+charges span more than one calendar month they are listed under one header
+per month ("July 2026 (13 charges):"). PT-BR follows ("julho de 2026 (13
+lançamentos):"). Still composed only, never sent.
+
+### `POST /api/runs/{run_id}/receipt-requests/mark-all`
+
+Body `{holder, to?, reask?}`: stamps `receipt_requested_at` (and
+`requested_to`) on every open charge of that holder's `receipt_chase[]`
+group, keeping the date of charges already asked unless `reask` is `true`.
+Replies `{ok, holder, n_marked, summary}`. Writes the marks only. Refusals:
+400 `invalid_body` (no string `holder`), 400 `holder_has_no_open_charge`,
+404 `run_not_found`.
+
+### Zoho already holds it: a CLI report, not a field
+
+`python -m expense_recon.zoho.booked_report --run-id <id> --month YYYY-MM
+--env-file <context/.env> --csv out.csv` (or `--run-payload` / `--settings` /
+`--zoho-pull` with saved files) reads the month with GET and the three
+orgs' expenses with `list_expenses` (read-only) and prints two lists: open
+charges a Zoho expense in the same company matches (same currency, same
+amount to the cent, dates within 3 days, one Zoho expense per charge), with
+its expense id; and charges closed by yellow / the reviewer / gray / a
+no-receipt mark that no Zoho expense matches. Every run scores a control
+(every amount moved one cent); exit 3 and a WARNING when the control does
+not come out near zero. Nothing is written back; marking a charge booked
+from the report is Criss's click. Live 2026-09-25 (control 0 in every
+month): July 0 open, 3 of 39 yellow not in Zoho, 24 of 24 gray in Zoho;
+August 11 of 57 open in Zoho, 40 of 40 gray not in Zoho; September 11 of 28
+open in Zoho, the 1 yellow (SAP SE 481.07) not in Zoho.
+
+Tests: `tests/test_front1_chase_honesty.py` (route-level: codes and labels,
+`n_already_posted`, the uncovered cards and the Publish refusal, the chase
+dates and the mail grouping, the ask age, the threshold setting, mark-all),
+`tests/test_zoho_booked_report.py` (through the command's `main()`), and the
+two re-pinned subjects in `tests/test_receipt_chasing_item_107.py`. Renders
+in `docs/lovable-chase-honesty-prompt.md`.
+## Three more duplicate rungs: `reference_digits`, `misread_digit`, `body_twin` (front 4, 2026-09-25)
+
+No new field. `duplicate_groups[].basis` gains three values, so a consumer
+that maps `basis` to a label must add them; every other key and its meaning
+is unchanged.
+
+| `basis` | Verdict | When |
+|---|---|---|
+| `reference_digits` | copy | Between rungs 3 and 4. Two members print one number inside different words: the longest digit run (at least 6 digits, at least 5 once leading zeros go, not the receipt's own date or total) of `reference`, `invoice_number` or `receipt_number` is shared, merchant identity agrees (`merchant_identity.identity_key`, one key the start or end of the other), total and currency agree, dates at most one day apart. A run carried by receipts of different totals is an account id and never counts. Never over two members that name different cards |
+| `misread_digit` | copy | As above, but the two runs have one length and differ in exactly one position, not one of the last two (consecutive till numbers differ there: labelled bundle ER-00181, 7-ELEVEN 446525 / 446528, is two purchases), and the dates are the SAME day (July's Marinho 271025 / 271825 differs in the hundreds) |
+| `body_twin` | copy | A rendered mail body (`NNNN__rendered-body.pdf`) beside the ONE document it repeats: same total and currency, dates at most a day apart, merchant identity agrees. The partner is either a single document or a set an earlier group already calls one document (an invoice and its receipt); a body beside two real purchases makes no group |
+
+New nominations are appended after every older key's groups, so no existing
+group's membership, `group_id` or saved ruling moves; a group whose members
+equal an existing group IS that group. A body group lists its partners first
+and the body last. The kept member: a copy a charge holds (item 217 rule 1),
+then a document over a rendered body, then a payment receipt over its
+invoice, then the first. A group with no stored kept copy (nominated after the
+month last re-matched) keeps the document another group already keeps.
+
+Live on the frozen 2026-09-25 payloads (per row, `copies_set_aside` grows
+by): July 5 rows at read time (five charge-named copies beside Criss's own
+slips, BRL 437.77) plus the E A Locações slip (BRL 340.00) at July's next
+re-match, because a charge holds its twin; August 1 (the Zoho Books 576.00
+mail body); September 4 (mail bodies: Zoho 50.00, Lovable 60.00, Anthropic
+100.00, Lovable 50.00). The three September OpenAI 80.12 invoices stay three.
+Tests: `tests/test_duplicate_front4_copies.py`.
+
+## What the document calls itself: `document_kind` and `reads_as_reminder` (item 223 step 4, 2026-09-27)
+
+The receipt extraction also returns `document_kind`: `invoice`, `receipt`,
+`reminder`, `statement` or `other`. It is asked in the response schema only
+(last property, the question in its `description`), so the extraction
+instructions are byte-identical; the schema edit does change the extraction
+cache fingerprint, so a document read again after the deploy is a fresh call.
+Stored on the snapshot receipt as `document_kind` (absent on every receipt
+read before 2026-09-27: a re-match reuses stored readings, so only arrivals
+from the deploy on carry it). Not served on `expenses[]`.
+
+Where it is read:
+
+| Reader | Effect |
+|---|---|
+| The kept copy (item 217) | Which member of a copy group is the payment receipt and which its invoice: `document_kind`, then the printed `receipt_number`, then `invoice_number`, then the file name. A member read as `reminder` is never kept beside a document that is not one. |
+| `expenses[].review` | New `reason_code` `reads_as_reminder` (state `check`): the row stays counted and asks a person. Ranked after `missing_fields`, before `date_outside_period`. Quiet once any line carries a category the reviewer set or confirmed. The published SPA does not localize it yet and shows the English `reason`. |
+
+Nothing excludes, deletes or sets aside a document on its `document_kind`;
+the ingest-time correspondence quarantine (text markers plus no itemization)
+is unchanged. Live effect at deploy: none (no stored reading carries the
+field). Tests: `tests/test_document_kind_front4_step4.py`.
+
+## Merchant identity and the listed account, read live (front 3 step 1, 2026-09-25)
+
+A receipt's merchant and its registry account used to be stamped when the
+receipt arrived and never re-read, so a merchant added to the list later
+(OpenAI and Anthropic with their accounts, item 219) reached no row already in
+a month. Both payloads now read the merchant list as it is when the payload is
+built. Nothing stored changes.
+
+Grid (`GET /api/expense-batches/{id}`), per `expenses[]` row:
+
+- `vendor.display` / `vendor.source` resolve against the list now: a person's
+  vendor edit still wins (`override`); else a listed merchant reads its
+  canonical name with `source: "registry"`; else the learned or extracted
+  spelling. `vendor.stamped` = `{display, source}` as ingest stored them,
+  present only when that differs from the live pair; ABSENT otherwise.
+- `merchant` = `{name, match}`: the listed merchant the row names (`match` is
+  how the list matched it: `exact`, `fuzzy`, or `descriptor` once the
+  bank-descriptor tier exists). ABSENT when the list names none.
+
+Run payload (`GET /api/runs/{id}`), per `rows[]` charge:
+
+- `merchant`, same shape, resolved from the bank's description the way a
+  receiptless charge is categorized. `vendor` stays the bank's text.
+
+Both payloads, the account: on a Zoho-account month, a merchant whose
+per-company map (`settings.merchants[].accounts`) names an account for the
+row's company decides the account at read time, as the ingest tier would (a
+rule's answer, `origin: "rule"`, source `registry`; the line's `provenance`
+and a charge's `posting_category.provenance` read "merchant registry account
+for {company}"). The company is the one the row shows. Only a person's pick
+outranks it. The model's answer is replaced, never moved into the posting:
+`suggested_category` is absent on such a row.
+
+- `posting_category.stamped` = what the row read before this rule decided it
+  (the stored suggestion if there was one, else the stored posting; the
+  category shape: `category`, `zoho_account`, `source`, `origin`). ABSENT on
+  every row the rule did not change, and on a changed row that carried
+  nothing before.
+
+The reviewer files follow the screen: `expenses.csv`, the month report and
+`bills.csv` apply the same rule. The matcher's trip and neighbour pools do not
+(they read receipts, never accounts), and every caller of `build_view` other
+than the GET route reads the rows as stored.
+
+Tests: `tests/test_front3_identity_live.py` (route-level: grid, run payload,
+`expenses.csv`, a person's pick) and the type guard
+`test_live_merchant_fields_are_absent_or_well_formed` in
+`tests/test_view_contract.py`.
+
+Steps 2 to 5 (same day):
+
+- `merchant.match: "descriptor"`: the list matched a bank line through the
+  descriptor tier (the listed name's lead word, plus the product word on
+  Google / Microsoft / Amazon), after exact and close spelling found nothing.
+- New refusal code `account_vendor_specific` (review `reason_code:
+  "category_refused"`, `refusal: "account_vendor_specific"`): the model named
+  an account kept for one vendor's product (E500010-10, Cloud
+  Subscriptions-ZOHO ERP) on a row whose merchant is not that vendor. Given at
+  categorization, and at read time for a suggestion stored before the rule.
+- At read time a stored model suggestion naming a summary account with
+  postable accounts under it reads `refusal: "model_picked_parent"` instead
+  of a suggestion (`suggested_category` absent), until the row is
+  re-categorized. Rules and people are never re-read.
+
+## Billing-account keys across months (item 223 step 5, 2026-09-27)
+
+Some vendors print the customer's billing-account code where the document
+number goes (Railway `77H7ITO0`, Rize `5ZK1BCDG`). One month holding such a
+code once cannot tell it from a document number, so two real bills of one
+amount under it in one month would read as one document and one would leave
+the total.
+
+What is decided: a number (the normalized reference, or the long digit run of
+the reference, invoice number or receipt number) that another month batch
+prints on a receipt of the same total and currency, dated 20 days or more
+away, is an account key. No receipt of the month is twinned on it, exactly as
+an account id found inside one month. A re-filed copy prints the same date,
+so it never becomes a key.
+
+Where it is computed: only where other months may be read, from their stored
+snapshots and the reviewer's stored edits (no file, no model): the re-match,
+and the commit of receipts added to a month with no statement. Trips and
+`TEST` / `UTIL` batches are left out. Stored on the snapshot as
+`duplicate_account_keys` (sorted) and `cross_month_copies`, each absent when
+empty. A page view never reads another month; every surface (grid, run
+payload, months list, export, billing-account index) reads the stored keys.
+A month's keys move only on its own next computing write.
+
+What the reader sees: `duplicate_groups[]` and every count already follow
+the keys. The Expenses payload (`GET /api/expense-batches/{id}`) adds
+`cross_month_copies[]`, objects `{document_id, batch_id, other_document_id}`:
+this month's receipts whose vendor, date, total and currency repeat a
+receipt of batch `batch_id`. Advisory only, nothing is set aside across
+months. ABSENT when there are none, never null or `[]`.
+
+Tests: `tests/test_cross_month_account_keys_step5.py` (route-level) and
+`test_cross_month_copies_is_absent_or_non_empty_never_null` in
+`tests/test_view_contract.py`.
+
+## Re-apply the duplicate rules to a matched month (item 223 step 7, 2026-09-27)
+
+Which copy of a duplicated purchase counts is chosen when a month re-matches
+(item 217: the payment receipt over its invoice; front 4: a document over the
+rendered mail body) and stored as the snapshot's `duplicate_kept`. A month
+with a statement shows that stored choice until its next natural re-match, so
+a rule change reaches it only when something else happens to re-match it
+(September 2026 held 12 invoice-over-receipt groups that way). This operator
+route runs that re-match on purpose, one month at a time, after a preview. The
+SPA offers no control for it.
+
+`POST /api/runs/{run_id}/duplicates/reapply`, body:
+
+```json
+{"confirm": "September 2026", "dry_run": true}
+```
+
+`confirm` repeats the month's label (or its run id) for a preview as for a
+real run, so a mistyped id cannot preview another month quietly. `dry_run`
+must be a JSON boolean.
+
+Refusals, in the order they are checked, each writing nothing:
+
+| Status | `code` | When |
+|---|---|---|
+| 404 | `run_not_found` | no such run |
+| 409 | `not_an_expense_batch` | a statement-first run, which has no receipt spine to decide copies on |
+| 409 | `reapply_no_statement` | no statement: nothing is matched, and the month's rules already apply as its page is read |
+| 409 | `month_published` | published; unpublish it first |
+| 409 | `rematch_running` | the month carries an owed re-match mark (`rematch_pending`, item 113) whose latest event is not a recorded failure: a re-match is in flight, or waits for the boot re-pair. A mark whose `failed_at` is at or after its `changed_at` is owed, not running, and a re-apply is its retry |
+| 400 | `reapply_confirm_required` | `confirm` missing or blank |
+| 400 | `reapply_confirm_mismatch` | `confirm` is neither the label nor the run id |
+| 400 | `reapply_dry_run_required` | `dry_run` absent or not a boolean (the string `"false"` included) |
+
+The job checks the 404 and 409 set again when it starts; a refusal there is
+the job's error, code first.
+
+**Dry run** (`dry_run: true`) writes nothing: no snapshot, no decision, no
+job, no log row. The answer (values from the route test's fixture, a Stripe
+invoice and receipt for one 15.00 USD purchase, the invoice stored as kept):
+
+```json
+{"ok": true, "dry_run": true, "run_id": "…", "label": "August 2026",
+ "n_groups": 1,
+ "groups": [{"group_id": "…",
+             "members": ["…Invoice-HMVWDWIL-0029.jpg", "…Receipt-2167-5718.jpg"],
+             "before": {"basis": "vendor_date", "verdict": "copy", "kept": "…Invoice-HMVWDWIL-0029.jpg"},
+             "after":  {"basis": "vendor_date", "verdict": "copy", "kept": "…Receipt-2167-5718.jpg"}}],
+ "counts_in_total": {"true_to_false": ["…Invoice-HMVWDWIL-0029.jpg"],
+                     "false_to_true": ["…Receipt-2167-5718.jpg"]},
+ "totals_by_ccy": {"before": {"USD": "15.00"}, "after": {"USD": "15.00"}}}
+```
+
+- `n_groups`: the month's receipt groups, so an empty `groups` reads as
+  "nothing moves" and not as "no groups found".
+- `groups[]`: only the groups whose `basis`, `verdict` or `kept` moves.
+  `members` sorted; `kept` is the counted copy of a `copy` group and null
+  otherwise; a side is null for a group present on one side only.
+- `counts_in_total`: the documents whose row flips, by id.
+- `totals_by_ccy`: the Expenses summary's field, both sides.
+
+How the "after" side is computed: the Expenses view (the payload `GET
+/api/expense-batches/{id}` serves, without its card tabs) is built twice, as
+stored and over the same run with `duplicate_kept` replaced by the choice a
+re-match would store now. That choice comes from the re-match's own functions:
+`held_documents(store, run)` (what charges hold before the re-match), then
+`duplicate_pool(..., held=...)`, which decides the groups with
+`duplicate_decisions(..., with_statement_check=False)` and runs `choose_kept`,
+over the grid's receipts minus any another month has settled (the pool
+`rematch_month` hands it). A preview cannot see two things: the statement
+check (rung 7) needs the match itself, so each group keeps the restoration the
+last re-match stored; and a charge the matcher pairs differently once another
+copy is in its pool appears only in the real run's `applied`.
+
+**Real run** (`dry_run: false`) answers `{"ok": true, "dry_run": false,
+"job_id": "…"}`. The job runs the month's ordinary re-match,
+`rematch_after_change(..., trigger="duplicates_reapply")`, which records a
+`rematch_log` event with that trigger (the month payload's `last_rematch`).
+`GET /jobs/{id}` then carries:
+
+```json
+{"status": "done", "run_id": "…",
+ "result": {"run_id": "…", "label": "August 2026",
+            "preview": {"n_groups": 1, "groups": ["…the dry run's diff, computed just before the write…"]},
+            "applied": {"n_groups": 1, "groups": ["…the view before the write against the view read back after it…"]},
+            "rematch": {"n_matched": 0, "n_review": 0, "…": "rematch_after_change's own result"}}}
+```
+
+A failed re-match is `status: "error"`, `error: "rematch_failed: …"`, with the
+preview in `result`; the month's match stays as it was and its owed mark
+records the failure (item 113).
+
+A real run changes what any re-match changes: the month's snapshot (pool,
+outcome, `duplicate_kept`, `duplicate_statement_restored`, `rematch_log`), its
+summary, its receipt claims, the tool's own self-confirmations (item 76) and,
+on a Zoho-account month, the categories of rows whose company moved (item
+206). It never changes a charge decision a person confirmed (a copy a charge
+holds stays kept, item 217 rule 1), a reviewer's duplicate ruling (a "Not a
+copy" group stays two purchases), or the stored row of any other month.
+
+Tests: `tests/test_duplicates_reapply_step7.py`, route-level: the swap
+previewed with both databases byte-identical afterwards, the real run's swap
+and its `rematch_log` trigger, a copy a charge holds that does not move, a
+"Not a copy" ruling that survives, and every refusal writing nothing.
+## A card-named exact pair whose merchant disagrees waits in review when a same-amount receipt is left over: `review_code` `exact_vendor_disagrees` (item 222 step 6, 2026-09-27)
+
+The card-named sibling of `no_card_vendor_disagrees`. A chosen same-currency
+`exact` pair whose receipt names a card (`card_evidence.receipt` is not
+`none`) and whose `vendor_pct` is under 50 keeps its assignment but files in
+`review`, `requires_review: true`, `review_code: "exact_vendor_disagrees"`,
+when ANOTHER receipt of the same total and currency is unmatched after the
+assignment. The reason ends "the merchants differ (N%) and another receipt of
+the same amount is still unmatched ({vendor} {total} {currency} on {date})".
+`review.cause` is `merchant_disagrees`, and `cause_detail` adds
+`same_amount_receipt` (that parenthesis, as text) beside `vendor_pct`; its
+presence is what says the receipt DID name a card. Without a leftover
+same-amount receipt the pair books exactly as before. Knob
+`exact_vendor_lookalike_guard` (asset key, default true). Live on 2026-09-27:
+0 pairs on July, August and September. Tests:
+`tests/test_exact_vendor_lookalike_222.py`.
+
+## Lines that do not add up to the total (front 3 step 6, item 224, 2026-09-27)
+
+The extractor reads a total and a list of lines, and nothing compared them.
+The export pro-rates the charged amount across the lines, so the total posts
+either way and a one-account receipt books right whatever its lines say; a
+receipt split across accounts hands each account the share its misread lines
+give it.
+
+Grid (`GET /api/expense-batches/{id}`), per `expenses[]` row, both ABSENT when
+the lines equal the total within 0.05, when they equal the total less the
+printed tax (lines priced net, e.g. Anthropic 180.00 + 34.20 VAT = 214.20), or
+when there is no total or no line:
+
+- `line_sum_gap`: the lines minus the total, a signed amount string in the
+  row's currency (`"400.00"` when the lines read more, `"-24.61"` when less).
+- `line_sum_note`: the English sentence. One-account row: "The lines add up to
+  600.00 USD, not the total 200.00 USD. The total is what posts." Split row:
+  the same head, then "... and they split across accounts, so each account's
+  share may be wrong. Check the receipt; one account for the whole expense
+  books all of it there."
+
+Review: a row that splits across accounts (`is_split`) AND carries a gap reads
+`review.state: "check"`, `reason_code: "line_sum_split"`, the split sentence as
+`reason`, and `review.line_sum_gap` beside it. A missing category (`pick`)
+still outranks it; it outranks every category check. A one-account row's
+review is unchanged.
+
+Export: every `expenses.csv` row of such a split receipt ends its `Expense
+Description` with ` (lines do not add up)`; a one-account receipt is unmarked.
+
+Live on 2026-09-27 payloads: 13 / 9 / 10 rows carry the fields (July / August /
+September; 16 more agree once tax is taken off), one splits (July Railway
+0088, already `pick` on an uncategorized line), so no review state and no
+count moves. Tests: `tests/test_line_sum_224.py` (route-level: upload, the
+reviewer's per-line account picks, grid, `expenses.csv`).
+
+## What a statement declares, and cards with no statement (item 220 steps 3-4, front 2, 2026-09-27)
+
+### `statements[].period_declared_start` · `statements[].period_declared_end`
+
+Parallel, absent when the upload declares no period, never null. ISO dates.
+The period the upload names for ITSELF, beside the charge-derived
+`period_start..period_end`:
+
+- a Chase cycle PDF: its printed `Opening/Closing Date` (the year was read
+  before, the days were dropped);
+- a SharePoint-pulled Chase export: the POSTED range in its name,
+  `Chase9693_2026-09_posted_0906-0915_from-SharePoint.xlsx` = 09-06..09-15
+  (its own rows ran 09-04..09-14).
+
+Recorded on an attach and on a statement re-read. An entry stored before has
+no field; a workbook's range is then read off `upload_name` at read time, a
+stored PDF has none until it is attached or re-read again.
+
+**Coverage by date changes twice** (this replaces the family sentence of the
+item 204 section above): a card is covered over the UNION of the printed and
+the declared span, and a family's subcards (`Card.parent`) are covered by an
+upload only when it printed one of their charges or declares its period. An
+upload that printed no 0340 charge and names no period says nothing about
+0340 (the April 2026 2838 activity CSV carried no 3876 charge at all). No
+field changes shape; `waits_for_statements`, `reason_code` and
+`receipts_waiting_cards` read the new coverage.
+
+### `cards[].statement_expected`
+
+Boolean on the card registry entry, default `true`, stored only when `false`
+(like `active`). Emitted on `GET /api/cards` `cards[]` and on
+`GET /api/settings` `cards_effective[]`. `PUT /api/settings` accepts it on
+`cards[slug]`; a non-boolean is `400 invalid_body` with
+`field: "cards[slug].statement_expected"`.
+
+**Save rule.** The cards map stays whole-map replace, with one exception:
+an entry whose payload does not MENTION `statement_expected` keeps a stored
+`false`. An explicit `true` clears it; a card left out of the map goes with
+its flag. A Settings > Cards save from a build that does not know the field
+therefore cannot erase it.
+
+`false` means the card's statements will never be loaded (a dormant fee-only
+card, one nobody can export). Read LIVE from settings, never snapshotted:
+nothing waits for such a card. A card-less receipt no longer lists it in
+`waits_for_statements` (both payloads) or `receipts_waiting_cards`, and a
+receipt whose own card is such a card reads
+`no_charge_on_any_loaded_statement`, never the neighbouring-month code.
+Front 1's `summary.cards_uncovered[]` (the Publish warning) is unchanged: the
+card still has no statement.
+
+Tests: `tests/test_statement_declared_item_220.py` (20, route-level).
+
+## One company, one key (item 220 step 5, front 2, 2026-09-27)
+
+The app holds two spellings of most companies: the provisioning file's
+("Corporate Services", what cards and charges carry) and the settings
+registry's Zoho legal name ("Brisken Corp Services, LLC"). Every company
+label now resolves through one `entity_key`: the provisioning spelling of the
+label's org when that org has exactly one, otherwise the label itself.
+Keying on the org alone is deliberately NOT done: the live registry gives
+"Brisken Holding, LLC" the org id of "Brisken GmbH", and an org-only key
+would make them one company. No stored value is rewritten; a row keeps the
+spelling it was given.
+
+**`entity_options[]` (settings, `GET /api/cards`, every expense batch).**
+Same type, one name per company (owner yes 2026-09-25): eight names for five
+companies before, five now, each under its key, in the `entity_order` the
+operator set. A batch's list additionally carries, at the back and as
+written, any spelling one of its own rows holds that the list does not
+already offer, so that row's select renders its value instead of a blank.
+Nothing validates a submitted company against this list.
+
+**Entity scope.** The matcher (`MatchingConfig.entity_keys`, handed in by the
+re-match and the folder ingest; scope only, never a score) and the hand-match
+guard (`POST /api/runs/{id}/manual-match`, refusal `entity_differs`) compare
+companies, not spellings. Two different companies still never pair and still
+refuse.
+
+**`entity_mismatch` (re-match result, rides the job's `warning:` stage).**
+Judged by company, and per row: besides the old batch-level sentence (the
+statement's company absent from the whole pool), it names each receipt whose
+company no registered card belongs to ("1 receipt names a company no card
+belongs to, so no charge can pair with it: Moghul Mahal (Brisken GmbH)."). A
+receipt whose company's card merely has no statement loaded is not named;
+that is `waits_for_statements`.
+
+Tests: `tests/test_entity_key_220.py` (8, route-level).
+
+## The intake decides once: `submitted_by.twin_of` and basis `intake_twin` (item 223 step 6, 2026-09-27)
+
+A Stripe-style vendor mails one purchase as two attachments of one mail, the
+invoice and its receipt. When the readings of two files ONE mail delivered
+name one invoice number (normalized, at least 5 characters), one reads as the
+invoice and one as the payment receipt (`document_kind`, then the printed
+numbers, then the file name), they agree on total and currency, name no two
+different cards, and no third file of that mail carries the number, the
+intake records the pair on both files' provenance at arrival.
+
+| Payload | Field |
+|---|---|
+| Expense batch / run (month with no statement) | `expenses[].submitted_by.twin_of` (string, the twin's `document_id`) |
+| Both | `duplicate_groups[].basis` gains the value `intake_twin` |
+
+`twin_of` is ABSENT on every other file, on a web upload, and on every file
+that arrived before this deploy (the record is made once, at arrival, and
+stored in the run snapshot's `intake_provenance`). Parallel, never null.
+
+Rung 0 of the duplicate ladder reads the record: a two-member group whose
+members name each other decides `copy` with basis `intake_twin`, before
+identical bytes. A pair no older key nominates is listed as its own group
+(appended after every older key, so no existing group id moves); a pair an
+older key already holds keeps that group and its id, and only the basis
+changes. Re-checked on every read: once a reviewer's edit gives the two
+different amounts or cards, the record stops deciding and the older rungs
+answer as before. A reviewer's "Not a copy" outranks it like any other rung.
+Which copy counts is unchanged (item 217: the payment receipt over its
+invoice). A receipt moved to another month (`month_move`) drops its
+`twin_of`: the twin stays behind.
+
+Live on the day it shipped: no stored file carries the record. Predicted on
+the step-4 A/B readings (both passes agreeing) joined to the live mails, ten
+pairs July to September would be recorded and every one already sits in a
+single copy group, so nothing counts differently.
+
+Tests: `tests/test_intake_twin_front4_step6.py` (route-level through mail
+intake and the batch payload, plus the rule on readings).
+
+## AI cost figures include the vision model (item 227, 2026-09-27)
+
+No field changes. `summary.llm_cost_usd` (a month's creation) and
+`expense_ingest.cost_usd` (a receipt add) are still list-price estimates from
+`llm/cost.py`, but a photographed receipt or rendered mail body read by
+`gpt-5-mini` is now costed (USD 0.25 input, 0.025 cached input, 2.00 output
+per 1M tokens; output includes reasoning tokens) instead of recorded at 0,
+and the cached part of any prompt bills at its model's cached rate. Figures
+stored before the deploy keep the value they were recorded with.
+
+Tests: `tests/test_llm_cost_item_227.py`.
+
+## A private expense with no company (item 220 step 7, added 2026-09-28)
+
+`expenses[].review.refusal` gains `private_no_company`: a CONFIRMED private
+row (`private: true`, a person to reimburse) that shows no company
+(`legal_entity_id` empty), whose lines the GL engine refused
+`entity_missing`. `review.reason` reads "A private expense needs no company,
+so no account was picked. If a company should book it, set the company, then
+pick the account." `state` stays `"pick"` and `reason_code` stays
+`"category_refused"`, so no box and no count moves.
+
+Read time only (`service.private_no_company_review`, wired in
+`build_expense_view`): the stored categorization keeps `entity_missing`,
+because private is resolved at read time (the row's flag, the private card
+list, the month strip) and can be undone. Undo private and the row asks for
+its company again. A private row that shows a company keeps the engine's
+verdict for that company. Pinned by `tests/test_private_no_company_item220.py`.
+
+## Send a month to Zoho Books (added 2026-09-28, owner decision)
+
+A "Send to Zoho" button on a company month, pressed by Criss when the month
+is done. Two routes; both 404 while `EXPENSE_RECON_RECEIPT_FIRST` is unset.
+Writes go to the TEST-BTS sandbox only; production stays read-only until
+Brisken signs off a mapping. Design and guards:
+`docs/zoho-month-end-posting.md`, "Sending from the app".
+
+### `GET /api/runs/{id}/zoho-send`: the preview
+
+Reads Zoho, writes nothing. While the server switch
+(`EXPENSE_RECON_ZOHO_POST`) is off it reads nothing and answers
+`{enabled: false, reason}`: show the button disabled with the reason.
+
+Switched on, 200:
+
+| Field | Meaning |
+|---|---|
+| `enabled` | `true` |
+| `status` | `ready` (something to send), `nothing_to_send`, or `blocked` |
+| `reason` | plain sentence when `blocked` (a month typed in by hand, Zoho unreachable), else `null` |
+| `detail` | the runner's own sentence behind a block, for whoever investigates; not for the screen |
+| `month` | `YYYY-MM`, from the month's name |
+| `company` / `test_company` | the Zoho company it goes to (`TEST-BTS`) and `true` while that is the test company |
+| `currency` | the currency amounts are entered in (foreign receipts are converted at the file's exchange rate) |
+| `count` / `total` | how many entries and their total, `total` a string with two decimals |
+| `entries[]` | `{reference, date, vendor, amount, currency, accounts[]}`, one per entry to be made |
+| `held_back[]` | `{reference, reason, message, detail}`: rows that will NOT be sent; show `message` |
+| `already_sent` | how many of this month's references were sent before |
+| `confirm` | pass back unchanged to send; `""` when `blocked` |
+
+Refusals: 409 `zoho_send_no_month` (the month's name names no month; rename
+it, for example "September 2026"), 409 `zoho_send_refused` with a plain
+`error` (no Zoho login on the server, Zoho answered with an error).
+
+### `POST /api/runs/{id}/zoho-send`: the send
+
+Body `{confirm}` from the preview. Answers `{ok: true, job_id}`; poll
+`GET /jobs/{job_id}`. Refusals: 409 `zoho_send_off`, 400
+`zoho_send_confirm_required`.
+
+The done job's `result`:
+
+| Field | Meaning |
+|---|---|
+| `ok` | `true` only when everything sent read back exactly |
+| `reason` | plain sentence when nothing or not everything was sent (the month changed after the preview, a month typed in by hand, Zoho stopped answering), else `null` |
+| `sent` / `checked_ok` | entries made, and how many read back identical |
+| `total_sent` / `total_in_zoho` / `totals_match` | the planned total, the total Zoho holds for the new entries, and whether they agree |
+| `problems[]` | `{reference, problems[]}` for an entry that read back different |
+| `rejected[]` / `unsure[]` | `{reference, message}`: Zoho refused it (safe to retry), or its outcome is unknown (needs a check before anything is sent again) |
+| `held_back[]` | as in the preview |
+| `log[]` | the runner's step-by-step lines; not for the screen |
+
+A send that cannot start (another send running, no Zoho login) ends the job
+as `error` with a plain sentence. Tests: `tests/test_web_zoho_send.py`.
+
+## Which provider reads receipts: `healthz.receipt_reader` (item 239, added 2026-09-28)
+
+Receipts can be read by Google's Gemini instead of OpenAI (switched by the
+environment, off by default). `/healthz` says which, so a switch is provable
+from outside without reading a receipt. `status` is still the only field a
+caller needs; the block never carries the key.
+
+| Path | Element | Meaning |
+|---|---|---|
+| `receipt_reader.reads` | string | `"off"` (OpenAI reads everything), `"images"` (Gemini reads photos, scanned PDFs and rendered mail bodies; PDFs with a text layer stay on OpenAI) or `"all"` |
+| `receipt_reader.provider` | string | `"gemini"`; absent when off |
+| `receipt_reader.model` | string | the Gemini model reading, e.g. `"gemini-3.8-flash"`; absent when off |
+| `receipt_reader.key_set` | boolean | whether the app holds a Gemini key; `false` with `reads` on means OpenAI is still reading every receipt; absent when off |
+| `receipt_reader.thinking_level` | string | present only when a thinking level is set |
+
+A reading Gemini cannot give (outage after two retries, a refused or cut
+answer, JSON the parser rejects) is read by OpenAI instead, so `reads` says
+who reads first, not who read every receipt.
+
+## Read a month's stored receipts again: `POST /api/runs/{run_id}/receipts/reread` (item 240, added 2026-09-28)
+
+Operator only; the SPA offers no control for it. Item 239 made Gemini read
+every receipt that arrives; the ones already stored keep their first reading
+until this route reads them again, through the same path an arrival takes
+(the month's own card list and reader, the arrival's statement and
+correspondence rules, remembered corrections, the card gate, the card's
+company).
+
+Body: `{"confirm": "<month label or run id>", "dry_run": true|false,
+"skip": ["<document_id>", ...]}`. `confirm` and `dry_run` are required, for a
+dry run too; `skip` (optional) names receipts to leave exactly as they are
+(listed under `skipped` with `why: "operator_skip"`). Both answer
+`{"ok": true, "dry_run": ..., "job_id": "..."}`; poll `GET /jobs/{job_id}`.
+
+| Refusal | Status | `code` |
+|---|---|---|
+| no such run | 404 | `run_not_found` |
+| not an expense batch / published / a re-match running or owed / no receipts | 409 | `not_an_expense_batch` / `month_published` / `rematch_running` / `reread_no_receipts` |
+| confirm missing or wrong | 400 | `reread_confirm_required` / `reread_confirm_mismatch` |
+| `dry_run` not a JSON boolean | 400 | `reread_dry_run_required` |
+| `skip` not a list of strings | 400 | `reread_skip_invalid` |
+| no reader configured (job error) | job `error` | `reread_no_reader` |
+
+**What a re-read may change.** Decided by item 239's blind A/B: date, total,
+currency, tax (with its label), document type, the card (`card_last4`), and
+the merchant when it names a different merchant (one name containing the
+other, alphanumerics only, is the same merchant). A blank reading never
+blanks a stored date, total, currency, merchant or tax; a blank card does
+replace a stored one. `document_kind`, `reference`, `invoice_number` and
+`receipt_number` are compared and counted, never written. Line items and
+their categories stay; a receipt whose merchant or company moves is
+categorized again. Readings are written to the snapshot's
+`extracted_receipts` and `receipts`, never to the reviewer's tables, so every
+field edit, category pick, duplicate ruling, set-aside restore and match
+decision stays on top, and nothing a re-read writes is a correction a Publish
+learns from.
+
+Job `result` (both modes):
+
+| Path | Meaning |
+|---|---|
+| `readings.reader` | `{provider, model, ...}` that answered first |
+| `readings.n_read` / `n_changed` / `n_unchanged` | files read; receipts with at least one field moving; the rest |
+| `readings.changes[]` | `{document_id, display, where: "expense" \| "set_aside", changes: {field: {before, after}}}`; values are strings or `null`. A set-aside page now read as a purchase adds `set_aside_reason` and `joins_month: true`; a new date outside the batch's month adds `new_date_outside_month: true` (absent otherwise). A re-read never moves a receipt to another month |
+| `readings.reads_as_non_receipt[]` | `{document_id, display, reads_as}`: an expense the new reader calls a statement or report page; listed and left exactly as it is |
+| `readings.skipped[]` | `{document_id, display, why: "no_file" \| "unreadable" \| "operator_skip"}` |
+| `readings.held[]` | `{document_id, display, field: "date", why: "other_year", before, after}`: a new date in a year that is neither the stored reading's nor the batch's, not taken |
+| `readings.not_taken` | `{document_kind, reference, invoice_number, receipt_number}`: how many receipts read those differently (`document_kind` only where the stored reading has one) |
+| `consequences` (dry run) / `applied` (real run) | `pairs {n_before, n_after, changed[{transaction_id, before, after}]}`; `confirmed[]` (`{transaction_id, document_id, decided_by, reading_moves, after{status, document_id}}`: a confirmed match whose receipt's date, total or currency moves, or that is no longer confirmed after); `expenses[]` (`{document_id, fields[], before, after}` over vendor, date, total, currency, category, zoho_account, entity of the Expenses view); `duplicates` (the item 223 step 7 `layer_diff`, totals included) |
+| `consequences.rematch_error` | the throwaway copy's re-match error, else `null` |
+| `consequences.rematch_alone` | same shape as `consequences`: what ANY re-match of this month would change today (rules changed since its last one). The top-level `consequences` diff a copy that was only re-matched against a copy that got the readings and was re-matched, so they show the re-read's own effect. The real run's `applied` is both together |
+| `written[]` / `joined[]` / `gone[]` / `rematch` (real run) | receipts whose reading was written; set-aside pages that joined; documents changed by someone between the read and the write (left alone); the re-match's own answer |
+| `cost_usd` | model spend of the job, when the app tracks it |
+
+The dry run writes nothing to the month: it commits the plan to a throwaway
+copy of the database, re-matches the copy, diffs, and deletes it. Its reads
+warm the extraction cache, which is what makes a real run right after it read
+the same answers. The real run writes the readings (each changed receipt's
+`data_quality_note` gains "read again YYYY-MM-DD: {fields} changed"), marks a
+joined set-aside entry `restored_by: "reread"`, appends a `receipts_reread`
+record to the snapshot, and re-matches the month with trigger
+`receipts_reread`. Tests: `tests/test_receipts_reread_item_240.py`.
+
+## The receipt overview: `GET /api/receipts/overview` (item 248, 2026-10-07)
+
+Dirk: users should see and filter every receipt in the tool in one place. One
+row per receipt, from every source, newest arrival first. Read-only, built by
+`web/receipt_overview.py` from each batch's Expenses page payload (months and
+trips) plus the mail log, so every verdict on a row is its month's own. Kept
+under the card roll-up's memo key plus the mail archive's (log size/mtime and
+every `meta.json`), so an arrival, a dismiss or a replay is on the next read.
+Cold build ~3.5-6.5 s on the 2026-10-07 backup (8 months, 378 rows), memo hit
+~0.03 s.
+
+Top level: `receipts[]`, `n_receipts`, `by_status{}`, `by_source{}`,
+`statuses[]` (every code in display order), `batches[]`
+(`{batch_id, label, batch_type}`), `generated_at`.
+
+Every row carries every key (null when unknown): `id` (`{batch}/{document}`
+or `mail/{archive}/{n}`), `source` (`email` | `upload`), `status`, `review`
+(`ready` | `check` | `pick` | null) + `review_reason`, `file_name` (every
+`NNNN__` prefix dropped), `file_type` (lower-case extension, `jpeg` -> `jpg`,
+`email_body` for a mail text the intake rendered, `other`), `document_id`,
+`can_view` (the month's `receipt_image_available`; true on a removed document
+whose month still exists, false when the month is gone), `batch_id`,
+`batch_label`, `batch_type`, `archive`, `subject`, `from_address`,
+`submitted_by`, `received_at` + `received_from` (`mail` = the mail's arrival;
+`stored_file` = the stored receipt file's write time, the only arrival an
+upload has, since no upload records one per file), `receipt_date`, `vendor`,
+`total` (as printed) + `amount` (number), `currency`, `card`, `person`,
+`category` (the accounts in `books_as`, else the posting account), `reference`
+(invoice / receipt number / reference), `note`, `duplicate_of`, `pool_month`,
+`set_aside_reason`.
+
+`status`, for a receipt in a month, in this order: `duplicate`
+(`counts_in_total: false` or an extra copy), `private`, `bill`
+(`payment_path: "bill"`), `settled_outside`, `matched` (not
+`without_charge`), `waiting_for_statement` (no statement on the month, or
+`waits_for_statements`), `no_charge`. For a file that is not or no longer an
+expense: `set_aside` (not restored), `waiting_for_month` (mail `pooled`),
+`held` (mail `held_*`), `processing`, `removed` (filed, then gone from its
+month, or its month deleted; a document found under the same file name on a
+row joined to the same mail is not removed, so a month move does not read as
+a deletion), `dismissed`. A mail is joined to a row by the provenance's
+`archive`, else the log's (batch, document) pairs, else the arrival second.
+Tests: `tests/test_receipt_overview.py`.

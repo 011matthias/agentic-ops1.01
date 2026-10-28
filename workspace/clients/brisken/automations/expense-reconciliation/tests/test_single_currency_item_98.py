@@ -77,7 +77,11 @@ CARDS = {
 # implies, so a test that used the wrong rung would fail rather than agree by
 # coincidence. Both live months price every row, so the default fixture does
 # too; `test_a_currency_with_no_rate_*` drops BRL to prove the other path.
-SETTINGS_RATES = {"EUR:USD": "1.10", "BRL:USD": "0.20"}
+# The ECB table's shape: units per ONE EUR. The matcher crosses through
+# EUR, so EUR:USD is units["USD"] (1.10) and BRL:USD is
+# units["USD"] / units["BRL"] (1.10 / 5.5 = 0.20) -- the two rates this
+# module used to type into Settings, which were retired 2026-09-23.
+ECB_PER_EUR = {"USD": "1.10", "BRL": "5.5"}
 
 CARD_HEADERS = ("Card", "Date", "Description", "Type", "Amount")
 CARD_ROWS = [
@@ -145,15 +149,26 @@ def _xlsx_bytes(rows, headers) -> bytes:
     return buf.getvalue()
 
 
-def _month(client, monkeypatch, rates=None) -> str:
+def _month(client, monkeypatch, per_eur=None) -> str:
     """September with four receipts in three currencies, then a USD Chase
-    workbook whose KAUFLAND charge settles the EUR receipt."""
-    assert client.put(
-        "/api/settings",
-        json={
-            "cards": CARDS,
-            "fx_reference_rates": SETTINGS_RATES if rates is None else rates,
+    workbook whose KAUFLAND charge settles the EUR receipt.
+
+    `per_eur` is the ECB table the month fetches at creation, units per one
+    EUR; a currency absent from it has no rate on any rung, which is how
+    this module exercises "a currency with no rate"."""
+    from expense_recon.web import ecb_rates
+
+    table = ECB_PER_EUR if per_eur is None else per_eur
+    monkeypatch.setattr(
+        ecb_rates, "fetch_monthly",
+        lambda start, end, **kw: {
+            m: dict(table)
+            for m in ("2026-%02d" % i for i in range(1, 13))
+            if start <= m <= end
         },
+    )
+    assert client.put(
+        "/api/settings", json={"cards": CARDS},
     ).status_code == 200
     _wire(monkeypatch)
     resp = client.post(
@@ -271,7 +286,7 @@ def test_a_currency_with_no_rate_is_named_not_counted_as_zero(
     when it leaves an expense out: a heading a reader carries away cannot be
     undone by a caveat, so the heading itself says partial and says of how
     many."""
-    batch_id = _month(client, monkeypatch, rates={"EUR:USD": "1.10"})
+    batch_id = _month(client, monkeypatch, per_eur={"USD": "1.10"})
     _header, _body, footers = _csv_rows(client, batch_id)
     joined = " ".join(footers)
 
@@ -316,7 +331,7 @@ def test_report_prints_the_figure_and_the_rate_on_the_row(client, monkeypatch):
     text = _pdf_text(client, batch_id)
 
     assert "= USD 56.00 at 1.12, the charge" in text, text
-    assert "= USD 22.00 at 1.1, your rate" in text
+    assert "= USD 22.00 at 1.1, ECB" in text
     # A row already in the filing currency is not "converted" at 1.0.
     assert "= USD 30.00" not in text
 
@@ -332,7 +347,7 @@ def test_report_totals_the_month_in_one_currency(client, monkeypatch):
 
 
 def test_report_says_which_rows_it_could_not_price(client, monkeypatch):
-    batch_id = _month(client, monkeypatch, rates={"EUR:USD": "1.10"})
+    batch_id = _month(client, monkeypatch, per_eur={"USD": "1.10"})
     text = _pdf_text(client, batch_id)
 
     assert "Partial total in USD: 108.00 (3 of 4 expenses" in text
@@ -512,8 +527,11 @@ def test_the_ecb_rung_actually_fires_on_a_listing_date():
     assert lookup("EUR", "") is None
 
 
-def test_a_typed_rate_still_outranks_the_ecb_table():
-    """Precedence is the matcher's, unchanged: operator intent first."""
+def test_a_typed_rate_left_in_a_stored_config_is_ignored():
+    """Precedence is the matcher's, and the typed rung is gone from it
+    (owner 2026-09-23). A month whose stored config still carries the
+    retired key -- every month created before the retirement does -- prices
+    its rows from the ECB table beside it, not from the typed rate."""
     lookup = usd_reference_rate(_run_with({
         "matching": {
             "fx_reference_rates": {"EUR:USD": "1.10"},
@@ -521,7 +539,7 @@ def test_a_typed_rate_still_outranks_the_ecb_table():
         },
     }))
     rate, source, _month = lookup("EUR", "2026-09-05")
-    assert (rate, source) == (Decimal("1.10"), "configured")
+    assert (rate, source) == (Decimal("1.17"), "ecb_month")
 
 
 def test_a_row_with_no_readable_amount_gets_no_rate_and_its_own_reason():

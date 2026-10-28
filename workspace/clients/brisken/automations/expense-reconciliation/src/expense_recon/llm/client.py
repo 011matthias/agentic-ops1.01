@@ -29,6 +29,7 @@ from typing import Protocol
 from ..untrusted import UNTRUSTED_SYSTEM, data_block, new_nonce
 from .cost import CostTracker, TokenUsage
 from .extraction_cache import ExtractionCache, extraction_cache_key, prompt_fingerprint
+from .gemini import ReaderUnavailable
 
 logger = logging.getLogger("expense_recon")
 
@@ -56,6 +57,44 @@ class ClassificationResult:
     zoho_account: str | None
     confidence: float
     reasoning: str
+
+
+@dataclass(frozen=True)
+class FxEvidence:
+    """What the tool already knows about one cross-currency pair, handed to
+    the FX judge so it judges the tool's evidence instead of re-deriving it
+    (front 5, 2026-09-25).
+
+    Until then the judge got amounts, dates, vendors and the raw card
+    strings, and was asked to convert "using your best estimate": live July
+    and August 2026 printed a conversion off tenfold (55.74 BRL as ~1.00
+    USD) and three inverse rates, and rejected a pair for "card numbers
+    differ" where the tool's own card evidence read unknown.
+
+    The rate fields are the matcher's reference conversion
+    (`deterministic._reference_rate_for` + `reference_gap`, the numbers the
+    month page shows in the candidate's `fx` block), all None when the pair
+    has no rate. `receipt_card` / `charge_card` are `card_evidence` sources,
+    `cards_differ` its verdict (None = unknown, never a disagreement), and
+    `vendor_pct` the merchant agreement 0-100 the matcher measured.
+    """
+
+    reference_rate: Decimal | None = None
+    reference_rate_source: str | None = None
+    reference_converted: Decimal | None = None
+    reference_gap_pct: Decimal | None = None
+    reference_gap_band: str | None = None
+    receipt_card: str = "none"
+    charge_card: str = "none"
+    cards_differ: bool | None = None
+    vendor_pct: int | None = None
+
+
+# The FX judgment prompt's version. Part of the judgment-cache key
+# (`web/judgment_cache.call_key`), so a verdict bought under an older prompt
+# is never read back as an answer to this one: a month re-judges its FX pairs
+# at its next natural re-match. Bump on any edit to the prompt below.
+FX_JUDGMENT_PROMPT_VERSION = "2"
 
 
 @dataclass(frozen=True)
@@ -154,6 +193,14 @@ class ExtractedReceipt:
     time: str | None = None
     invoice_number: str | None = None
     receipt_number: str | None = None
+    # Item 223 step 4 (front 4, 2026-09-27): what the document says it is,
+    # finer than `document_type` (which decides only whether a file becomes
+    # an expense at all): invoice / receipt / reminder / statement / other.
+    # Asked for in the response schema only, like the three fields above, so
+    # the instructions stay byte-identical. None when absent or unrecognised.
+    # The duplicate ladder reads it before the file name; nothing excludes a
+    # document on it.
+    document_kind: str | None = None
 
 
 @dataclass(frozen=True)
@@ -214,6 +261,19 @@ class LLMClient(Protocol):
         absent or all vague. `merchant_profile` as above."""
         ...
 
+    def classify_by_note(
+        self,
+        note: str,
+        vendor: str,
+        total: Decimal,
+        categories: list[str],
+    ) -> ClassificationResult:
+        """Item 250: the account the sender's own note names, or null. The
+        note is fenced as data; the categorizer acts on the answer only at
+        high confidence. Optional: the categorizer skips a client without
+        it."""
+        ...
+
     def judge_fx_match(
         self,
         *,
@@ -221,13 +281,14 @@ class LLMClient(Protocol):
         tx_currency: str,
         tx_date: str,
         tx_vendor: str,
-        receipt_amount: Decimal,
+        receipt_amount: Decimal | None,
         receipt_currency: str,
         receipt_date: str | None,
         receipt_vendor: str | None,
         receipt_reference: str | None,
         tx_card: str | None = None,
         receipt_payment_mode: str | None = None,
+        evidence: FxEvidence | None = None,
     ) -> FxJudgmentResult:
         """FX judgment (v2 spec §15.2). One call per FX-mismatch
         candidate pair. Unlike LD-2 categorization, vendor name IS a
@@ -238,7 +299,12 @@ class LLMClient(Protocol):
         records of which card paid — the statement's card column or
         account id, and the Zoho expense's payment-mode label. Optional
         so an older client implementation still satisfies the protocol;
-        omitted means "unknown card", never "different card"."""
+        omitted means "unknown card", never "different card".
+
+        `evidence` (front 5) is the tool's own reference conversion, card
+        evidence and merchant agreement; with a rate in it the model is
+        told the rate, never asked to estimate one. `receipt_amount` None
+        means the receipt's total could not be read."""
         ...
 
     def judge_ambiguous(
@@ -313,6 +379,30 @@ Total: {total}
 Return a single JSON object with: category (one of the listed names or null), confidence (number), reasoning (string), zoho_account (copy the exact label of the single best-matching GL account from the account list above, or null if no account list was given or none clearly fits).
 """
 
+# Item 250 (owner 2026-10-07, "decide when clear"): the colleague who sent the
+# receipt often says what it is ("IT subscriptions", "Marketing", "Travel
+# (Matthias)"). The note is evidence about THIS receipt, fenced as data like
+# every third-party text; the rules below are ours.
+_NOTE_PROMPT_TEMPLATE = """You file one business expense into an account, using the note the colleague who sent the receipt wrote about it.
+
+Accounts (pick exactly one, or null):
+{categories_block}
+
+Vendor: {vendor}
+Total: {total}
+
+{note_block}
+
+Rules:
+- Pick the account that the note's own words name or plainly describe (for example "IT subscriptions", "Marketing", "Travel").
+- A company name (BCS, BTS, CorpServ), a project, a product or a person's name says nothing about the account. When the note names no kind of cost, answer null with confidence 0.
+- Use the vendor only to choose between accounts the note's words already point to. Never pick an account the note does not support.
+- Confidence: 0.9 or more only when the note's words name one listed account; lower whenever you had to interpret.
+- Reasoning is one short sentence quoting the note words you followed.
+
+Return a single JSON object with: category (the exact label of one listed account, or null), confidence (number), reasoning (string), zoho_account (the same label as category, or null).
+"""
+
 
 _LINE_ITEMS_SCHEMA = {
     "type": "object",
@@ -367,20 +457,151 @@ Receipt:
   reference: {receipt_reference}
   card the expense report says paid it: {receipt_payment_mode}
 
+What the tool already established (its own records; take these as given):
+{evidence_block}
+
 How to judge:
-- Convert the receipt amount from {receipt_currency} to {tx_currency} using your best estimate of the exchange rate around {tx_date}. Card networks usually add a small FX fee (roughly 1 to 3 percent), so the statement amount is often slightly higher than the raw converted amount.
+{rate_rule}
 - Compare the converted amount to the transaction amount, then weigh vendor-name similarity, reference overlap, and how close the dates are.
-- Check the two card labels. They come from different systems and are written differently, so compare the card numbers inside them rather than the whole string. Matching numbers corroborate the pair. Numbers that clearly disagree are strong evidence these are two different purchases, even when the converted amounts land close, because a small amount in one currency often coincides with a small amount in another. Say so in your reasoning when the cards decide it. When either label names no card, treat the card as unknown and judge on the other signals; unknown is not disagreement.
-- Weigh the vendors as evidence too. A recurring software subscription, a cloud bill, or another charge that clearly is not a travel purchase does not belong to a restaurant, taxi, or toll receipt however well the amounts convert.
-- Be honest about uncertainty. Your exchange-rate estimate is approximate and this judgment always goes to a human for review, so do not overstate confidence.
+- The card verdict above is final; do not re-check it. The same card supports the pair. Different cards are strong evidence of two different purchases, even when the converted amounts land close, because a small amount in one currency often coincides with a small amount in another. An unknown card says nothing either way.
+- Weigh the vendors as evidence too, but remember the bank prints a truncated trading name while a receipt often prints the legal name (a supermarket's company name, a fuel station's tax registration), so different wording for the same shop is common. A recurring software subscription, a cloud bill, or another charge that clearly is not a travel purchase does not belong to a restaurant, taxi, or toll receipt however well the amounts convert.
+- Be honest about uncertainty. This judgment always goes to a human for review, so do not overstate confidence.
 
 Return a JSON object with:
 - is_match: true if the receipt is plausibly the same purchase, false otherwise
 - same_purchase_confidence: your probability from 0.0 to 1.0 that they are the same purchase
-- implied_rate: the {receipt_currency}-to-{tx_currency} rate you used as a number, or null
-- converted_amount: the receipt amount converted to {tx_currency} as a number, or null
+- implied_rate: the {receipt_currency}-to-{tx_currency} rate you used as a number (the tool's rate when one is given above), or null
+- converted_amount: the receipt amount converted to {tx_currency} as a number (the tool's converted amount when one is given above), or null
 - reasoning: one or two short sentences explaining the judgment
 """
+
+# How a rate source reads in the judge's prompt.
+_FX_SOURCE_TEXT = {
+    "opentickers_day": "the daily reference rate for the charge date",
+    "ecb_month": "the ECB monthly average for the charge's month",
+    "statement": "a rate read off this month's card statement",
+    "receipts": "a rate read off this month's receipts",
+}
+_FX_BAND_TEXT = {
+    "match": "inside the clean band the tool accepts for this rate",
+    "review": "outside the clean band, inside the zone the tool sends to review",
+    "outside": "outside the zone the tool would accept at all",
+}
+_CARD_EVIDENCE_TEXT = {
+    "override": "picked by a reviewer",
+    "hint": "resolved from the receipt's payment wording",
+    "learned": "remembered from an earlier month",
+    "printed": "digits printed on the receipt",
+    "row": "the statement's card column",
+    "account": "the statement account",
+    "none": "unknown",
+}
+
+
+def fx_evidence_block(
+    evidence: FxEvidence | None, *, receipt_currency: str, tx_currency: str
+) -> tuple[str, str]:
+    """`(evidence_block, rate_rule)` for the FX judgment prompt. With a rate,
+    the rule forbids estimating one; without, it forbids inventing one."""
+    if evidence is None:
+        evidence = FxEvidence()
+    lines: list[str] = []
+    has_rate = (
+        evidence.reference_rate is not None
+        and evidence.reference_converted is not None
+    )
+    if has_rate:
+        source = _FX_SOURCE_TEXT.get(
+            evidence.reference_rate_source or "", "a reference rate"
+        )
+        lines.append(
+            f"  exchange rate: 1 {receipt_currency} = {evidence.reference_rate} "
+            f"{tx_currency} ({source})"
+        )
+        lines.append(
+            f"  receipt converted at that rate: {evidence.reference_converted} "
+            f"{tx_currency}"
+        )
+        if evidence.reference_gap_pct is not None:
+            band = _FX_BAND_TEXT.get(evidence.reference_gap_band or "", "")
+            lines.append(
+                f"  charge vs converted receipt: {evidence.reference_gap_pct:+}%"
+                + (f", {band}" if band else "")
+            )
+    else:
+        lines.append("  exchange rate: none available for this pair")
+    # One verdict, no source labels: on the 2026-09-25 replay a line naming
+    # both sides' sources read to the model as two cards.
+    if evidence.cards_differ is True:
+        card = "DIFFERENT cards paid the receipt and the charge"
+    elif evidence.cards_differ is False:
+        card = "the SAME card paid the receipt and the charge"
+    else:
+        card = "unknown, which is not a disagreement"
+    lines.append(f"  card (final, already checked by the tool): {card}")
+    if evidence.vendor_pct is not None:
+        lines.append(f"  merchant-name agreement measured: {evidence.vendor_pct}%")
+    if has_rate:
+        rule = (
+            "- The exchange rate is given above: use it and do not estimate your "
+            "own. Card networks usually add a small FX fee (roughly 1 to 3 "
+            "percent), so the statement amount is often slightly higher than "
+            "the converted amount."
+        )
+    else:
+        rule = (
+            "- No exchange rate is available. Do not invent one: judge on the "
+            "card, vendor, reference and dates, and keep your confidence "
+            "moderate."
+        )
+    return "\n".join(lines), rule
+
+
+def render_fx_judgment_prompt(
+    *,
+    tx_amount: Decimal,
+    tx_currency: str,
+    tx_date: str,
+    tx_vendor: str | None,
+    receipt_amount: Decimal | None,
+    receipt_currency: str | None,
+    receipt_date: str | None,
+    receipt_vendor: str | None,
+    receipt_reference: str | None,
+    tx_card: str | None = None,
+    receipt_payment_mode: str | None = None,
+    evidence: FxEvidence | None = None,
+) -> str:
+    """The FX judgment prompt as the model reads it. Public so a test can
+    assert what reaches the model without a network call."""
+    evidence_block, rate_rule = fx_evidence_block(
+        evidence,
+        receipt_currency=receipt_currency or "(unknown)",
+        tx_currency=tx_currency,
+    )
+    if evidence is not None:
+        # The replay of the 13 live verdicts (2026-09-25): shown both the
+        # raw labels ("9693" beside "CARTAO ...3876") and the tool's "the
+        # cards AGREE", the model answered "the cards differ" on 7 of 9. The
+        # tool already compared them; the model gets the verdict only.
+        tx_card = receipt_payment_mode = "see the tool's card verdict below"
+    return _FX_JUDGMENT_PROMPT_TEMPLATE.format(
+        tx_amount=tx_amount,
+        tx_currency=tx_currency,
+        tx_date=tx_date,
+        tx_vendor=tx_vendor or "(unknown)",
+        receipt_amount=(
+            receipt_amount if receipt_amount is not None else "(unknown)"
+        ),
+        receipt_currency=receipt_currency or "(unknown)",
+        receipt_date=receipt_date or "(unknown)",
+        receipt_vendor=receipt_vendor or "(unknown)",
+        receipt_reference=receipt_reference or "(none)",
+        tx_card=tx_card or "(unknown)",
+        receipt_payment_mode=receipt_payment_mode or "(unknown)",
+        evidence_block=evidence_block,
+        rate_rule=rate_rule,
+    )
 
 
 _FX_JUDGMENT_SCHEMA = {
@@ -534,6 +755,21 @@ _EXTRACT_SCHEMA = {
             "type": ["string", "null"],
             "description": "The number the document labels as its receipt number, exactly as printed, or null.",
         },
+        # Item 223 step 4. Same shape as the item 77 amendment above: schema
+        # only, last, the question carried by `description`.
+        "document_kind": {
+            "type": "string",
+            "enum": ["invoice", "receipt", "reminder", "statement", "other"],
+            "description": (
+                "What the document calls itself. invoice = an invoice or bill "
+                "stating an amount charged or due; receipt = proof that a "
+                "payment was made (a payment receipt, till receipt, card slip "
+                "or ticket); reminder = a notice chasing payment of another "
+                "invoice (past due, payment reminder, dunning); statement = a "
+                "bank, card or account statement listing many transactions; "
+                "other = anything else."
+            ),
+        },
     },
     "required": [
         "document_type",
@@ -541,6 +777,7 @@ _EXTRACT_SCHEMA = {
         "tax", "tax_label", "payment_hint", "card_last4",
         "line_items", "confidence", "notes",
         "time", "invoice_number", "receipt_number",
+        "document_kind",
     ],
     "additionalProperties": False,
 }
@@ -665,6 +902,10 @@ class OpenAIClient:
         self.known_cards = [
             d for d in (str(c).strip() for c in (known_cards or [])) if d
         ]
+        # Item 239: an optional second provider for the receipt READING only
+        # (`llm.gemini.GeminiReader`). None = OpenAI reads everything, exactly
+        # as before. Set by the builder, like the extraction cache.
+        self.receipt_reader = None
 
     def classify_line_items(
         self,
@@ -766,6 +1007,44 @@ class OpenAIClient:
             reasoning=str(payload.get("reasoning", "")),
         )
 
+    def classify_by_note(
+        self,
+        note: str,
+        vendor: str,
+        total: Decimal,
+        categories: list[str],
+    ) -> ClassificationResult:
+        nonce = new_nonce()
+        prompt = _NOTE_PROMPT_TEMPLATE.format(
+            categories_block="\n".join(f"  - {c}" for c in categories),
+            vendor=data_block(vendor, kind="vendor name", nonce=nonce),
+            total=total,
+            note_block=data_block(note, kind="the sender's note", nonce=nonce),
+        )
+        response = self._client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "system", "content": UNTRUSTED_SYSTEM},
+                      {"role": "user", "content": prompt}],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "note_classification",
+                    "schema": _VENDOR_SCHEMA,
+                    "strict": True,
+                },
+            },
+            temperature=0,
+        )
+        self._record_usage(response)
+
+        payload = json.loads(response.choices[0].message.content or "{}")
+        return ClassificationResult(
+            category=_opt_label(payload.get("category")),
+            zoho_account=_opt_label(payload.get("zoho_account")),
+            confidence=float(payload.get("confidence", 0.0)),
+            reasoning=str(payload.get("reasoning", "")),
+        )
+
     def judge_fx_match(
         self,
         *,
@@ -780,19 +1059,21 @@ class OpenAIClient:
         receipt_reference: str | None,
         tx_card: str | None = None,
         receipt_payment_mode: str | None = None,
+        evidence: FxEvidence | None = None,
     ) -> FxJudgmentResult:
-        prompt = _FX_JUDGMENT_PROMPT_TEMPLATE.format(
+        prompt = render_fx_judgment_prompt(
             tx_amount=tx_amount,
             tx_currency=tx_currency,
             tx_date=tx_date,
-            tx_vendor=tx_vendor or "(unknown)",
+            tx_vendor=tx_vendor,
             receipt_amount=receipt_amount,
-            receipt_currency=receipt_currency or "(unknown)",
-            receipt_date=receipt_date or "(unknown)",
-            receipt_vendor=receipt_vendor or "(unknown)",
-            receipt_reference=receipt_reference or "(none)",
-            tx_card=tx_card or "(unknown)",
-            receipt_payment_mode=receipt_payment_mode or "(unknown)",
+            receipt_currency=receipt_currency,
+            receipt_date=receipt_date,
+            receipt_vendor=receipt_vendor,
+            receipt_reference=receipt_reference,
+            tx_card=tx_card,
+            receipt_payment_mode=receipt_payment_mode,
+            evidence=evidence,
         )
         response = self._client.chat.completions.create(
             model=self.model,
@@ -862,8 +1143,38 @@ class OpenAIClient:
         if (images is None) == (text is None):
             raise ValueError("extract_receipt needs exactly one of images= or text=")
 
-        model = self.model if text is not None else self.vision_model
+        # Item 239: when a second reader is switched on for this kind of read,
+        # it answers first; if it cannot (outage after retries, a refused or
+        # cut answer, JSON the parser rejects), OpenAI reads the document, so
+        # a receipt is never lost to the second provider having a bad minute.
+        reader = getattr(self, "receipt_reader", None)
+        if reader is not None and reader.takes(is_text=text is not None):
+            try:
+                return self._extract_receipt(
+                    file_name=file_name, images=images, text=text,
+                    model=reader.model, reader=reader,
+                )
+            except ReaderUnavailable as exc:
+                logger.warning(
+                    "receipt reader %s could not read %s (%s); reading it with OpenAI",
+                    reader.model, file_name, exc,
+                )
 
+        return self._extract_receipt(
+            file_name=file_name, images=images, text=text,
+            model=self.model if text is not None else self.vision_model,
+            reader=None,
+        )
+
+    def _extract_receipt(
+        self,
+        *,
+        file_name: str,
+        images: list[tuple[bytes, str]] | None,
+        text: str | None,
+        model: str,
+        reader=None,
+    ) -> ExtractedReceipt:
         # Same photo, same answer: identical document content (under the same
         # model + prompt fingerprint) is answered from the raw-payload cache
         # instead of the API. The payload is re-parsed live below, so parser
@@ -908,7 +1219,26 @@ class OpenAIClient:
             # have its tail read as instructions (untrusted.data_block).
             content: object = instructions + "\n" + _EXTRACT_TEXT_INTRO + data_block(
                 text, kind="PDF text layer", nonce=nonce)
-        else:
+        if reader is not None:
+            # Item 239: the SAME system rule, instructions, fences and schema,
+            # sent to the second reader; only the transport differs.
+            result = reader.read(
+                system=UNTRUSTED_SYSTEM,
+                prompt_text=content if text is not None else instructions,
+                images=images,
+                schema=_EXTRACT_SCHEMA,
+            )
+            self.cost_tracker.record(TokenUsage.from_counts(
+                model, result.input_tokens, result.output_tokens, result.cached_tokens))
+            raw_payload = result.payload
+            try:
+                extraction = _extraction_from_payload(json.loads(raw_payload))
+            except (ValueError, TypeError, AttributeError) as exc:
+                raise ReaderUnavailable(f"unparseable answer: {exc}") from exc
+            if cache is not None and cache_key is not None:
+                cache.put(cache_key, raw_payload, model=model, file_name=file_name)
+            return extraction
+        if text is None:
             import base64
 
             parts: list[dict] = [{"type": "text", "text": instructions}]
@@ -950,11 +1280,17 @@ class OpenAIClient:
             usage = response.usage
             input_tokens = getattr(usage, "prompt_tokens", 0) or 0
             output_tokens = getattr(usage, "completion_tokens", 0) or 0
+            # Item 227: the cached part of the prompt bills at its own rate.
+            details = getattr(usage, "prompt_tokens_details", None)
+            cached_tokens = getattr(details, "cached_tokens", 0) or 0
         except AttributeError:
             input_tokens = 0
             output_tokens = 0
+            cached_tokens = 0
         self.cost_tracker.record(
-            TokenUsage.from_counts(model or self.model, input_tokens, output_tokens)
+            TokenUsage.from_counts(
+                model or self.model, input_tokens, output_tokens, cached_tokens
+            )
         )
 
 
@@ -1019,7 +1355,20 @@ def _extraction_from_payload(payload: dict) -> ExtractedReceipt:
         time=_time_hhmm(payload.get("time")),
         invoice_number=_opt_str(payload.get("invoice_number")),
         receipt_number=_opt_str(payload.get("receipt_number")),
+        document_kind=_document_kind(payload.get("document_kind")),
     )
+
+
+_DOCUMENT_KINDS = frozenset({"invoice", "receipt", "reminder", "statement", "other"})
+
+
+def _document_kind(value: object) -> str | None:
+    """The document's own kind, whitelisted, or None (absent key, junk, a
+    cached payload read before the field existed). Unlike `_document_type`
+    there is no safe default to collapse to: a guessed kind would steer which
+    copy of a purchase counts."""
+    s = str(value or "").strip().lower()
+    return s if s in _DOCUMENT_KINDS else None
 
 
 _TIME_RE = re.compile(r"^\s*(\d{1,2})[:h.](\d{2})(?::\d{2})?\s*$")
@@ -1123,8 +1472,14 @@ class MockLLMClient:
         ambiguous_responses: list[AmbiguousJudgmentResult] | None = None,
         extraction_responses: list[ExtractedReceipt] | None = None,
         cost_tracker: CostTracker | None = None,
+        note_responses: list[ClassificationResult] | None = None,
     ):
         self._queue = list(responses or [])
+        # Item 250: answers for `classify_by_note`, kept apart from the
+        # classify queue so a note never consumes a line or vendor answer.
+        # Empty = the note names no account (null, confidence 0).
+        self._note_queue = list(note_responses or [])
+        self.notes_seen: list[tuple[str, tuple[str, ...]]] = []
         self._fx_queue = list(fx_responses or [])
         self._ambiguous_queue = list(ambiguous_responses or [])
         self._extraction_queue = list(extraction_responses or [])
@@ -1189,6 +1544,20 @@ class MockLLMClient:
             return queued
         return _default_for_vendor(vendor, categories)
 
+    def classify_by_note(
+        self,
+        note: str,
+        vendor: str,
+        total: Decimal,
+        categories: list[str],
+    ) -> ClassificationResult:
+        self.calls.append(("classify_by_note", (note, vendor, total)))
+        self.notes_seen.append((note, tuple(categories)))
+        self.cost_tracker.record(self._per_call_cost)
+        if self._note_queue:
+            return self._note_queue.pop(0)
+        return _review_result("the note names no account")
+
     def judge_fx_match(
         self,
         *,
@@ -1203,12 +1572,23 @@ class MockLLMClient:
         receipt_reference: str | None,
         tx_card: str | None = None,
         receipt_payment_mode: str | None = None,
+        evidence: FxEvidence | None = None,
     ) -> FxJudgmentResult:
         self.calls.append(("judge_fx_match", (tx_vendor, receipt_vendor)))
         # WS3: the card pair is recorded on the side rather than in `calls`,
         # so the existing (vendor, vendor) call assertions stay valid while
         # a test can still assert the cards reached the model.
         self.last_fx_cards = (tx_card, receipt_payment_mode)
+        # Front 5: likewise the tool's evidence, and the prompt it renders.
+        self.last_fx_evidence = evidence
+        self.last_fx_prompt = render_fx_judgment_prompt(
+            tx_amount=tx_amount, tx_currency=tx_currency, tx_date=tx_date,
+            tx_vendor=tx_vendor, receipt_amount=receipt_amount,
+            receipt_currency=receipt_currency, receipt_date=receipt_date,
+            receipt_vendor=receipt_vendor, receipt_reference=receipt_reference,
+            tx_card=tx_card, receipt_payment_mode=receipt_payment_mode,
+            evidence=evidence,
+        )
         self.cost_tracker.record(self._per_call_cost)
 
         if self._fx_queue:
