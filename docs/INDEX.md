@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-20 | Expense-Recon Item 162 Statement Colours | client-dev | [→](docs/2026-09-20%20-%20Expense-Recon%20Item%20162%20Statement%20Colours/Checkpoint.md) |
 | 2026-09-22 | Verve Beta Boundary Testing | client-dev | [Mini-Checkpoint-1](docs/2026-09-22%20-%20Verve%20Beta%20Boundary%20Testing/Mini-Checkpoint-1.md) |
 | 2026-09-23 | Zoho GL Account Relevance And Categorization Architecture | client-dev | [→](docs/2026-09-23%20-%20Zoho%20GL%20Account%20Relevance%20And%20Categorization%20Architecture/Checkpoint.md) |
 | 2026-10-21 | Recon Memory Window Portuguese And Outage Check | client-dev | [Mini-Checkpoint-1](docs/2026-10-21%20-%20Recon%20Memory%20Window%20Portuguese%20And%20Outage%20Check/Mini-Checkpoint-1.md) |
