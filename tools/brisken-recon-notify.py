@@ -361,7 +361,22 @@ def fetch_feedback_entries(session) -> list[dict]:
     return entries
 
 
+def pin_ipv4() -> None:
+    """Resolve every host over IPv4 only.
+
+    The dev machine's IPv6 route to Fly drops the TLS handshake: on
+    2026-10-28 IPv4 reached both Fly apps 4/4 while IPv6 managed 2/4 and 0/4,
+    and the scheduled run had failed ~3 in 4 since 10-16 with SSLEOFError on
+    /api/login. urllib3 resolves with AF_UNSPEC only while HAS_IPV6 is true.
+    Called from main() so importing this module (the tests) changes nothing.
+    """
+    import urllib3.util.connection as conn
+
+    conn.HAS_IPV6 = False
+
+
 def main() -> int:
+    pin_ipv4()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--once", action="store_true", help="single pass (the only mode)")
     parser.add_argument("--dry-run", action="store_true", help="print, send nothing")
