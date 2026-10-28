@@ -254,20 +254,24 @@ def test_a_multi_card_month_states_its_coverage_per_card():
     assert "amex-9001" in page1
 
 
-def test_the_charge_listing_is_sectioned_by_card():
-    """Sectioned, both of the corporate card's charges print before the amex
-    one even though the payload interleaves them; flat, they print in payload
-    order. That ordering is the only thing that distinguishes the two."""
-    page1 = _flat(build_reconciliation_report_pdf(TWO_CARD_VIEW, title="April"))
-    listing = page1[page1.index("All charges"):]
-    assert listing.index("CHARLIEVENDOR") < listing.index("BRAVOVENDOR")
-    assert listing.index("ALPHAVENDOR") < listing.index("CHARLIEVENDOR")
+def test_the_document_is_sectioned_by_card():
+    """Item 138: each card gets its own section, on its own page, holding its
+    own charges. Both of the corporate card's charges print there even though
+    the payload interleaves them; the amex one prints in the amex section."""
+    pdf = build_reconciliation_report_pdf(TWO_CARD_VIEW, title="April")
+    corporate, amex = _flat(pdf, 1), _flat(pdf, 2)
+    assert corporate.startswith("Corporate card (2838)")
+    assert "ALPHAVENDOR" in corporate and "CHARLIEVENDOR" in corporate
+    assert "BRAVOVENDOR" not in corporate
+    assert "Statement: chase-april.xlsx · 2026-04-01 to 2026-04-03" in corporate
+    assert "2 charges · 0 matched · unreconciled USD 500.00" in corporate
+    assert amex.startswith("amex-9001") and "BRAVOVENDOR" in amex
 
 
 def test_a_charge_on_no_listed_card_is_still_printed():
     """A listing that silently drops charges is worse than an ugly one. A row
-    whose card the coverage list does not carry gets its own section rather
-    than disappearing between two that it does."""
+    whose card the coverage list does not carry goes to the last section
+    rather than disappearing between two that it does."""
     view = dict(TWO_CARD_VIEW)
     view["rows"] = TWO_CARD_VIEW["rows"] + [
         {"date": "2026-04-09", "vendor": "ORPHANVENDOR", "amount": "7.00",
@@ -275,9 +279,10 @@ def test_a_charge_on_no_listed_card_is_still_printed():
          "effective_bucket": "unmatched", "candidates": [],
          "posting_category": None, "coverage_key": "not-a-card"},
     ]
-    page1 = _flat(build_reconciliation_report_pdf(view, title="April"))
-    assert "Other charges" in page1
-    assert "ORPHANVENDOR" in page1
+    pdf = build_reconciliation_report_pdf(view, title="April")
+    last = _flat(pdf, len(PdfReader(io.BytesIO(pdf)).pages) - 1)
+    assert last.startswith("No card")
+    assert "ORPHANVENDOR" in last
 
 
 def test_a_one_card_month_gets_neither_a_table_nor_sections():

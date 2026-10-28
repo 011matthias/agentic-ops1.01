@@ -9,11 +9,17 @@ on:
     paths:
       - "workspace/clients/brisken/automations/expense-reconciliation/**"
       - ".github/workflows/expense-recon-tests.yml"
+      - "tools/scorers/**"
+      - "tools/recon_accuracy_check.py"
+      - "tools/recon-accuracy-baseline.json"
   push:
     branches: [main]
     paths:
       - "workspace/clients/brisken/automations/expense-reconciliation/**"
       - ".github/workflows/expense-recon-tests.yml"
+      - "tools/scorers/**"
+      - "tools/recon_accuracy_check.py"
+      - "tools/recon-accuracy-baseline.json"
 
 jobs:
   test:
@@ -31,3 +37,31 @@ jobs:
         # silently skip here). dev carries pytest + httpx; web carries
         # fastapi + uvicorn + python-multipart.
         run: uv run --extra dev --extra web pytest -q
+
+  # Backlog item 127: matching accuracy used to be measured by hand, offline.
+  # The pinned scorer (tools/scorers/recon-match-accuracy.py) replays the
+  # committed synthetic labelled bundles under config/match-tuning.json and
+  # this job compares twelve per-bundle fields against expected.json on EXACT
+  # equality. The scorer is deterministic (no LLM, no network, no clock), so
+  # the only thing that moves a number is a matcher behaviour change, which
+  # is exactly what must be written down: a deliberate change re-records
+  # expected.json in the same PR (`... ci --write-expected`) and that diff is
+  # the review artefact. The six real labelled months are gitignored client
+  # data and never reach CI; the deploy hook scores those on the dev machine.
+  accuracy:
+    name: match accuracy (synthetic bundles, exact-equality gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.12'
+      - name: Score the labelled bundles against expected.json
+        # From the repo root: the checker imports the pinned scorer by path,
+        # which imports the module's src by path; the script header pins the
+        # runtime deps and `uv run` installs them.
+        run: >-
+          uv run tools/recon_accuracy_check.py ci
+          --fixtures workspace/clients/brisken/automations/expense-reconciliation/tests/fixtures/accuracy
+          --expected workspace/clients/brisken/automations/expense-reconciliation/tests/fixtures/accuracy/expected.json

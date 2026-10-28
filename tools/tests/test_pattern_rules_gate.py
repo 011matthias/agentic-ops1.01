@@ -209,6 +209,21 @@ def test_stop_code_stripped(env):
     assert _stop(env, "The gate catches `say the word` offers.").stdout.strip() == ""
 
 
+def test_stop_raw_text_keeps_what_the_strip_drops(env):
+    """2026-10-02 gate-precision: the publish-prompt rule fired twice on
+    closings that named the prompt file, because house style puts the name in
+    backticks and the strip removed it before the exemption looked."""
+    _rule(env["dir"], "warn-unnamed", "stop", conditions=[
+        ("final_text", "regex_match", r"(?i)paste"),
+        ("final_text_raw", "not_regex_match", r"lovable-[a-z0-9-]+-prompt\.md"),
+    ])
+    named = _stop(env, "Paste `docs/lovable-x-prompt.md` into Lovable.", session="raw1")
+    assert named.stdout.strip() == ""
+    assert _prompt(env, "next", session="raw1").stdout.strip() == ""
+    _stop(env, "Paste the new screen into Lovable.", session="raw2")
+    assert "warn-unnamed" in _context(_prompt(env, "next", session="raw2"))
+
+
 def test_stop_warn_is_parked_then_delivered_on_next_prompt_once(env):
     _rule(env["dir"], "warn-queue", "stop", pattern=r"(?i)queued")
     stop = _stop(env, "3 edits queued.", session="abc")
@@ -305,7 +320,28 @@ SEEDS = [
     ("warn-git-exit-masked-by-pipe", "bash",
      {"command": "git push -q -u origin br 2>&1 | grep -v remote | tail -1 && gh pr create"},
      {"command": "git -C /c/x rebase origin/main > log 2>&1; echo $?"}),
+    ("warn-attach-busy-cdp-9222", "bash",
+     {"command": "agent-browser --cdp 9222 snapshot -i"},
+     {"command": "agent-browser --cdp 9333 snapshot -i"}),
+    ("warn-attach-busy-cdp-9222", "bash",
+     {"command": "python -c \"b=pw.chromium.connect_over_cdp('http://127.0.0.1:9222')\""},
+     {"command": "agent-browser --session recon open http://127.0.0.1:8765"}),
+    ("warn-owner-publish-without-named-prompt", "stop",
+     {"final_text": "Waits on the owner publishing the Lovable change.",
+      "final_text_raw": "Waits on the owner publishing the Lovable change."},
+     {"final_text": "Paste  into Lovable and publish it.",
+      "final_text_raw": "Paste `docs/lovable-nav-no-scroll-bill-tip-prompt.md` into Lovable and publish it."}),
 ]
+
+
+def test_cdp_rule_ignores_file_text_that_only_mentions_the_flag():
+    """Register 2026-09-17 gate-precision: the rule fired on a consumer-gate
+    test fixture and a register-flip script, where no browser was attached."""
+    rules, _ = pr.load_rules(str(REPO / ".claude" / "patterns"))
+    rule = [r for r in rules if r.name == "warn-attach-busy-cdp-9222"]
+    fixture = {"file_path": "C:/repo/tools/tests/test_deploy_consumer_gate.py",
+               "new_text": '    "agent-browser --cdp 9222 snapshot",'}
+    assert rule and pr.evaluate(rule, "file", fixture) == []
 
 
 @pytest.mark.parametrize("name,event,hit,miss", SEEDS)
@@ -390,6 +426,9 @@ def test_digest_extracts_user_turns_for_the_miner(tmp_path):
         {"type": "user", "message": {"role": "user", "content": "Build the thing <system-reminder>secret ctx</system-reminder>"}},
         {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "I ran git add -A and pushed."}]}},
         {"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "content": "ok"}]}},
+        # 2026-09-17 first real miner run: a background-task notification was
+        # digested as a user turn.
+        {"type": "user", "message": {"role": "user", "content": "<task-notification><task-id>b1</task-id><status>completed</status></task-notification>"}},
         {"type": "user", "message": {"role": "user", "content": "No, don't use git add -A here, stage paths."}},
     ]
     t.write_text("\n".join(json.dumps(e) for e in entries) + "\n", encoding="utf-8")
@@ -397,7 +436,7 @@ def test_digest_extracts_user_turns_for_the_miner(tmp_path):
     out = subprocess.run([sys.executable, cli, "digest", "--transcript", str(t)],
                          capture_output=True, text=True, timeout=30).stdout
     assert out.count("user:") == 2
-    assert "secret ctx" not in out and "tool_result" not in out
+    assert "secret ctx" not in out and "tool_result" not in out and "task-id" not in out
     assert "* user: No, don't use git add -A" in out
     assert "agent: ...I ran git add -A and pushed." in out
     missing = subprocess.run([sys.executable, cli, "digest", "--session", "no-such-session"],

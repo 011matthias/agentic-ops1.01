@@ -95,7 +95,10 @@ from .categorize import (
     categorize_receipts_with_registry,
 )
 from .cards import cards_from_setting, stamp_card_entities
+from .sender_note import stamp_sender_notes
 from .categorize_charges import categorize_charges, derive_subscription_status
+from .coa_provision import GL_ENTITY_ORGS_KEY
+from .correspondence import CORRESPONDENCE, quarantine_correspondence
 from .ingest._common import ParseIssue
 from .ingest.chart_of_accounts import ChartOfAccounts
 from .ingest.expense_csv import parse_expense_csv_tolerant
@@ -108,10 +111,12 @@ from .ingest.statement_xlsx import parse_statement_xlsx_tolerant
 from .llm.client import LLMClient, OpenAIClient
 from .llm.cost import CostTracker
 from .llm.extraction_cache import ExtractionCache
-from .merchant_registry import MerchantRegistry
+from .llm.gemini import receipt_reader_from_config
+from .merchant_registry import MerchantRegistry, drop_unvouched_remembered_cards
 from .matching.deterministic import MatchingConfig, match_month
 from .matching.judgment import judge_ambiguous, judge_fx_match, judge_unmatched
 from .matching.types import Categorization, Match, MatchOutcome, Receipt, Transaction
+from .matching.types import MatchType  # item 204 step 6: the judge reads FX only
 from .output.reconciled_csv import write_reconciled_csv
 from .output.report_xlsx import write_report
 from .output.sheet_writeback import write_sheet_writeback
@@ -321,23 +326,76 @@ def _apply_vision_receipts(
 
 def _apply_judgment(
     outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None,
-    *, suggest_floor: float = 0.0,
+    *, suggest_floor: float = 0.0, cfg: MatchingConfig | None = None,
+    skip_tx_ids: "frozenset[str] | set[str]" = frozenset(),
 ) -> None:
     """Replace each judgment_required entry with the judgment verdict.
+
+    Front 5 (2026-09-25): a charge already booked (the workbook's yellow
+    `entry_status` "posted", or a reviewer's already-posted verdict named in
+    `skip_tx_ids`) is not judged. Live July 2026 paid for 13 verdicts on
+    charges the page treats as nothing to do; the pair stays as the matcher
+    built it, on the row for the audit.
 
     With an `LLMClient`, every FX case gets a real model judgment
     (D1b); without one, `judge_fx_match` returns the stub Match and the
     entry stays in `judgment_required` with `requires_review=True`.
 
-    A real verdict BELOW `suggest_floor` is unbound instead of kept
-    (owner call 2026-07-24): showing a pair the model itself rejected
-    at p=0.10 as "the suggested receipt" wastes the reviewer and reads
-    as a tool error. The charge and the receipt fall to the plain
+    A real verdict BELOW `suggest_floor` is unbound instead of kept, with
+    no exception (owner call 2026-07-24): showing a pair the model itself
+    rejected at p=0.10 as "the suggested receipt" wastes the reviewer and
+    reads as a tool error. The charge and the receipt fall to the plain
     unmatched buckets when nothing else claims them, so every id still
     lands in a bucket and the reconciliation guarantee holds.
+
+    A verdict EXACTLY AT the floor is a rejection too (item 131,
+    2026-09-17: the model answers exactly 0.20, and "below" let those
+    rejections through with "likely NOT the same purchase" as the reason a
+    reviewer read), with one exception: a pair whose OWN rate arithmetic
+    sits in the clean band (item 81's `reference_gap_band` == "match", read
+    through `pair_reference_gap_band` at `cfg`'s rate) stays in review, the
+    tool's arithmetic first and the model's disagreement after it (live
+    July 2026: NATHALIA 5.61 against a 28.73 BRL receipt, 1.5% off the
+    month rate, labelled right, model p=0.20). The exception stops at the
+    floor on purpose: applied below it, it brought back July's Erste Fracht
+    receipt against HOTEL AM TIERGARTEN (-1.59%, model 0.10, another
+    merchant). Without `cfg` no band can be read and an at-floor rejection
+    is unbound. The rate is derived from the charges and receipts handed in
+    here; a configured rate reproduces the matcher's exactly, a
+    receipts-derived one can differ when the matcher's pool left a copy out
+    (item 81's residual). Since items 90/132 the band follows the rate's
+    source (ECB 2%, every other 3%), so that residual can also flip an ECB
+    pair to a receipts-derived source with the same rate and a wider band;
+    it needs three receipts carrying a booked exchange rate, which no hosted
+    month holds (mailed and dropped receipts carry none).
     """
     if not outcome.judgment_required:
         return
+    from .matching.deterministic import (
+        derive_fx_reference_rates,
+        pair_reference_gap_band,
+    )
+
+    from .matching.deterministic import UNIQUENESS_RIVAL_REVIEW
+    from .matching.judgment import fx_evidence
+
+    derived: list = []
+
+    def _derived_rates():
+        if cfg is None:
+            return None
+        if not derived:
+            derived.append(derive_fx_reference_rates(
+                [t for t in tx_by_id.values() if not t.is_credit],
+                list(rec_by_id.values()), cfg,
+            ))
+        return derived[0]
+
+    def _rate_band(tx, rec) -> str | None:
+        if cfg is None:
+            return None
+        return pair_reference_gap_band(tx, rec, cfg, _derived_rates())
+
     judged: list = []
     suppressed: list = []
     for m in outcome.judgment_required:
@@ -346,7 +404,35 @@ def _apply_judgment(
         if tx is None or rec is None:
             judged.append(m)
             continue
-        verdict = judge_fx_match(tx, rec, client=client)
+        # Item 204 step 6 (owner D5, 2026-09-25): the model judges FX pairs
+        # only. A deterministic pair the matcher itself sent to review (a
+        # no-card pair whose merchant words disagree) is kept as built: its
+        # review code, its reason, its place as the charge's top candidate.
+        if m.match_type is not MatchType.FX_JUDGMENT:
+            judged.append(m)
+            continue
+        if _is_booked(tx, skip_tx_ids):
+            judged.append(m)
+            continue
+        # Front 5 (2026-09-25): a pair the uniqueness gate demoted although
+        # its own evidence is clean (the card agrees, the merchant agrees at
+        # 75+, the rate lands in the clean band) is not a question the model
+        # can answer: the question is WHICH of two look-alikes, and live July
+        # 2026 had the model answer 0.85 on both POSTO SANTOS 9.80 twins. It
+        # stays in review as the matcher built it, its reason naming the
+        # rival, and no call is spent.
+        if (
+            m.review_code == UNIQUENESS_RIVAL_REVIEW
+            and m.card_score >= 1.0
+            and m.vendor_score >= 0.75
+            and _rate_band(tx, rec) == "match"
+        ):
+            judged.append(m)
+            continue
+        verdict = judge_fx_match(
+            tx, rec, client=client,
+            evidence=fx_evidence(tx, rec, cfg, _derived_rates(), m.vendor_score),
+        )
         # The judgment layer builds a fresh Match around the model's
         # verdict, which dropped the deterministic sub-scores the matcher
         # had already computed. Carry them over: every FX row otherwise
@@ -361,10 +447,30 @@ def _apply_judgment(
             date_score=m.date_score,
             vendor_score=m.vendor_score,
             card_score=m.card_score,
+            # Front 5: why the matcher sent the pair here survives the
+            # verdict, so the month page can say it: the code, and for a
+            # look-alike the sentence naming the rival ahead of the verdict
+            # (the shape the at-floor rejection below already has).
+            review_code=m.review_code,
+            reason=(
+                m.reason.rstrip(".") + ". " + verdict.reason
+                if m.review_code == UNIQUENESS_RIVAL_REVIEW else verdict.reason
+            ),
         )
         # Only a REAL model verdict can be suppressed; the no-client stub
         # (confidence 0.5) always stays, so no-LLM runs are unaffected.
-        if client is not None and full.confidence < suggest_floor:
+        at_floor = suggest_floor > 0.0 and abs(full.confidence - suggest_floor) <= 1e-9
+        rejected = at_floor or full.confidence < suggest_floor
+        if client is not None and rejected:
+            # Item 131: only an at-floor rejection can be kept, and only on
+            # a clean rate; below the floor the owner's cut is final.
+            if at_floor and _rate_band(tx, rec) == "match":
+                judged.append(replace(full, reason=(
+                    m.reason.rstrip(".")
+                    + ". Kept for review although the model disagrees: "
+                    + verdict.reason
+                )))
+                continue
             suppressed.append(full)
             continue
         judged.append(full)
@@ -401,8 +507,17 @@ def _apply_judgment(
                 claimed_rec.add(m.document_id)
 
 
+def _is_booked(tx, skip_tx_ids) -> bool:
+    """Front 5: a charge already booked is not judged (see `_apply_judgment`)."""
+    return (
+        getattr(tx, "entry_status", None) == "posted"
+        or tx.transaction_id in skip_tx_ids
+    )
+
+
 def _apply_ambiguous_judgment(
-    outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None
+    outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None,
+    *, skip_tx_ids: "frozenset[str] | set[str]" = frozenset(),
 ) -> None:
     """Ask the LLM to break each ambiguous tie (D-series, judge_ambiguous).
 
@@ -421,7 +536,10 @@ def _apply_ambiguous_judgment(
     rebuilt: list[Match] = []
     for tx_id, group in groups.items():
         tx = tx_by_id.get(tx_id)
-        pick = judge_ambiguous(tx, group, rec_by_id, client=client) if tx else None
+        pick = (
+            judge_ambiguous(tx, group, rec_by_id, client=client)
+            if tx and not _is_booked(tx, skip_tx_ids) else None
+        )
         if pick is None:
             rebuilt.extend(group)
             continue
@@ -457,6 +575,8 @@ def _apply_unmatched_judgment(
     client: LLMClient | None,
     match_cfg: MatchingConfig,
     cfg: dict,
+    *,
+    skip_tx_ids: "frozenset[str] | set[str]" = frozenset(),
 ) -> None:
     """Optional second-chance LLM pass over the leftovers (WS3).
 
@@ -497,7 +617,7 @@ def _apply_unmatched_judgment(
         if calls_used >= max_calls:
             break
         tx = tx_by_id.get(tx_id)
-        if tx is None:
+        if tx is None or _is_booked(tx, skip_tx_ids):
             continue
         available = [
             rec_by_id[doc]
@@ -743,9 +863,13 @@ def reconcile(
         (cfg.get("categorization") or {}).get("override_er_category", False)
     )
     _stage("categorizing")
+    # Phase 1, item 3: a run carrying the entity -> org map is categorized
+    # straight into its entity's curated GL leaves (see categorize_receipts).
+    entity_orgs = cfg.get(GL_ENTITY_ORGS_KEY)
     receipts = categorize_receipts(
         receipts, client=llm_client, chart_of_accounts=account_labels, learned=learned,
         override_er_category=override_er_category,
+        entity_orgs=entity_orgs,
     )
 
     # WS2 (2026-07-21): top-level adjudication. Under override_er_category the
@@ -753,7 +877,8 @@ def reconcile(
     # (a different Zoho root-group between the tool's pick and the report's
     # category). Same root-group => the report's category is kept. Deterministic
     # (no LLM call); runs only with a chart to resolve root-groups against.
-    if override_er_category and cat_chart is not None:
+    # Not on the GL path: there the report's account is not a candidate.
+    if entity_orgs is None and override_er_category and cat_chart is not None:
         receipts = adjudicate_receipts(
             receipts, cat_chart, scope_groups=scope_groups
         )
@@ -790,6 +915,7 @@ def reconcile(
     _apply_judgment(
         outcome, tx_by_id, rec_by_id, llm_client,
         suggest_floor=(match_cfg or MatchingConfig()).fx_judgment_suggest_floor,
+        cfg=match_cfg or MatchingConfig(),
     )
     _apply_ambiguous_judgment(outcome, tx_by_id, rec_by_id, llm_client)
     # WS3: opt-in second chance for the leftovers, after the deterministic
@@ -810,6 +936,7 @@ def reconcile(
         chart_of_accounts=account_labels,
         learned=learned,
         override_er_category=override_er_category,
+        entity_orgs=entity_orgs,
     )
     if charge_categorizations:
         n_categorized = sum(
@@ -843,6 +970,10 @@ NON_RECEIPT_LABELS: dict[str, str] = {
     "statement": "a bank/card statement page",
     "report_summary": "an expense-report summary page",
     "other": "not an expense document",
+    # 2026-09-24: a payment reminder / past-due notice ABOUT another
+    # document. Written only by `correspondence.quarantine_correspondence`,
+    # never by the extractor, so the extraction cache is untouched.
+    CORRESPONDENCE: "a payment reminder or account notice",
 }
 
 
@@ -861,11 +992,20 @@ def split_non_receipt_documents(
     extraction: the web layer records them in the snapshot's set-aside list
     so the reviewer can see WHY each file was set aside and restore one
     without a fresh vision call.
+
+    The correspondence rung (2026-09-24) rides the same partition: a payment
+    reminder the reader called a receipt. It reads `Receipt.ocr_text`, so a
+    source that keeps no text layer is untouched.
     """
     kept: list[Receipt] = []
     excluded: list[Receipt] = []
     issues: list[ParseIssue] = []
     for r in receipts:
+        invoice = keep_invoice_read_as_statement(r)  # item 105
+        if invoice is not None:
+            kept.append(invoice)
+            continue
+        r = quarantine_correspondence(r) or r  # 2026-09-24
         label = NON_RECEIPT_LABELS.get(r.document_type)
         if label is None:
             kept.append(r)
@@ -881,9 +1021,51 @@ def split_non_receipt_documents(
     return kept, excluded, issues
 
 
+# Item 105 (2026-09-17). The reader called three real July invoices
+# statement pages (AWS USD 3,352.59, Microsoft USD 718.20, Tricarico
+# BRL 27,203.34), so they left the month. Each one still carried a vendor,
+# a total, its invoice number and its own line items; eight real statements
+# read through the same reader (seven Chase card statements and an SAP
+# accounts-receivable statement) carried no reference and no line items,
+# and the billing-notice emails no line items. A "statement" verdict with
+# all four is therefore kept as an expense with a note to check it, and the
+# reader's prompt is untouched (a prompt edit moves unrelated readings).
+INVOICE_READ_AS_STATEMENT_NOTE = (
+    "read as a statement page, but it prints its own invoice number and "
+    "line items, so it was kept as an expense: check it"
+)
+
+
+def keep_invoice_read_as_statement(r: Receipt) -> Receipt | None:
+    """The receipt to keep when a "statement" verdict is really one invoice
+    (see above), else None. Only "statement" is second-guessed."""
+    if r.document_type != "statement":
+        return None
+    # Ingest stores an unreadable line amount as 0, so "has an amount" is
+    # "has a non-zero amount".
+    if not any(li.line_total for li in r.line_items):
+        return None
+    for value in (r.detected_vendor, r.detected_total, r.detected_reference):
+        if value is None or not str(value).strip():
+            return None
+    try:
+        if Decimal(str(r.detected_total)) == 0:
+            return None  # a statement's zero balance is not an invoice
+    except (ArithmeticError, ValueError):
+        return None
+    note = INVOICE_READ_AS_STATEMENT_NOTE
+    return replace(
+        r,
+        document_type="receipt",
+        data_quality_note=(
+            f"{r.data_quality_note}; {note}" if r.data_quality_note else note
+        ),
+    )
+
+
 def generate_expenses(
     cfg: dict, config_dir: Path, *, learned=None, llm_client=None,
-    on_stage=None, expense_memory=None, registry=None,
+    on_stage=None, expense_memory=None, registry=None, sender_notes=None,
 ) -> ReconcileResult:
     """Receipt-first expense generation: ingest -> vision -> categorize a
     batch of receipts with NO bank statement, one "expense" per receipt.
@@ -951,6 +1133,16 @@ def generate_expenses(
     # downstream. Provenance lands on data_quality_note (grid-visible).
     if expense_memory is not None:
         receipts = expense_memory.apply(receipts)
+        # Item 173, second half: the remembered CARD only for a brand the
+        # registry vouches is paid on one card. The read-time twin of this
+        # gate shipped in `fill_remembered_cards`, and this stamp did not, so
+        # a month ingested after a multi-card brand was corrected still took
+        # the minority card -- the same 8-to-1 OpenAI memory, arriving by the
+        # other door. Run AFTER the pass rather than inside it, so the vouch
+        # resolves against the same corrected vendor the grid will resolve
+        # against; a gate keyed on the pre-correction name would answer a
+        # different question than its twin.
+        receipts = drop_unvouched_remembered_cards(receipts, registry)
 
     # Cards R3: each receipt's paying card resolves its legal entity (the
     # card registry snapshotted into this run's config + the batch's
@@ -965,6 +1157,10 @@ def generate_expenses(
             expense_block.get("card_hints"), dict
         ) else None,
     )
+    # Item 250: `sender_notes` is `{document_id: note}` from the web layer,
+    # already limited to our own senders. The note's company outranks the
+    # card, so it stamps after it and before the categorizer reads the stamp.
+    receipts = stamp_sender_notes(receipts, sender_notes)
 
     # Non-receipt quarantine (2026-08-13), before the categorizer spends a
     # call on them: statement pages and report-summary pages that arrive in
@@ -1007,6 +1203,7 @@ def generate_expenses(
         override_er_category=override_er_category,
         cat_chart=cat_chart,
         scope_groups=scope_groups,
+        entity_orgs=cfg.get(GL_ENTITY_ORGS_KEY),
     )
 
     # No statement => no matching. Every receipt IS an expense; they live in
@@ -1598,6 +1795,17 @@ def _build_llm_client(cfg: dict) -> tuple[LLMClient | None, CostTracker | None]:
         client.extraction_cache = ExtractionCache(Path(cache_path))
         logger.info("extraction cache: %s", cache_path)
 
+    # Item 239: Gemini reads receipts when `llm.receipt_reader` or the
+    # EXPENSE_RECON_GEMINI_READS switch says so; off otherwise, and every
+    # other call stays on OpenAI either way. Attribute, like the cache.
+    try:
+        reader = receipt_reader_from_config(llm_cfg)
+    except ValueError as exc:
+        raise ConfigError(f"config.llm.receipt_reader: {exc}") from exc
+    if reader is not None:
+        client.receipt_reader = reader
+        logger.info("receipt reader: %s", reader.describe())
+
     return client, tracker
 
 
@@ -1761,6 +1969,11 @@ def _build_coa_gate(cfg: dict, config_dir: Path):
     The Books COA JSON has the shape
     `{ "<org_id>": { "org": {...}, "accounts": [...] }, ... }`; it is
     sensitive client data and is never committed to this repo.
+
+    A GL batch (`cfg` carries `gl_entity_orgs`, the engine's own test) gets
+    `curated_org` on every gate whose org Dirk curated, so the export judges
+    postable by his marking, as the engine and the API poster do (item 4b).
+    A bucket batch builds exactly the gate it always did.
     """
     block = cfg.get("coa_validation")
     if not isinstance(block, dict) or not block.get("enabled", True):
@@ -1768,6 +1981,9 @@ def _build_coa_gate(cfg: dict, config_dir: Path):
 
     from .coa_gate import CoaGate, gate_for_entities, load_entity_chart
     from .ingest.chart_of_accounts import EXPENSE_ACCOUNT_TYPES
+    from .zoho import curated_leaves
+
+    gl_batch = cfg.get(GL_ENTITY_ORGS_KEY) is not None
 
     # Cards R4: a batch that mixes legal entities carries one entry per
     # entity, and each row is gated against the chart of the entity that
@@ -1780,8 +1996,11 @@ def _build_coa_gate(cfg: dict, config_dir: Path):
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
+            sub_cfg = {"coa_validation": entry}
+            if gl_batch:
+                sub_cfg[GL_ENTITY_ORGS_KEY] = cfg[GL_ENTITY_ORGS_KEY]
             try:
-                gate = _build_coa_gate({"coa_validation": entry}, config_dir)
+                gate = _build_coa_gate(sub_cfg, config_dir)
             except ConfigError:
                 continue
             if gate is not None and isinstance(gate, CoaGate):
@@ -1807,11 +2026,13 @@ def _build_coa_gate(cfg: dict, config_dir: Path):
     scope_groups = block.get("scope_groups")
     types = block.get("types") or EXPENSE_ACCOUNT_TYPES
     entity = block.get("entity_label") or str(org_id)
+    org = str(org_id).strip()
     return CoaGate(
         chart=chart,
         scope_groups=tuple(scope_groups) if scope_groups else None,
         types=tuple(types),
         entity=entity,
+        curated_org=org if gl_batch and curated_leaves.covers_org(org) else None,
     )
 
 
@@ -1896,12 +2117,25 @@ def main(argv: list[str] | None = None) -> int:
 
         return label_main(argv[1:])
 
+    # `expense-recon backup --dry-run|--check|--go` — copy the data folder
+    # off the machine to Brisken's SharePoint (item 119). Dry run by
+    # default; --go is the only form that uploads.
+    if argv and argv[0] == "backup":
+        from .web.backup import main as backup_main
+
+        return backup_main(argv[1:])
+
     # `expense-recon memory list|forget|reset` — inspect / correct the
     # cross-run learning store (Phase 2 escape hatch, 2d).
     if argv and argv[0] == "memory":
         from .learning_cli import main as memory_main
 
         return memory_main(argv[1:])
+
+    if argv and argv[0] == "zoho-post":
+        from .zoho_post_cli import main as zoho_post_main
+
+        return zoho_post_main(argv[1:])
 
     parser = argparse.ArgumentParser(
         prog="expense-recon",

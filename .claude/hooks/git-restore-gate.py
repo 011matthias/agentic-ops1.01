@@ -338,6 +338,8 @@ def main() -> int:
         payload = json.load(sys.stdin)
     except Exception:
         return 0
+    if session_state is not None:
+        session_state.bind_session(payload)
 
     if payload.get("tool_name") not in ("Bash", "PowerShell"):
         return 0

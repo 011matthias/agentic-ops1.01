@@ -64,6 +64,7 @@ def test_apply_to_state_marks_all_visible():
         "seen_published": ["r9"],
         "seen_feedback_count": 3,
         "seen_rematches": [],
+        "seen_rematch_failures": [],
     }
     # idempotent second pass announces nothing
     assert mod.diff_state(state, remote) == ([], [])
@@ -168,3 +169,23 @@ def test_rematch_line_reads_as_one_line_with_the_counts():
     assert line == "August 2026: 14 of 111, pool 7 (statement, 2026-09-11T14:24:46)"
     bare = mod.rematch_line({"event_id": "e2", "run_id": "abc"})
     assert bare == "abc: ? of ?, pool ?"
+
+
+def test_a_failed_rematch_is_announced_once_per_failure():
+    """Item 113: an owed re-match whose last attempt failed is announced; the
+    same failure is not announced twice, a NEW failure on that month is."""
+    mod = _load()
+    owed = {"run_id": "r1", "label": "August 2026", "since": "2026-09-17T14:00:00+00:00",
+            "error": "RuntimeError: model outage", "failed_at": "2026-09-17T14:01:00+00:00",
+            "attempts": 1}
+    quiet = {"run_id": "r2", "label": "July 2026", "since": "2026-09-17T14:02:00+00:00"}
+    remote = {"rematch_pending": [owed, quiet]}
+    assert [m["run_id"] for m in mod.diff_rematch_failures({}, remote)] == ["r1"]
+    state = mod.apply_to_state({}, remote)
+    assert mod.diff_rematch_failures(state, remote) == []
+    again = {**owed, "failed_at": "2026-09-17T15:00:00+00:00", "attempts": 2}
+    assert mod.diff_rematch_failures(state, {"rematch_pending": [again]}) == [again]
+    assert mod.rematch_failure_line(again) == (
+        "August 2026: re-match did not run (RuntimeError: model outage), owed "
+        "since 2026-09-17T14:00:00+00:00, attempt 2"
+    )

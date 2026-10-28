@@ -10,23 +10,45 @@ for three facts about a receipt's merchant:
   * a default COST CENTER for it (backlog item 47), the project or purpose
     this brand's spend belongs to.
 
-Consulted in `generate_expenses` ONLY (mirrors the Phase-6 `ExpenseMemory`
-contract); `reconcile()` never sees it. It sits ABOVE the learned SQLite
-tables in precedence: registry -> learned -> LLM, and a reviewer override
-always wins over all three. An empty registry resolves nothing, so a
-tenant with no `merchants` key behaves exactly as before.
+Consulted in `generate_expenses` and, since note item M1 (2026-09-18), for
+a month's receiptless charges (`categorize_charges`); `reconcile()` itself
+never sees it. Precedence for the CATEGORY: a reviewer override > the
+registry default > learned memory > the model. The ACCOUNT of a merchant
+with a registry default comes from the (company, vendor) rule memory holds
+for the receipt's company (`categorize._registry_account`), so one
+merchant keeps one category while its account varies by company, which is
+Dirk's 2026-09-18 description of how the books work. An empty registry
+resolves nothing, so a tenant with no `merchants` key behaves exactly as
+before.
 
 Shape:
     settings["merchants"] = {
         "<canonical name>": {
             "aliases": ["raw pattern", ...],   # extra strings to match on
-            "category": "<one of EXPENSE_CATEGORIES>" | None,
+            "category": "<a bucket, or a curated GL leaf code>" | None,
             "zoho_account": "<chart label>" | None,
             "multi_category": True,            # optional (2026-08-19)
             "cost_center": "<defined name>" | None,   # optional (item 47)
+            "card_key": "<card key>",          # optional (note item M2)
+            "card_key_learned": True,          # optional, machine-set
+            "cards_seen": ["<card key>", ...], # optional, machine-kept
+            "profile": "<free prose>",         # optional (note item M4)
+            "accounts": {"<company>": "<leaf code>"},  # optional (item 180)
+            "accounts_locked": True,           # optional (item 219)
         },
         ...
     }
+
+``accounts`` (items 180/181, owner 2026-09-23/25) is the merchant's GL
+account PER COMPANY, one curated leaf code for each company it books to.
+Codes only, never names: a name is one company's wording of an account and
+the same code reads differently across the three charts. The key is a company
+label as the app holds it (either spelling of a company works, because the
+engine matches on the label's Zoho org, not on the text). On a GL month the
+receipt's own company's entry decides the account before anything else the
+registry knows (`categorize._registry_gl`); a bucket month never reads it.
+A `multi_category` merchant ignores it for the same reason it ignores its
+category.
 
 A `multi_category` merchant (backlog item 8) decouples the registry's two
 facts: the canonical NAME still resolves (spelling stability), but no
@@ -44,6 +66,39 @@ independently, so the edit ORDER must not matter. A name the registry does
 not define fails to resolve at resolution time and leaves the row
 unassigned, rather than stamping a centre nobody defined.
 
+``card_key`` (note item M2, 2026-09-18) is the card this brand's spend is
+exclusively on, when it has one: the last link of the row's card chain
+(`web/service.resolve_batch_row_cards`), consulted only for a receipt that
+prints no card number, names no assigned hint word, and is not remembered
+from an earlier month. Like ``cost_center`` it is stored as typed and is NOT
+checked against the card registry, so the edit ORDER of cards and merchants
+does not matter; a key no card defines resolves to nothing and the row stays
+uncarded rather than being stamped with a card nobody has.
+
+``cards_seen`` is the machine's own record of every card this merchant's
+receipts actually resolved to, accumulated at sign-off, and ``card_key_learned``
+marks a ``card_key`` the machine wrote from it rather than a person. The
+learner sets a key only while ``cards_seen`` holds exactly ONE card, drops a
+learned key the moment a second card appears, and never touches a key an
+editor typed. Two cards are a fact about the merchant, not a conflict to
+resolve by guessing.
+
+``profile`` (note item M4, 2026-09-20) is the unstructured knowledge beside
+all of the above: what the business actually buys from this merchant, on
+which card and for which company, anything Criss or Dirk would tell a new
+bookkeeper on their first day. Free prose, because the whole point is the
+part that does not fit a field. It is read by the categorizer as CONTEXT for
+that merchant's receipts and by nothing else: no resolver keys on it, no
+review state fires on it, and it never carries a category or an account of
+its own. Per `rule_untrusted_inbound` it is fenced as untrusted data in
+every prompt that carries it (`llm/client._merchant_profile_block`) — a
+profile informs the category, it never instructs the model — because the
+learning path may append to it and a machine line is only as trustworthy as
+the receipts it was read from. Lines a person wrote and lines the tool
+appended are told apart by the ``[tool YYYY-MM-DD]`` prefix
+(`append_machine_note`); the tool only ever appends, so an editor's prose is
+never rewritten by the machine.
+
 Matching (`resolve`): normalized-exact on the canonical name or any alias,
 then rapidfuzz `token_set_ratio >= threshold` over the same strings, else
 unmatched. Both the receipt's extracted `vendor_clean` and its raw
@@ -52,18 +107,327 @@ probes, so a path that never produced a `vendor_clean` still resolves.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
+import unicodedata
+from dataclasses import dataclass, replace
+from functools import lru_cache
 
 from rapidfuzz import fuzz
 
 from .matching.deterministic import _normalize as normalize_vendor
+from .category_vocabulary import recognize as recognize_category
+from .error_codes import CodedValueError
 from .matching.types import EXPENSE_CATEGORIES
-from .vendor_names import clean_vendor_name
+from .vendor_names import _LEGAL_SUFFIXES, clean_vendor_name
 
 # token_set_ratio (0-100) at or above this counts as a confident brand
 # match. High enough that only a genuine spelling / OCR variant of a known
 # alias clears it, not an unrelated merchant sharing one common token.
 DEFAULT_FUZZY_THRESHOLD = 88.0
+
+# Backlog item 117 (2026-09-17 voids audit). token_set_ratio scores 100
+# whenever one side's words are a subset of the other's, so a one-word
+# alias like "Mercado" made every vendor containing that word a certain
+# hit: "Mercado Livre" filed as NOBRE ATACADO / Meals, "Gasolina Comum" as
+# RAC. The rules below close it, mirroring the card registry's generic
+# tender words (cards.GENERIC_TENDER_WORDS):
+#
+#   * An alias built only of generic words (a kind of shop, a product, a
+#     fuel) names no merchant. The resolver ignores it and the settings
+#     PUT refuses to add a new one. A merchant's CANONICAL name is never
+#     ignored: that is the name somebody chose for it.
+#   * A fuzzy hit needs the merchant's FIRST distinctive word (where the
+#     brand sits; place names trail) in the vendor, and is discounted by
+#     the share of the vendor's distinctive words the merchant does not
+#     cover. Generic words, joining words, legal forms, single letters and
+#     bare numbers are not distinctive, so "O Castelinho Bar" still reads
+#     as O CASTELINHO and "Auto Posto Pimentel" as AUTO POSTO PIMENTEL SAO
+#     JOSE, while "Auto Posto Shell" and "Posto Sao Jose" no longer do.
+#   * A vendor whose distinctive words are exactly the merchant's also
+#     matches, whatever generic words surround them ("KI-MASSA CAFE" is
+#     PADARIA E PASTELARIA KI-MASSA).
+#
+# Trade-offs, named: every one-word alias the live registry carried is a
+# generic word, so none of them matches on its own any more (the merchants
+# still resolve by their canonical names); a brand plus a place the merchant
+# does not carry ("Starbucks Paulista") and a vendor naming only part of a
+# longer merchant plus a shop word ("NOBRE ATACADO E VAREJO" for NOBRE
+# ATACADO SAO JOSE DA C) fall through to the model instead of guessing,
+# because the same shape also reads "Farmacia Pimentel" as the petrol station.
+GENERIC_MERCHANT_WORDS = frozenset({
+    # PT kinds of shop
+    "supermercado", "supermecado", "hipermercado", "mercado",
+    "mercadinho", "minimercado", "mercearia", "atacado", "atacadao",
+    "varejo", "padaria", "pastelaria", "confeitaria", "lanchonete",
+    "restaurante", "bar", "boteco", "cafe", "cafeteria", "sorveteria",
+    "pizzaria", "churrascaria", "farmacia", "drogaria", "posto", "auto",
+    "loja", "comercio", "comercial", "distribuidora", "conveniencia",
+    "acougue", "hortifruti", "feira", "quiosque", "hotel", "pousada",
+    "estacionamento", "borracharia", "rotisse", "rotisserie",
+    "rotisseria",
+    # PT products
+    "comida", "bebida", "drink", "doce", "bolo", "pao", "paes", "pastel",
+    "pasteis", "coxinha", "salgado", "sushi", "peixe", "sorvete", "feijao",
+    "tapioca", "caipirinha", "cerveja", "lanche", "almoco", "jantar",
+    "gasolina", "alcool", "etanol", "diesel", "combustivel",
+    "combustiveis", "esporte", "caldinho", "espetinho", "churrasco",
+    # EN
+    "sport", "restaurant", "coffee", "pub", "grocery", "market",
+    "supermarket", "store", "shop", "gas", "fuel", "food", "bakery",
+    "pharmacy", "parking", "taxi",
+    # DE / ES / FR
+    "supermarkt", "markt", "baeckerei", "backerei", "tankstelle",
+    "kiosk", "apotheke", "tienda", "supermarche", "marche", "epicerie",
+    "boulangerie", "pharmacie",
+})
+
+# Joining words that carry no brand (PT / EN / ES / FR / DE).
+_STOPWORDS = frozenset({
+    "de", "do", "da", "dos", "das", "e", "o", "a", "os", "as", "em",
+    "the", "and", "of", "y", "del", "la", "el", "le", "les", "des", "du",
+    "et", "und", "von", "der", "die",
+})
+
+
+def _tokens(text: str | None) -> list[str]:
+    """Diacritic-folded normalized words ("SÃO JOSÉ" -> ["sao", "jose"]).
+    `normalize_vendor` is ASCII-alnum and would split accented letters."""
+    folded = unicodedata.normalize("NFKD", str(text or ""))
+    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
+    return normalize_vendor(folded).split()
+
+
+def _is_generic_word(t: str) -> bool:
+    """A listed generic word, or its plural ("mercados", "lojas")."""
+    return t in GENERIC_MERCHANT_WORDS or (
+        len(t) > 3 and t.endswith("s") and t[:-1] in GENERIC_MERCHANT_WORDS
+    )
+
+
+def _distinctive(tokens: list[str]) -> list[str]:
+    """The words that can identify a merchant: not a joining word, a legal
+    form ("Inc", "Ltda"), a generic word, a single letter or a bare number."""
+    return list(_distinctive_words(tuple(tokens)))
+
+
+# The fuzzy tier asks this of the same registry names for every receipt it
+# resolves: 127k calls in one re-match of September (2026-10-07). Every word
+# list it reads is a frozenset, so the answer depends on the tokens alone.
+@lru_cache(maxsize=1 << 14)
+def _distinctive_words(tokens: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(
+        t for t in tokens
+        if len(t) > 1 and not t.isdigit()
+        and t not in _STOPWORDS and t not in _LEGAL_SUFFIXES
+        and not _is_generic_word(t)
+    )
+
+
+def _key_words(tokens: list[str]) -> list[str]:
+    """The distinctive words, else the numbers: a brand that IS a number
+    ("99", "Posto 10") is identified by it."""
+    return _distinctive(tokens) or [
+        t for t in tokens if t.isdigit() and len(t) > 1
+    ]
+
+
+def is_generic_alias(text: str | None) -> bool:
+    """True when an alias names no merchant: at least one generic word and
+    nothing distinctive ("Mercado", "Supermercado", "Comida e Bebida")."""
+    tokens = _tokens(text)
+    return (
+        any(_is_generic_word(t) for t in tokens)
+        and not _distinctive(tokens)
+    )
+
+
+# One word covers another when it is the same word or a spelling variant of
+# it. Looser than the whole-name threshold on purpose: a one-letter OCR slip
+# in a six-letter word ("openal" / "openai") is 83, and the whole name must
+# still clear DEFAULT_FUZZY_THRESHOLD (or share every distinctive word).
+_WORD_VARIANT_RATIO = 80.0
+
+
+def _covers(
+    word: str, words: list[str] | set[str],
+    ratio: float = _WORD_VARIANT_RATIO,
+) -> bool:
+    return word in words or any(fuzz.ratio(word, w) >= ratio for w in words)
+
+
+def _fuzzy_score(
+    probe_norm: str, cand_norm: str,
+    probe_tokens: list[str], cand_tokens: list[str], threshold: float,
+    canonical_lead: str | None = None,
+) -> float:
+    """The fuzzy tier's score for one probe x candidate (0-100).
+
+    `canonical_lead` is the lead key word of the candidate's merchant's
+    CANONICAL name (front 3 step 3), for the containment guard below."""
+    probe_keys = _key_words(probe_tokens)
+    cand_keys = _key_words(cand_tokens)
+    if not probe_keys or not cand_keys:
+        return 0.0
+    if not _covers(cand_keys[0], probe_keys):
+        return 0.0
+    probe_distinct = _distinctive(probe_tokens)
+    cand_distinct = _distinctive(cand_tokens)
+    # Same distinctive words on both sides. No whole-name score backs this
+    # rule, so a word variant must clear the full threshold here: at 80,
+    # "Cafe Americano" (a coffee on an expense report) read as Americanas.
+    if probe_distinct and cand_distinct and all(
+        _covers(t, cand_distinct, threshold) for t in probe_distinct
+    ) and all(_covers(t, probe_distinct, threshold) for t in cand_distinct):
+        return 100.0
+    score = fuzz.token_set_ratio(probe_norm, cand_norm)
+    if score < threshold:
+        return score
+    cand = set(cand_tokens)
+    covered = total = 0
+    for t in probe_keys:
+        total += len(t)
+        if _covers(t, cand):
+            covered += len(t)
+    score = score * covered / total
+    # Front 3 step 3, the containment guard. token_set_ratio scores 100
+    # whenever the probe's words sit inside a longer name, and the discount
+    # above only counts the PROBE's uncovered words, so a name that says
+    # less than the listed one reached it: 'Twilio Inc' filed as 'Sendgrid -
+    # Twilio INC' (through its alias 'TWILIO SENDGRID'), 'Google LLC' as
+    # Google Ads. A probe that is a strict subset of the candidate now needs
+    # the lead word of the merchant's own name, and on a platform brand the
+    # product word, and it scores just under an equal-words name so a
+    # shorter listed name covering the same words wins.
+    if probe_distinct and all(
+        _covers(t, cand_distinct) for t in probe_distinct
+    ) and not all(_covers(t, probe_distinct) for t in cand_distinct):
+        if canonical_lead and not _covers(canonical_lead, probe_keys):
+            return 0.0
+        if cand_keys[0] in PLATFORM_WORDS and len(cand_keys) > 1 and not any(
+            _word_covers(t, cand_keys[1]) for t in probe_keys[1:]
+        ):
+            return 0.0
+        score -= 0.5
+    return score
+
+
+# Front 3 step 2: brands that sell several products whose bookings differ
+# (Google Workspace vs Google Ads; Microsoft 365 vs Azure; AWS vs an Amazon
+# order; Zoho One vs Zoho Books). A bank line naming only the brand names no
+# merchant among them, so the descriptor tier asks for the product word too.
+PLATFORM_WORDS = frozenset({
+    "google", "microsoft", "msft", "amazon", "amz", "aws",
+})
+
+# Chase prints a card line's merchant field cut to this many characters
+# ('GOOGLE *Workspace_bris'); the last word of such a line may be cut short.
+_CHASE_CUT_WIDTHS = frozenset({22, 23})
+
+
+def _is_bare_platform_alias(alias: str, canonical_keys: list[str]) -> bool:
+    """An alias that is only a platform brand ('google') on a merchant whose
+    own name carries a product ('Google Ads'): it names every product of the
+    brand, so like a generic alias it is ignored (front 3 step 3; it filed
+    'Google LLC' as Google Ads in the planned list)."""
+    keys = _key_words(_tokens(alias))
+    return (
+        len(keys) == 1 and keys[0] in PLATFORM_WORDS
+        and len(canonical_keys) > 1 and canonical_keys[0] == keys[0]
+    )
+
+
+def _word_covers(line_word: str, name_word: str) -> bool:
+    """A bank line's word stands for a listed name's word: the same word, or
+    one cut short by the card network (four letters at least on the shorter
+    side, so 'Workspac' is Workspace and 'go' is not Google)."""
+    if line_word == name_word:
+        return True
+    short, long_ = sorted((line_word, name_word), key=len)
+    return len(short) >= 4 and long_.startswith(short)
+
+
+def _descriptor_score(
+    probe: list[str], cand: list[str], cut: bool = False,
+) -> int | None:
+    """How many of a listed name's key words a bank line's key words cover,
+    or None when the descriptor tier's rules say it is not this merchant
+    (see `MerchantRegistry._descriptor_hit`). `cut` says the line is at
+    Chase's cut width, so its last word may be a stub."""
+    if not cand:
+        return None
+    lead = cand[0]
+    if probe[0] == lead:
+        rest = probe[1:]
+    else:
+        # The line split a one-word name ('Host Europe' for 'HostEurope').
+        acc, i = "", 0
+        while i < len(probe) and lead.startswith(acc + probe[i]):
+            acc += probe[i]
+            i += 1
+        if len(lead) < 5 or acc != lead:
+            return None
+        rest = probe[i:]
+    # A handle or product code that repeats the brand ('ZOHO* ZOHO-ONE').
+    rest = [w for w in rest if w != lead]
+    if lead in PLATFORM_WORDS:
+        products = cand[1:]
+        if not products:
+            # A bare brand is the merchant only when the line says nothing
+            # more: "GOOGLE" is Google, "GOOGLE *ADS" is not.
+            if [w for w in rest if len(w) >= 3]:
+                return None
+        elif not any(_word_covers(w, products[0]) for w in rest):
+            return None
+    covered = [w for w in rest if any(_word_covers(w, c) for c in cand[1:])]
+    # A word the name does not carry is a country or state code (three
+    # letters at most), a short code the reference rule keeps ('B2vMDX'
+    # carries a digit), or the stub Chase's cut left at the end of the line.
+    # Anything else is another business ('FENIX TURISMO' is not
+    # Supermercado Fenix), so the line is not this merchant.
+    uncovered = [
+        w for w in rest
+        if w not in covered and len(w) > 3
+        and not any(ch.isdigit() for ch in w)
+        and not (cut and w == probe[-1])
+    ]
+    if uncovered or len([w for w in rest if w not in covered]) > 1:
+        return None
+    return 1 + len(covered)
+
+
+def drop_unvouched_remembered_cards(receipts: list, registry) -> list:
+    """Item 173, second half: clear the remembered card off any receipt whose
+    brand the registry does not vouch is paid on ONE card.
+
+    `Receipt.card_key` is by its own contract the card remembered from a
+    reviewer's per-row fix on an earlier month, never anything read off the
+    document, so at ingest every value in it came from `ExpenseMemory.apply`
+    and clearing an unvouched one takes nothing else with it.
+
+    An absent or empty registry vouches for NOTHING, so every remembered card
+    is cleared. That is not over-reach, it is the same answer the read-time
+    twin already gives: `merchant_vouches_one_card` returns False without a
+    registry, so on a registry-free run the grid declines to lend a
+    remembered card anyway. Letting the ingest stamp survive there would put
+    the card back by the other door, which is the whole defect.
+    """
+    out = []
+    for r in receipts:
+        if not (getattr(r, "card_key", "") or "").strip():
+            out.append(r)
+            continue
+        vouched = registry is not None and registry.vouches_one_card(
+            getattr(r, "vendor_clean", None), getattr(r, "detected_vendor", None)
+        )
+        out.append(r if vouched else replace(r, card_key=None))
+    return out
+
+
+def _cards_seen(entry: dict) -> tuple[str, ...]:
+    """The merchant's `cards_seen` as a clean tuple; () when it has none."""
+    return tuple(
+        s for s in (str(c or "").strip() for c in (entry.get("cards_seen") or [])) if s
+    )
 
 
 @dataclass(frozen=True)
@@ -80,6 +444,74 @@ class MerchantMatch:
     # Item 47: the brand's default project / purpose. None when unset, and
     # unaffected by `multi_category` (which decouples CATEGORY only).
     cost_center: str | None = None
+    # Item 115: whether this merchant is marked multi-category. `category`
+    # is None for that merchant AND for a naming-only one, and the two are
+    # not the same instruction: a multi-category merchant says "judge every
+    # receipt on its own items", so a remembered category must not flatten
+    # its lines either.
+    multi_category: bool = False
+    # Note item M2: the card this brand's spend is exclusively on, when the
+    # registry carries one. None when unset, and unaffected by
+    # `multi_category` (which decouples CATEGORY only) for the same reason
+    # `cost_center` is: a vendor can book to several categories and still be
+    # paid from one card.
+    card_key: str | None = None
+    # Item 173: every card this merchant's receipts have actually resolved
+    # to, the machine's own record. Carried on the match so the single-card
+    # question can be asked of the REGISTRY rather than of a raw settings
+    # dict the asker happens to hold. `card_key` answers "which card", this
+    # answers "may anything lend one at all", and the second question has
+    # two askers in two layers (ingest and the grid) that must agree.
+    cards_seen: tuple[str, ...] = ()
+    # Note item M4: the merchant's free-prose profile, when it carries one.
+    # Context for the categorizer's prompts and nothing else; never a
+    # resolver. Carried on a `multi_category` merchant too, where it is worth
+    # the most: a vendor that books to several categories is exactly the one
+    # whose receipts need the background a field cannot hold.
+    profile: str | None = None
+    # Items 180/181: the merchant's account per company, `(label, code)`
+    # pairs in label order (a tuple so the match stays hashable). Empty on a
+    # merchant with no map and on a `multi_category` one.
+    accounts: tuple[tuple[str, str], ...] = ()
+
+
+def _accounts_pairs(entry: dict) -> tuple[tuple[str, str], ...]:
+    raw = entry.get("accounts")
+    if not isinstance(raw, dict):
+        return ()
+    return tuple(sorted(
+        (str(k).strip(), str(v).strip())
+        for k, v in raw.items()
+        if str(k or "").strip() and str(v or "").strip()
+    ))
+
+
+def company_account(
+    accounts, org_id: str | None, entity_orgs: dict | None,
+) -> tuple[str, str] | None:
+    """The `(label, code)` a merchant's per-company map names for the
+    company whose Zoho org is `org_id`, or None (items 180/181).
+
+    Matched on the ORG, not the label text: the app holds two spellings of
+    every company ("Corporate Services" on receipts, "Brisken Corp Services,
+    LLC" in the settings registry) and both map to one org. Two labels of
+    one org naming two different codes is a contradiction nobody can
+    resolve by guessing, so it answers None and the receipt goes to the
+    engine as if the map were silent."""
+    if not org_id or not accounts:
+        return None
+    from .coa_provision import org_id_for_entity
+
+    pairs = accounts.items() if isinstance(accounts, dict) else accounts
+    hits = {
+        (str(label), str(code))
+        for label, code in pairs
+        if str(code or "").strip()
+        and org_id_for_entity(label, entity_orgs) == org_id
+    }
+    if len({code for _label, code in hits}) != 1:
+        return None
+    return sorted(hits)[0]
 
 
 class MerchantRegistry:
@@ -97,8 +529,16 @@ class MerchantRegistry:
         self._entries: dict[str, dict] = {}
         # normalized string -> (canonical, original string) for exact lookup
         self._exact: dict[str, tuple[str, str]] = {}
-        # (normalized, original, canonical) triples for the fuzzy sweep
-        self._candidates: list[tuple[str, str, str]] = []
+        # (normalized, original, canonical, folded words) for the fuzzy sweep
+        self._candidates: list[tuple[str, str, str, list[str]]] = []
+        # canonical -> the lead key word of its own name (front 3 step 3)
+        self._lead: dict[str, str] = {}
+        # (vendor_clean, vendor_raw) -> `resolve`'s answer. Safe because the
+        # registry never changes after construction and MerchantMatch is
+        # frozen; one re-match asks 700 times for 274 names (2026-10-07).
+        self._resolved: dict[
+            tuple[str | None, str | None], MerchantMatch | None
+        ] = {}
 
         # Deterministic ordering: sort by canonical so a first-wins result on
         # any normalized-key or fuzzy-score collision is stable across runs.
@@ -111,7 +551,15 @@ class MerchantRegistry:
             if not canonical:
                 continue
             self._entries[canonical] = entry
-            for raw in (canonical, *(entry.get("aliases") or [])):
+            canonical_keys = _key_words(_tokens(canonical))
+            if canonical_keys:
+                self._lead[canonical] = canonical_keys[0]
+            aliases = [
+                a for a in (entry.get("aliases") or [])
+                if not is_generic_alias(str(a or ""))
+                and not _is_bare_platform_alias(str(a or ""), canonical_keys)
+            ]
+            for raw in (canonical, *aliases):
                 s = str(raw or "").strip()
                 if not s:
                     continue
@@ -119,7 +567,7 @@ class MerchantRegistry:
                 if not norm:
                     continue
                 self._exact.setdefault(norm, (canonical, s))
-                self._candidates.append((norm, s, canonical))
+                self._candidates.append((norm, s, canonical, _tokens(s)))
 
     def __bool__(self) -> bool:
         return bool(self._entries)
@@ -131,13 +579,30 @@ class MerchantRegistry:
         """Ordered, de-duped normalized probe strings for one receipt:
         extracted brand first, then a deterministic clean of the raw name,
         then the raw name itself."""
+        return [norm for norm, _raw in self._probe_pairs(vendor_clean, vendor_raw)]
+
+    def _probe_pairs(
+        self, vendor_clean: str | None, vendor_raw: str | None
+    ) -> list[tuple[str, str]]:
+        """`_probes` with each probe's source string kept, so the coverage
+        rule can fold its diacritics before `normalize_vendor` splits them.
+
+        Item 216 cause 3: the merchant identity of each name comes LAST, so
+        "Anthropic, PBC (@anthropic)" reaches the canonical "Anthropic" while
+        every probe that matched before still matches first (exact wins in
+        probe order)."""
+        from .merchant_identity import identity_key
+
         seen: set[str] = set()
-        out: list[str] = []
-        for raw in (vendor_clean, clean_vendor_name(vendor_raw), vendor_raw):
+        out: list[tuple[str, str]] = []
+        for raw in (
+            vendor_clean, clean_vendor_name(vendor_raw), vendor_raw,
+            identity_key(vendor_clean), identity_key(vendor_raw),
+        ):
             norm = normalize_vendor(str(raw)) if raw else ""
             if norm and norm not in seen:
                 seen.add(norm)
-                out.append(norm)
+                out.append((norm, str(raw)))
         return out
 
     def resolve(
@@ -148,32 +613,146 @@ class MerchantRegistry:
         the earlier probe (vendor_clean before raw) wins within a tier."""
         if not self._entries:
             return None
-        probes = self._probes(vendor_clean, vendor_raw)
+        key = (vendor_clean, vendor_raw)
+        if key not in self._resolved:
+            self._resolved[key] = self._resolve(vendor_clean, vendor_raw)
+        return self._resolved[key]
+
+    def _resolve(
+        self, vendor_clean: str | None, vendor_raw: str | None
+    ) -> MerchantMatch | None:
+        probes = self._probe_pairs(vendor_clean, vendor_raw)
         if not probes:
             return None
 
         # 1) Exact: normalized equality on any canonical / alias string.
-        for norm in probes:
+        for norm, _raw in probes:
             hit = self._exact.get(norm)
             if hit:
                 canonical, original = hit
                 return self._match(canonical, original, 100.0, "exact")
 
-        # 2) Fuzzy: best token_set_ratio across probe x candidate. Strict `>`
-        # over the sorted-canonical candidate list keeps ties deterministic.
+        # 2) Fuzzy: best `_fuzzy_score` across probe x candidate (item 117:
+        # token_set_ratio gated on the merchant's lead word and discounted by
+        # the vendor's uncovered distinctive words). Strict `>` over the
+        # sorted-canonical candidate list keeps ties deterministic.
         best_score = -1.0
         best_canonical: str | None = None
         best_original: str | None = None
-        for norm in probes:
-            for cand_norm, cand_orig, canonical in self._candidates:
-                score = fuzz.token_set_ratio(norm, cand_norm)
+        for norm, raw in probes:
+            probe_tokens = _tokens(raw)
+            for cand_norm, cand_orig, canonical, cand_tokens in self._candidates:
+                score = _fuzzy_score(
+                    norm, cand_norm, probe_tokens, cand_tokens, self.threshold,
+                    canonical_lead=self._lead.get(canonical),
+                )
                 if score > best_score:
                     best_score = score
                     best_canonical = canonical
                     best_original = cand_orig
         if best_canonical is not None and best_score >= self.threshold:
             return self._match(best_canonical, best_original, best_score, "fuzzy")
+        # 3) Descriptor (front 3 step 2): a bank line's merchant words.
+        hit = self._descriptor_hit(vendor_clean, vendor_raw)
+        if hit is not None:
+            canonical, original = hit
+            return self._match(canonical, original, 100.0, "descriptor")
         return None
+
+    def _descriptor_hit(
+        self, vendor_clean: str | None, vendor_raw: str | None,
+    ) -> tuple[str, str] | None:
+        """The descriptor tier: `(canonical, matched string)` or None.
+
+        A card network's line carries the merchant's name plus words the
+        merchant does not: a truncation ('GOOGLE *Workspace_bris'), a country
+        ('HOSTINGER US INC'), a product ('ZOHO* ZOHO-ONE'), a city ('Host
+        Europe RN36953805 Koeln'). The fuzzy tier discounts every one of those
+        words, so these lines missed even under the planned aliases.
+
+        Here the line is first reduced to its merchant words
+        (`merchant_identity.identity_key`: the location tail, phone numbers,
+        references and legal forms go), then a listed name matches when its
+        LEAD word opens the line (or, for a one-word name of five letters or
+        more, the line's first words run together spell it: 'Host Europe' is
+        'HostEurope'). For the platforms that sell several products under one
+        brand (Google Workspace, Cloud, Play and Ads; Microsoft; Amazon and
+        AWS), the lead word alone names no merchant, so the listed name's
+        product word has to appear too, whole or cut short. At most one of
+        the line's other words may go uncovered, and only a country or state
+        code, a short code, or the stub at the end of a line cut at Chase's
+        width. Only a listed string that opens with the merchant's own brand
+        word takes part, and two different merchants matching equally well
+        is no answer."""
+        from .merchant_identity import identity_key
+
+        best: tuple[int, str, str] | None = None
+        tied = False
+        for text in (vendor_raw, vendor_clean):
+            words = _tokens(identity_key(text)) if text else []
+            probe = _key_words(words)
+            if not probe:
+                continue
+            cut = len(str(text).strip()) in _CHASE_CUT_WIDTHS
+            # A kind of shop the line names ('Farmacia', 'e Varejo') and the
+            # listed name does not is another business (item 117's
+            # trade-offs: 'Farmacia Pimentel' is not the petrol station).
+            kinds = {w for w in words if _is_generic_word(w)}
+            for _norm, original, canonical, cand_tokens in self._candidates:
+                cand = _key_words(cand_tokens)
+                # Only a listed string that opens with the merchant's own
+                # brand word: 'Twilio Inc' is not 'Sendgrid - Twilio INC'
+                # through its alias 'TWILIO SENDGRID'.
+                if not cand or cand[0] != self._lead.get(canonical):
+                    continue
+                if not kinds <= set(cand_tokens):
+                    continue
+                score = _descriptor_score(probe, cand, cut)
+                if score is None:
+                    continue
+                if best is None or score > best[0]:
+                    best, tied = (score, canonical, original), False
+                elif score == best[0] and canonical != best[1]:
+                    tied = True
+            if best is not None:
+                break
+        if best is None or tied:
+            return None
+        return best[1], best[2]
+
+    def vouches_one_card(
+        self, vendor_clean: str | None, vendor_raw: str | None
+    ) -> bool:
+        """Item 173: does the registry vouch that this brand is paid on
+        exactly ONE card, so a card REMEMBERED from an earlier correction may
+        lend itself to a receipt of it?
+
+        The registry's own card learner already works this way: note item M2
+        sets a merchant's `card_key` only while `cards_seen` holds exactly one
+        card, precisely so a brand seen on two never lends either. The
+        remembered correction did not inherit that rule, and the live data
+        says it needed it. Criss's single OpenAI fix taught card 3645, while
+        the hard evidence (printed numbers, her own picks, the statement) puts
+        OpenAI on card-9693 eight times and 3645 once. The memory was the
+        minority card, 8 to 1, on 12 live September rows.
+
+        Owner ruling 2026-09-23, given that split: gate it. A blank prompts a
+        human to look; a confidently wrong card silently books the receipt to
+        the wrong entity AND the wrong person, because both ride the card.
+
+        Deliberately conservative about the unknown case: a vendor the
+        registry cannot resolve at all is NOT vouched, because "no evidence of
+        a second card" is not evidence of one card. OpenAI is exactly that
+        vendor (adding it is the owner's call and he has said he raises it),
+        which is what makes this ruling bite today.
+
+        It lives on the registry rather than beside one caller because two
+        layers ask it: `ExpenseMemory`'s stamp at INGEST and
+        `fill_remembered_cards` at read time. A gate held in one and not the
+        other is the shape of the bug item 173 was split in half by.
+        """
+        match = self.resolve(vendor_clean, vendor_raw)
+        return match is not None and len(match.cards_seen) <= 1
 
     def _match(
         self, canonical: str, original: str, score: float, kind: str
@@ -193,16 +772,32 @@ class MerchantRegistry:
                 score=float(score),
                 kind=kind,
                 cost_center=(entry.get("cost_center") or None),
+                multi_category=True,
+                card_key=(entry.get("card_key") or None),
+                cards_seen=_cards_seen(entry),
+                profile=(entry.get("profile") or None),
             )
         category = (entry.get("category") or None)
         return MerchantMatch(
             canonical_name=canonical,
-            category=category if category in EXPENSE_CATEGORIES else None,
+            # Re-validate our OWN store against the vocabulary that store is
+            # allowed to hold. `normalize_merchants_setting` has accepted
+            # curated leaf codes since #1236 (:532), so filtering here on the
+            # eight buckets threw away exactly what the write path had just
+            # saved: the rule went inert, the receipt fell through to the LLM
+            # at full cost, and nothing errored or logged. That is the shape
+            # this whole change set exists to remove, so it may not sit in the
+            # reader of the registry.
+            category=recognize_category(category),
             zoho_account=(entry.get("zoho_account") or None),
             matched_alias=original,
             score=float(score),
             kind=kind,
             cost_center=(entry.get("cost_center") or None),
+            card_key=(entry.get("card_key") or None),
+            cards_seen=_cards_seen(entry),
+            profile=(entry.get("profile") or None),
+            accounts=_accounts_pairs(entry),
         )
 
     @classmethod
@@ -213,39 +808,129 @@ class MerchantRegistry:
         return cls(merchants, threshold=threshold)
 
 
-def normalize_merchants_setting(raw: object) -> dict:
+def _normalize_accounts(
+    canonical: str, raw: object, dropped: list[tuple[str, str]] | None,
+) -> dict[str, str]:
+    """Items 180/181: `{company label: leaf code}`, codes only.
+
+    Each value goes through `category_vocabulary.recognize`, so a `"CODE
+    name"` label an editor echoes back is stored as its code. A bucket, a
+    name, or a string from neither vocabulary is DROPPED and named, never
+    refused, for the reason `category` is: a settings save replaces the whole
+    map, and one bad value must not 400 the cards and entities with it.
+    Whether the code is postable in that company is decided where it posts
+    (`categorize._registry_gl`), not here: companies and merchants are edited
+    independently, so the edit order must not matter."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise CodedValueError(
+            f"merchant {canonical!r} accounts must be an object of "
+            "{company: account code}",
+            code="invalid_body", merchant=canonical,
+        )
+    out: dict[str, str] = {}
+    for label, value in raw.items():
+        company = str(label or "").strip()
+        text = str(value or "").strip()
+        if not company or not text:
+            continue
+        code = recognize_category(text)
+        if code is None or code in EXPENSE_CATEGORIES:
+            if dropped is not None:
+                dropped.append((canonical, company))
+            continue
+        out[company] = code
+    return dict(sorted(out.items()))
+
+
+def normalize_merchants_setting(
+    raw: object, *, stored: object = None,
+    dropped: list[tuple[str, str]] | None = None,
+    dropped_accounts: list[tuple[str, str]] | None = None,
+) -> dict:
     """Validate + clean a `merchants` settings payload into the stored shape.
 
     Raises ValueError on a malformed structure (the settings PUT surfaces it
     as HTTP 400). Mirrors the `entities` map contract: the whole map replaces
     the stored one, a blank canonical name is dropped, and each entry must be
     a dict. Aliases are trimmed + de-duplicated on their normalized key; a
-    category, when given, must be one of the fixed expense categories."""
+    category, when given, must be one the tool still knows (either of the two
+    live vocabularies) and is otherwise dropped rather than refused.
+
+    ``dropped``, when given, receives one ``(merchant, category)`` pair per
+    dropped category so the caller can name the loss in its reply. Callers
+    that pass nothing drop silently, which is what the internal callers
+    (memory at sign-off, the seed) want.
+
+    ``stored`` (item 117) is the merchant map already saved, passed by the
+    settings PUT only. When given, an alias made only of generic words
+    ("Mercado") that no stored merchant already carries is refused: it would
+    name no merchant, and the resolver ignores it. Aliases already stored
+    stay accepted, anywhere in the map, so an editor that sends the whole
+    map back (or renames a merchant) never fails on data it did not add.
+    Internal callers (memory at sign-off, the seed) pass nothing and are
+    unchanged.
+
+    ``dropped_accounts`` receives one ``(merchant, company)`` pair per
+    per-company account value that was not a curated leaf code (items
+    180/181), for the same reply."""
     if raw is None:
         return {}
     if not isinstance(raw, dict):
-        raise ValueError("merchants must be an object of {canonical_name: entry}")
+        raise CodedValueError(
+            "merchants must be an object of {canonical_name: entry}",
+            code="invalid_body",
+        )
+    already: set[str] | None = None
+    if isinstance(stored, dict):
+        already = {
+            normalize_vendor(str(a or "").strip())
+            for e in stored.values() if isinstance(e, dict)
+            for a in (e.get("aliases") or [])
+        }
     out: dict[str, dict] = {}
     for name, entry in raw.items():
         canonical = str(name or "").strip()
         if not canonical:
             continue
         if not isinstance(entry, dict):
-            raise ValueError(f"merchant {canonical!r} must be an object")
+            raise CodedValueError(
+                f"merchant {canonical!r} must be an object",
+                code="invalid_body", merchant=canonical,
+            )
         aliases: list[str] = []
         seen: set[str] = set()
         for a in entry.get("aliases") or []:
             s = str(a or "").strip()
             key = normalize_vendor(s)
             if s and key and key not in seen:
+                if (
+                    already is not None and key not in already
+                    and is_generic_alias(s)
+                ):
+                    raise CodedValueError(
+                        f"merchant {canonical!r} alias {s!r} is a generic "
+                        "word (a kind of shop or product, not a merchant "
+                        "name), so it would match unrelated vendors; use "
+                        "a word from the merchant's own name",
+                        code="merchant_alias_generic",
+                        merchant=canonical, alias=s,
+                    )
                 seen.add(key)
                 aliases.append(s)
         category = str(entry.get("category") or "").strip() or None
-        if category is not None and category not in EXPENSE_CATEGORIES:
-            raise ValueError(
-                f"merchant {canonical!r} category {category!r} is not one of the "
-                "expense categories"
-            )
+        if category is not None:
+            # Two vocabularies are live at once (`category_vocabulary`), and
+            # a value from neither is DROPPED, not refused. A settings save
+            # replaces the whole map, so one merchant holding a string the
+            # server no longer knows would have 400'd the entire save, the
+            # cards and entities tabs included, for an edit that never
+            # touched it. `dropped` carries the loss out to the reply.
+            recognized = recognize_category(category)
+            if recognized is None and dropped is not None:
+                dropped.append((canonical, category))
+            category = recognized
         zoho_account = str(entry.get("zoho_account") or "").strip() or None
         cleaned: dict = {
             "aliases": aliases,
@@ -262,5 +947,137 @@ def normalize_merchants_setting(raw: object) -> dict:
         cost_center = str(entry.get("cost_center") or "").strip()
         if cost_center:
             cleaned["cost_center"] = cost_center
+        # Item 107: where this brand's invoice can be downloaded again
+        # ("platform.openai.com", "Chase statements portal"). Stored only
+        # when set, for the same reason, and free text on purpose: it is a
+        # hint printed next to the charge in the chase list and the request
+        # mail, not something the tool follows.
+        portal = str(entry.get("receipt_portal") or "").strip()
+        if portal:
+            cleaned["receipt_portal"] = portal[:200]
+        # Note item M2: the card this brand's spend is exclusively on, the
+        # machine's record of the cards it has been seen on, and whether the
+        # key was learned rather than typed. All three stored only when set,
+        # so an entry that has none keeps its exact shape. `card_key` is not
+        # checked against the card registry (edit order must not matter --
+        # see the module docstring), and `cards_seen` is capped so a long-
+        # lived merchant cannot grow the settings blob without bound.
+        card_key = str(entry.get("card_key") or "").strip()
+        if card_key:
+            cleaned["card_key"] = card_key[:64]
+        seen_keys: list[str] = []
+        for c in entry.get("cards_seen") or []:
+            s = str(c or "").strip()[:64]
+            if s and s not in seen_keys:
+                seen_keys.append(s)
+        if seen_keys:
+            cleaned["cards_seen"] = sorted(seen_keys)[:32]
+        # Only meaningful beside a key, and only as a machine mark: an entry
+        # a person typed carries no flag, which is exactly what protects it
+        # from the learner.
+        if card_key and entry.get("card_key_learned"):
+            cleaned["card_key_learned"] = True
+        # Note item M4: the merchant's free-prose profile. Stored only when
+        # set, for the same reason, and capped generously rather than tightly
+        # (`receipt_portal` is a hint, this is prose a bookkeeper writes).
+        # Control characters are stripped because the value is rendered in a
+        # page and pasted into a prompt; the newlines that separate its lines
+        # survive, because the machine-note convention needs them.
+        profile = _clean_profile(entry.get("profile"))
+        if profile:
+            cleaned["profile"] = profile
+        # Items 180/181: the per-company account map. On the settings PUT
+        # (`stored` given) an entry that does not carry the key keeps the
+        # map already saved: an editor rebuilding merchants from the fields
+        # it knows would otherwise wipe every company's account on an
+        # unrelated save. Only an explicit `{}` or null clears it. The
+        # internal callers pass no `stored` and always carry the key they
+        # read, so for them absent is simply absent.
+        if "accounts" in entry:
+            accounts = _normalize_accounts(
+                canonical, entry.get("accounts"), dropped_accounts)
+        elif isinstance(stored, dict) and isinstance(stored.get(canonical), dict):
+            accounts = _normalize_accounts(
+                canonical, stored[canonical].get("accounts"), None)
+        else:
+            accounts = {}
+        if accounts:
+            cleaned["accounts"] = accounts
+        # Item 219: the decided-accounts lock. Stored only when set, and kept
+        # on a settings PUT that omits the key for the reason `accounts` is:
+        # an editor rebuilding merchants from the fields it knows must not
+        # unlock an entry on an unrelated save. Only an explicit false clears.
+        if ACCOUNTS_LOCKED in entry:
+            locked = entry.get(ACCOUNTS_LOCKED) is True
+        elif isinstance(stored, dict) and isinstance(stored.get(canonical), dict):
+            locked = is_accounts_locked(stored[canonical])
+        else:
+            locked = False
+        if locked:
+            cleaned[ACCOUNTS_LOCKED] = True
         out[canonical] = cleaned
     return out
+
+
+# Item 219 (owner 2026-09-25): a merchant whose per-company accounts are
+# DECIDED. No learner changes a locked entry's `accounts`, `zoho_account` or
+# `category`; only Settings, an owner-approved write, or the Publish drift
+# lesson a person ticks do. A person's pick on a row still wins on that row.
+ACCOUNTS_LOCKED = "accounts_locked"
+
+
+def is_accounts_locked(entry: object) -> bool:
+    """Whether a stored merchant entry carries the decided-accounts lock."""
+    return isinstance(entry, dict) and entry.get(ACCOUNTS_LOCKED) is True
+
+
+# A profile is prose, so the cap is generous: enough for the paragraph a
+# bookkeeper would write plus a year of machine lines, short enough that the
+# settings blob stays a settings blob and the prompt stays affordable.
+PROFILE_CHARS = 2000
+
+_PROFILE_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+# A line the TOOL wrote, not a person: "[tool 2026-09-20] seen on 3 cards".
+# The prefix is the whole convention — the Memory page dims these lines, the
+# categorizer's prompt carries them like any other context, and `append_
+# machine_note` only ever adds one, so a person's prose is never rewritten.
+MACHINE_NOTE_PREFIX = "[tool "
+_MACHINE_NOTE_RE = re.compile(r"^\[tool \d{4}-\d{2}-\d{2}\] ")
+
+
+def _clean_profile(raw: object) -> str:
+    """Normalize a profile value for storage: control characters out,
+    trailing whitespace off each line, capped at `PROFILE_CHARS`."""
+    text = _PROFILE_CONTROL.sub(" ", str(raw or ""))
+    lines = [ln.rstrip() for ln in text.replace("\r\n", "\n").split("\n")]
+    return "\n".join(lines).strip()[:PROFILE_CHARS]
+
+
+def is_machine_note(line: str | None) -> bool:
+    """True for a line the tool appended (`[tool YYYY-MM-DD] ...`)."""
+    return bool(_MACHINE_NOTE_RE.match(str(line or "")))
+
+
+def append_machine_note(profile: object, note: str, *, today: str) -> str:
+    """Return `profile` with one machine line appended, or unchanged.
+
+    The learning path may add an OBSERVATION to a merchant's profile; it may
+    never edit what a person wrote there. So this only ever appends, and only
+    a line marked `[tool <today>]` so the two are told apart on sight.
+
+    Unchanged when the note is empty, when the same note text is already
+    present (re-signing a month must not grow the field every time), or when
+    the line would not fit under `PROFILE_CHARS` — a full profile keeps the
+    prose it has rather than dropping the beginning of it to make room."""
+    base = _clean_profile(profile)
+    body = " ".join(str(note or "").split())
+    if not body:
+        return base
+    if body in base:
+        return base
+    line = f"{MACHINE_NOTE_PREFIX}{today}] {body}"
+    candidate = f"{base}\n{line}" if base else line
+    if len(candidate) > PROFILE_CHARS:
+        return base
+    return candidate

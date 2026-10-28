@@ -1,0 +1,26 @@
+{
+  "train": {
+    "composite": 56.8,
+    "determ_ok": 52,
+    "determ_wrong": 0,
+    "nc_determ_matched": 0,
+    "deferred_ok": 16,
+    "invariant_ok": true
+  },
+  "holdout": {
+    "composite": 19.2,
+    "determ_ok": 18,
+    "determ_wrong": 0,
+    "nc_determ_matched": 0,
+    "deferred_ok": 4,
+    "invariant_ok": true
+  },
+  "all": {
+    "composite": 76.0,
+    "determ_ok": 70,
+    "determ_wrong": 0,
+    "nc_determ_matched": 0,
+    "deferred_ok": 20,
+    "invariant_ok": true
+  }
+}

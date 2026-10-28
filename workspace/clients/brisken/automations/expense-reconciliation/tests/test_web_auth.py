@@ -71,7 +71,7 @@ def test_bearer_token_authenticates(gated_client):
     # Mutations accept the same bearer (404 proves the handler ran).
     resp = gated_client.post("/api/runs/missing/publish", headers=hdr)
     assert resp.status_code == 404
-    assert resp.json() == {"error": "run not found"}
+    assert resp.json() == {"error": "run not found", "code": "run_not_found"}
 
 
 def test_legacy_cookie_session_still_accepted(gated_client, monkeypatch):

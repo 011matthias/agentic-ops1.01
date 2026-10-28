@@ -6,6 +6,8 @@
 #     "pypdf==6.13.2",
 #     "pypdfium2==5.9.0",
 #     "pillow==12.2.0",
+#     "rapidfuzz>=3.0",
+#     "reportlab>=4.0",
 # ]
 # ///
 """Failure attribution for the expense-recon matcher: which gate lost each receipt.
@@ -60,7 +62,8 @@ Classes, in the order the matcher applies its gates:
   rival_won_greedy          correct pair was a candidate, the assignment gave
                             the receipt or the charge to another pair
   ambiguous_tie             correct charge tied between candidates
-  llm_suppressed            the model rejected the (correct) pair below the floor
+  llm_suppressed            the model rejected the (correct) pair at or below the
+                            floor, and its rate arithmetic was not clean (item 131)
   coverage_unloaded_card    receipt paid on a card whose statement is not loaded
   coverage_non_card_tender  cash / debit / bank transfer: never posts to a card
   coverage_boundary         receipt dated at the statement's edge; its charge
@@ -74,6 +77,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import inspect
 import json
 import os
 import re
@@ -213,6 +217,11 @@ def load_live(
         )
         for r in receipts
     ]
+    # Note #63 / item 137: the resolved card reaches the pool, by the module's
+    # own function. An older tree carries neither step.
+    bake = getattr(service, "bake_card_scope", None)
+    if bake is not None:
+        receipts = bake(receipts, card_res)
     transactions = service.stamp_charge_entities(transactions, service._batch_cards(cfg))
     foreign = {
         doc: c for doc, c in store.get_claims_on_receipts(run_id).items()
@@ -228,8 +237,14 @@ def load_live(
     dup_decisions: list = []
     work_dir = (Path(files) / run_id) if files is not None else None
     if dup_pool is not None:
+        # Item 217: the app keeps the copy a charge already holds; replay it
+        # with the same held set when the module has it.
+        held_fn = getattr(service, "held_documents", None)
+        pool_kw = {"work_dir": work_dir}
+        if held_fn is not None:
+            pool_kw["held"] = held_fn(store, run)
         pool, collapsed, dup_decisions = dup_pool(
-            run, pool, store.get_duplicate_resolutions(run_id), work_dir=work_dir,
+            run, pool, store.get_duplicate_resolutions(run_id), **pool_kw,
         )
     else:
         collapsed = collapsed_duplicate_copies(pool, store.get_duplicate_resolutions(run_id))
@@ -250,6 +265,11 @@ def load_live(
     match_input = [*pool, *borrowed] if borrowed else pool
     memory = MatchMemory.from_db_path(learning) if learning and Path(learning).exists() else None
     match_cfg = build_match_cfg(cfg, Path(run.work_dir), memory) or MatchingConfig()
+    # Item 220 step 5: the company keys `rematch_month` hands in, by the
+    # module's own function. An older tree has neither.
+    with_keys = getattr(service, "match_cfg_with_entity_keys", None)
+    if with_keys is not None:
+        match_cfg = with_keys(match_cfg, store.get_settings())
 
     raw = match_month(transactions, match_input, match_cfg)
     # Item 74 rung 7, as `rematch_month` runs it: once, then one re-match.
@@ -271,7 +291,13 @@ def load_live(
     rec_by_id = {r.document_id: r for r in receipts}
     for br in borrowed:
         rec_by_id.setdefault(br.document_id, br)
-    _apply_judgment(judged, tx_by_id, rec_by_id, client, suggest_floor=match_cfg.fx_judgment_suggest_floor)
+    # Item 131: the judgment layer reads the pair's rate band to decide whether
+    # a rejected pair stays in review, so it needs the match config, exactly as
+    # `rematch_month` passes it. An older tree takes no `cfg`.
+    judgment_kw = {"suggest_floor": match_cfg.fx_judgment_suggest_floor}
+    if "cfg" in inspect.signature(_apply_judgment).parameters:
+        judgment_kw["cfg"] = match_cfg
+    _apply_judgment(judged, tx_by_id, rec_by_id, client, **judgment_kw)
     _apply_ambiguous_judgment(judged, tx_by_id, rec_by_id, client)
     for o in (raw, judged):
         in_pool = {r.document_id for r in receipts}
@@ -360,8 +386,9 @@ def trace_candidates(transactions, receipts, cfg) -> dict:
     """Every candidate pair the matcher generated, with the status it had
     going into the assignment: clean | judgment | demoted_uniqueness |
     demoted_card. Mirrors `match_month` up to the assignment pass."""
+    from expense_recon.matching import deterministic as det
     from expense_recon.matching.deterministic import (
-        _card_keys, _signal, _tx_card_keys, derive_fx_reference_rates, match_one,
+        _signal, _tx_card_keys, derive_fx_reference_rates, match_one,
     )
     from expense_recon.matching.types import MatchType
 
@@ -370,34 +397,47 @@ def trace_candidates(transactions, receipts, cfg) -> dict:
     present: set[str] = set()
     for keys in tx_card_keys.values():
         present |= keys
+    # The scope and the pair enumeration are the matcher's own (item 137):
+    # `receipt_card_scope` and `scored_pairs`. The inline copy below is kept
+    # only so a "before" run against an older module tree still measures
+    # that tree.
     scope: dict[str, set[str]] = {}
-    if cfg.card_scoping:
-        for r in receipts:
-            pm = _card_keys(r.payment_mode)
-            if pm and (pm & present):
-                scope[r.document_id] = pm
+    for r in receipts:
+        sc = det.receipt_card_scope(r, present, cfg)
+        if sc is not None:
+            scope[r.document_id] = sc
     derived = derive_fx_reference_rates(purchases, receipts, cfg)
 
+    if hasattr(det, "scored_pairs"):
+        pairs = det.scored_pairs(purchases, receipts, cfg, derived)
+    else:
+        pairs = []
+        for tx in purchases:
+            for r in receipts:
+                if not det.pair_in_scope(
+                    tx, r, tx_card_keys[tx.transaction_id], scope.get(r.document_id)
+                ):
+                    continue
+                m = match_one(tx, r, cfg, derived)
+                if m is not None:
+                    pairs.append((tx, r, m))
+    differ = getattr(det, "cards_differ", None)
+
     cands: dict[tuple[str, str], dict] = {}
-    for tx in purchases:
-        for r in receipts:
-            if r.legal_entity_id and tx.legal_entity_id and r.legal_entity_id != tx.legal_entity_id:
-                continue
-            sc = scope.get(r.document_id)
-            if sc is not None and not (sc & tx_card_keys[tx.transaction_id]):
-                continue
-            m = match_one(tx, r, cfg, derived)
-            if m is None:
-                continue
-            ref_sig, card_sig, vendor_sig = _signal(tx, r, cfg)
-            cands[(tx.transaction_id, r.document_id)] = {
-                "match": m,
-                "type": m.match_type.value,
-                "is_determ": m.match_type != MatchType.FX_JUDGMENT,
-                "card_signal": card_sig,
-                "vendor_signal": vendor_sig,
-                "status": "clean" if m.match_type != MatchType.FX_JUDGMENT else "judgment",
-            }
+    for tx, r, m in pairs:
+        ref_sig, card_sig, vendor_sig = _signal(tx, r, cfg)
+        cands[(tx.transaction_id, r.document_id)] = {
+            "match": m,
+            "type": m.match_type.value,
+            "is_determ": m.match_type != MatchType.FX_JUDGMENT,
+            "card_signal": card_sig,
+            "vendor_signal": vendor_sig,
+            "status": "clean" if m.match_type != MatchType.FX_JUDGMENT else "judgment",
+            "cards_differ": bool(
+                differ and cfg.card_scoping
+                and differ(tx_card_keys[tx.transaction_id], r)
+            ),
+        }
     # The gate itself is the matcher's, imported, not re-implemented here
     # (2026-09-15, round B): this tool is the judge of what the matcher
     # does, so a second copy of the rules is a measurement that can quietly
@@ -434,7 +474,12 @@ def gate_for(tx, r, cfg, trace) -> str:
         return "amount_band"  # a credit never pairs; nothing a receipt can do
     if r.detected_currency is None:
         return "currency_unknown"
-    if r.legal_entity_id and tx.legal_entity_id and r.legal_entity_id != tx.legal_entity_id:
+    from expense_recon.matching import deterministic as det
+
+    keys = getattr(cfg, "entity_keys", None)
+    if keys and not det.pair_in_scope(tx, r, set(), None, keys):
+        return "entity_mismatch"
+    if not keys and r.legal_entity_id and tx.legal_entity_id and r.legal_entity_id != tx.legal_entity_id:
         return "entity_mismatch"
     sc = trace["scope"].get(r.document_id)
     if sc is not None and not (sc & _tx_card_keys(tx)):
@@ -474,10 +519,10 @@ def _usd(r, tx_ccy: str, cfg, derived) -> Decimal | None:
         return r.base_amount
     if not ccy or ccy == tx_ccy:
         return r.detected_total
-    rate = cfg.fx_reference_rate(ccy, tx_ccy)
-    if rate is None:
-        hit = derived.get((ccy, tx_ccy))
-        rate = hit[0] if hit else None
+    # Item 168 retired the typed Settings rates (the matcher's `configured`
+    # rung and `MatchingConfig.fx_reference_rate`), so the derived rate leads.
+    hit = derived.get((ccy, tx_ccy))
+    rate = hit[0] if hit else None
     if rate is None:
         band = cfg.fx_band(ccy, tx_ccy)
         rate = (band[0] + band[1]) / 2 if band else None
@@ -738,7 +783,7 @@ def attribute(month: dict, labels: dict[str, tuple[str, str]]) -> list[dict]:
                 row["cls"], row["detail"] = "rival_won_greedy", f"candidate {c['type']} not assigned"
         if suppressed:
             row["cls"] = "llm_suppressed"
-            row["detail"] = "model rejected the pair below the suggest floor; " + row["detail"]
+            row["detail"] = "model rejected the pair at or below the suggest floor; " + row["detail"]
         elif bucket == "judgment" and not row["teed_up"]:
             row["detail"] += f"; in review with the WRONG charge {held_desc(held[0])}"
         rows.append(row)

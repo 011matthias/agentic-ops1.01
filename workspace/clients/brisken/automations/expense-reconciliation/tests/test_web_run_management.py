@@ -93,13 +93,14 @@ def test_rename_empty_label_400(client):
     _, run_id = _make_run(client)
     resp = client.post(f"/api/runs/{run_id}/rename", json={"label": "   "})
     assert resp.status_code == 400
-    assert resp.json() == {"error": "label is required"}
+    assert resp.json() == {"error": "label is required",
+                           "code": "label_required"}
 
 
 def test_rename_unknown_run_404(client):
     resp = client.post("/api/runs/nope/rename", json={"label": "x"})
     assert resp.status_code == 404
-    assert resp.json() == {"error": "run not found"}
+    assert resp.json() == {"error": "run not found", "code": "run_not_found"}
 
 
 # ── delete (F9) ───────────────────────────────────────────────────────────
@@ -130,7 +131,7 @@ def test_delete_run_removes_db_and_disk(client):
 def test_delete_unknown_run_404(client):
     resp = client.post("/api/runs/nope/delete")
     assert resp.status_code == 404
-    assert resp.json() == {"error": "run not found"}
+    assert resp.json() == {"error": "run not found", "code": "run_not_found"}
 
 
 def test_delete_requires_confirm_phrase(client):
@@ -141,12 +142,14 @@ def test_delete_requires_confirm_phrase(client):
     resp = client.post(f"/api/runs/{run_id}/delete")
     assert resp.status_code == 400
     assert "confirm" in resp.json()["error"]
+    assert resp.json()["code"] == "delete_confirm_required"
 
     resp = client.post(
         f"/api/runs/{run_id}/delete", json={"confirm": "wrong label"}
     )
     assert resp.status_code == 409
-    assert resp.json() == {"error": "confirm label mismatch"}
+    assert resp.json() == {"error": "confirm label mismatch",
+                           "code": "delete_confirm_mismatch"}
 
     with RunStore(client._data_root / "recon-web.sqlite") as store:
         assert store.get_run(run_id) is not None

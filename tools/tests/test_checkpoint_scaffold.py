@@ -3,9 +3,11 @@
 import datetime as dt
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -153,8 +155,102 @@ class TestFinalizeFresh:
         log = (root / "docs" / "sessions" / "2026-07-23.md").read_text(encoding="utf-8")
         assert "Test Topic (mini)" in log
 
+    def _pre_target(self, root: Path, capsys, *where: str) -> Path:
+        # `where` places --root before or after the subcommand.
+        argv = [*where, "pre", "--topic", "Test Topic", "--date", "2026-07-23", "--mini"]
+        if not where:
+            argv = ["pre", "--root", str(root), *argv[1:]]
+        assert cs.main(argv) == 0
+        line = next(ln for ln in capsys.readouterr().out.splitlines()
+                    if ln.startswith("write checkpoint prose to: "))
+        return Path(line.removeprefix("write checkpoint prose to: ").split("  (")[0])
+
+    def test_prose_written_at_pre_target_is_the_one_finalize_links(self, root: Path, capsys):
+        # The skill's order: pre names the file, the prose is written there,
+        # then finalize runs. Before the fix finalize counted the prose file
+        # and linked INDEX to Mini-Checkpoint-2, a file that did not exist.
+        for n in (1, 2):
+            target = self._pre_target(root, capsys, "--root", str(root))
+            assert target.name == f"Mini-Checkpoint-{n}.md"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("prose", encoding="utf-8")
+            run_finalize(root, base_payload(mini=True))
+            out = capsys.readouterr().out
+            assert f"Mini-checkpoint saved → [Mini-Checkpoint-{n}.md]" in out
+            assert "NOT WRITTEN YET" not in out
+        index = (root / "docs" / "INDEX.md").read_text(encoding="utf-8")
+        assert "[Mini-Checkpoint-1]" in index and "[Mini-Checkpoint-2]" in index
+        assert "[Mini-Checkpoint-3]" not in index
+
+    def test_root_is_accepted_after_the_subcommand(self, root: Path, capsys, monkeypatch, tmp_path_factory):
+        # Run from an unrelated cwd: a --root that was ignored would resolve '.'.
+        monkeypatch.chdir(tmp_path_factory.mktemp("elsewhere"))
+        target = self._pre_target(root, capsys)
+        assert target.parent == root / "docs" / "2026-07-23 - Test Topic"
+        target.parent.mkdir(parents=True)
+        target.write_text("prose", encoding="utf-8")
+        p = root / "payload.json"
+        p.write_text(json.dumps(base_payload(mini=True)), encoding="utf-8")
+        assert cs.main(["finalize", "--root", str(root), "--payload", str(p),
+                        "--context-root", str(root)]) == 0
+        assert "[Mini-Checkpoint-1]" in (root / "docs" / "INDEX.md").read_text(encoding="utf-8")
+
     def test_missing_required_field(self, root: Path):
         assert run_finalize(root, {"topic": "X"}) == 2
+
+
+class TestPayloadIsolation:
+    """The finalize payload belongs to ONE session.
+
+    2026-09-09 (register, boundary-violation): the skill documented a single
+    fixed path, `.scratch/checkpoint-payload.json`, in a clone that routinely
+    runs concurrent sessions. A sibling wrote its payload there between this
+    session's write and its finalize, so finalize appended the sibling's INDEX
+    row, session entry and context YAML.
+    """
+
+    @pytest.fixture()
+    def root(self, tmp_path: Path) -> Path:
+        (tmp_path / "docs" / "sessions").mkdir(parents=True)
+        return tmp_path
+
+    def _finalize(self, root: Path, path: Path) -> int:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(base_payload()), encoding="utf-8")
+        return cs.main(
+            ["--root", str(root), "finalize", "--payload", str(path),
+             "--context-root", str(root)]
+        )
+
+    def test_shared_payload_path_is_refused(self, root: Path, capsys):
+        assert self._finalize(root, root / ".scratch" / cs.LEGACY_PAYLOAD_NAME) == 2
+        out = capsys.readouterr().out
+        assert "refusing the shared payload path" in out
+        assert "checkpoint-payload-" in out  # names the per-session path to use
+
+    def test_per_session_payload_path_is_accepted(self, root: Path):
+        assert self._finalize(root, cs.payload_path(root)) == 0
+
+    def test_stale_payload_is_refused(self, root: Path, capsys):
+        p = cs.payload_path(root)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(base_payload()), encoding="utf-8")
+        old = time.time() - (cs.PAYLOAD_MAX_AGE_H + 1) * 3600
+        os.utime(p, (old, old))
+        rc = cs.main(["--root", str(root), "finalize", "--payload", str(p),
+                      "--context-root", str(root)])
+        assert rc == 2
+        assert "stale payload" in capsys.readouterr().out
+
+    def test_path_is_distinct_per_session(self, root: Path, monkeypatch):
+        monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "aaaaaaaa-1111")
+        mine = cs.payload_path(root)
+        monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "bbbbbbbb-2222")
+        assert cs.payload_path(root) != mine
+
+    def test_pre_prints_the_payload_path(self, root: Path, capsys):
+        cs.main(["--root", str(root), "pre"])
+        assert str(cs.payload_path(root)) in capsys.readouterr().out
 
 
 class TestNotWorked:
@@ -440,3 +536,45 @@ class TestContextRootWorktree:
         ) == 0
         assert (forced / "docs" / "sessions" / "2026-07-23-context.yaml").exists()
         assert not (primary / "docs" / "sessions" / "2026-07-23-context.yaml").exists()
+
+
+class TestSharedContextFailClosed:
+    """The same-day context YAML holds every sibling session's client entries
+    and is gitignored: finalize must never rewrite it fresh (2026-09-17)."""
+
+    @pytest.fixture()
+    def root(self, tmp_path: Path) -> Path:
+        (tmp_path / "docs" / "sessions").mkdir(parents=True)
+        return tmp_path
+
+    def _ctx(self, root: Path) -> Path:
+        return root / "docs" / "sessions" / "2026-07-23-context.yaml"
+
+    def test_unparseable_context_refuses_and_writes_nothing(self, root: Path, capsys):
+        ctx = self._ctx(root)
+        ctx.write_text("clients: [unclosed\n", encoding="utf-8")
+        before = ctx.read_bytes()
+        assert run_finalize(root, base_payload()) == 2
+        assert ctx.read_bytes() == before
+        assert not (root / "docs" / "sessions" / "2026-07-23.md").exists()
+        assert not (root / "docs" / "INDEX.md").exists()
+        assert not (root / "docs" / "2026-07-23 - Test Topic").exists()
+        assert "refusing to overwrite" in capsys.readouterr().out
+
+    def test_yaml_context_without_pyyaml_refuses_and_names_uv(self, root: Path, capsys, monkeypatch):
+        ctx = self._ctx(root)
+        ctx.write_text("clients:\n  brisken:\n    next_steps:\n    - keep me\n", encoding="utf-8")
+        before = ctx.read_bytes()
+        monkeypatch.setattr(cs, "_yaml", lambda: None)
+        assert run_finalize(root, base_payload()) == 2
+        assert ctx.read_bytes() == before
+        assert "uv run tools/checkpoint_scaffold.py" in capsys.readouterr().out
+
+    def test_sibling_client_entries_survive_a_merge(self, root: Path):
+        self._ctx(root).write_text(
+            "clients:\n  brisken:\n    next_steps:\n    - keep me\n", encoding="utf-8")
+        payload = base_payload(yaml_clients={"sys": {"next_steps": ["mine"]}})
+        assert run_finalize(root, payload) == 0
+        data = cs.load_context_text(self._ctx(root).read_text(encoding="utf-8"))
+        assert data["clients"]["brisken"]["next_steps"] == ["keep me"]
+        assert data["clients"]["sys"]["next_steps"] == ["mine"]

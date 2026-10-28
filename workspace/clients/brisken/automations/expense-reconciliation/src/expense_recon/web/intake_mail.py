@@ -54,6 +54,7 @@ import re
 import shutil
 import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from email import policy
@@ -62,6 +63,8 @@ from email.utils import getaddresses, parseaddr
 from pathlib import Path
 
 from ..batch_period import month_from_label
+from ..error_codes import CodedValueError
+from .. import untrusted
 from . import graph_notify
 from .service import (
     BATCH_TYPE_TRIP,
@@ -105,7 +108,29 @@ MAX_KNOWN_SENDERS = 25
 # `rendered_by` on mail the arrival path rendered without a human.
 AUTO_RENDER_OPERATOR = "auto"
 MAX_INFLIGHT_ROUTES = 8
-MIN_FREE_DISK_BYTES = 500 * 1024 * 1024
+# Free-disk floor (backlog item 122). It used to be a flat 500 MiB, which
+# on the 1 GB volume meant the mailbox turned EVERY receipt away once the
+# disk was half full — Dirk's mail bouncing mid-close would have been the
+# first sign. The floor is now read from the actual volume: a share of it,
+# never below 200 MB, and never more than half of a small disk (so a tiny
+# test volume does not refuse from empty). On 1 GB that is 200 MB, on 5 GB
+# 256 MB, and the same code is correct on both without a redeploy.
+MIN_FREE_DISK_FLOOR_BYTES = 200 * 1024 * 1024
+MIN_FREE_DISK_FRACTION = 0.05
+# A stranger's message is capped far below the listener's 25 MB ceiling,
+# and all unrecognised senders together get a daily byte budget. Anyone
+# may submit (owner directive 2026-08-23) and From is forgeable, so the
+# budget is deliberately GLOBAL rather than per-sender: a rotating From
+# walks straight past a per-sender one, which is the same reasoning the
+# file caps above already carry. Our own people (inside @brisken.com or
+# listed in intake.known_senders) are subject to neither.
+DEFAULT_UNKNOWN_MAX_MESSAGE_BYTES = 5 * 1024 * 1024
+DEFAULT_UNKNOWN_DAILY_BYTES = 50 * 1024 * 1024
+# Purge for archives the operator judged junk (item 122). Days since the
+# DISMISSAL, not since arrival. 0 = never, which is the default: deleting
+# Brisken's mail is the owner's call, so the sweep ships inert and one
+# settings write (intake.dismissed_purge_days) turns it on.
+DEFAULT_DISMISSED_PURGE_DAYS = 0
 
 # Archive statuses. "received" = custody taken, routing pending;
 # a stale "received" (crashed router) is replayable like held_no_batch.
@@ -235,6 +260,10 @@ class IntakeConfig:
     aliases: dict = field(default_factory=dict)  # local-part -> person name
     sender_daily_cap: int = DEFAULT_SENDER_DAILY_CAP
     global_daily_cap: int = DEFAULT_GLOBAL_DAILY_CAP
+    # Item 122: what an unrecognised sender may spend in disk.
+    unknown_max_message_bytes: int = DEFAULT_UNKNOWN_MAX_MESSAGE_BYTES
+    unknown_daily_bytes: int = DEFAULT_UNKNOWN_DAILY_BYTES
+    dismissed_purge_days: int = DEFAULT_DISMISSED_PURGE_DAYS
     auto_ack: bool = True
     alert_recipients: tuple[str, ...] = DEFAULT_ALERT_RECIPIENTS
     retention_years: int = DEFAULT_RETENTION_YEARS
@@ -270,6 +299,14 @@ class IntakeConfig:
             except (TypeError, ValueError):
                 return default
 
+        def _count(key: str, default: int) -> int:
+            """Like _cap but 0 is a legal value meaning "off"."""
+            try:
+                v = int(raw.get(key, default))
+                return v if v >= 0 else default
+            except (TypeError, ValueError):
+                return default
+
         # Alert recipients keep only internal-looking addresses; the Graph
         # layer re-asserts @brisken.com per send regardless.
         alerts = tuple(
@@ -301,6 +338,15 @@ class IntakeConfig:
             aliases=aliases,
             sender_daily_cap=_cap("sender_daily_cap", DEFAULT_SENDER_DAILY_CAP),
             global_daily_cap=_cap("global_daily_cap", DEFAULT_GLOBAL_DAILY_CAP),
+            unknown_max_message_bytes=_cap(
+                "unknown_max_message_bytes", DEFAULT_UNKNOWN_MAX_MESSAGE_BYTES
+            ),
+            unknown_daily_bytes=_cap(
+                "unknown_daily_bytes", DEFAULT_UNKNOWN_DAILY_BYTES
+            ),
+            dismissed_purge_days=_count(
+                "dismissed_purge_days", DEFAULT_DISMISSED_PURGE_DAYS
+            ),
             auto_ack=bool(raw.get("auto_ack", True)),
             alert_recipients=alerts,
             retention_years=_cap("retention_years", DEFAULT_RETENTION_YEARS),
@@ -313,12 +359,17 @@ def normalize_intake_setting(raw) -> dict:
     """Validate the settings["intake"] payload at the PUT edge. Returns the
     cleaned dict; raises ValueError on a malformed shape."""
     if not isinstance(raw, dict):
-        raise ValueError("intake must be an object")
+        raise CodedValueError(
+            "intake must be an object", code="invalid_body"
+        )
     cleaned: dict = {}
     domain = raw.get("domain")
     if domain is not None:
         if not isinstance(domain, str) or "@" in domain or not domain.strip():
-            raise ValueError("intake.domain must be a bare domain name")
+            raise CodedValueError(
+                "intake.domain must be a bare domain name",
+                code="intake_domain_invalid",
+            )
         cleaned["domain"] = domain.strip().lower()
     # ``senders`` (the retired allowlist) is dropped rather than rejected: a
     # stored settings blob or an older client may still carry it, and a 400
@@ -331,24 +382,54 @@ def normalize_intake_setting(raw) -> dict:
             and isinstance(v, str) and v.strip()
             for k, v in aliases.items()
         ):
-            raise ValueError(
-                "intake.aliases must map address local-parts to person names"
+            raise CodedValueError(
+                "intake.aliases must map address local-parts to person names",
+                code="intake_aliases_invalid",
             )
         cleaned["aliases"] = {
             k.strip().lower(): v.strip() for k, v in aliases.items()
         }
-    for cap in ("sender_daily_cap", "global_daily_cap", "retention_years"):
+    for cap in ("sender_daily_cap", "global_daily_cap", "retention_years",
+                "unknown_max_message_bytes", "unknown_daily_bytes"):
         if cap in raw:
             try:
                 v = int(raw[cap])
             except (TypeError, ValueError):
-                raise ValueError(f"intake.{cap} must be a positive integer")
+                raise CodedValueError(
+                    f"intake.{cap} must be a positive integer",
+                    code="intake_number_invalid", field=cap,
+                )
             if v <= 0:
-                raise ValueError(f"intake.{cap} must be a positive integer")
+                raise CodedValueError(
+                    f"intake.{cap} must be a positive integer",
+                    code="intake_number_invalid", field=cap,
+                )
             cleaned[cap] = v
+    # Item 122: days an archive stays after the operator dismissed it as
+    # junk. 0 is legal and means "never delete", which is why it is not in
+    # the positive-integer loop above.
+    if "dismissed_purge_days" in raw:
+        try:
+            days = int(raw["dismissed_purge_days"])
+        except (TypeError, ValueError):
+            raise CodedValueError(
+                "intake.dismissed_purge_days must be 0 (never) or a "
+                "positive number of days",
+                code="invalid_body", field="dismissed_purge_days",
+            )
+        if days < 0:
+            raise CodedValueError(
+                "intake.dismissed_purge_days must be 0 (never) or a "
+                "positive number of days",
+                code="invalid_body", field="dismissed_purge_days",
+            )
+        cleaned["dismissed_purge_days"] = days
     if "auto_ack" in raw:
         if not isinstance(raw["auto_ack"], bool):
-            raise ValueError("intake.auto_ack must be true or false")
+            raise CodedValueError(
+                "intake.auto_ack must be true or false",
+                code="invalid_body", field="auto_ack",
+            )
         cleaned["auto_ack"] = raw["auto_ack"]
     alerts = raw.get("alert_recipients")
     if alerts is not None:
@@ -357,8 +438,9 @@ def normalize_intake_setting(raw) -> dict:
             and a.strip().count("@") == 1
             for a in alerts
         ):
-            raise ValueError(
-                "intake.alert_recipients must be @brisken.com addresses"
+            raise CodedValueError(
+                "intake.alert_recipients must be @brisken.com addresses",
+                code="intake_alert_recipients_invalid",
             )
         cleaned["alert_recipients"] = [a.strip().lower() for a in alerts]
     known = raw.get("known_senders")
@@ -366,15 +448,18 @@ def normalize_intake_setting(raw) -> dict:
         if not isinstance(known, list) or not all(
             _is_plain_address(a) for a in known
         ):
-            raise ValueError(
+            raise CodedValueError(
                 "intake.known_senders must be a list of plain e-mail "
-                "addresses"
+                "addresses",
+                code="intake_known_senders_invalid",
             )
         deduped = list(dict.fromkeys(a.strip().lower() for a in known))
         if len(deduped) > MAX_KNOWN_SENDERS:
-            raise ValueError(
+            raise CodedValueError(
                 f"intake.known_senders holds at most {MAX_KNOWN_SENDERS} "
-                "addresses"
+                "addresses",
+                code="intake_known_senders_too_many",
+                limit=MAX_KNOWN_SENDERS,
             )
         cleaned["known_senders"] = deduped
     # Item 38: the travel-pool local-part. "" stores as unset (the owner
@@ -386,22 +471,29 @@ def normalize_intake_setting(raw) -> dict:
     if "travel_alias" in raw:
         travel = raw["travel_alias"]
         if not isinstance(travel, str):
-            raise ValueError("intake.travel_alias must be a string")
+            raise CodedValueError(
+                "intake.travel_alias must be a string",
+                code="invalid_body", field="travel_alias",
+            )
         travel = travel.strip().lower()
         if travel and not _TRAVEL_ALIAS_RE.fullmatch(travel):
-            raise ValueError(
+            raise CodedValueError(
                 "intake.travel_alias must be a bare address local-part "
-                "(letters, digits, . _ -)"
+                "(letters, digits, . _ -)",
+                code="intake_travel_alias_invalid",
             )
         if travel == "receipts":
-            raise ValueError(
+            raise CodedValueError(
                 "intake.travel_alias cannot be 'receipts' - that is the "
-                "company intake address"
+                "company intake address",
+                code="intake_travel_alias_reserved",
             )
         if travel and travel in cleaned.get("aliases", {}):
-            raise ValueError(
+            raise CodedValueError(
                 f"intake.travel_alias {travel!r} collides with a person "
-                "alias"
+                "alias",
+                code="intake_travel_alias_collision",
+                alias=travel,
             )
         cleaned["travel_alias"] = travel
     return cleaned
@@ -592,6 +684,7 @@ class DayBudget:
         self._day = ""
         self._per_sender: dict[str, int] = {}
         self._global = 0
+        self._unknown_bytes = 0
         self._seeded_from: Path | None = None
 
     def _roll(self, data_root: Path) -> None:
@@ -600,6 +693,7 @@ class DayBudget:
             self._day = today
             self._per_sender = {}
             self._global = 0
+            self._unknown_bytes = 0
             self._seeded_from = None
         if self._seeded_from != data_root:
             self._seeded_from = data_root
@@ -610,18 +704,46 @@ class DayBudget:
                 sender = str(row.get("from", ""))
                 self._per_sender[sender] = self._per_sender.get(sender, 0) + units
                 self._global += units
+                # Rows written before item 122 carry neither field. A
+                # missing `known_sender` reads as known (charges nothing):
+                # over-charging the byte budget from archaeology would
+                # refuse today's real receipts after a restart, which is
+                # the failure this item exists to remove.
+                if row.get("known_sender") is False:
+                    self._unknown_bytes += max(0, int(row.get("n_bytes") or 0))
 
     def reserve(self, data_root: Path, sender: str, units: int,
-                cfg: IntakeConfig) -> bool:
+                cfg: IntakeConfig, *, known: bool = False,
+                n_bytes: int = 0) -> bool:
+        """Reserve one message's spend. All-or-nothing under one lock, so
+        a refused message consumes no budget at all.
+
+        ``known`` is item 122: our own people (inside @brisken.com, or an
+        address an operator listed) are not held to the per-sender file
+        cap — a month-end backfill legitimately exceeds 40 files, and the
+        cap was never a security boundary anyway since From is forgeable.
+        The GLOBAL file cap still binds everyone; it is the real ceiling
+        on a day's vision spend. A stranger additionally spends against a
+        shared daily byte budget, which is what stops one afternoon of
+        junk from filling the volume."""
         units = max(1, units)
+        n_bytes = max(0, n_bytes)
         with self._lock:
             self._roll(data_root)
-            if self._per_sender.get(sender, 0) + units > cfg.sender_daily_cap:
+            if not known and (
+                self._per_sender.get(sender, 0) + units > cfg.sender_daily_cap
+            ):
                 return False
             if self._global + units > cfg.global_daily_cap:
                 return False
+            if not known and (
+                self._unknown_bytes + n_bytes > cfg.unknown_daily_bytes
+            ):
+                return False
             self._per_sender[sender] = self._per_sender.get(sender, 0) + units
             self._global += units
+            if not known:
+                self._unknown_bytes += n_bytes
             return True
 
 
@@ -646,11 +768,49 @@ def end_route() -> None:
         _INFLIGHT = max(0, _INFLIGHT - 1)
 
 
-def disk_low(data_root: Path) -> bool:
+def free_disk_floor(total_bytes: int) -> int:
+    """How much free space the mailbox insists on, for a volume of this
+    size (item 122).
+
+    A share of the disk, floored at 200 MB so a bigger volume never
+    lowers the guard, and capped at half the disk so a small one cannot
+    refuse mail from empty. The old flat 500 MiB was 51% of the 1 GB
+    volume, which is why refusals were due to start in early 2027 with no
+    warning; the same code now leaves 800 MB usable on 1 GB and 4.75 GB
+    on 5 GB, and neither number is written down anywhere."""
+    total = max(0, int(total_bytes))
+    share = int(total * MIN_FREE_DISK_FRACTION)
+    return min(max(share, MIN_FREE_DISK_FLOOR_BYTES), total // 2)
+
+
+def disk_snapshot(data_root: Path) -> dict:
+    """Free space on the volume the archive lives on, as /healthz reports
+    it (item 122). ``available`` is False when the volume cannot be read,
+    so a monitor can tell "cannot say" from "nothing free"."""
     try:
-        return shutil.disk_usage(str(data_root)).free < MIN_FREE_DISK_BYTES
+        usage = shutil.disk_usage(str(data_root))
     except OSError:
-        return False
+        return {"available": False}
+    floor = free_disk_floor(usage.total)
+    pct = round(usage.free * 100.0 / usage.total, 1) if usage.total else 0.0
+    return {
+        "available": True,
+        "total_bytes": usage.total,
+        "free_bytes": usage.free,
+        "used_bytes": usage.used,
+        "free_pct": pct,
+        "floor_bytes": floor,
+        # The question a monitor actually asks: is the mailbox about to
+        # start turning receipts away?
+        "intake_refusing": usage.free < floor,
+    }
+
+
+def disk_low(data_root: Path) -> bool:
+    snap = disk_snapshot(data_root)
+    # Unreadable volume: never refuse mail on a failed measurement (the
+    # pre-item-122 posture, kept deliberately).
+    return bool(snap.get("intake_refusing"))
 
 
 # ---------------------------------------------------------------- archive --
@@ -885,8 +1045,17 @@ def read_log(data_root: Path, limit: int = 100, overlay: bool = True) -> list[di
                 row["files"] = files
             if meta.get("skipped"):
                 row["skipped"] = meta["skipped"]
+            # Item 106: why this mail's other files created no expense.
+            if meta.get("not_added"):
+                row["not_added"] = meta["not_added"]
             if meta.get("error"):
                 row["error"] = meta["error"]
+            if row.get("status") == STATUS_INGESTED:
+                # An ingested mail has no current error. A failed first try
+                # (the 2026-09-24 429 on a render) leaves its text on the
+                # archive and on the row logged at the time, and both stay
+                # there as the record; the row just stops presenting it.
+                row.pop("error", None)
             # Month-pool stamps (2026-08-24): which month this mail's
             # receipts belong to, and how that month was decided.
             if meta.get("receipt_month"):
@@ -1083,6 +1252,109 @@ def content_fingerprints(attachments, body_text: str = "") -> list[str]:
     return [_body_fingerprint(body_text)] if (body_text or "").strip() else []
 
 
+def _untrusted_flags(arch: Path | None) -> list[dict]:
+    """Agent-directed text this mail carried, as stamped by route_archived.
+    Data for a human (rule_untrusted_inbound): it raises a review flag and
+    suppresses the auto-ack, and decides nothing else."""
+    if arch is None:
+        return []
+    flags = _read_meta(arch).get("untrusted_instructions") or []
+    return [dict(f) for f in flags if isinstance(f, dict)]
+
+
+def _provenance_entry(person: dict, received_at: str, arch: Path | None) -> dict:
+    """One per-file provenance record. Carries the mail's untrusted-text
+    flags, so a receipt created from an injected mail shows the flag on its
+    grid row exactly where `submitted_by` already shows."""
+    entry = {**person, "received_at": received_at}
+    meta = _read_meta(arch)  # {} for arch is None (item 106 / 125 both read it)
+    if arch is not None:
+        # Item 106: which mail stored this file, so a replay of the same
+        # mail recognises its own receipt instead of calling it a copy.
+        entry["archive"] = arch.name
+    # Item 125: whether this mail's SMTP session was encrypted, carried from
+    # the archive meta (stamped in archive_incoming) onto the receipt, so
+    # the operator sees on the grid who still delivers in the clear. Present
+    # ONLY when the intake recorded it (every real SMTP arrival does); a
+    # non-SMTP caller and a pre-2026-09-18 archive leave the key absent, so
+    # "not recorded" reads apart from "delivered in the clear" (False).
+    if "transport_tls" in meta:
+        entry["transport_tls"] = bool(meta.get("transport_tls"))
+    flags = _untrusted_flags(arch)
+    if flags:
+        entry["untrusted_instructions"] = flags
+    # Item 155: the sender's own prose above the forward - the filing
+    # instruction that exists nowhere in the attached PDF. Parallel and
+    # ABSENT when the mail carried none (56 of the 86 readable live
+    # bodies), never "". Shown to the reviewer as written. Since item 250
+    # (owner 2026-10-07) a note from one of OUR senders also classifies;
+    # that reading goes through `trusted_sender_notes`, never this record.
+    #
+    # Recorded for a RENDERED body-only mail too, deliberately. The
+    # caution against double-recording guards against a second copy of
+    # the invoice, and the boundary rule cannot produce one: it keeps
+    # only what sits ABOVE the forward, and the invoice is always below.
+    # What it keeps on those mails is the 1-3 lines of instruction, which
+    # on a body-only mail are otherwise buried inside a rendered image the
+    # reviewer has to open - 13 of the 30 live notes arrive that way.
+    note = _archive_operator_note(arch)
+    if note:
+        entry["operator_note"] = note
+    return entry
+
+
+def trusted_sender_notes(
+    provenance: dict | None, cfg: "IntakeConfig",
+) -> dict[str, str]:
+    """`{document_id: note}` for the notes allowed to classify (item 250).
+
+    Owner 2026-10-07: a note from one of our own senders classifies the
+    receipt (company, and the account when the note names one clearly). The
+    filter is the whole of that boundary, so it is deny-by-default:
+
+    - the address is ours (`is_known_sender`: the Brisken tenant or
+      `intake.known_senders`). A stranger's note stays display-only, exactly
+      as item 155 left every note. From is forgeable, so this is the same
+      courtesy boundary the ack and the auto-render use, not a security one:
+      a forged note can move a receipt's company and account, which the
+      reviewer sees labelled "from the sender's note" and can change.
+    - the mail carried no agent-directed text (`untrusted_instructions`): a
+      mail that tried to steer the tool decides nothing.
+    - the note is not only the sender's signature (`strip_signature`, cut at
+      a line naming one of the intake aliases' people).
+
+    Keyed by the provenance's own keys, which are the stored file names and
+    so the receipts' document ids."""
+    from ..sender_note import strip_signature
+
+    names = tuple(sorted({str(v) for v in (cfg.aliases or {}).values() if v}))
+    out: dict[str, str] = {}
+    for doc_id, entry in (provenance or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        note = str(entry.get("operator_note") or "").strip()
+        if not note or entry.get("untrusted_instructions"):
+            continue
+        if not is_known_sender(str(entry.get("address") or ""), cfg):
+            continue
+        note = strip_signature(note, names)
+        if note:
+            out[str(doc_id)] = note
+    return out
+
+
+def _archive_operator_note(arch: Path | None) -> str:
+    """The operator's note above the forward in this mail's body, or ""."""
+    if arch is None:
+        return ""
+    from .body_render import operator_note
+
+    try:
+        return operator_note(_archive_body_text(arch))
+    except Exception:  # noqa: BLE001 - a display note is never worth a crash
+        return ""
+
+
 def _archive_body_text(arch: Path) -> str:
     """Readable body of the custody message, or "" when unreadable."""
     from .body_render import extract_body_text
@@ -1224,29 +1496,51 @@ def pool_deleted_batch(data_root: Path, batch_id: str) -> tuple[int, int]:
 
 def archive_incoming(
     data_root: Path, raw: bytes, parsed: InboundMessage, peer: str = "",
+    known_sender: bool = True, transport_tls: bool | None = None,
 ) -> Path:
     """Custody step: archive + acceptance log row, called INLINE in the
     SMTP DATA handler before the 250 goes out. Raises on failure (the
-    caller answers 451 so the sender's MTA retries)."""
+    caller answers 451 so the sender's MTA retries).
+
+    The row records the message's SIZE and whether we recognised the
+    sender (item 122), which is what lets the day budget re-seed the
+    unknown-sender byte spend after a restart instead of forgiving it.
+
+    `transport_tls` (item 125) is whether the SMTP session had completed
+    STARTTLS before DATA; the listener always knows and always passes a
+    bool. It lands on the archive meta and the log row, and from the meta
+    onto every receipt the mail produces (`_provenance_entry`). Left None
+    by a non-SMTP caller, the key is ABSENT (never null), so a reader
+    tells "not recorded" from "delivered in the clear"; archives written
+    before 2026-09-18 read the same way."""
+    extra: dict = {"peer": peer}
+    if transport_tls is not None:
+        extra["transport_tls"] = bool(transport_tls)
     arch = archive_message(
-        data_root, raw, parsed, STATUS_RECEIVED, extra={"peer": peer}
+        data_root, raw, parsed, STATUS_RECEIVED, extra=extra
     )
-    _append_log(data_root, {
+    row = {
         "at": _now_iso(),
         "from": parsed.from_addr,
         "subject": parsed.subject,
         "n_files": len(parsed.attachments),
+        "n_bytes": len(raw or b""),
+        "known_sender": bool(known_sender),
         "status": STATUS_RECEIVED,
         "archive": arch.name,
-    })
+    }
+    if transport_tls is not None:
+        row["transport_tls"] = bool(transport_tls)
+    _append_log(data_root, row)
     return arch
 
 
 # ---------------------------------------------------------- notifications --
-# Acks + held alerts ride graph_notify (internal-only, hard-guarded).
-# Both are best-effort side effects: a failed notification never changes
-# an archive's status or breaks ingest, and both are idempotent per
-# archive via meta stamps (ack_at / alert_at).
+# Acks, held alerts and held-sender notices ride graph_notify (internal-only
+# plus operator-listed senders, hard-guarded). All are best-effort side
+# effects: a failed notification never changes an archive's status or
+# breaks ingest, and each is idempotent per archive via its own meta stamp
+# (ack_at / alert_at / held_notice_at).
 
 _NO_REPLY_LOCALS = ("no-reply", "noreply", "do-not-reply", "postmaster",
                     "mailer-daemon", "bounce")
@@ -1313,7 +1607,19 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
                     batch_is_trip = is_trip_batch(run)
         if not cfg.auto_ack or not graph_notify.enabled():
             return
-        if meta.get("ack_at") or _inbound_is_auto_generated(arch):
+        # Item 106: a mail acked earlier (pooled: "will join that month
+        # automatically") that then added nothing gets ONE correction.
+        corrective = (
+            mail_added_nothing(meta) and not meta.get("no_expense_ack_at")
+        )
+        if (meta.get("ack_at") and not corrective) or _inbound_is_auto_generated(arch):
+            return
+        if _untrusted_flags(arch):
+            # The mail carried text aimed at an assistant, and the ack echoes
+            # its subject back into the tenant. An injected mail never
+            # triggers an outbound message: its receipts are flagged for a
+            # human instead (rule_untrusted_inbound).
+            _update_meta(arch, {"ack_suppressed": "untrusted_instructions"})
             return
         recipient = str(meta.get("from", "")).strip().lower()
         n = int(meta.get("n_files") or 0)
@@ -1395,18 +1701,45 @@ def _maybe_ack(db_path: Path, arch: Path) -> None:
             + "\n\nAutomated confirmation from "
             f"{sender_local}@{cfg.domain}."
         )
+        ack_subject = "Receipt received" + (f": {subject}" if subject else "")
+        if mail_added_nothing(meta):
+            # Item 106: a forward that created no expense (every file set
+            # aside, already on file, or unreadable) must not be told it
+            # "landed". Say what happened per file and what would help.
+            ack_subject = "No expense added" + (f": {subject}" if subject else "")
+            body = _no_expense_ack_body(
+                meta, subject=subject, month=month, batch_label=batch_label,
+                batch_is_trip=batch_is_trip,
+                signature=f"{sender_local}@{cfg.domain}",
+            )
         if graph_notify.send_mail(
-            recipient, "Receipt received" + (f": {subject}" if subject else ""),
+            recipient, ack_subject,
             body, allow_external=cfg.known_senders,
         ):
-            _update_meta(arch, {"ack_at": _now_iso()})
+            stamp = {"ack_at": _now_iso()}
+            if mail_added_nothing(meta):
+                stamp["no_expense_ack_at"] = stamp["ack_at"]
+            _update_meta(arch, stamp)
     except Exception as exc:  # noqa: BLE001 - notifications never break ingest
         log.warning("ack skipped for %s: %s", arch.name, exc)
 
 
 def _maybe_alert(db_path: Path, arch: Path, status: str) -> None:
     """Operator alert the first time an archive lands in a held status.
-    Without this, held mail is only visible when someone opens the app."""
+    Without this, held mail is only visible when someone opens the app.
+
+    The same moment also tells the SENDER (item 121, owner ruling
+    2026-09-17): until then a held mail left the person who sent it with
+    no signal at all. Two separate facts with separate stamps (``alert_at``
+    and ``held_notice_at``), each best-effort on its own, so a failed
+    operator send never suppresses the sender notice, or the reverse."""
+    _alert_operator(db_path, arch, status)
+    _maybe_notify_held_sender(db_path, arch, status)
+
+
+def _alert_operator(db_path: Path, arch: Path, status: str) -> None:
+    """The operator half of `_maybe_alert`: recipients, subject and body
+    exactly as they were before the sender notice existed."""
     try:
         with RunStore(db_path) as store:
             cfg = IntakeConfig.from_settings(store.get_settings())
@@ -1433,6 +1766,106 @@ def _maybe_alert(db_path: Path, arch: Path, status: str) -> None:
             _update_meta(arch, {"alert_at": _now_iso()})
     except Exception as exc:  # noqa: BLE001 - notifications never break ingest
         log.warning("held alert skipped for %s: %s", arch.name, exc)
+
+
+# What a held mail's sender reads, per held status: (why it is not filed and
+# what happens next, whether "the team has been told" belongs beside it).
+# Every sentence states only what the code does next. Nothing retries a held
+# mail on its own: held_failed waits for an operator's "Retry held emails",
+# and the other holds are resolved by a click or by the sender re-sending.
+_HELD_NOTICE_TEXT: dict[str, tuple[str, bool]] = {
+    HELD_FAILED: (
+        " reached the Brisken expense tool, but something went wrong on our"
+        " side while filing it, so it has not been filed yet. The email is"
+        " saved in full and can be retried from there, so there is no need"
+        " to send it again.",
+        True,
+    ),
+    HELD_NO_VALID_FILES: (
+        " reached the Brisken expense tool, but nothing in it was a file the"
+        " tool can read as a receipt, so nothing was filed. Sending the"
+        " receipt again as a PDF or a photo (JPG, PNG or WEBP) attachment"
+        " lets the tool pick it up.",
+        False,
+    ),
+    HELD_BODY_ONLY: (
+        " reached the Brisken expense tool without a receipt file attached,"
+        " and its text could not be read as a receipt automatically, so it"
+        " has not been filed yet. The email is saved. If you have the"
+        " receipt as a PDF or a photo, sending it again as an attachment is"
+        " the surest way for the tool to pick it up.",
+        True,
+    ),
+}
+_HELD_NOTICE_FALLBACK = (
+    " reached the Brisken expense tool but has not been filed yet. The email"
+    " is saved.",
+    True,
+)
+
+
+def _maybe_notify_held_sender(db_path: Path, arch: Path, status: str) -> None:
+    """Tell the address a held mail came from that it was not filed, once.
+
+    The guards are exactly `_maybe_ack`'s, because the recipient is the same
+    untrusted From header (rule_untrusted_inbound: inbound mail never decides
+    who we send to on its own). Off with ``intake.auto_ack``; never for
+    auto-generated inbound mail; never for mail that carried agent-directed
+    text (stamped, like the ack); and `graph_notify.send_mail` only lets the
+    address through when it is inside @brisken.com or an operator listed it
+    in ``intake.known_senders``. A stranger gets nothing.
+
+    Idempotent per archive via ``held_notice_at``, independent of the
+    operator's ``alert_at``. The text carries no archive name, no error
+    string and nothing the operator alert carries beyond the sender's own
+    subject line."""
+    try:
+        with RunStore(db_path) as store:
+            cfg = IntakeConfig.from_settings(store.get_settings())
+        if not cfg.auto_ack or not graph_notify.enabled():
+            return
+        meta = _read_meta(arch)
+        if meta.get("held_notice_at") or _inbound_is_auto_generated(arch):
+            return
+        if _untrusted_flags(arch):
+            # Same reason the ack holds back: the notice echoes the subject,
+            # and an injected mail never triggers an outbound message.
+            _update_meta(
+                arch, {"held_notice_suppressed": "untrusted_instructions"}
+            )
+            return
+        recipient = str(meta.get("from", "")).strip().lower()
+        subject = str(meta.get("subject") or "").strip()
+        reason, mention_team = _HELD_NOTICE_TEXT.get(
+            status, _HELD_NOTICE_FALLBACK
+        )
+        # "Told" only when the operator alert really went out; the two sends
+        # are independent, so the notice must not claim the other one.
+        told = (
+            " The team running the tool has been told."
+            if mention_team and meta.get("alert_at") else ""
+        )
+        sender_local = (
+            cfg.travel_alias
+            if str(meta.get("pool_kind") or "") == "travel" and cfg.travel_alias
+            else "receipts"
+        )
+        body = (
+            "Your email"
+            + (f' "{subject}"' if subject else "")
+            + reason
+            + told
+            + "\n\nAutomated notice from "
+            f"{sender_local}@{cfg.domain}."
+        )
+        if graph_notify.send_mail(
+            recipient,
+            "Receipt not filed yet" + (f": {subject}" if subject else ""),
+            body, allow_external=cfg.known_senders,
+        ):
+            _update_meta(arch, {"held_notice_at": _now_iso()})
+    except Exception as exc:  # noqa: BLE001 - notifications never break ingest
+        log.warning("held notice skipped for %s: %s", arch.name, exc)
 
 
 # ---------------------------------------------------------------- routing --
@@ -1669,6 +2102,11 @@ def annotate_status_view(rows: list[dict]) -> None:
                 f'Already have this, from "{subject}"' if subject
                 else "Already have this"
             )
+        elif mail_added_nothing(row):
+            # Item 106: finished, but no expense came of it. Same status
+            # and kind (the held count keys on status; a sixth kind value
+            # is the enum growth this view exists to avoid), honest label.
+            label = no_expense_label(row.get("not_added"))
         elif (
             row.get("materialized")
             and status in (STATUS_INGESTED, STATUS_REPLAYED)
@@ -1697,6 +2135,225 @@ def annotate_status_view(rows: list[dict]) -> None:
             kind, label = KIND_HELD, "The month it was added to was deleted"
         row["status_kind"] = kind
         row["status_label"] = label
+
+
+# ------------------------------------------- a mail that added nothing --
+# Item 106 (2026-09-17 voids audit). A forward whose every file was set
+# aside (a statement page, a bill notice rendered from the email text), was
+# already on file, or could not be read used to finish as "ingested" with
+# `documents: []`, read "Added" on the intake page, and tell its sender the
+# files "landed in the July 2026 expense month". Live: Dirk's two AWS
+# "billing statement available" forwards and Criss's AT&T bill notice and
+# card summary, none of which put a receipt anywhere.
+
+_SET_ASIDE_READS = {
+    "statement": "a bank or card statement page",
+    "report_summary": "a summary page",
+    "other": "not a receipt",
+    "correspondence": "a payment reminder about another invoice",
+}
+_RENDERED_BODY = "rendered-body.pdf"
+
+
+def mail_added_nothing(record: dict) -> bool:
+    """A finished mail (ingested/replayed) that created no expense.
+
+    `documents` must be PRESENT and empty: an archive written before the
+    ingest stamped its documents is never claimed to be empty, and a mail
+    whose month was deleted keeps the deleted-month story."""
+    docs = record.get("documents")
+    return (
+        str(record.get("status", "")) in (STATUS_INGESTED, STATUS_REPLAYED)
+        and isinstance(docs, list)
+        and not docs
+        and not record.get("batch_deleted")
+    )
+
+
+def no_expense_label(not_added) -> str:
+    """The intake row's label for a mail that added nothing."""
+    entries = [e for e in (not_added or []) if isinstance(e, dict)]
+    whys = {str(e.get("why") or "") for e in entries}
+    if not whys:
+        # Stamped before item 106, or nothing reached the month at all.
+        return "Nothing added"
+    if whys == {"already_on_file"}:
+        return "Nothing added: already on file"
+    if whys == {"set_aside"}:
+        reasons = {str(e.get("reason") or "") for e in entries}
+        if reasons == {"statement"}:
+            return "Nothing added: read as a statement page"
+        if reasons == {"report_summary"}:
+            return "Nothing added: read as a summary page"
+        if reasons == {"correspondence"}:
+            return "Nothing added: read as a payment reminder"
+        return "Nothing added: not read as a receipt"
+    if whys <= {"set_aside", "already_on_file"}:
+        return "Nothing added: set aside or already on file"
+    return "Nothing added: a file could not be read"
+
+
+def _created_batch_not_added(run) -> list[dict]:
+    """`not_added` for a batch this mail CREATED (month materialization,
+    trip creation): every set-aside entry and every upload rejection in a
+    fresh batch is this mail's."""
+    if run is None:
+        return []
+    from .service import set_aside_entries
+
+    out = [
+        {"file": str(e.get("display") or e.get("file") or ""),
+         "why": "set_aside", "reason": str(e.get("reason") or ""),
+         "document_id": str(e.get("file") or "")}
+        for e in set_aside_entries(run.snapshot or {})
+    ]
+    for d in (run.summary or {}).get("upload_issue_details") or []:
+        if isinstance(d, dict) and d.get("code"):
+            out.append({"file": str(d.get("file") or ""), "why": str(d["code"])})
+    return out
+
+
+def _own_outcome(run, arch: Path | None, summary: dict | None) -> tuple[list[str], list[dict]]:
+    """(documents, not_added) for one ingest of this mail.
+
+    A replay after a crash that struck AFTER the batch stored this mail's
+    receipts (a re-match that raised, a machine stop before the meta stamp)
+    finds its own files already on file. Those are this mail's expenses,
+    not copies: the stored file's provenance names this archive. Never
+    raises; on any doubt the add's own summary stands."""
+    documents = list((summary or {}).get("documents") or [])
+    not_added = list((summary or {}).get("not_added") or [])
+    if run is None or arch is None:
+        return documents, not_added
+    try:
+        snap = run.snapshot or {}
+        prov = snap.get("intake_provenance") or {}
+        pool = {
+            str(r.get("document_id")) for r in snap.get("receipts") or []
+            if isinstance(r, dict)
+        }
+        kept: list[dict] = []
+        for e in not_added:
+            doc = str(e.get("document_id") or "") if isinstance(e, dict) else ""
+            if (
+                isinstance(e, dict) and e.get("why") == "already_on_file"
+                and doc in pool
+                and (prov.get(doc) or {}).get("archive") == arch.name
+            ):
+                if doc not in documents:
+                    documents.append(doc)
+                continue
+            kept.append(e)
+        return documents, kept
+    except Exception:  # noqa: BLE001 - the plain summary is still true
+        return (
+            list((summary or {}).get("documents") or []),
+            list((summary or {}).get("not_added") or []),
+        )
+
+
+def apply_restored_set_aside(rows: list[dict], run) -> None:
+    """Read-time overlay for one batch: a set-aside file an operator has
+    since RESTORED is an expense of the mail that brought it, so the row
+    stops reading "Nothing added" without rewriting the archive."""
+    restored = {
+        str(e.get("file") or "")
+        for e in (run.snapshot or {}).get("set_aside") or []
+        if isinstance(e, dict) and e.get("restored")
+    }
+    if not restored:
+        return
+    for row in rows:
+        if str(row.get("batch_id") or "") != run.run_id:
+            continue
+        entries = row.get("not_added")
+        if not isinstance(entries, list):
+            continue
+        back = [
+            e for e in entries
+            if isinstance(e, dict) and e.get("why") == "set_aside"
+            and str(e.get("document_id") or "") in restored
+        ]
+        if not back:
+            continue
+        docs = list(row.get("documents") or [])
+        for e in back:
+            if e["document_id"] not in docs:
+                docs.append(e["document_id"])
+        row["documents"] = docs
+        left = [e for e in entries if e not in back]
+        if left:
+            row["not_added"] = left
+        else:
+            row.pop("not_added", None)
+
+
+def _safe_echo(name: str) -> str:
+    """A sender-supplied file name, flattened before it is echoed into a
+    mail from receipts@: no line breaks, no URL punctuation, bounded."""
+    flat = re.sub(r"[^A-Za-z0-9._ ()-]", "_", str(name or ""))
+    return flat[:80] or "file"
+
+
+def _no_expense_ack_body(
+    meta: dict, *, subject: str, month: str, batch_label: str,
+    batch_is_trip: bool, signature: str,
+) -> str:
+    """Acknowledgement for a mail that created no expense: what happened
+    to each file and what would help. File names and the subject are the
+    sender's own words echoed back to the sender; nothing here is decided
+    by the mail's content (rule_untrusted_inbound)."""
+    if batch_label:
+        where = f'the "{batch_label}" ' + ("trip" if batch_is_trip else "expense month")
+    elif month:
+        where = _month_human(month)
+    else:
+        where = "its expense month"
+    lead = f'Your email "{subject}"' if subject else "Your email"
+    lines = [
+        f"{lead} reached the Brisken expense tool, but no expense was "
+        f"added to {where}."
+    ]
+    entries = [e for e in (meta.get("not_added") or []) if isinstance(e, dict)]
+    set_aside = unreadable = False
+    for e in entries:
+        file = str(e.get("file") or "")
+        name = "The email text" if file == _RENDERED_BODY else f'"{_safe_echo(file)}"'
+        why = str(e.get("why") or "")
+        if why == "set_aside":
+            set_aside = True
+            reading = _SET_ASIDE_READS.get(str(e.get("reason") or ""), "not a receipt")
+            lines.append(f"- {name} read as {reading}, so it was set aside.")
+        elif why == "already_on_file":
+            lines.append(
+                f"- {name} was already on file, so it was not added a "
+                "second time."
+            )
+        else:
+            unreadable = True
+            lines.append(f"- {name} could not be read.")
+    for skipped in meta.get("skipped") or []:
+        # Only a file TYPE the tool cannot read; a signature logo (a tiny
+        # image of a readable type) is not worth the sender's attention.
+        if Path(str(skipped)).suffix.lower() not in FOLDER_RECEIPT_SUFFIXES:
+            unreadable = True
+            lines.append(
+                f'- "{_safe_echo(skipped)}" was not read (the tool reads PDF, '
+                "PNG, JPEG and WebP files)."
+            )
+    if set_aside or unreadable or not entries:
+        lines.append(
+            "If the receipt or invoice is behind a link in the email, or in "
+            "a file that was not read, please forward it as a PDF or a photo."
+        )
+    if set_aside:
+        lines.append(
+            "If a set-aside file is a receipt after all, it can be restored "
+            "from the month's set-aside list in the expense tool."
+        )
+    if not (set_aside or unreadable) and entries:
+        lines.append("No action needed.")
+    return "\n".join(lines) + f"\n\nAutomated confirmation from {signature}."
 
 
 def _arrival_llm_client(settings: dict | None):
@@ -1823,6 +2480,50 @@ def _month_stamps(
     }
 
 
+def body_text_by_digest(arch: "Path | None", staging: Path) -> dict[str, str]:
+    """`sha1[:16] -> the mail's body text`, for the rendered-body PDF only.
+
+    A body-only mail renders to an IMAGE pdf (`body_render.render_body_pdf`
+    pastes Pillow pages), so it carries no text layer and the extractor keeps
+    the model's notes as `ocr_text` instead of the body's own words. The
+    rendered body IS the mail, so the mail body is that document's text and
+    nothing else can supply it.
+
+    An ATTACHMENT is deliberately never mapped. "FW: Reminder Invoice from
+    Redis IUS25300" attaches the genuine invoice; lending the reminder's
+    words to the invoice would set the invoice aside with the reminder.
+
+    Read-only and fail-open: an unreadable archive yields {}.
+    """
+    if arch is None:
+        return {}
+    try:
+        eml = arch / "message.eml"
+        if not eml.is_file():
+            return {}
+        # Staging writes files position-prefixed (`0000__rendered-body.pdf`),
+        # so match the SUFFIX; an exact-name lookup here silently never hits.
+        rendered = [
+            p for p in Path(staging).iterdir()
+            if p.is_file() and (
+                p.name == _RENDERED_BODY or p.name.endswith(f"__{_RENDERED_BODY}")
+            )
+        ]
+        if not rendered:
+            return {}
+        from .body_render import extract_body_text
+
+        text = extract_body_text(eml.read_bytes())
+        if not (text or "").strip():
+            return {}
+        return {
+            hashlib.sha1(p.read_bytes()).hexdigest()[:16]: text
+            for p in rendered
+        }
+    except Exception:  # noqa: BLE001 - a damaged archive is evidence of nothing
+        return {}
+
+
 def _ingest_job(
     db_path: Path, job_id: str, run_id: str, staging: Path,
     learning_db_path: Path | None, provenance: dict[str, dict],
@@ -1845,6 +2546,7 @@ def _ingest_job(
                 learning_db_path=learning_db_path,
                 on_stage=lambda s: store.set_job_stage(job_id, s, _now_iso()),
                 provenance_by_digest=provenance,
+                text_by_digest=body_text_by_digest(arch, staging),
             )
             store.set_job_status(
                 job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso()
@@ -1862,6 +2564,10 @@ def _ingest_job(
                     job_id, JOB_ERROR, error="batch deleted",
                     updated_at=_now_iso(),
                 )
+            documents, not_added = _own_outcome(
+                None if batch_gone or arch is None else store.get_run(run_id),
+                arch, summary,
+            )
         # Status truth: "ingested" only after the job ACTUALLY succeeded.
         if arch is not None:
             if batch_gone:
@@ -1873,7 +2579,9 @@ def _ingest_job(
                 # on it.
                 _update_meta(arch, {
                     "status": STATUS_INGESTED,
-                    "documents": list((summary or {}).get("documents") or []),
+                    "documents": documents,
+                    # Item 106: why each other file created no expense.
+                    "not_added": not_added,
                 })
                 _maybe_ack(db_path, arch)
     except Exception as exc:  # noqa: BLE001 - job errors surface via meta+log
@@ -1909,7 +2617,7 @@ def _start_ingest(
         safe = re.sub(r"[^A-Za-z0-9._-]", "_", Path(name).name) or "file"
         (staging / f"{i:04d}__{safe}").write_bytes(data)
         digest = hashlib.sha1(data).hexdigest()[:16]
-        provenance[digest] = {**person, "received_at": received_at}
+        provenance[digest] = _provenance_entry(person, received_at, arch)
     with RunStore(db_path) as store:
         store.create_job(job_id, None, _now_iso())
     if synchronous:
@@ -2035,9 +2743,8 @@ def _create_month_from_mail(
     with RunStore(db_path) as store:
         settings = store.get_settings()
     provenance = {
-        hashlib.sha1(data).hexdigest()[:16]: {
-            **person, "received_at": received_at,
-        }
+        hashlib.sha1(data).hexdigest()[:16]: _provenance_entry(
+            person, received_at, arch)
         for _name, data in attachments
     }
     prepared = create_expense_batch(
@@ -2081,7 +2788,8 @@ def _create_month_from_mail(
         lambda m: str(m.get("status", "")) == owned_status,
         {"status": STATUS_INGESTED, "batch_id": run_id, "job_id": job_id,
          "batch_deleted": False, "materialized": True,
-         "documents": documents},
+         "documents": documents,
+         "not_added": _created_batch_not_added(run)},
     )
     if not stamped:
         # Someone (a stale-transient replay, a dismiss) took the archive
@@ -2244,6 +2952,24 @@ def route_archived(
             "skipped": "already routed",
         }
     arrival_iso = str(meta.get("at") or received_at)
+
+    # Inbound mail is DATA, never instructions (rule_untrusted_inbound).
+    # Scan the subject and body for text addressed to an assistant and stamp
+    # the hits on the archive: they raise a review flag on whatever receipts
+    # this mail creates and hold the auto-ack back. Nothing branches on the
+    # content itself, so a sender cannot steer routing by writing to us.
+    try:
+        _flags = untrusted.scan(
+            str(meta.get("subject") or ""), _archive_body_text(arch))
+    except Exception:  # noqa: BLE001 - a flag is advisory; never block intake
+        _flags = ()
+    if _flags:
+        _update_meta(arch, {"untrusted_instructions": list(_flags)})
+        _append_log(data_root, {
+            "at": received_at, "archive": arch.name,
+            "event": "untrusted_instructions",
+            "kinds": list(untrusted.labels(_flags)),
+        })
 
     try:
         # Mail we cannot read as receipts never pays for extraction.
@@ -2415,6 +3141,7 @@ def route_archived(
         return {
             "status": HELD_FAILED if held else str(current.get("status", "")),
             "archive": arch.name, "person": person, "error": err,
+            "error_code": "mail_routing_failed",
         }
 
 
@@ -2759,24 +3486,27 @@ def join_trip(
     travel pool for the next click."""
     arch = _archive_dir(data_root, archive)
     if arch is None:
-        return {"error": "not found", "code": 404}
+        return {"error": "not found", "code": 404, "error_code": "mail_not_found"}
     meta = _read_meta(arch)
     if str(meta.get("pool_kind") or "") != "travel":
         return {
             "error": "only travel mail joins a trip; month mail joins "
                      "its month automatically",
             "code": 409,
+            "error_code": "mail_not_travel",
         }
     with RunStore(db_path) as store:
         trip = store.get_trip(str(trip_id))
     if trip is None:
-        return {"error": "trip not found", "code": 404}
+        return {"error": "trip not found", "code": 404,
+                "error_code": "trip_not_found"}
     attachments = _archive_attachments(arch)
     if not attachments:
         return {
             "error": "this mail has no ingestable file yet; render its "
                      "body first",
             "code": 409,
+            "error_code": "mail_no_file_yet",
         }
 
     with _TRIP_JOIN_LOCK:
@@ -2796,6 +3526,8 @@ def join_trip(
                 "error": "cannot join mail in state "
                          f"{str(meta.get('status', ''))!r}",
                 "code": 409,
+                "error_code": "mail_state_conflict",
+                "status": str(meta.get("status", "")),
             }
         person = _archive_person(meta)
         received_at = str(meta.get("at") or _now_iso())
@@ -2819,7 +3551,8 @@ def join_trip(
                     {"status": STATUS_POOLED, "batch_id": "",
                      "batch_deleted": False, "error": str(exc)[:400]},
                 )
-                return {"error": f"join failed: {exc}"[:400], "code": 500}
+                return {"error": f"join failed: {exc}"[:400], "code": 500,
+                        "error_code": "trip_join_failed"}
             if job.get("status") != JOB_DONE:
                 # _ingest_job stamped held_failed + the error; the
                 # RESTING place for travel mail is the travel pool.
@@ -2832,6 +3565,7 @@ def join_trip(
                 return {
                     "error": str(job.get("error") or "ingest failed"),
                     "code": 500,
+                    "error_code": "mail_ingest_failed",
                 }
             _update_meta(arch, {"job_id": job_id, "batch_id": run.run_id,
                                 "batch_deleted": False})
@@ -2871,8 +3605,8 @@ def join_trip(
         prepared = None
         try:
             provenance = {
-                hashlib.sha1(data).hexdigest()[:16]:
-                    {**person, "received_at": received_at}
+                hashlib.sha1(data).hexdigest()[:16]: _provenance_entry(
+                    person, received_at, arch)
                 for _name, data in attachments
             }
             with RunStore(db_path) as store:
@@ -2891,7 +3625,9 @@ def join_trip(
                 provenance_by_digest=provenance,
             )
             with RunStore(db_path) as store:
-                run_id = execute_expense_batch(store, prepared)
+                run_id = execute_expense_batch(
+                    store, prepared, learning_db_path=learning_db_path,
+                )
                 created = store.get_run(run_id)
         except Exception as exc:  # noqa: BLE001 - pool it back, keep it clickable
             if prepared is not None:
@@ -2903,7 +3639,8 @@ def join_trip(
                  "batch_deleted": False, "error": str(exc)[:400]},
             )
             log.warning("trip join failed for %s: %s", arch.name, exc)
-            return {"error": f"join failed: {exc}"[:400], "code": 500}
+            return {"error": f"join failed: {exc}"[:400], "code": 500,
+                        "error_code": "trip_join_failed"}
         finally:
             release_trip_batch_slot(trip.trip_id)
         documents = [
@@ -2914,6 +3651,7 @@ def join_trip(
         _update_meta(arch, {
             "status": STATUS_INGESTED, "batch_id": run_id,
             "batch_deleted": False, "documents": documents,
+            "not_added": _created_batch_not_added(created),
         })
         _maybe_ack(db_path, arch)
         _append_log(data_root, {
@@ -3229,6 +3967,55 @@ def sweep_retention(db_path: Path, data_root: Path) -> int:
     return removed
 
 
+def sweep_dismissed(db_path: Path, data_root: Path) -> int:
+    """Delete archives the operator dismissed as junk, once they have sat
+    dismissed for ``intake.dismissed_purge_days`` (item 122).
+
+    Dismissal is a human saying "this is not a receipt", so the bytes are
+    not an accounting record and nothing in AO paragraph 147 asks us to
+    keep them; today they are kept forever and count against the same
+    volume real receipts need. The grace period exists because a
+    dismissal can be a mis-click, and it is measured from the DISMISSAL,
+    not from arrival.
+
+    Ships inert: the default is 0 = never. Deleting Brisken's mail is the
+    owner's call, and turning it on is one settings write. Runs at boot
+    beside the retention sweep, fail-open, and only ever touches archives
+    whose status is `dismissed`."""
+    root = inbound_root(data_root)
+    if not root.exists():
+        return 0
+    with RunStore(db_path) as store:
+        cfg = IntakeConfig.from_settings(store.get_settings())
+    if cfg.dismissed_purge_days <= 0:
+        return 0
+    cutoff = datetime.now(timezone.utc).timestamp() - (
+        cfg.dismissed_purge_days * 86400
+    )
+    removed = 0
+    for arch in list(root.iterdir()):
+        if not arch.is_dir() or not _ARCHIVE_NAME_RE.fullmatch(arch.name):
+            continue
+        meta = _read_meta(arch)
+        if str(meta.get("status", "")) != STATUS_DISMISSED:
+            continue
+        stamp = str(meta.get("dismissed_at") or "")
+        try:
+            when = datetime.fromisoformat(stamp)
+        except ValueError:
+            # No readable dismissal time: leave it. An archive we cannot
+            # date is not one to delete.
+            continue
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        if when.timestamp() < cutoff:
+            shutil.rmtree(arch, ignore_errors=True)
+            removed += 1
+    if removed:
+        log.info("purged %d dismissed inbound archives", removed)
+    return removed
+
+
 # ------------------------------------------- body-only mail handling (C2) --
 # held_body_only was terminal: no view, no ingest path, no way to clear
 # the held strip. Three per-archive actions fix that: read the body
@@ -3276,10 +4063,11 @@ def render_ingest(
 
     arch = _archive_dir(data_root, archive)
     if arch is None or not (arch / "message.eml").exists():
-        return {"error": "not found", "code": 404}
+        return {"error": "not found", "code": 404, "error_code": "mail_not_found"}
     text = extract_body_text((arch / "message.eml").read_bytes())
     if not text.strip():
-        return {"error": "no readable body in this mail", "code": 409}
+        return {"error": "no readable body in this mail", "code": 409,
+                "error_code": "mail_no_readable_body"}
 
     def _renderable(meta: dict) -> bool:
         status = meta.get("status")
@@ -3304,7 +4092,9 @@ def render_ingest(
     })
     if not applied:
         return {"error": "only body-only held mail can be rendered "
-                         f"(status: {meta.get('status', '')})", "code": 409}
+                         f"(status: {meta.get('status', '')})", "code": 409,
+                "error_code": "mail_not_renderable",
+                "status": str(meta.get("status", ""))}
 
     header = [
         f"From: {meta.get('from', '')}",
@@ -3339,7 +4129,8 @@ def render_ingest(
             {"status": HELD_FAILED, "error": str(exc)[:400]},
         )
         log.warning("render failed for %s: %s", arch.name, exc)
-        return {"error": f"render failed: {exc}", "code": 500}
+        return {"error": f"render failed: {exc}", "code": 500,
+                "error_code": "mail_render_failed"}
 
     month = str(stamps["receipt_month"])
     if str(_read_meta(arch).get("pool_kind") or "") == "travel":
@@ -3423,7 +4214,7 @@ def re_ingest(
     """
     arch = _archive_dir(data_root, archive)
     if arch is None:
-        return {"error": "not found", "code": 404}
+        return {"error": "not found", "code": 404, "error_code": "mail_not_found"}
     parts_dir = arch / "parts"
     attachments = [
         (re.sub(r"^\d{3}__", "", f.name), f.read_bytes())
@@ -3435,6 +4226,7 @@ def re_ingest(
             "error": "this mail delivered no attachment to re-ingest; a "
                      "body-only mail is recovered with render-ingest",
             "code": 409,
+            "error_code": "mail_no_attachment",
         }
     if str(_read_meta(arch).get("pool_kind") or "") == "travel":
         # Belt: travel mail joins a TRIP by an operator's click, never
@@ -3446,11 +4238,13 @@ def re_ingest(
             "error": "travel mail joins a trip, not a month; use the "
                      "trip join on the pooled row",
             "code": 409,
+            "error_code": "mail_travel_not_month",
         }
     with RunStore(db_path) as store:
         run = open_batch(store)
     if run is None:
-        return {"error": "no open month to ingest into", "code": 409}
+        return {"error": "no open month to ingest into", "code": 409,
+                "error_code": "no_open_month"}
 
     def _stranded(meta: dict) -> bool:
         if not meta.get("batch_deleted"):
@@ -3475,10 +4269,13 @@ def re_ingest(
                 "error": "this mail still belongs to a live month; re-ingest "
                          "exists for mail stranded by a deleted month",
                 "code": 409,
+                "error_code": "mail_month_still_live",
             }
         return {
             "error": f"cannot re-ingest mail in state {status!r}",
             "code": 409,
+            "error_code": "mail_state_conflict",
+            "status": status,
         }
 
     person = meta.get("person") or {
@@ -3520,7 +4317,7 @@ def unmark_duplicate(
     """
     arch = _archive_dir(data_root, archive)
     if arch is None:
-        return {"error": "not found", "code": 404}
+        return {"error": "not found", "code": 404, "error_code": "mail_not_found"}
     applied, meta = _transition_meta(
         arch,
         lambda m: str(m.get("status", "")) == STATUS_DUPLICATE,
@@ -3536,19 +4333,22 @@ def unmark_duplicate(
                 "this mail is not parked as a duplicate"
             ),
             "code": 409,
+            "error_code": "mail_not_duplicate",
             "status": str(meta.get("status", "")),
         }
     eml = arch / "message.eml"
     if not eml.is_file():
         _update_meta(arch, {"status": HELD_FAILED})
-        return {"error": "custody message unreadable", "code": 409}
+        return {"error": "custody message unreadable", "code": 409,
+                "error_code": "mail_custody_unreadable"}
     with RunStore(db_path) as store:
         cfg = IntakeConfig.from_settings(store.get_settings())
     try:
         parsed = parse_inbound(eml.read_bytes(), cfg.domain)
     except Exception:  # noqa: BLE001 - unreadable custody file
         _update_meta(arch, {"status": HELD_FAILED})
-        return {"error": "custody message unreadable", "code": 409}
+        return {"error": "custody message unreadable", "code": 409,
+                "error_code": "mail_custody_unreadable"}
     # Route it exactly as an arrival would, minus the detector: the
     # override rides on the meta and `route_archived` honours it.
     return route_archived(
@@ -3570,7 +4370,7 @@ def dismiss_archive(
     otherwise, and clearing it is the normal way to finish with one."""
     arch = _archive_dir(data_root, archive)
     if arch is None:
-        return {"error": "not found", "code": 404}
+        return {"error": "not found", "code": 404, "error_code": "mail_not_found"}
     applied, meta = _transition_meta(
         arch,
         lambda m: (
@@ -3585,7 +4385,9 @@ def dismiss_archive(
     )
     if not applied:
         return {"error": "only held or pooled mail can be dismissed "
-                         f"(status: {meta.get('status', '')})", "code": 409}
+                         f"(status: {meta.get('status', '')})", "code": 409,
+                "error_code": "mail_not_dismissable",
+                "status": str(meta.get("status", ""))}
     return {"status": STATUS_DISMISSED, "archive": arch.name}
 # ------------------------------------------------------------ receipts drop --
 
@@ -3594,6 +4396,239 @@ def valid_month_key(month: str) -> bool:
     """True when ``month`` is a well-formed "YYYY-MM" key (the drop
     endpoint's override format)."""
     return _ym(month) is not None
+
+
+def drop_rematch_summary(rematch: object) -> dict | None:
+    """What the drop page says about the re-match an arrival ran (note #53):
+    None when none ran (no statement, or every file was a duplicate),
+    `{ok: false, error}` when it failed (the receipts are filed regardless
+    and the month's next change retries), else `{ok: true}` with the month's
+    counts after it."""
+    if not isinstance(rematch, dict):
+        return None
+    if rematch.get("error"):
+        return {"ok": False, "error": str(rematch["error"])}
+    return {
+        "ok": True,
+        **{
+            k: int(rematch.get(k) or 0)
+            for k in ("n_transactions", "n_matched", "n_review", "n_unmatched_tx")
+        },
+    }
+
+
+# How many dropped receipts are READ at once (item 148). Every worker is one
+# concurrent vision round-trip for ONE operator's drop: the round-trip, not
+# our CPU, is the wall clock, so a handful already collapses it, while a wide
+# pool would fire a single drop at the provider as a burst and spend the
+# shared key's per-minute headroom on retries. Six keeps a 40-file drop inside
+# one round-trip-ish instead of forty, and leaves headroom for the mail
+# intake reading on the same key at the same time.
+_DROP_READ_WORKERS = 6
+# Progress granularity for the read pass. Each report is a short-lived store
+# connection, so a 500-file drop reporting every file would spend the saving
+# on bookkeeping.
+_DROP_PROGRESS_ALL_UNTIL = 20
+_DROP_PROGRESS_EVERY = 5
+
+
+def _drop_progress_due(done: int, total: int) -> bool:
+    """Whether `reading receipts (done/total)` is worth a stage write: every
+    file while each one still reads as movement, then every fifth, plus the
+    last one whatever the pile size."""
+    return (
+        done <= _DROP_PROGRESS_ALL_UNTIL
+        or done % _DROP_PROGRESS_EVERY == 0
+        or done == total
+    )
+
+
+# A zip dropped on the Receipts page (owner directive 2026-09-27) is opened on
+# the server and every member files on its own, exactly as if the operator had
+# dropped the files themselves: its own month verdict, its own ledger row, and
+# the destination month's content dedupe. A pile that spans months is the case
+# the month upload gets wrong (it files a whole zip into ONE month and dedupes
+# only there), which is why the zip belongs on this page.
+#
+# Only a zip the operator dropped is opened (`NNNN__x.zip`, the endpoint's
+# spool name). Members are written beside it as `NNNN-MMMM__member` so they
+# keep the drop's order, and a zip inside a zip is left as a member and
+# rejected on type rather than recursed into. Which zip a member came from is
+# kept in a dotfile manifest beside them, so a member row can say so even
+# after the zip is gone (a restart re-runs the drop over the members alone).
+DROP_ZIP_UNREADABLE = "zip-unreadable"
+DROP_ZIP_TOO_MANY = "zip-too-many-files"
+DROP_ZIP_NO_SPACE = "zip-no-space"
+_DROP_ZIP_RE = re.compile(r"^(\d{4})__.+\.zip$", re.IGNORECASE)
+_DROP_MEMBER_RE = re.compile(r"^(\d{4})-\d{4}__")
+_DROP_SPOOL_PREFIX_RE = re.compile(r"^\d{4}(?:-\d{4})?__")
+_DROP_ZIP_MANIFEST = ".zip-origins.json"
+# A member's file name is capped well under the 255-byte filesystem limit
+# (the `NNNN-MMMM__` prefix rides on top), keeping its extension, so one long
+# name inside a zip can never fail the whole drop.
+_DROP_MEMBER_NAME_MAX = 100
+# Rule 5: the reason set grew, so the new codes ship their English prose
+# beside the code (`reason_label`). A page that does not know a code yet
+# prints the label instead of a raw token.
+_DROP_ZIP_REASON_LABELS = {
+    DROP_ZIP_UNREADABLE: (
+        "this zip could not be opened (it is damaged, or not really a zip)"
+    ),
+    DROP_ZIP_TOO_MANY: (
+        "unpacking this zip would take the drop past {limit} files; drop it"
+        " on its own, or split it into smaller zips"
+    ),
+    DROP_ZIP_NO_SPACE: (
+        "the server does not have the free space to unpack this zip right"
+        " now; nothing in it was filed"
+    ),
+}
+
+
+def _disk_can_take(root: Path, n_bytes: int) -> bool:
+    """Would writing ``n_bytes`` more keep the volume above the mailbox's
+    free-disk floor? Unpacking a zip is the one place a drop can grow the
+    volume by far more than it received, and the mailbox refuses mail below
+    that floor, so a big zip must not be what stops receipts arriving.
+    Cannot-say answers yes: the write itself still fails loudly."""
+    try:
+        usage = shutil.disk_usage(str(root))
+    except OSError:
+        return True
+    return usage.free - max(0, n_bytes) >= free_disk_floor(usage.total)
+
+
+def _drop_member_file_name(name: str) -> str:
+    """The on-disk (and ledger) name of a zip member: the endpoint's
+    character rule, capped at `_DROP_MEMBER_NAME_MAX` with the extension
+    kept."""
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", name) or "file"
+    if len(safe) <= _DROP_MEMBER_NAME_MAX:
+        return safe
+    stem, dot, ext = safe.rpartition(".")
+    ext = ext[:16]
+    if not dot or not stem:
+        return safe[:_DROP_MEMBER_NAME_MAX]
+    return stem[: _DROP_MEMBER_NAME_MAX - len(ext) - 1] + "." + ext
+
+
+def drop_zip_origins(staging: Path) -> dict[str, str]:
+    """``{zip prefix NNNN: the zip's display name}`` for this drop's
+    unpacked zips; empty when there is none or the manifest is unreadable
+    (a member row then simply carries no `from_zip`)."""
+    try:
+        data = json.loads(
+            (Path(staging) / _DROP_ZIP_MANIFEST).read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return {}
+    return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+
+
+def expand_dropped_zips(staging: Path) -> dict[str, dict]:
+    """Open every zip the operator dropped into ``staging`` and write its
+    members beside it, so the router below sees a pile of plain files.
+
+    Returns ``{staged zip name: ledger fields}`` for each zip refused WHOLE
+    and left in place, one row under the zip's name, nothing in it read:
+    ``zip-unreadable``; ``zip-too-many-files`` with ``limit`` when its members
+    would take the drop's unpacked total past ``FOLDER_MAX_FILES`` (counted
+    across every zip in the drop, before anything is written, because each
+    member costs a read before the per-month cap could drop it); or
+    ``zip-no-space`` when unpacking would breach the disk floor.
+
+    Per member: a type the page does not take is written as an EMPTY
+    placeholder (the router's type check runs first and names it, the bytes
+    are never needed), a receipt is read up to one byte past the size cap
+    (the router's size check names an oversized one), and a member that
+    cannot be read (a damaged entry, a password) is written empty and reads
+    ``empty-file``. One bad member never sinks the rest of the zip.
+
+    Restart-safe (item 114 re-runs an interrupted drop over the same folder):
+    the zip is deleted only after its last member is written, and before a
+    zip still present is looked at, whatever members an interrupted pass left
+    for it are deleted, so a refused zip never leaves part of itself to be
+    filed and the checks see the space those members held. A restart after
+    the delete finds plain files and nothing to open. A failure while WRITING
+    raises: the drop fails as a drop, never as a "bad zip" with half its
+    members on disk."""
+    import zipfile
+
+    from .service import (
+        FOLDER_MAX_FILES,
+        FOLDER_RECEIPT_MAX_BYTES,
+        zip_member_name,
+    )
+
+    staging = Path(staging)
+    refused: dict[str, dict] = {}
+    zips = sorted(
+        p for p in staging.iterdir()
+        if p.is_file() and _DROP_ZIP_RE.match(p.name)
+    )
+    if not zips:
+        return refused
+    pending = {_DROP_ZIP_RE.match(z.name).group(1) for z in zips}
+    for p in staging.iterdir():
+        m = _DROP_MEMBER_RE.match(p.name)
+        if m and m.group(1) in pending:
+            p.unlink()  # left by an interrupted pass over a zip still here
+    unpacked = sum(1 for p in staging.iterdir() if _DROP_MEMBER_RE.match(p.name))
+    origins = drop_zip_origins(staging)
+
+    for zpath in zips:
+        prefix = _DROP_ZIP_RE.match(zpath.name).group(1)
+        # Only READING the directory decides "unreadable": a malformed zip
+        # can fail as BadZipFile, ValueError, EOFError or struct.error. A
+        # failure while WRITING members (disk, permissions) is not the zip's
+        # fault and must fail the drop loudly.
+        try:
+            zf = zipfile.ZipFile(zpath)
+            members = [
+                (info, name) for info in zf.infolist()
+                if (name := zip_member_name(info)) is not None
+            ]
+        except Exception:  # noqa: BLE001 - see above: reading only
+            log.warning("drop zip %s unreadable", zpath.name, exc_info=True)
+            refused[zpath.name] = {"reason": DROP_ZIP_UNREADABLE}
+            continue
+        with zf:
+            if unpacked + len(members) > FOLDER_MAX_FILES:
+                refused[zpath.name] = {
+                    "reason": DROP_ZIP_TOO_MANY, "limit": FOLDER_MAX_FILES,
+                }
+                continue
+            need = sum(
+                min(info.file_size, FOLDER_RECEIPT_MAX_BYTES + 1)
+                for info, name in members
+                if Path(name).suffix.lower() in FOLDER_RECEIPT_SUFFIXES
+            )
+            if need and not _disk_can_take(staging, need):
+                refused[zpath.name] = {"reason": DROP_ZIP_NO_SPACE}
+                continue
+            origins[prefix] = _DROP_SPOOL_PREFIX_RE.sub("", zpath.name)
+            manifest = staging / _DROP_ZIP_MANIFEST
+            tmp = manifest.with_name(manifest.name + ".tmp")
+            tmp.write_text(json.dumps(origins), encoding="utf-8")
+            os.replace(tmp, manifest)
+            for j, (info, name) in enumerate(members, start=1):
+                dest = zpath.with_name(
+                    f"{prefix}-{j:04d}__{_drop_member_file_name(name)}"
+                )
+                if Path(name).suffix.lower() not in FOLDER_RECEIPT_SUFFIXES:
+                    dest.write_bytes(b"")
+                    continue
+                try:
+                    with zf.open(info) as fh:
+                        data = fh.read(FOLDER_RECEIPT_MAX_BYTES + 1)
+                except Exception:  # noqa: BLE001 - one member, not the pile
+                    log.warning("drop zip %s: member %s unreadable",
+                                zpath.name, name, exc_info=True)
+                    data = b""
+                dest.write_bytes(data)
+        unpacked += len(members)
+        zpath.unlink()
+    return refused
 
 
 def route_dropped_receipts(
@@ -3637,7 +4672,11 @@ def route_dropped_receipts(
     / ``upload-cap`` (with ``limit``) HERE, before the ingest call whose
     internal cap would otherwise skip those files while the row read
     ``filed``; re-dropping the same pile is safe because content dedupe
-    skips what already landed."""
+    skips what already landed.
+
+    A dropped zip is opened first (`expand_dropped_zips`) and each member
+    files on its own row; a zip refused whole gets one ``rejected`` row
+    under its own name."""
     from .service import FOLDER_RECEIPT_MAX_BYTES
 
     def _stage(name: str) -> None:
@@ -3648,61 +4687,152 @@ def route_dropped_receipts(
                 pass
 
     now = _now_iso()
-    staged = sorted(p for p in Path(staging).iterdir() if p.is_file())
+    zip_refusals = expand_dropped_zips(Path(staging))
+    zip_origins = drop_zip_origins(Path(staging))
+    # Dotfiles are the drop's own bookkeeping (the zip manifest); the
+    # endpoint spools every upload under an `NNNN__` name.
+    staged = sorted(
+        p for p in Path(staging).iterdir()
+        if p.is_file() and not p.name.startswith(".")
+    )
     with RunStore(db_path) as store:
         settings = store.get_settings()
 
     rows: list[dict] = []
     routed: dict[str, list[tuple[dict, Path]]] = {}
-    client = _UNSET
     _stage("reading receipts")
+    # Pass 1, in staged order: every verdict that costs nothing settles here
+    # (unreadable type, empty, oversized, a typed month), and every file that
+    # has to be READ is queued for the pool below. `records` stays in staged
+    # order start to finish, so the ledger assembled from it at the end is
+    # the one the end-to-end loop assembled.
+    records: list[dict] = []
+    to_read: list[int] = []
     for path in staged:
-        display = re.sub(r"^\d{4}__", "", path.name)
+        display = _DROP_SPOOL_PREFIX_RE.sub("", path.name)
         suffix = path.suffix.lower()
+        refusal = zip_refusals.get(path.name)
+        if refusal is not None:
+            row = {"file": display, "status": "rejected", **refusal}
+            label = _DROP_ZIP_REASON_LABELS.get(str(refusal.get("reason")))
+            if label:
+                row["reason_label"] = label.format(limit=refusal.get("limit"))
+            records.append({"row": row, "path": path, "month": None,
+                            "display": display})
+            continue
         if suffix not in FOLDER_RECEIPT_SUFFIXES:
-            # Zips included, deliberately: a zip's members would each need
-            # their own routing verdict, and the page is a drag-and-drop
-            # of the files themselves.
-            rows.append({"file": display, "status": "rejected",
-                         "reason": "unsupported-type"})
+            # Includes a zip found INSIDE a dropped zip: only the operator's
+            # own zips are opened, never recursively.
+            records.append({
+                "row": {"file": display, "status": "rejected",
+                        "reason": "unsupported-type"},
+                "path": path, "month": None, "display": display,
+            })
             continue
         size = path.stat().st_size
         if size == 0:
-            rows.append({"file": display, "status": "rejected",
-                         "reason": "empty-file"})
-            continue
-        if size > FOLDER_RECEIPT_MAX_BYTES:
-            rows.append({"file": display, "status": "rejected",
-                         "reason": "too-large"})
-            continue
-        if month_override:
-            row = {"file": display, "status": "filed",
-                   "month": month_override, "month_source": "operator"}
-            rows.append(row)
-            routed.setdefault(month_override, []).append((row, path))
-            continue
-        if client is _UNSET:
-            client = _arrival_llm_client(settings)
-        dates = (
-            _extract_receipt_dates([path], client)
-            if client is not None else []
-        )
-        month, source, mixed = resolve_receipt_month(dates, now)
-        if source != "receipt":
-            rows.append({
-                "file": display, "status": "needs_month",
-                "reason": (
-                    "implausible-date" if source == "implausible-receipt"
-                    else "no-readable-date"
-                ),
+            records.append({
+                "row": {"file": display, "status": "rejected",
+                        "reason": "empty-file"},
+                "path": path, "month": None, "display": display,
             })
             continue
-        row = {"file": display, "status": "filed", "month": month,
-               "month_source": "receipt"}
-        if mixed:
-            row["mixed_months"] = True
-        rows.append(row)
-        routed.setdefault(month, []).append((row, path))
+        if size > FOLDER_RECEIPT_MAX_BYTES:
+            records.append({
+                "row": {"file": display, "status": "rejected",
+                        "reason": "too-large"},
+                "path": path, "month": None, "display": display,
+            })
+            continue
+        if month_override:
+            # A typed month is believed, so the file is never opened: the
+            # override path pays no vision call and never enters the pool.
+            row = {"file": display, "status": "filed",
+                   "month": month_override, "month_source": "operator"}
+            records.append({"row": row, "path": path,
+                            "month": month_override, "display": display})
+            continue
+        records.append({"row": None, "path": path, "month": None,
+                        "display": display})
+        to_read.append(len(records) - 1)
+
+    if to_read:
+        client = _arrival_llm_client(settings)
+
+        def _verdict(i: int) -> tuple[str, str, bool]:
+            """One file's month verdict, on a pool thread. Reads only its own
+            record and returns it; nothing shared is mutated here, so the
+            assembly below stays the single writer of `rows` and `routed`.
+            `_extract_receipt_dates` already swallows a per-file extraction
+            failure into "no dates"; the guard here covers the rest of the
+            read, so one unreadable file can never take down the pile."""
+            try:
+                dates = (
+                    _extract_receipt_dates([records[i]["path"]], client)
+                    if client is not None else []
+                )
+            except Exception:  # noqa: BLE001 - per file, exactly as before
+                log.warning("drop routing failed for %s",
+                            records[i]["display"], exc_info=True)
+                dates = []
+            return resolve_receipt_month(dates, now)
+
+        # The reads ARE the wall clock of a drop: one vision round-trip each,
+        # and end to end they simply added up (a 40-file drop measured 40x one
+        # round-trip — the "way too long" the owner reported 2026-09-18).
+        # Nothing in a file's verdict depends on its neighbours, so they run
+        # on a bounded pool. A 429 stays a per-file event either way: the SDK
+        # retries it inside the call, and a call that still fails leaves that
+        # one file `needs_month` while the rest file.
+        with ThreadPoolExecutor(
+            max_workers=min(_DROP_READ_WORKERS, len(to_read)),
+            thread_name_prefix="drop-read",
+        ) as pool:
+            futures = {i: pool.submit(_verdict, i) for i in to_read}
+            done = 0
+            for _ in as_completed(futures.values()):
+                done += 1
+                if _drop_progress_due(done, len(to_read)):
+                    # One frozen "reading receipts" for minutes was the whole
+                    # of the page's feedback; the count is what makes the wait
+                    # legible. The SPA renders the stage string verbatim, so
+                    # this needs nothing of it.
+                    _stage(f"reading receipts ({done}/{len(to_read)})")
+
+        for i in to_read:
+            month, source, mixed = futures[i].result()
+            rec = records[i]
+            if source != "receipt":
+                rec["row"] = {
+                    "file": rec["display"], "status": "needs_month",
+                    "reason": (
+                        "implausible-date" if source == "implausible-receipt"
+                        else "no-readable-date"
+                    ),
+                }
+                continue
+            row = {"file": rec["display"], "status": "filed", "month": month,
+                   "month_source": "receipt"}
+            if mixed:
+                row["mixed_months"] = True
+            rec["row"] = row
+            rec["month"] = month
+
+    # One writer, one order: the ledger and the per-month groups are built
+    # from `records` in staged order, so the same staging folder yields a
+    # byte-identical `rows` whether the reads ran one at a time or six.
+    for rec in records:
+        member = _DROP_MEMBER_RE.match(rec["path"].name)
+        if member and member.group(1) in zip_origins:
+            # The page holds the zip, not this file, so it cannot re-send
+            # the file alone (the needs_month picker's move); the row says
+            # where the file came from instead.
+            rec["row"]["from_zip"] = zip_origins[member.group(1)]
+        rows.append(rec["row"])
+        if rec["month"] is not None:
+            routed.setdefault(rec["month"], []).append(
+                (rec["row"], rec["path"])
+            )
 
     from .service import FOLDER_MAX_FILES as _drop_cap
 
@@ -3759,6 +4889,9 @@ def route_dropped_receipts(
                     entry.update({
                         "batch_id": run_id, "created_batch": True,
                         "n_added": len(files_bytes),
+                        # A month created by this drop holds no statement,
+                        # so nothing was matched (note #53).
+                        "has_statement": False,
                     })
                     if prepared.upload_issues:
                         entry["issues"] = list(prepared.upload_issues)
@@ -3802,7 +4935,8 @@ def route_dropped_receipts(
                 fresh = store.get_run(target_run.run_id)
                 if fresh is None:
                     raise RunInputError(
-                        "This batch no longer exists (it was deleted)."
+                        "This batch no longer exists (it was deleted).",
+                        code="batch_deleted",
                     )
                 result = add_receipts_to_expense_batch(
                     store, fresh, add_staging, _now_iso(),
@@ -3812,7 +4946,13 @@ def route_dropped_receipts(
             entry.update({
                 "batch_id": target_run.run_id,
                 "n_added": int(result.get("n_added") or 0),
+                "has_statement": has_statement(fresh),
             })
+            # Note #53: the arrival already re-matched a month holding a
+            # statement; say so, and with what result, instead of dropping it.
+            rematch = drop_rematch_summary(result.get("rematch"))
+            if rematch is not None:
+                entry["rematch"] = rematch
             if result.get("issues"):
                 entry["issues"] = list(result["issues"])
             for row, _path in group:

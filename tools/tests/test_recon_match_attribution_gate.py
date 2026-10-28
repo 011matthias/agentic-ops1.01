@@ -146,3 +146,44 @@ def test_the_tool_reports_a_contradicted_card_as_demoted_card(attribution):
     )
     trace = _trace(attribution, [_tx("2838:1", "9.69")], [receipt])
     assert trace["cands"][("2838:1", "ER#BRL")]["status"] == "demoted_card"
+
+
+def test_the_tool_reports_the_no_card_review_clause_off_the_matchers_own_outcome(attribution):
+    """Item X1 (2026-09-18). A receipt naming no card, exact on 25.00, with a
+    second 25.00 charge on another card: the matcher keeps the pair and asks
+    for review (`no_card_rival_review`), and the tool's class for the
+    labelled pair says so ("review-flagged"), read off `match_month`'s own
+    outcome rather than a rule of the tool's. Bites when the clause is
+    unwired: the pair then reads as a clean, unflagged match."""
+    from datetime import date as _date
+
+    from expense_recon.matching.deterministic import MatchingConfig, match_month
+    from expense_recon.matching.types import Receipt, Transaction
+
+    def tx(tx_id, day, card):
+        return Transaction(
+            transaction_id=tx_id, legal_entity_id="", account_id="card-2838",
+            transaction_date=_date(2026, 8, day), posting_date=None,
+            amount=Decimal("25.00"), transaction_currency="USD",
+            account_card_currency="USD", vendor_from_statement="LOVABLE",
+            card_last4=card,
+        )
+
+    transactions = [tx("on-2838", 5, "2838"), tx("on-3645", 6, "3645")]
+    receipt = Receipt(
+        document_id="doc", legal_entity_id="", detected_date=_date(2026, 8, 5),
+        detected_total=Decimal("25.00"), detected_currency="USD",
+        detected_vendor="Lovable",
+    )
+    cfg = MatchingConfig()
+    outcome = match_month(transactions, [receipt], cfg)
+    month = {
+        "label": "x1", "id": "x1", "cfg": {}, "match_cfg": cfg,
+        "transactions": transactions, "receipts": [receipt], "match_input": [receipt],
+        "collapsed": set(), "foreign": {},
+        "raw": outcome, "judged": outcome, "effective": outcome, "stored": None,
+    }
+    rows = attribution.attribute(month, {"doc": ("confirmed", "on-2838", "")})
+    row = next(r for r in rows if r["document_id"] == "doc")
+    assert row["cls"] == "resolved_clean", row
+    assert "(review-flagged)" in row["detail"], row

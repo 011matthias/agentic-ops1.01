@@ -150,6 +150,8 @@ def cmd_test(args) -> int:
                       "new_text": args.text, "old_text": ""}
         elif event in ("prompt", "stop"):
             fields = {pr.DEFAULT_FIELD[event]: _strip_code(args.text)}
+            if event == "stop":
+                fields["final_text_raw"] = args.text
         else:
             from _shell import normalize_command
             fields = {"command": normalize_command(args.text)}
@@ -190,7 +192,8 @@ def _user_text(msg: dict) -> str:
         return ""
     # Harness-injected context is not the user speaking.
     text = re.sub(r"<system-reminder>.*?</system-reminder>", " ", text, flags=re.S)
-    text = re.sub(r"<(command-[a-z-]+|local-command-[a-z-]+)>.*?</\1>", " ", text, flags=re.S)
+    text = re.sub(r"<(command-[a-z-]+|local-command-[a-z-]+|task-notification)>.*?</\1>",
+                  " ", text, flags=re.S)
     return text.strip()
 
 

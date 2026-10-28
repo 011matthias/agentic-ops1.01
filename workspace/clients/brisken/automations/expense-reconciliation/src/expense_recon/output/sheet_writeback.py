@@ -44,14 +44,17 @@ from openpyxl import load_workbook
 from openpyxl.styles import Font
 
 from ..matching.types import (
+    DECIDED_ORIGINS,
     Categorization,
     ClassificationSource,
     Match,
     MatchOutcome,
     Receipt,
     Transaction,
+    answer_origin,
+    is_suggestion_only,
 )
-from .posting_common import _resolve_account
+from .posting_common import _UNMAPPED, _resolve_account, suggested_cell
 
 if TYPE_CHECKING:
     from ..ingest.chart_of_accounts import ChartOfAccounts
@@ -128,24 +131,32 @@ def _account_cell_value(
 ) -> str:
     """The matched receipt's posting account(s), for one cell.
 
-    Each line item's categorization contributes ``zoho_account or
-    category``; with a chart, the reference is resolved to the
-    canonical Zoho account name (an unresolvable reference keeps the
-    raw label — this is a review surface, so showing the pick beats
-    hiding it). Distinct accounts join with "; " in first-seen order.
-    No categorizations at all → flagged, never guessed.
+    Each line item's categorization contributes its ``zoho_account``;
+    with a chart, the reference is resolved to the canonical Zoho account
+    name (an unresolvable reference keeps the raw label — this is a
+    review surface, so showing the pick beats hiding it). A categorized
+    line with no account contributes ``(account unmapped - assign)``, the
+    export's own marker, never its category: this is the account column.
+    Distinct accounts join with "; " in first-seen order. No
+    categorizations at all → flagged, never guessed.
     """
     values: list[str] = []
     for item in rec.line_items:
         cat = item.categorization
         if cat is None:
             continue
-        ref = cat.zoho_account or cat.category
-        if not ref:
+        if not cat.zoho_account:
+            if cat.category and cat.source is not ClassificationSource.REVIEW:
+                if _UNMAPPED not in values:
+                    values.append(_UNMAPPED)
             continue
+        ref = cat.zoho_account
         value = ref
         if coa is not None:
             value = _resolve_account(ref, coa) or ref
+        if is_suggestion_only(cat):
+            # Item 216 Build 2 step 2: the model's reading is a suggestion.
+            value = suggested_cell(value)
         if value not in values:
             values.append(value)
     if not values:
@@ -167,9 +178,12 @@ def _cell_value(
     (a yellow already-in-Zoho row wins even when it also matched).
 
     Slice 10: an unmatched charge with a side-map categorization writes
-    its learned/guessed account instead of "(no receipt matched)" — a
-    LEARNED account verbatim, a VENDOR guess with a "(confirm)" marker
-    so the guess stays visible as a guess (LD-2)."""
+    its account instead of "(no receipt matched)": a decided answer (a
+    person's pick, a merchant-list or remembered rule) verbatim, the
+    model's guess with a "(confirm)" marker so it stays visible as a guess
+    (LD-2). Item 216 cause 1: which is which is `answer_origin`, the one mapping
+    every surface reads; this cell used to trust LEARNED alone, so Criss's
+    own pick on a charge printed "(confirm)"."""
     if tx.entry_status == "posted":
         return _ALREADY_POSTED
     match = match_by_tx.get(tx.transaction_id)
@@ -183,10 +197,18 @@ def _cell_value(
     if tx.transaction_id in unmatched_tx:
         cat = (charge_cats or {}).get(tx.transaction_id)
         if cat is not None and cat.category:
-            ref = cat.zoho_account or cat.category
+            ref = cat.zoho_account
+            if not ref:
+                # A guessed category with no account: nothing to confirm,
+                # and the category is not an account (see above).
+                return _UNMAPPED
             value = (_resolve_account(ref, coa) or ref) if coa is not None else ref
-            if cat.source is ClassificationSource.LEARNED:
+            if answer_origin(cat) in DECIDED_ORIGINS:
                 return value
+            if is_suggestion_only(cat):
+                # Item 216 Build 2 step 2: on a GL month the guess is a
+                # labelled suggestion, the same cell `expenses.csv` writes.
+                return suggested_cell(value)
             return f"{value} (confirm)"
         return _NO_RECEIPT
     return None

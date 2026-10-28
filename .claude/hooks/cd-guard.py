@@ -22,10 +22,26 @@ cwd change is local) or replace it with absolute/cwd-flag equivalents
 
 DECISION
 --------
-BLOCK with a clear, scriptable correction message. The hook does NOT silently
-rewrite the command: the agent must learn the pattern, not have it papered
-over. The block reason names the three idiomatic fixes so the agent can
-choose the right one without re-deriving.
+BLOCK with a clear, scriptable correction message. The block reason names the
+three idiomatic fixes so the agent can choose the right one without
+re-deriving.
+
+AUTO-MODE REWRITE (2026-09-17)
+------------------------------
+Under `permission_mode == "auto"` a Bash cd chain is REWRITTEN into a subshell
+instead of blocked: the hook emits `updatedInput` (the full tool_input, command
+wrapped in `( ... )`) plus `additionalContext` telling the agent the cd did not
+persist. It NEVER emits a permissionDecision next to the rewrite: a hook
+`allow` skips the approval the command would otherwise need. Live probes
+(memory reference_pretooluse_updatedinput_semantics): the auto classifier
+judges the rewritten command, a refused command stays refused with or without
+the wrap, a benign wrapped one runs. Every other mode keeps the block: in
+"default" a `( ... )` loses prefix-rule matching ("shell operators that require
+approval"), so a rewrite would turn a recoverable block into a human prompt,
+and "dontAsk" would deny it outright. A cd with nothing chained after it
+(`cd X`, `cd X 2>/dev/null`, a trailing `cd X` line) is blocked in every mode:
+wrapped, it would be a silent no-op and the next call would run in the
+directory the agent did not expect.
 
 EXEMPTIONS
 ----------
@@ -193,6 +209,39 @@ REASON_TEMPLATE = (
     "Then resubmit the corrected command."
 )
 
+# Permission modes in which a Bash cd chain is rewritten instead of blocked
+# (see AUTO-MODE REWRITE above for why "auto" is the only one).
+REWRITE_MODES = frozenset({"auto"})
+
+# What may trail a cd's path without counting as a command that uses the new
+# directory: whitespace, statement separators, and redirections.
+_NO_FOLLOWUP = re.compile(r"(?:[\s;&|]|\d?>>?\s*[^\s;&|]+|&>\s*[^\s;&|]+)*")
+
+REWRITE_NOTE = (
+    "[cd-guard] Ran this command inside a subshell `( ... )` because it "
+    "changes directory with `cd {path}`: the change applied to this call only "
+    "and does NOT persist to later calls or hooks. Keep using subshells, "
+    "`git -C {path}` / `--prefix` / `--directory` flags, or absolute paths."
+)
+
+
+def has_followup(scan: str, end: int) -> bool:
+    """True if a statement follows the cd whose path ends at `end`, i.e. the
+    cd is used within this same command rather than meant to persist."""
+    rest = scan[end:]
+    return _NO_FOLLOWUP.fullmatch(rest) is None
+
+
+def wrap_subshell(cmd: str) -> str:
+    """`cmd` wrapped in a subshell. A command with a newline or a `#` gets the
+    parentheses on their own lines, so a trailing comment or a heredoc
+    terminator cannot swallow the closing `)`."""
+    body = cmd.rstrip("\r\n")
+    if "\n" in body or "#" in body:
+        return f"(\n{body}\n)"
+    return f"( {body} )"
+
+
 PS_REASON_TEMPLATE = (
     "[cd-guard] Refused: changing the location to `{path}` persists the "
     "PowerShell cwd across subsequent PowerShell calls AND across hooks that "
@@ -231,6 +280,7 @@ def main() -> int:
         rx, reason_tpl, subshell_exempt = PS_CD_RX, PS_REASON_TEMPLATE, False
 
     # residue is length-preserving, so match offsets index straight into `cmd`.
+    hits = []
     for m in rx.finditer(scan):
         # Use the ORIGINAL text for the exemption test + reason -- the matched
         # `path` group may be the masked 'X' filler of a quoted span.
@@ -256,16 +306,36 @@ def main() -> int:
         # resolved against it, which is the same drift. The safe escapes
         # (`cd -`, `cd ~`, `cd $HOME`, absolute paths, `( cd .. && .. )`
         # subshells, `Push-Location`) are all exempted above or by the regex.
-        log_fire(f"BLOCK tool={tool} path={path[:40]} cmd={cmd[:80]!r}")
-        decision = {"decision": "block", "reason": reason_tpl.format(path=path)}
-        # Claude Code reads JSON decisions from stdout for newer hook APIs
-        # and from stderr for older; emit on both to be safe.
-        print(json.dumps(decision), file=sys.stderr)
-        print(json.dumps(decision))
-        return 2  # non-zero -> Claude Code treats as block
+        hits.append((m, path))
 
-    log_fire("ALLOW")
-    return 0
+    if not hits:
+        log_fire("ALLOW")
+        return 0
+
+    mode = event.get("permission_mode")
+    path = hits[0][1]
+    rewrite_eligible = tool == "Bash" and mode in REWRITE_MODES
+    # A cd nothing uses in this call (see has_followup) is blocked even here.
+    stranded = [p for m, p in hits if not has_followup(scan, m.end("path"))]
+    if rewrite_eligible and stranded:
+        path = stranded[0]
+    elif rewrite_eligible:
+        new_input = dict(event.get("tool_input") or {})
+        new_input["command"] = wrap_subshell(cmd)
+        # updatedInput WITHOUT permissionDecision: the rewritten command still
+        # goes through permission rules and the auto classifier.
+        out = {"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": new_input, "additionalContext": REWRITE_NOTE.format(path=path)}}
+        log_fire(f"REWRITE mode={mode} path={path[:40]} cmd={cmd[:80]!r}")
+        print(json.dumps(out))
+        return 0
+
+    log_fire(f"BLOCK tool={tool} mode={mode} path={path[:40]} cmd={cmd[:80]!r}")
+    decision = {"decision": "block", "reason": reason_tpl.format(path=path)}
+    # Claude Code reads JSON decisions from stdout for newer hook APIs
+    # and from stderr for older; emit on both to be safe.
+    print(json.dumps(decision), file=sys.stderr)
+    print(json.dumps(decision))
+    return 2  # non-zero -> Claude Code treats as block
 
 
 if __name__ == "__main__":

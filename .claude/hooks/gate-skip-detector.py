@@ -232,6 +232,8 @@ def main() -> int:
         event = json.loads(raw) if raw.strip() else {}
     except Exception:
         return 0
+    if session_state is not None:
+        session_state.bind_session(event)
 
     cmd = ""
     if event.get("tool_name") in ("Bash", "PowerShell"):

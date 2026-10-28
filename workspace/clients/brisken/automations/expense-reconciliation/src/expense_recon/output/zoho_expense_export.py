@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import csv
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -35,11 +35,13 @@ from .posting_common import (
     _DISPOSITION_WITHHELD,
     _REIMBURSABLE_PLACEHOLDER,
     _UNCATEGORIZED,
+    LINES_DISAGREE_MARK,
     _amount,
     _debit_account_and_note,
     _posting_amounts,
     _resolve_account,
     _str,
+    line_sum_gap,
 )
 
 if TYPE_CHECKING:
@@ -64,11 +66,15 @@ EXPENSE_COLUMNS = (
     "Receipt URL",
 )
 
-_PAID_THROUGH_PLACEHOLDER = "(paid-through - assign)"
+# Public because the API posting path REFUSES on them: `zoho/accounts.py`
+# and `zoho/expense_post.py` import these two rather than re-spelling the
+# strings, so the column the export writes and the refusal that reads it
+# cannot drift apart.
+PAID_THROUGH_PLACEHOLDER = "(paid-through - assign)"
 # Cards R3: an unresolved legal entity NEVER blocks an export (owner
 # ruling 2026-08-21) — the row ships with a visible placeholder, the
 # reviewer assigns the card/entity later, and a re-export folds it in.
-_ENTITY_PLACEHOLDER = "(entity - assign)"
+ENTITY_PLACEHOLDER = "(entity - assign)"
 
 
 def _card_last4(payment_mode: str | None) -> str | None:
@@ -183,18 +189,18 @@ def resolve_paid_through(
             "reimbursable",
         )
     if override:
-        return _resolve_or(override, coa, _PAID_THROUGH_PLACEHOLDER), "override"
+        return _resolve_or(override, coa, PAID_THROUGH_PLACEHOLDER), "override"
     if receipt.paid_through:
-        return _resolve_or(receipt.paid_through, coa, _PAID_THROUGH_PLACEHOLDER), "receipt"
+        return _resolve_or(receipt.paid_through, coa, PAID_THROUGH_PLACEHOLDER), "receipt"
     card = card_hint_account or (
         None if card_map_blocked
         else _card_account(receipt.payment_mode, card_accounts)
     )
     if card:
-        return _resolve_or(card, coa, _PAID_THROUGH_PLACEHOLDER), "card"
+        return _resolve_or(card, coa, PAID_THROUGH_PLACEHOLDER), "card"
     if default:
-        return _resolve_or(default, coa, _PAID_THROUGH_PLACEHOLDER), "default"
-    return _PAID_THROUGH_PLACEHOLDER, "unassigned"
+        return _resolve_or(default, coa, PAID_THROUGH_PLACEHOLDER), "default"
+    return PAID_THROUGH_PLACEHOLDER, "unassigned"
 
 
 def _paid_through(
@@ -242,18 +248,92 @@ def build_expense_rows(
     Tax lands on the FIRST row of an expense only, so a split never
     double-counts tax.
 
-    `coa_gate` diverts any non-postable account to review before a row is
-    built (the same guarantee as the journal export). `dispositions`
+    `coa_gate` keeps any non-postable account out of a row before it is
+    built (the same guarantee as the journal export). It judges the
+    ACCOUNT, so a categorized line keeps its category (item 95): the row
+    books as a category with no account, the same thing the grid's
+    `books_as` and a category edit without an account show, and a receipt's
+    categorized part stays its own row. `dispositions`
     (document_id -> §17 disposition) withholds personal / do-not-export
     expenses and redirects a reimbursable expense's Paid Through. Every
     map is keyed by `document_id`.
-    """
-    if coa_gate is not None:
-        gated, _report = coa_gate.run(list(receipts))
-        receipts = gated
 
-    rows: list[list[str]] = []
+    A receipt whose total was never read writes ONE row with the Amount cell
+    blank (item 97): its lines allocate nothing, so the fan-out has no part
+    to write, and the receipt used to leave no row at all while its page was
+    still in the report.
+    """
+    return [
+        row
+        for _doc, doc_rows in build_expense_row_groups(
+            receipts,
+            chart_of_accounts=chart_of_accounts,
+            coa_gate=coa_gate,
+            default_paid_through=default_paid_through,
+            paid_through_by_doc=paid_through_by_doc,
+            entity_by_doc=entity_by_doc,
+            dispositions=dispositions,
+            reimbursable_account=reimbursable_account,
+            receipt_urls=receipt_urls,
+            customer_by_doc=customer_by_doc,
+            card_accounts=card_accounts,
+            card_hint_accounts=card_hint_accounts,
+            card_map_blocked_docs=card_map_blocked_docs,
+        )
+        for row in doc_rows
+    ]
+
+
+def gated_for_posting(
+    receipts: "Sequence[Receipt]", coa_gate: "CoaGate | None"
+) -> "list[Receipt]":
+    """The receipts a posting fan-out reads: the chart gate applied with
+    `keep_category` (item 95), or the receipts as they are when no gate is
+    wired.
+
+    ONE function, because the grid's `books_as` depiction calls
+    `expense_posting_parts` on its own receipts and the export calls it on
+    gated ones: a line whose account the company's chart rejects would then
+    read as its raw account on the screen and as its category (or
+    `(account unmapped - assign)`) in the CSV for the same purchase. Both
+    sides gate first, so the screen and the document cannot disagree.
+    """
+    if coa_gate is None:
+        return list(receipts)
+    gated, _report = coa_gate.run(list(receipts), keep_category=True)
+    return gated
+
+
+def build_expense_row_groups(
+    receipts: "Sequence[Receipt]",
+    *,
+    chart_of_accounts: "ChartOfAccounts | None" = None,
+    coa_gate: "CoaGate | None" = None,
+    default_paid_through: str | None = None,
+    paid_through_by_doc: "Mapping[str, str] | None" = None,
+    entity_by_doc: "Mapping[str, str] | None" = None,
+    dispositions: "Mapping[str, str] | None" = None,
+    reimbursable_account: str | None = None,
+    receipt_urls: "Mapping[str, str | None] | None" = None,
+    customer_by_doc: "Mapping[str, str] | None" = None,
+    card_accounts: "Mapping[str, str] | None" = None,
+    card_hint_accounts: "Mapping[str, str] | None" = None,
+    card_map_blocked_docs: "set[str] | None" = None,
+) -> list[tuple[str, list[list[str]]]]:
+    """`build_expense_rows`, per receipt: `[(document_id, rows written for
+    it)]` in the receipts' order, a withheld receipt with no rows.
+
+    The month report numbers its listing and captions each receipt's pages
+    from THIS pass (item 97), so a caption names the rows actually written
+    for that document. It used to count a second fan-out that ran without
+    the chart and the COA gate, and from the first receipt the two counted
+    differently every later caption named another purchase."""
+    receipts = gated_for_posting(receipts, coa_gate)
+
+    groups: list[tuple[str, list[list[str]]]] = []
     for r in receipts:
+        rows: list[list[str]] = []
+        groups.append((r.document_id, rows))
         disposition = (dispositions or {}).get(r.document_id)
         if disposition in _DISPOSITION_WITHHELD:
             continue
@@ -273,7 +353,7 @@ def build_expense_rows(
         entity = (
             (entity_by_doc or {}).get(r.document_id)
             or r.legal_entity_id
-            or _ENTITY_PLACEHOLDER
+            or ENTITY_PLACEHOLDER
         )
         customer = (customer_by_doc or {}).get(r.document_id, "")
         url = (
@@ -293,11 +373,33 @@ def build_expense_rows(
             r.document_id in (card_map_blocked_docs or ()),
         )
 
+        parts: list[tuple[str, Decimal | None, list[str]]] = list(
+            expense_posting_parts(
+                r, chart_of_accounts=chart_of_accounts, fallback_desc=vendor
+            )
+        )
+        if not parts and r.detected_total is None:
+            # Item 97: no readable total, so nothing to allocate. One row
+            # with a blank amount keeps the receipt in the listing, where the
+            # report marks it "amount unreadable, not in total".
+            accounts = list(dict.fromkeys(
+                _debit_account_and_note(i.categorization, chart_of_accounts)[0]
+                for i in r.line_items or ()
+            )) or [_UNCATEGORIZED]
+            parts = [(
+                "; ".join(accounts), None,
+                [i.description for i in r.line_items or () if i.description],
+            )]
+        # Item 224 step 6: a split receipt whose lines disagree with its total
+        # hands each account the share its misread lines give it, so every
+        # row of it says so. A one-account receipt posts its total whatever
+        # the lines say, and stays unmarked.
+        mark = len(parts) > 1 and line_sum_gap(r) is not None
         first = True
-        for account, amt, part_descs in expense_posting_parts(
-            r, chart_of_accounts=chart_of_accounts, fallback_desc=vendor
-        ):
+        for account, amt, part_descs in parts:
             description = "; ".join(part_descs) or vendor
+            if mark:
+                description = f"{description} {LINES_DISAGREE_MARK}"
             rows.append([
                 date_str,
                 account,
@@ -315,7 +417,7 @@ def build_expense_rows(
                 _str(url),
             ])
             first = False
-    return rows
+    return groups
 
 
 def expense_posting_parts(
@@ -387,12 +489,32 @@ def write_zoho_expense_export(
     card_accounts: "Mapping[str, str] | None" = None,
     card_hint_accounts: "Mapping[str, str] | None" = None,
     card_map_blocked_docs: "set[str] | None" = None,
+    footer: str = "",
+    single_currency: "Callable[[list[tuple[str, list[list[str]]]]], tuple[Mapping[int, str], Sequence[str]]] | None" = None,
 ) -> Path:
     """Write the Zoho Books Expenses import CSV (one row per expense).
-    Returns the path."""
+    Returns the path.
+
+    `footer` (item 94) is one line of prose written under the rows after a
+    blank row, in the first column only, so no amount column carries it.
+    Empty (the default) writes nothing, byte for byte as before.
+
+    `single_currency` (item 98) is handed the row groups and returns the
+    `Exchange Rate` cell for each 1-based row number it can price, plus any
+    footer lines to write under the rows. It is a callback rather than a
+    computation here because the rate depends on the month's charges and its
+    frozen FX config, neither of which this module has any business knowing;
+    what it DOES own is that the rate belongs in the column already named
+    for it. That column has shipped empty on every row since the export
+    existed, because a scanned receipt prints no rate, and filling it is
+    what lets a reader (or an importer) reach the base-currency figure
+    without a second document. The header is untouched on purpose: the
+    system this CSV imports into is still an open question (backlog item
+    23), and a column that already exists cannot break a mapping that a new
+    one might."""
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    rows = build_expense_rows(
+    groups = build_expense_row_groups(
         receipts,
         chart_of_accounts=chart_of_accounts,
         coa_gate=coa_gate,
@@ -407,8 +529,26 @@ def write_zoho_expense_export(
         card_hint_accounts=card_hint_accounts,
         card_map_blocked_docs=card_map_blocked_docs,
     )
+    rows = [row for _doc, doc_rows in groups for row in doc_rows]
+    lines: list[str] = [footer] if footer else []
+    if single_currency is not None:
+        rates, extra = single_currency(groups)
+        rate_col = EXPENSE_COLUMNS.index("Exchange Rate")
+        for n, text in (rates or {}).items():
+            # Never overwrite a rate the RECEIPT printed. A booked rate read
+            # off the document is what that purchase was actually converted
+            # at; a rate computed here is our reconstruction, and the
+            # document's own figure outranks it. No live receipt carries one
+            # today (vision extraction sets none), which is exactly why this
+            # would otherwise go unnoticed the first time one does.
+            if 1 <= int(n) <= len(rows) and text and not rows[int(n) - 1][rate_col]:
+                rows[int(n) - 1][rate_col] = text
+        lines.extend(line for line in (extra or ()) if line)
     with out_path.open("w", encoding="utf-8", newline="") as fh:
         writer = csv.writer(fh)
         writer.writerow(EXPENSE_COLUMNS)
         writer.writerows(rows)
+        for line in lines:
+            writer.writerow([])
+            writer.writerow([line])
     return out_path

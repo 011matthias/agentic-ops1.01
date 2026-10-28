@@ -150,6 +150,8 @@ def main() -> int:
         return 0
     if not isinstance(payload, dict):
         return 0
+    if session_state is not None:
+        session_state.bind_session(payload)
 
     tool_name = str(payload.get("tool_name") or "")
     cls = classify(tool_name, failure_text(payload))

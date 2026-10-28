@@ -136,6 +136,32 @@ def diff_rematches(state: dict, remote: dict) -> list[dict]:
     ]
 
 
+def _failure_key(mark: dict) -> str:
+    return f"{mark.get('run_id')}:{mark.get('failed_at')}"
+
+
+def diff_rematch_failures(state: dict, remote: dict) -> list[dict]:
+    """Item 113: owed re-matches whose last attempt FAILED and that have not
+    been announced. `remote["rematch_pending"]` lists months owing a re-match
+    (a mark with `error` + `failed_at` when an attempt raised); a new failure
+    on the same month has a new `failed_at`, so it is announced again."""
+    seen = set(state.get("seen_rematch_failures", []))
+    return [
+        m for m in remote.get("rematch_pending", [])
+        if m.get("failed_at") and _failure_key(m) not in seen
+    ]
+
+
+def rematch_failure_line(mark: dict) -> str:
+    """"August 2026: re-match did not run (RuntimeError: ...), owed since
+    2026-09-17T14:24:46, attempt 2"."""
+    label = mark.get("label") or mark.get("run_id") or "?"
+    return (
+        f"{label}: re-match did not run ({mark.get('error') or '?'}), owed "
+        f"since {mark.get('since') or '?'}, attempt {mark.get('attempts') or 1}"
+    )
+
+
 def rematch_line(event: dict) -> str:
     """One line per re-match: "August 2026: 14 of 111, pool 7 (statement,
     2026-09-11T14:24:46)". Counts are the month's matched charges over its
@@ -177,6 +203,13 @@ def apply_to_state(state: dict, remote: dict) -> dict:
                 e.get("event_id")
                 for e in remote.get("rematches", [])
                 if e.get("event_id")
+            }
+        ),
+        "seen_rematch_failures": sorted(
+            {
+                _failure_key(m)
+                for m in remote.get("rematch_pending", [])
+                if m.get("failed_at")
             }
         ),
     }
@@ -347,10 +380,11 @@ def main() -> int:
     new_runs = diff_runs(state, remote)
     new_feedback = diff_feedback(state, remote)
     new_rematches = diff_rematches(state, remote)
+    new_failures = diff_rematch_failures(state, remote)
 
     if (
         not new_intakes and not new_runs and not new_publishes
-        and not new_feedback and not new_rematches
+        and not new_feedback and not new_rematches and not new_failures
     ):
         print("nothing new")
         return 0
@@ -412,6 +446,20 @@ def main() -> int:
             + "\n".join(
                 f"- {rematch_line(e)}  {APP_URL}/runs/{e.get('run_id')}"
                 for e in new_rematches
+            )
+            + "\n"
+        )
+        plans.append((subject, body, DEV_RECIPIENTS))
+    if new_failures:
+        n = len(new_failures)
+        subject = f"Expense recon: {n} re-match{'es' if n != 1 else ''} did not run"
+        body = (
+            "These months still describe themselves as they were before a "
+            "change, because the re-match after it failed. The next receipt "
+            "or a restart retries it.\n\n"
+            + "\n".join(
+                f"- {rematch_failure_line(m)}  {APP_URL}/runs/{m.get('run_id')}"
+                for m in new_failures
             )
             + "\n"
         )

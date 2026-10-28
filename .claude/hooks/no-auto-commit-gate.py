@@ -444,6 +444,8 @@ def main() -> None:
         payload = json.load(sys.stdin)
     except Exception:
         sys.exit(0)
+    if session_state is not None:
+        session_state.bind_session(payload)
 
     cmd = ((payload.get("tool_input") or {}).get("command")) or ""
     if not cmd:

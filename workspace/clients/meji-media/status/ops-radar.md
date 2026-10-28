@@ -4,10 +4,20 @@ workstream: ops-radar
 group: ""
 spec: ""
 state: active
-updated: 2026-09-11
+updated: 2026-10-09
 ---
 
 # Meji Media / Opportunity Radar
+
+**Historical note (2026-10-09):** the September narrative below (live state,
+September launch prep, Gurmej 09-07/09-08 exchanges, review-page build) is
+superseded by events since. Current live state: see
+`status/enquiry-automation.md` (corporate + Christmas rows) and
+`context/comms-log.md` (2026-09-22 onward: Christmas warm/dormant live,
+corporate October trial live, weekly client summary system built). This file
+is kept for the radar METHOD (lens catalog, candidate ledger, engine) below;
+the dated narrative is a historical record, not current state. Candidate
+ledger overdue for a prune pass.
 
 The repeatable method for finding leaks, gaps, and ROI opportunities from live
 state with slight weekly effort. This file is the durable, value-free anchor:

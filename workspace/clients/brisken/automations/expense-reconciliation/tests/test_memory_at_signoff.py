@@ -77,7 +77,9 @@ def _edit(client, batch_id, doc, field, value) -> None:
 
 
 def _publish(client, batch_id) -> dict:
-    resp = client.post(f"/api/runs/{batch_id}/publish")
+    # These months have receipts and no statement, so since item 100 they
+    # publish only on an explicit override; the memory save is the same.
+    resp = client.post(f"/api/runs/{batch_id}/publish", json={"override": True})
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["published"] is True

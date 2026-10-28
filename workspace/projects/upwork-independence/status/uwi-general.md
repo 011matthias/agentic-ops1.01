@@ -4,7 +4,7 @@ workstream: uwi-general
 group: uwi
 spec:
 state: active
-updated: 2026-09-05
+updated: 2026-10-26
 ---
 
 # Upwork Independence (group general reference)
@@ -50,6 +50,20 @@ the weekly hours ledger. It is a roll-up, not a copy.
    ~EUR20-40/mo. One polite-firm bonus re-raise to Gurmej approved (lifts
    do-not-chase once, sequenced after ask-1's reply). Everything else stays
    per-item.
+7. **Local offer terms + demo channel** (2026-10-05, during the first
+   Karlsruhe field session). Care EUR200/mo runs 12 months, then monthly
+   cancellable. UnpauseAI is Kleinunternehmer: EUR1,225 / EUR200 are end
+   prices, no VAT. Domain and content belong to the client; on cancellation
+   the client gets an export. Repair of a compromised site (first case: a
+   hacked architect homepage) is quoted as a fixed price after a short
+   review, never on the spot. New demos are built as Lovable one-pagers
+   (prompts + sourced facts in `workspace/projects/local-web/prospects/`).
+   Conversation guide: `workspace/projects/local-web/GESPRAECHSLEITFADEN.md`.
+8. **n8n is the platform; HERO channel opened** (2026-10-26). Make is not a
+   growth route: no own Make account, no new clients onto Make, no Make
+   partner program. Platform-partner reach runs through n8n. The HERO x n8n
+   channel (publish the missing n8n node for HERO, Wärme Wimmer as proof,
+   HERO's partner doors) opens as u9.
 
 ## Cross-model reconciliation (do not re-litigate)
 
@@ -76,6 +90,7 @@ deleted 2026-09-05 on owner order; git history holds the last version.
 - `u5-delivery-kit.md` — meji pipeline -> `workspace/templates/leadgen-delivery/`
 - `u6-offer-surface.md` — pricing/service pages from `pricing-tiers.json`
 - `u7-subcontracting.md` — starts when u5 exists (kit = contractor runbook)
+- `u9-hero-n8n-channel.md` — n8n node for HERO + templates + HERO partner listing
 
 ## Weekly acquisition-hours ledger (target ~14 h/wk)
 

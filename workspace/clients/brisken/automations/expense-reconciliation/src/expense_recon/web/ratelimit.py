@@ -201,6 +201,7 @@ def register_success(store, ip: str) -> None:
 def denial_body(verdict: Verdict) -> dict:
     return {
         "error": "too many login attempts",
+        "code": "too_many_login_attempts",
         "retry_after": verdict.retry_after,
         "scope": verdict.scope,
     }

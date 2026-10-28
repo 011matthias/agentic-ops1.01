@@ -42,7 +42,7 @@ for the delegated `Files.ReadWrite.All` workaround. Full detail:
 | Create a draft / send mail | app-only `Mail.ReadWrite` / `Mail.Send` on the allowlisted mailbox | `Items.Add` COM draft-loader |
 | Read calendar | app-only `Calendars.Read` | COM calendar scan |
 | Planner / Tasks | `Tasks.ReadWrite.All` (app) or delegated token | CDP token off the planner tab |
-| SharePoint files (the Rome master, decks) | Graph **workbook / drive API** (delegated `Files.ReadWrite.All` token, because the app's `Sites.Selected` is not granted for the MARKETING site) | raw-CDP SP REST from an Edge tab |
+| SharePoint files (the Rome master, decks) | Graph **workbook / drive API**, **app-only** (proven 2026-09-21, see below) | raw-CDP SP REST from an Edge tab; a delegated token where app-only now works |
 
 For the master sheet specifically: read/write via the Graph workbook
 range API (surgical per-cell PATCH, coexists with the file open in
@@ -116,10 +116,22 @@ Only where Graph genuinely cannot do it with current grants:
   `Calendars.Read` is granted. Request `Calendars.ReadWrite` rather
   than reverting to COM; until granted, a documented COM fallback is
   acceptable for a specific approved invite.
-- **SharePoint sites not granted to the app** (`Sites.Selected`
-  covers only granted sites): use the delegated `Files.ReadWrite.All`
-  Graph token (still Graph, not CDP). Raw-CDP SP REST is a last
-  resort only if no Graph token is available.
+- **SharePoint sites the app genuinely cannot reach.** This carve-out is
+  narrower than it was. App-only SharePoint on the MARKETING site is
+  **proven, 2026-09-21**: the client-credentials token resolves
+  `brisken.sharepoint.com:/sites/MARKETING`, resolves its default document
+  library, lists 18 root folders and WRITES (the expense-recon backup
+  uploaded a 127.2 MB archive into `ExpenseTool`). `Sites.ReadWrite.All`
+  was granted 2026-09-10; the "not granted for MARKETING" line above
+  predated it and was wrong from that date. So test app-only first and
+  reach for a delegated `Files.ReadWrite.All` token only against a site
+  app-only actually refuses. Raw-CDP SP REST stays the last resort.
+
+  When testing, do not accept an empty listing as proof of reach: Graph
+  answers 404 for "no such folder" and for several kinds of "you cannot
+  see this", and callers routinely fold that into an empty list. Confirm
+  the credential can see something you know is there before you believe
+  what it says is not.
 - Driving an authenticated *web UI* that has no API (rare): CDP Edge
   remains valid ([[reference_user_edge_cdp_9222]]) for genuine
   UI-only tasks, not for anything with a Graph endpoint.
