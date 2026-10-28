@@ -798,6 +798,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## warme-wimmer
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-21 | WW Hero Key And Zapier Migration Prep | client-dev | [→](docs/2026-10-21%20-%20WW%20Hero%20Key%20And%20Zapier%20Migration%20Prep/Checkpoint.md) |
 | 2026-10-21 | WW W2-14 Testseite Jetzt pruefen | client-dev | [→](docs/2026-10-21%20-%20WW%20W2-14%20Testseite%20Jetzt%20pruefen/Checkpoint.md) |
 | 2026-10-14 | WW W2-14 Startknopf und Hero-Reiter | client-dev | [→](docs/2026-10-14%20-%20WW%20W2-14%20Startknopf%20und%20Hero-Reiter/Checkpoint.md) |
 | 2026-10-13 | WW W2-14 Kalender-Ortszeit und R20-Titel | client-dev | [→](docs/2026-10-13%20-%20WW%20W2-14%20Kalender-Ortszeit%20und%20R20-Titel/Checkpoint.md) |
