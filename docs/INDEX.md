@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-21 | Recon Memory Window Portuguese And Outage Check | client-dev | [Mini-Checkpoint-1](docs/2026-10-21%20-%20Recon%20Memory%20Window%20Portuguese%20And%20Outage%20Check/Mini-Checkpoint-1.md) |
 | 2026-10-09 | Recon Card Filter Perf Fix | client-dev | [→](docs/2026-10-09%20-%20Recon%20Card%20Filter%20Perf%20Fix/Checkpoint.md) |
 | 2026-10-07 | Recon Sender Notes Classify And Backfill | client-dev | [→](docs/2026-10-07%20-%20Recon%20Sender%20Notes%20Classify%20And%20Backfill/Checkpoint.md) |
 | 2026-10-07 | Publish to Close Month Rename | client-dev | [→](docs/2026-10-07%20-%20Publish%20to%20Close%20Month%20Rename/Checkpoint.md) |
@@ -519,6 +520,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-28 | Repo Layout Audit | system-infra | [→](docs/2026-10-28%20-%20Repo%20Layout%20Audit/Checkpoint.md) |
 | 2026-10-07 | Jotform Warme Wimmer Vault Entry | misc | [Mini-Checkpoint-1](docs/2026-10-07%20-%20Jotform%20Warme%20Wimmer%20Vault%20Entry/Mini-Checkpoint-1.md) |
 | 2026-10-07 | Zapier MCP Connector Setup | system-infra | [→](docs/2026-10-07%20-%20Zapier%20MCP%20Connector%20Setup/Checkpoint.md) |
 | 2026-10-05 | Handyvertrag HIGH Verlaengerung | misc | [→](docs/2026-10-05%20-%20Handyvertrag%20HIGH%20Verlaengerung/Checkpoint.md) |
@@ -634,6 +636,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## meji-media
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-21 | Meji Weekly Summary 12 Oct and Outreach Plan | client-dev | [→](docs/2026-10-21%20-%20Meji%20Weekly%20Summary%2012%20Oct%20and%20Outreach%20Plan/Checkpoint.md) |
 | 2026-10-13 | Meji Row 1361 Contact Swap and Campaign Pulse | client-dev | [→](docs/2026-10-13%20-%20Meji%20Row%201361%20Contact%20Swap%20and%20Campaign%20Pulse/Checkpoint.md) |
 | 2026-10-09 | Meji October Corporate Trial and Weekly Summary System | client-dev | [→](docs/2026-10-09%20-%20Meji%20October%20Corporate%20Trial%20and%20Weekly%20Summary%20System/Checkpoint.md) |
 | 2026-10-09 | Meji Weekly Summary PDF Template | client-dev | [Mini-Checkpoint-1](docs/2026-10-09%20-%20Meji%20Weekly%20Summary%20PDF%20Template/Mini-Checkpoint-1.md) |
@@ -762,6 +765,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## upwork-independence
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-26 | UWI HERO n8n Channel | misc | [→](docs/2026-10-26%20-%20UWI%20HERO%20n8n%20Channel/Checkpoint.md) |
 | 2026-09-09 | UWI Phase-2 Shape + Voice-Line Assessment | system-infra | [→](docs/2026-09-09%20-%20UWI%20Phase-2%20Shape%20%2B%20Voice-Line%20Assessment/Checkpoint.md) |
 | 2026-09-05 | UWI Monetization Strategy Committed | system-infra | [Mini-Checkpoint-2](docs/2026-09-05%20-%20UWI%20Monetization%20Strategy%20Committed/Mini-Checkpoint-2.md) |
 | 2026-07-28 | UnpauseAI Cold-Email u1 Provisioning | misc | [→](docs/2026-07-28%20-%20UnpauseAI%20Cold-Email%20u1%20Provisioning/Checkpoint.md) |
@@ -795,6 +799,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-10-21 | WW Hero Key And Zapier Migration Prep | client-dev | [→](docs/2026-10-21%20-%20WW%20Hero%20Key%20And%20Zapier%20Migration%20Prep/Checkpoint.md) |
+| 2026-10-21 | WW W2-14 Testseite Jetzt pruefen | client-dev | [→](docs/2026-10-21%20-%20WW%20W2-14%20Testseite%20Jetzt%20pruefen/Checkpoint.md) |
 | 2026-10-14 | WW W2-14 Startknopf und Hero-Reiter | client-dev | [→](docs/2026-10-14%20-%20WW%20W2-14%20Startknopf%20und%20Hero-Reiter/Checkpoint.md) |
 | 2026-10-13 | WW W2-14 Kalender-Ortszeit und R20-Titel | client-dev | [→](docs/2026-10-13%20-%20WW%20W2-14%20Kalender-Ortszeit%20und%20R20-Titel/Checkpoint.md) |
 | 2026-10-12 | WW W2-14 Duplicate Test Run | client-dev | [→](docs/2026-10-12%20-%20WW%20W2-14%20Duplicate%20Test%20Run/Checkpoint.md) |
@@ -811,6 +816,13 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system/platform
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-27 | KIT CDS Tutorien und Anmeldungen | misc | [Mini-Checkpoint-1](docs/2026-10-27%20-%20KIT%20CDS%20Tutorien%20und%20Anmeldungen/Mini-Checkpoint-1.md) |
+| 2026-10-22 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-1](docs/2026-10-22%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-1.md) |
 | 2026-10-20 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-3](docs/2026-10-20%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-3.md) |
 | 2026-10-20 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-2](docs/2026-10-20%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-2.md) |
 | 2026-10-20 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-1](docs/2026-10-20%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-1.md) |
+
+## personal-kit
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-10-28 | KIT IAM-Praktikum und ECTS-Plan | misc | [Mini-Checkpoint-1](docs/2026-10-28%20-%20KIT%20IAM-Praktikum%20und%20ECTS-Plan/Mini-Checkpoint-1.md) |
