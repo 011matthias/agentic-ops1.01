@@ -12,6 +12,14 @@ Reloads context for a project or client so work can continue from where it left 
 - Working directory: !`pwd`
 - Project name: $ARGUMENTS
 
+### What not to retry (latest checkpoint)
+
+!`uv run tools/checkpoint_scaffold.py not-worked --client "$ARGUMENTS"`
+
+## Step -1: Print WHAT NOT TO RETRY first
+
+Before anything else, including the session header, output the block above verbatim: the `WHAT NOT TO RETRY` line and every entry under it, even when the only entry is `- None` or `- not recorded`. A dead end the previous session already paid for must not be re-run because it sat below the fold. If the block failed to render, run the same command and print its output. Treat each listed approach as ruled out for this session unless the stated reason no longer holds, and say so explicitly if you believe it no longer holds.
+
 ## Prerequisites
 
 If $ARGUMENTS is empty, ask the user for the project name.

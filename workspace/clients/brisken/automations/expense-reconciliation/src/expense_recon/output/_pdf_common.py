@@ -27,6 +27,17 @@ _FONT_CANDIDATES = (
 _FONT_NAME = "ReportBody"
 _FONT_BOLD = "ReportBold"
 
+# Both documents lay out on A4 portrait with 14 mm margins, and reportlab's
+# frame keeps 6 pt of padding inside the margins on each side, so a table
+# has 210 mm - 28 mm - 12 pt = 503.9 pt. A wider table is centered past both
+# sides of the frame, and once it spills past the margin its outer columns
+# are cut off the paper while the text layer still reads the clipped cells,
+# which is how the 732 pt listing shipped from item 24 (2026-08-23) to item
+# 143. `tests/test_pdf_tables_fit_the_page.py`
+# measures every table the builders draw against the real frame.
+PAGE_MARGIN_MM = 14
+TABLE_WIDTH_MAX = (210 - 2 * PAGE_MARGIN_MM) * 72 / 25.4 - 2 * 6
+
 
 def register_fonts() -> tuple[str, str]:
     """Register a full-Latin TTF pair with reportlab, or fall back to the
@@ -83,6 +94,11 @@ def make_styles(body_font: str, bold_font: str) -> dict:
         ),
         "caption": ParagraphStyle(
             "caption", fontName=bold_font, fontSize=12, leading=15, spaceAfter=4,
+        ),
+        # A heading inside a section (item 138: a card inside a cost center).
+        "subcaption": ParagraphStyle(
+            "subcaption", fontName=bold_font, fontSize=10, leading=13,
+            spaceBefore=6, spaceAfter=3,
         ),
         "capsub": ParagraphStyle(
             "capsub", fontName=body_font, fontSize=9, leading=12, textColor=muted,
@@ -221,42 +237,469 @@ def prepare_evidence(items: list[dict]) -> list[tuple[dict, bytes | None]]:
     return prepared
 
 
-def stitch(document_pdf: bytes, prepared: list[tuple[dict, bytes | None]]) -> bytes:
-    """Interleave: the leading pages, then each caption page followed by its
-    document's pages. The caption pages are the LAST `len(prepared)` pages of
-    `document_pdf`, one per evidence item."""
+def caption_mark(pages: list[int]):
+    """A zero-size flowable that records the page it lands on.
+
+    Placed right after the `PageBreak` that opens an evidence caption, it
+    tells `stitch` which page is that caption's, so receipt pages can sit
+    INSIDE the document (item 138: each card's receipts follow that card's
+    listing) instead of only after its last page."""
+    from reportlab.platypus import Flowable
+
+    class _Mark(Flowable):
+        def wrap(self, *_args):
+            return 0, 0
+
+        def draw(self):
+            pages.append(self.canv.getPageNumber())
+
+    return _Mark()
+
+
+def stitch(
+    document_pdf: bytes,
+    prepared: list[tuple[dict, bytes | None]],
+    caption_pages: list[int] | None = None,
+) -> bytes:
+    """Interleave each caption page with its document's pages.
+
+    Without `caption_pages` the caption pages are the LAST `len(prepared)`
+    pages of `document_pdf`, one per evidence item. With it (the 1-based page
+    of each item's caption, in `prepared` order, recorded by `caption_mark`)
+    each document's pages follow its own caption wherever that sits, so a
+    report can put a card's receipts behind that card's section. A caption
+    must own its page (a `PageBreak` before it and before whatever follows
+    its section). A mark count that does not line up with `prepared` would
+    misfile every receipt, so it falls back to appending the documents after
+    the last page: out of place, never dropped."""
     from pypdf import PdfReader, PdfWriter
 
     base = PdfReader(io.BytesIO(document_pdf))
     writer = PdfWriter()
+    if caption_pages is not None and len(caption_pages) == len(prepared):
+        after: dict[int, list[bytes | None]] = {}
+        for page_no, (_item, pdf_bytes) in zip(caption_pages, prepared):
+            after.setdefault(page_no, []).append(pdf_bytes)
+        for i, page in enumerate(base.pages, start=1):
+            writer.add_page(page)
+            for pdf_bytes in after.get(i, []):
+                _add_document_pages(writer, pdf_bytes)
+        return _written(writer)
+    if caption_pages is not None:
+        for page in base.pages:
+            writer.add_page(page)
+        for _item, pdf_bytes in prepared:
+            _add_document_pages(writer, pdf_bytes)
+        return _written(writer)
     lead_end = len(base.pages) - len(prepared)
     for page in base.pages[:lead_end]:
         writer.add_page(page)
     for i, (_item, pdf_bytes) in enumerate(prepared):
         writer.add_page(base.pages[lead_end + i])
-        if pdf_bytes is None:
-            continue
-        # Per file, because the alternative is the whole month. One receipt
-        # that raised here used to abort the assembly, so the request 500ed
-        # and the period produced NO report at all: not a partial one, not a
-        # caption, nothing naming the file. `probe_pdf` has already run these
-        # same operations over these same bytes, so a failure reaching this
-        # point is the residual case rather than the expected one; the caption
-        # is laid out before stitching and cannot be rewritten from here,
-        # which is why the decision belongs in `prepare_evidence` and this is
-        # only the belt that keeps the rest of the document.
-        try:
-            pages = list(PdfReader(io.BytesIO(pdf_bytes)).pages)
-            for page in pages[:MAX_RECEIPT_PAGES]:
-                writer.add_page(page)
-        except Exception:  # noqa: BLE001 - one receipt never costs the month
-            continue
+        _add_document_pages(writer, pdf_bytes)
+    return _written(writer)
+
+
+def _add_document_pages(writer, pdf_bytes: bytes | None) -> None:
+    from pypdf import PdfReader
+
+    if pdf_bytes is None:
+        return
+    # Per file, because the alternative is the whole month. One receipt
+    # that raised here used to abort the assembly, so the request 500ed
+    # and the period produced NO report at all: not a partial one, not a
+    # caption, nothing naming the file. `probe_pdf` has already run these
+    # same operations over these same bytes, so a failure reaching this
+    # point is the residual case rather than the expected one; the caption
+    # is laid out before stitching and cannot be rewritten from here,
+    # which is why the decision belongs in `prepare_evidence` and this is
+    # only the belt that keeps the rest of the document.
+    try:
+        pages = list(PdfReader(io.BytesIO(pdf_bytes)).pages)
+        for page in pages[:MAX_RECEIPT_PAGES]:
+            writer.add_page(page)
+    except Exception:  # noqa: BLE001 - one receipt never costs the month
+        return
+
+
+def _written(writer) -> bytes:
     # Spooled, not `BytesIO().getvalue()`: that held the serialized document
     # twice at once, on the same machine this assembly already fills.
     with tempfile.TemporaryFile() as fh:
         writer.write(fh)
         fh.seek(0)
         return fh.read()
+
+
+# ── per-card sections (backlog item 138) ────────────────────────────
+#
+# Owner, 2026-09-17: "the output (PDF) is also not organized in the
+# different cards that were reconciled." A month is reconciled card by card,
+# so both documents section on the same grouping, derived here once.
+
+NO_CARD_SECTION_LABEL = "No card"
+
+
+def card_name(entry: dict) -> str:
+    """A coverage entry's name for a document: its label, with the digits
+    beside it when they add something the label does not already say."""
+    label = str(entry.get("label") or "").strip()
+    digits = [str(d) for d in (entry.get("digits") or []) if str(d).strip()]
+    extra = [d for d in digits if d not in label]
+    return f"{label} ({'/'.join(extra)})" if label and extra else (label or "-")
+
+
+def is_booked(row: dict) -> bool:
+    """A charge keyed into the books: Criss's yellow fill or the reviewer's
+    already-posted verdict. `section == "posted"` is the view's own
+    derivation of both; the two raw facts are read too, for a payload built
+    before `section` existed."""
+    return (
+        row.get("section") == "posted"
+        or row.get("entry_status") == "posted"
+        or row.get("status") == "already_posted"
+    )
+
+
+def booked_without_receipt(row: dict) -> bool:
+    """Booked, and no receipt holds it (item 102's count). Not something to
+    act on: the screen folds these rows away as already booked (item 96), so
+    the documents keep them out of "What needs attention" too."""
+    return (
+        is_booked(row)
+        and row.get("effective_bucket") in ("unmatched", "", None)
+        and not row.get("chosen_document_id")
+    )
+
+
+def card_own_figures(section: dict) -> dict:
+    """What a card's OWN statement settled, as data: the figures
+    `card_statement_line` prints, computed once so the documents and the
+    month page's card tabs (item 138, `service.month_card_tabs`) cannot
+    describe a card differently.
+
+    `section` is one of `card_sections`' entries. The figures are the
+    coverage entry's, the numbers the month page's coverage panel shows. The
+    one figure computed here is booked without a receipt (item 102): the
+    card's charges keyed into the books (`section == "posted"`) that no
+    receipt settles, summed in Decimal off the rows' own amount strings.
+
+    `statement` is "loaded" (an upload covered the card), "not_recorded"
+    (charges but no recorded upload: they arrived under another statement,
+    live August 2026: 1176, item 108, so "none loaded" would be false),
+    "not_loaded" (neither), or None for the no-card section, which names no
+    statement. The period and the charge figures describe charges, so a
+    section without any carries no period and zeros.
+
+    An ACCOUNT's own figures are its own card's, its subcards left out
+    (item 147); `card_statement_figures` is the one that sums the group."""
+    coverage = section.get("coverage") or {}
+    rows = list(section.get("rows") or [])
+    statements = _section_statements(section)
+    if not section.get("key"):
+        statement = None
+    elif statements:
+        statement = "loaded"
+    elif rows:
+        statement = "not_recorded"
+    else:
+        statement = "not_loaded"
+    n_booked = 0
+    booked: dict[str, Decimal] = {}
+    for row in rows:
+        if not booked_without_receipt(row):
+            continue
+        n_booked += 1
+        value = parse_amount(row.get("amount"))
+        if value is not None:
+            ccy = str(row.get("currency") or "") or "?"
+            booked[ccy] = booked.get(ccy, Decimal("0")) + abs(value)
+    return {
+        "statement": statement,
+        "statements": statements,
+        "period_start": coverage.get("period_start") if rows else None,
+        "period_end": coverage.get("period_end") if rows else None,
+        "n_charges": int(coverage.get("n_transactions") or len(rows)) if rows else 0,
+        "n_matched": int(coverage.get("n_reconciled") or 0) if rows else 0,
+        "unreconciled_by_ccy": (
+            dict(sorted((coverage.get("unreconciled_by_ccy") or {}).items()))
+            if rows else {}
+        ),
+        "n_booked_without_receipt": n_booked,
+        "booked_without_receipt_by_ccy": {
+            ccy: f"{amt:,.2f}" for ccy, amt in sorted(booked.items())
+        },
+    }
+
+
+def _section_statements(section: dict) -> list[str]:
+    """The upload file names recorded on this section's own card. The no-card
+    section names no statement, which is why the key is checked."""
+    coverage = section.get("coverage") or {}
+    if not section.get("key"):
+        return []
+    return [
+        str(s) for s in (coverage.get("statements") or []) if str(s).strip()
+    ]
+
+
+def _add_money(maps: "list[dict]") -> dict:
+    """Per-currency amounts that already travel as formatted strings
+    ("1,234.56"), added in Decimal and printed back the same way.
+
+    An account's line adds the numbers its subcards print rather than
+    re-deriving them from rows, so the account and the cards under it can
+    never state a different total for one statement (the item 138 rule, one
+    level up)."""
+    totals: "dict[str, Decimal]" = {}
+    for part in maps:
+        for ccy, text in (part or {}).items():
+            value = parse_amount(text)
+            if value is None:
+                continue
+            key = str(ccy)
+            totals[key] = totals.get(key, Decimal("0")) + value
+    return {ccy: f"{amt:,.2f}" for ccy, amt in sorted(totals.items())}
+
+
+def card_statement_figures(section: dict) -> dict:
+    """`card_own_figures`, summed over an account and its subcards (item 147).
+
+    Owner ruling 2026-09-18: "card 2838 for example should be an account with
+    others as subcards". An account's figures are the GROUP's, because that is
+    what the owner reads one number for; each subcard keeps its own, and
+    `card_own_figures` still answers the account card's own. A section with no
+    subcards returns exactly what this function returned before the tree
+    existed, field for field, which is what keeps every other month unchanged.
+
+    The period spans the group, the counts and the money add up, and the
+    statement status is re-derived from the union rather than inherited: an
+    account whose own card records no upload while a subcard's statement
+    covers the group reads `loaded`, which is what the file actually says.
+    """
+    own = card_own_figures(section)
+    children = section.get("children") or []
+    if not children:
+        return own
+    parts = [own, *(card_own_figures(child) for child in children)]
+    statements: list[str] = []
+    for part in parts:
+        for name in part["statements"]:
+            if name not in statements:
+                statements.append(name)
+    starts = [p["period_start"] for p in parts if p["period_start"]]
+    ends = [p["period_end"] for p in parts if p["period_end"]]
+    n_charges = sum(p["n_charges"] for p in parts)
+    return {
+        "statement": (
+            "loaded" if statements else
+            "not_recorded" if n_charges else "not_loaded"
+        ),
+        "statements": statements,
+        "period_start": min(starts) if starts else None,
+        "period_end": max(ends) if ends else None,
+        "n_charges": n_charges,
+        "n_matched": sum(p["n_matched"] for p in parts),
+        "unreconciled_by_ccy": _add_money(
+            [p["unreconciled_by_ccy"] for p in parts]
+        ),
+        "n_booked_without_receipt": sum(
+            p["n_booked_without_receipt"] for p in parts
+        ),
+        "booked_without_receipt_by_ccy": _add_money(
+            [p["booked_without_receipt_by_ccy"] for p in parts]
+        ),
+    }
+
+
+def card_statement_line(section: dict) -> str:
+    """What a card's statement settled, in one line under its heading.
+
+    `section` is one of `card_sections`' entries. Both documents print this
+    same line (item 138), so they cannot describe a card differently, and it
+    is `card_statement_figures` in words, so the month page's card tabs say
+    the same. A card with charges but no recorded upload says "not recorded";
+    a card with neither says no statement was loaded. The no-card section
+    names no statement."""
+    figures = card_statement_figures(section)
+    rows = list(section.get("rows") or [])
+    # An account's own card may have no charges while the group has plenty
+    # (item 147). The two are the same test for a card with no subcards,
+    # where `n_charges` is zero exactly when there are no rows.
+    has_charges = bool(rows) or figures["n_charges"] > 0
+    children = section.get("children") or []
+    parts: list[str] = []
+    statements = figures["statements"]
+    if section.get("statement_on_account"):
+        # Item 147: one statement covers the whole account, so the account
+        # names the file and a card under it points at the account instead of
+        # repeating the same line once per card.
+        parts.append(
+            "Statement: on " + (section.get("parent_label") or "its account")
+        )
+    elif figures["statement"] == "loaded":
+        parts.append(
+            ("Statement: " if len(statements) == 1 else "Statements: ")
+            + ", ".join(statements)
+        )
+    elif figures["statement"] == "not_recorded":
+        parts.append("Statement: not recorded")
+    elif figures["statement"] == "not_loaded":
+        parts.append("No statement loaded for this card")
+    if children:
+        parts.append(
+            f"with {len(children)} subcard{'' if len(children) == 1 else 's'}"
+        )
+    start, end = figures["period_start"], figures["period_end"]
+    if section.get("key") and has_charges and (start or end):
+        parts.append(f"{start or '?'} to {end or '?'}")
+    if has_charges:
+        n_tx = figures["n_charges"]
+        parts.append(f"{n_tx} charge{'s' if n_tx != 1 else ''}")
+        parts.append(f"{figures['n_matched']} matched")
+        parts.append("unreconciled " + (
+            ", ".join(
+                f"{ccy} {amt}" for ccy, amt in figures["unreconciled_by_ccy"].items()
+            )
+            or "nothing"
+        ))
+        n_booked = figures["n_booked_without_receipt"]
+        booked = figures["booked_without_receipt_by_ccy"]
+        if n_booked:
+            parts.append(
+                f"booked without a receipt: {n_booked} "
+                f"charge{'s' if n_booked != 1 else ''}"
+                + (", " + ", ".join(
+                    f"{ccy} {amt}" for ccy, amt in booked.items()
+                ) if booked else "")
+            )
+    return "  ·  ".join(parts)
+
+
+def card_sections(
+    view: dict,
+    receipt_cards: dict[str, tuple[str, str]],
+    parents: dict[str, str] | None = None,
+) -> list[dict]:
+    """The month's per-card sections, in document order.
+
+    `view` is `build_view`'s payload. `receipt_cards` is every receipt in
+    the pool, in pool order: `{document_id: (card key, card label)}`, the
+    card the tool resolved for it (item 137's chain) or `("", "")`.
+
+    Charges group on `rows[].coverage_key`, which joins `coverage[].key`;
+    the key is never parsed. A receipt a charge holds follows that charge's
+    card, even where its own resolved card differs (the row's
+    `cards_differ` names that inside the section rather than moving it). A
+    receipt nobody holds goes to its resolved card. The last section,
+    `key` "" and never dropped while it has content, takes the charges no
+    coverage entry claims (and the "no card on the charge" entry) and the
+    receipts with no card.
+
+    Each section: `key`, `label`, `coverage` (the entry, or None; the last
+    section carries the "no card on the charge" entry when there is one), `rows`
+    (its charges, in payload order) and `receipt_docs` (held receipts in
+    charge order, then the unheld ones in pool order). Sections with
+    neither charges nor receipts are left out; a card with nothing this
+    month is already a line in the coverage table.
+
+    `parents` is `{subcard key: account key}` from the registry
+    (`cards.card_parents`, item 147). Given one, the sections come back as a
+    tree: see `_card_tree`. Omitted or empty, the result is exactly what it
+    was before accounts existed, which is what leaves every month whose
+    registry names no parent untouched.
+    """
+    coverage = {
+        str(c.get("key") or ""): c for c in (view.get("coverage") or [])
+    }
+    order: list[str] = [k for k in coverage if k]
+    labels: dict[str, str] = {k: card_name(c) for k, c in coverage.items() if k}
+    rows_by: dict[str, list[dict]] = {}
+    docs_by: dict[str, list[str]] = {}
+    held: set[str] = set()
+    for row in view.get("rows") or []:
+        key = str(row.get("coverage_key") or "")
+        if key not in labels:
+            key = ""
+        rows_by.setdefault(key, []).append(row)
+        doc = str(row.get("chosen_document_id") or "")
+        if doc and doc not in held:
+            held.add(doc)
+            docs_by.setdefault(key, []).append(doc)
+    for doc, (card_key, card_label) in receipt_cards.items():
+        if doc in held:
+            continue
+        key = str(card_key or "")
+        if key and key not in labels:
+            labels[key] = str(card_label or key)
+            order.append(key)
+        docs_by.setdefault(key, []).append(doc)
+    out = []
+    for key in [*order, ""]:
+        if not (rows_by.get(key) or docs_by.get(key)):
+            continue
+        out.append({
+            "key": key,
+            "label": labels.get(key) or NO_CARD_SECTION_LABEL,
+            # The "" entry is the charges with no card; its figures are the
+            # same arithmetic as every card's, so the last section keeps them.
+            "coverage": coverage.get(key),
+            "rows": rows_by.get(key, []),
+            "receipt_docs": docs_by.get(key, []),
+        })
+    return _card_tree(out, parents) if parents else out
+
+
+def _card_tree(sections: list[dict], parents: dict[str, str]) -> list[dict]:
+    """`sections`, re-ordered so each account is followed by its subcards and
+    the tree links set on the sections that have one (item 147).
+
+    An account gains `subcards` (the keys, in section order) and `children`
+    (those sections themselves, which is what lets `card_statement_figures`
+    sum the group without any caller passing the registry around). A subcard
+    gains `parent`, `parent_label`, and `statement_on_account`: true when
+    every file recorded on the subcard is also recorded on the account, which
+    is the case the owner complained about (July's one Chase file named on
+    four tabs) and the only case where dropping the subcard's file line loses
+    nothing.
+
+    A link is applied only when BOTH ends have a section this month. An
+    account with neither charges nor receipts is not a section at all (the
+    rule above), and a card cannot nest under a heading that does not exist,
+    so such a subcard stands alone for the month exactly as it did before.
+    """
+    by_key = {s["key"]: s for s in sections if s["key"]}
+    links = {
+        key: parent for key, parent in parents.items()
+        if key != parent and key in by_key and parent in by_key
+    }
+    if not links:
+        return sections
+    children: dict[str, list[dict]] = {}
+    for sec in sections:
+        parent = links.get(sec["key"])
+        if parent:
+            children.setdefault(parent, []).append(sec)
+    out: list[dict] = []
+    for sec in sections:
+        if sec["key"] in links:
+            continue  # emitted under its account, below
+        kids = children.get(sec["key"]) or []
+        out.append(sec)
+        if not kids:
+            continue
+        sec["subcards"] = [kid["key"] for kid in kids]
+        sec["children"] = kids
+        account_files = _section_statements(sec)
+        for kid in kids:
+            kid_files = _section_statements(kid)
+            kid["parent"] = sec["key"]
+            kid["parent_label"] = sec["label"]
+            kid["statement_on_account"] = bool(
+                kid_files and all(f in account_files for f in kid_files)
+            )
+        out.extend(kids)
+    return out
 
 
 def esc(text) -> str:

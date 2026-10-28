@@ -74,7 +74,9 @@ def test_healthz_keeps_status_and_gains_the_server_block(client):
     body = resp.json()
     assert body["status"] == "ok"
     server = body["server"]
-    assert set(server) == {"machine", "region", "app", "started_at", "uptime_s"}
+    assert set(server) == {
+        "machine", "region", "app", "commit", "image", "started_at", "uptime_s",
+    }
     assert server["uptime_s"] >= 0
     assert server["started_at"]
 
@@ -84,6 +86,229 @@ def test_the_machine_identity_is_absent_not_invented_off_fly(client, monkeypatch
     row must not read like a production one (B4)."""
     server = client.get("/healthz").json()["server"]
     assert server["machine"] == "" and server["region"] == ""
+
+
+# --- build identity: which commit is this (backlog item 120) -----------
+#
+# These go through /healthz rather than through machine.py, because the
+# thing worth pinning is the WIRING. A green machine.py proves a helper
+# works; it does not prove the health route carries what the helper
+# returns, and the route is the only surface an emergency actually reads.
+
+
+def test_healthz_reports_the_commit_the_image_was_built_from(client, monkeypatch):
+    """The item's headline ask: the running app says which commit it is.
+
+    The value is read from the environment the image baked it into, so
+    this asserts the whole path the deploy uses, not a constant.
+    """
+    monkeypatch.setenv("EXPENSE_RECON_COMMIT", "0123456789abcdef0123456789abcdef01234567")
+    server = client.get("/healthz").json()["server"]
+    assert server["commit"] == "0123456789abcdef0123456789abcdef01234567"
+
+
+def test_healthz_reports_the_image_fly_actually_booted(client, monkeypatch):
+    """`image` is the join back to a release: it is the same string
+    `flyctl releases --image` prints, so a running process can be tied to
+    the release that produced it without correlating timestamps."""
+    ref = "registry.fly.io/brisken-expense-recon:deployment-01TESTTESTTESTTESTTEST"
+    monkeypatch.setenv("FLY_IMAGE_REF", ref)
+    server = client.get("/healthz").json()["server"]
+    assert server["image"] == ref
+
+
+def test_an_unstamped_build_says_nothing_rather_than_guessing(client, monkeypatch):
+    """The one failure this design still allows is absence, and absence has
+    to read as absence.
+
+    A deploy that omits --build-arg bakes an empty string. Reporting ""
+    tells the reader "I cannot say"; reporting a git read from the
+    container, or a plausible-looking default, would tell them something
+    false in the one place they are trusting to be literal. Wrong identity
+    is worse than no identity, so this pins the blank.
+    """
+    monkeypatch.delenv("EXPENSE_RECON_COMMIT", raising=False)
+    monkeypatch.delenv("FLY_IMAGE_REF", raising=False)
+    server = client.get("/healthz").json()["server"]
+    assert server["commit"] == ""
+    assert server["image"] == ""
+
+
+def test_build_identity_does_not_disturb_the_uptime_probe_contract(client, monkeypatch):
+    """House rule 1, parallel fields only. tools/recon_uptime_probe.py reads
+    `status`, `disk.available`, `disk.intake_refusing` and `disk.free_pct`
+    every ten minutes and opens an issue when they are wrong; the SPA reads
+    this endpoint too. Adding build identity must leave all of that with
+    the same names, types and meanings."""
+    monkeypatch.setenv("EXPENSE_RECON_COMMIT", "deadbeef")
+    body = client.get("/healthz").json()
+    assert body["status"] == "ok"
+    disk = body["disk"]
+    assert isinstance(disk["available"], bool)
+    assert isinstance(disk["intake_refusing"], bool)
+    assert isinstance(disk["free_pct"], (int, float))
+
+
+def test_the_failure_list_names_the_build_reading_it(client, monkeypatch):
+    """One source, so the two surfaces can never disagree.
+
+    Both /healthz and this list stamp machine.snapshot(), so the build
+    identity an investigator reads beside the failures is the same string
+    the health probe reports, with no second stamp to keep in step.
+
+    `server` here is the process READING the rows. Which build served each
+    individual failure is on the row itself (`server_commit`), stamped when
+    the report arrived; the two are different questions and the next block
+    pins the difference.
+    """
+    monkeypatch.setenv("EXPENSE_RECON_COMMIT", "cafebabe0000111122223333444455556666aaaa")
+    _report(client, kind="fetch-failed", seconds_ago=5)
+    out = _rows(client)
+    assert out["client_errors"], "the report should have landed"
+    assert out["server"]["commit"] == "cafebabe0000111122223333444455556666aaaa"
+
+
+# --- which build served the failure (item 120, 2026-09-21) -------------
+#
+# Until this shipped a stored row carried `machine` and
+# `process_started_at` but no build identity, so "which build was the
+# browser talking to when this broke" was answerable only while the
+# serving process was still up. Once it restarted the route was
+# correlating a timestamp against Fly's release list by hand, which is the
+# exact work /healthz.server.commit was added to end.
+#
+# These go through the routes for the same reason the rest of this module
+# does: a green store proves the column exists, not that the handler fills
+# it from the serving process.
+
+
+def test_a_stored_failure_names_the_build_that_served_it(client, monkeypatch):
+    """The row answers the question on its own, with no release list."""
+    monkeypatch.setenv("EXPENSE_RECON_COMMIT", "1111111111111111111111111111111111111111")
+    monkeypatch.setenv(
+        "FLY_IMAGE_REF",
+        "registry.fly.io/brisken-expense-recon:deployment-01AAAA",
+    )
+    _report(client, message="Failed to fetch", seconds_ago=2.0)
+    row = _rows(client)["client_errors"][0]
+    assert row["server_commit"] == "1111111111111111111111111111111111111111"
+    assert row["server_image"] == (
+        "registry.fly.io/brisken-expense-recon:deployment-01AAAA"
+    )
+
+
+def test_the_row_keeps_the_build_that_served_it_when_a_later_one_reads(
+    client, monkeypatch,
+):
+    """THE property, and the only one worth the migration.
+
+    A failure is investigated after the fact, from a process that is by
+    then a different build. If the row were stamped at read time it would
+    name the build doing the reading and send the investigation to the
+    wrong release, which is worse than the blank it replaced. So: report
+    under build A, redeploy to build B, read. The row must still say A
+    while `server` says B.
+    """
+    monkeypatch.setenv("EXPENSE_RECON_COMMIT", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+    _report(client, message="Failed to fetch", seconds_ago=2.0)
+
+    # The deploy: same process, a new build answering from here on.
+    monkeypatch.setenv("EXPENSE_RECON_COMMIT", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+    out = _rows(client)
+    assert out["server"]["commit"] == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    assert out["client_errors"][0]["server_commit"] == (
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    )
+
+
+def test_an_unstamped_build_stores_blank_rather_than_a_guess(client, monkeypatch):
+    """Same trade as /healthz: absence reads as absence.
+
+    A deploy that omits --build-arg bakes an empty string, and the row says
+    so. Writing a plausible-looking commit into a diagnostic row would be
+    wrong identity, which costs an investigation more than no identity
+    does.
+    """
+    monkeypatch.delenv("EXPENSE_RECON_COMMIT", raising=False)
+    monkeypatch.delenv("FLY_IMAGE_REF", raising=False)
+    _report(client, message="Failed to fetch", seconds_ago=2.0)
+    row = _rows(client)["client_errors"][0]
+    assert row["server_commit"] == ""
+    assert row["server_image"] == ""
+
+
+def test_rows_written_before_the_column_read_empty_not_back_filled(
+    tmp_path, monkeypatch,
+):
+    """The live volume's own path: a database whose `client_errors` predates
+    the column, carrying rows nothing can attribute.
+
+    Built by creating the table with the OLD definition before the app ever
+    opens the file, so `CREATE TABLE IF NOT EXISTS` skips it and the
+    migration is what has to add the columns; that is exactly what happens
+    on `/data` at the next deploy.
+
+    The legacy row must read empty. Back-filling it could only write the
+    build doing the back-fill, which is a false answer in the one place an
+    investigation is trusting to be literal.
+    """
+    import sqlite3
+
+    db = tmp_path / "recon-web.sqlite"
+    conn = sqlite3.connect(db)
+    conn.execute(
+        """
+        CREATE TABLE client_errors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            received_at TEXT NOT NULL,
+            received_ts REAL NOT NULL,
+            operator TEXT NOT NULL,
+            caller TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            url TEXT NOT NULL,
+            method TEXT NOT NULL,
+            message TEXT NOT NULL,
+            occurred_at TEXT NOT NULL,
+            seconds_ago REAL,
+            duration_ms INTEGER,
+            online INTEGER,
+            detail TEXT NOT NULL,
+            machine TEXT NOT NULL,
+            region TEXT NOT NULL,
+            process_started_at TEXT NOT NULL,
+            uptime_s REAL NOT NULL,
+            process_predates_failure INTEGER
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO client_errors (received_at, received_ts, operator, "
+        "caller, kind, url, method, message, occurred_at, detail, machine, "
+        "region, process_started_at, uptime_s) VALUES "
+        "('2026-09-10T10:00:00Z', 1.0, 'operator', '1.2.3.4', "
+        "'fetch-failed', '/api/x', 'POST', 'Failed to fetch', "
+        "'2026-09-10T10:00:00Z', '', '148e...', 'fra', "
+        "'2026-09-10T09:00:00Z', 3600.0)"
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
+    monkeypatch.setenv("EXPENSE_RECON_COMMIT", "cccccccccccccccccccccccccccccccccccccccc")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    app = create_app(tmp_path)
+    with TestClient(app) as c:
+        rows = c.get("/api/client-errors").json()["client_errors"]
+        assert len(rows) == 1
+        # The column exists (the read did not raise) and says nothing.
+        assert rows[0]["server_commit"] == ""
+        assert rows[0]["server_image"] == ""
+        assert rows[0]["message"] == "Failed to fetch"  # the row survived
+
+        # And a NEW report on the migrated database is stamped.
+        assert c.post("/api/client-errors", json={"message": "new"}).status_code == 200
+        fresh = c.get("/api/client-errors").json()["client_errors"][0]
+        assert fresh["server_commit"] == "cccccccccccccccccccccccccccccccccccccccc"
 
 
 # --- the report lands, stamped with this process ------------------------

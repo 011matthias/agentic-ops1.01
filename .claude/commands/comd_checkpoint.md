@@ -41,9 +41,15 @@ Review the session for friction events. Include events already noted mid-session
 6. Strategic gaps (built before questioning whether to build)
 7. Infrastructure deferral (same manual fix suggested in 2+ checkpoints)
 
-For each event record: **Type** (`agent-deferred`, `missed-tool`, `redundant-escalation`, `slow-path`, `scope-creep`, `verification-theater`, `skipped-gate`, `intent-misalignment`, `over-literal`, `strategic-gap`, `missed-memory-recall`, `infrastructure-deferred`), **Detected by** (user/agent), **Gate** (B1–B7 or none), **Fix** (`structural`/`memory`/`documented`/`ext-limit`).
+For each event record: **Type** (`agent-deferred`, `missed-tool`, `redundant-escalation`, `slow-path`, `scope-creep`, `verification-theater`, `skipped-gate`, `intent-misalignment`, `over-literal`, `strategic-gap`, `missed-memory-recall`, `infrastructure-deferred`), **Detected by** (user/agent), **Gate** (B1–B7 or none), **Fix** (`structural`/`pattern-rule:<name>`/`memory`/`documented`/`ext-limit`). Prefer `pattern-rule:<name>` over `memory` whenever the failure has a regex-shaped signature in a command, a file write, a prompt, or a closing message: `uv run tools/pattern_rules.py new <warn|block|require>-<slug> --event <bash|file|stop|prompt> --pattern '<regex>' --message "..." --source "<date> <type>"`, then `test --text` it against the incident text. Finalize refuses a malformed `pattern-rule:` value and advises when the rule file is not in the checkout.
 
 **Regression check:** use the `pre` output's regression rows (or a targeted Grep on `docs/friction-register.md` — never a full Read). If a previous same-type entry was Resolved=Yes, mark the new row `Regression: Yes ({date} fix, {fix type} didn't hold)`. If fix = `memory`, note: "Fragile fix — consider structural alternative."
+
+**Rule miner (optional, full mode).** Mines the transcript for corrections the conversation scan may miss and proposes pattern rules. Off whenever the transcript cannot be found.
+
+1. Session id = the UUID segment of your scratchpad directory path. Run `uv run tools/pattern_rules.py digest --session <uuid> > .scratch/rule-miner-digest.txt`. If the file reads `transcript unavailable`, skip the rest of this step.
+2. Spawn an Agent with `model: "haiku"` (`subagent_type: general-purpose`) and this prompt: *"Read .scratch/rule-miner-digest.txt. Lines starting `*` are user turns with correction cues; each is preceded by the agent text it answered. Find behaviors the user corrected, reverted, or had to repeat (`no, don't`, `stop doing`, `wrong`, the same instruction twice). For each one a regex could catch BEFORE it happens again, return a YAML item: name (warn-/block-/require- kebab), event (bash, file, stop or prompt), pattern (Python regex), action (warn unless it caused real damage), message (one line), source (the correction quoted, max 15 words), evidence (which turn). Skip anything a regex cannot catch. Return at most 5. Create no files."*
+3. Put its output under the friction list as **PROPOSED pattern rules (not created)**. Proposals only: nothing is written to `.claude/patterns/` unless the user promotes one, and a promoted rule is created with `pattern_rules.py new` and recorded as Fix `pattern-rule:<name>`.
 
 ## 4. Gate Compliance Audit (full mode only)
 
@@ -80,6 +86,13 @@ Write to the target path from `pre`, using the template below (Mini template in 
 
 ---
 
+## What Did NOT Work (and why)
+- **[Approach]:** [exact reason it failed: the error, the measured number, the constraint]
+
+[Required. Write `None` when nothing failed; an absent section is not "None".]
+
+---
+
 ## Files Modified
 | File | Action | Purpose |
 |------|--------|---------|
@@ -104,7 +117,7 @@ Write to the target path from `pre`, using the template below (Mini template in 
 - [Question]
 
 ### Working Notes
-Findings and intermediate state expensive to re-derive: failed approaches (and why), partial results, best current hypotheses.
+Findings and intermediate state expensive to re-derive: partial results, best current hypotheses. (Failed approaches go in What Did NOT Work.)
 
 ### Reference Materials
 - [URL or path]
@@ -145,6 +158,9 @@ Findings and intermediate state expensive to re-derive: failed approaches (and w
 ## What Was Done
 - [Item]
 
+## What Did NOT Work (and why)
+- **[Approach]:** [exact reason] (or `None`; required)
+
 ## Current Status
 [Where things stand]
 
@@ -167,10 +183,15 @@ If `pre` reported any client's comms-log at 4+ days stale: ask once — "{client
 
 ## 8. Finalize (one call)
 
-Build the payload and apply it:
+Build the payload and apply it. Write it to the **per-session** path `pre`
+printed (`.scratch/checkpoint-payload-<session>.json`), never the shared
+`.scratch/checkpoint-payload.json`: in a clone running concurrent sessions a
+sibling overwrites the shared file between your write and this call, and
+finalize then applies THEIR checkpoint (2026-09-09). `finalize` refuses the
+shared name outright.
 
 ```
-uv run tools/checkpoint_scaffold.py finalize --payload .scratch/checkpoint-payload.json
+uv run tools/checkpoint_scaffold.py finalize --payload .scratch/checkpoint-payload-<session>.json
 ```
 
 Payload (write to `.scratch/` — gitignored):
@@ -192,6 +213,9 @@ Payload (write to `.scratch/` — gitignored):
   "friction_rows": [
     {"client": "{c}", "type": "{type}", "desc": "{description incl. gate + detected-by}", "resolved": "No", "fix": "{fix}", "regression": "{No | Yes (...)}"}
   ],
+  "not_worked": [
+    {"approach": "{what was tried}", "reason": "{exact reason it failed}"}
+  ],
   "yaml_clients": {
     "{client-id}": {
       "orchestrator": "{n8n|make|trigger-dev|fastapi}",
@@ -204,6 +228,8 @@ Payload (write to `.scratch/` — gitignored):
 ```
 
 The script bumps the session-log frontmatter, appends the derived `### Session {N}` entry, inserts the INDEX row (URL-encoded), merges the context YAML (add/update touched clients, others preserved), and appends the register rows. In mini mode omit `friction_rows`/`gates`/`autonomy`.
+
+`not_worked` is required in both modes and mirrors the checkpoint's What Did NOT Work section: `"None"` when nothing failed, otherwise one `{approach, reason}` entry per dead end. `finalize` exits 2 and writes nothing when it is omitted, an empty list, or an entry lacks a reason. It lands in the session-log entry (`**Did NOT work:**`), the context YAML top level, and each touched client's YAML entry, which is where `/comd_resume` prints WHAT NOT TO RETRY from.
 
 **Worktree note:** when the checkpoint's committed ledger edits go through a `docs/...` worktree (because siblings are live, per rule_branch_isolation §1), run `finalize` with `--root` = the worktree. The gitignored context YAML is auto-written to the **primary clone** (finalize detects the linked worktree via git and merges into `<primary>/docs/sessions/`, preserving any sibling's same-day entry) so it is never orphaned in the throwaway worktree. Do not hand-write it into the main tree; that risks clobbering a sibling's client context. Override the target only with `--context-root` if the auto-detect is wrong.
 

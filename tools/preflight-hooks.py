@@ -6,14 +6,14 @@
 
 WHY THIS EXISTS
 ---------------
-The CI `hooks` job (ci.yml) runs three steps: ruff, tools/INDEX.md membership,
-and the pytest enforcement suite. On 2026-07-16..17 five PRs went red on this
+The CI `hooks` job (ci.yml) runs four steps: ruff, tools/INDEX.md membership,
+pattern-rule lint, and the pytest enforcement suite. On 2026-07-16..17 five PRs went red on this
 job for things that passed on the author's machine but failed in the clean CI
 env (ruff F401/F841 in new files; a pytest that imported yaml, absent from the
 CI test env). Each was a "passes locally, fails in CI" gap: the author never
 ran the CI checks the way CI runs them before pushing.
 
-This is the one command that closes that gap: it runs the SAME three steps the
+This is the one command that closes that gap: it runs the SAME steps the
 CI job runs, so "locally" and "in CI" mean the same thing. Run it before
 pushing any change under tools/, .claude/hooks/, or tools/tests/.
 
@@ -25,7 +25,7 @@ ruff cannot see.
 
 USAGE
 -----
-  uv run tools/preflight-hooks.py            # fast: ruff + INDEX membership
+  uv run tools/preflight-hooks.py            # fast: ruff + INDEX membership + pattern lint
   uv run tools/preflight-hooks.py --full     # + the pytest enforcement suite
   uv run tools/preflight-hooks.py --pytest    # pytest suite only
 
@@ -47,6 +47,8 @@ RUFF = ("ruff (real-bug ruleset)",
          "ruff", "check", "tools", ".claude/hooks", "tools/tests"])
 INDEX = ("tools/INDEX.md membership",
          ["uv", "run", "tools/check-index.py"])
+PATTERNS = ("pattern rules lint",
+            ["uv", "run", "tools/pattern_rules.py", "lint"])
 # The dependency list must match the CI `hooks` job exactly. It did not until
 # 2026-09-08: CI passed --with requests --with httpx --with pyyaml and this did
 # not, so every module guarded by pytest.importorskip("httpx") or ("yaml") was
@@ -81,9 +83,9 @@ def main(argv: list[str]) -> int:
     if pytest_only:
         steps = [PYTEST]
     elif full:
-        steps = [RUFF, INDEX, PYTEST]
+        steps = [RUFF, INDEX, PATTERNS, PYTEST]
     else:
-        steps = [RUFF, INDEX]
+        steps = [RUFF, INDEX, PATTERNS]
 
     results = [(label, run_step(label, args)) for label, args in steps]
     failed = [label for label, ok in results if not ok]
@@ -95,8 +97,8 @@ def main(argv: list[str]) -> int:
         if not full and not pytest_only:
             print("(ran fast steps only; add --full to also run the pytest suite)")
         return 1
-    scope = "ruff + INDEX + pytest" if full else (
-        "pytest" if pytest_only else "ruff + INDEX")
+    scope = "ruff + INDEX + pattern lint + pytest" if full else (
+        "pytest" if pytest_only else "ruff + INDEX + pattern lint")
     print(f"PREFLIGHT OK -- {scope} clean. The CI `hooks` job should pass"
           + ("." if full or pytest_only else "; run --full before a tools/tests change."))
     return 0

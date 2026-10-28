@@ -41,6 +41,24 @@ USAGE
 `--replace/--with` may repeat (pairs are zipped in order). `--regex` switches
 both to regular expressions. `--cwd` runs the test command elsewhere.
 
+A RED THAT IS NOT A BITE
+------------------------
+The tool's verdict is only as good as the mutation it made. Two ways a red run
+can mean nothing, both now refused rather than counted:
+
+  * The mutated source does not PARSE. Then every test errors at import and the
+    command exits non-zero no matter what the suite asserts, so a suite that
+    does NOT bite reports as biting. Found 2026-09-17: this file read the source
+    as bytes and wrote it back with `Path.write_text`, which on Windows re-
+    translates every `\\n`, turning each CRLF into `\\r\\r\\n`; the extra blank
+    lines break backslash continuations (15 of 185 CRLF files under `tools/`
+    stopped parsing). The source is now read and written as BYTES, so the
+    mutated file differs from the original in the replacement and nowhere else,
+    and a mutation that does not compile is exit 5, never a bite.
+  * The command exits non-zero but names no failing test. That red could be a
+    crash, a collection error, or a bad command. It is reported as UNATTRIBUTED
+    with the output tail, so nobody reads it as proof.
+
 EXIT CODES
 ----------
   0  the suite bites: green -> red under mutation -> green again
@@ -48,6 +66,8 @@ EXIT CODES
   2  baseline is not green: fix the tree before checking the guard
   3  mutation did not apply (no match, or more than one match)
   4  restore failed / post-restore run is red  (the tree needs attention)
+  5  BROKEN MUTATION: the mutated source does not compile, so any red it
+     produces is a syntax error rather than evidence about the suite
 """
 from __future__ import annotations
 
@@ -60,6 +80,9 @@ from pathlib import Path
 
 FAIL_SUMMARY = re.compile(r"(\d+) failed", re.IGNORECASE)
 PASS_SUMMARY = re.compile(r"(\d+) passed", re.IGNORECASE)
+
+NO_SUMMARY = "(no pytest summary line)"
+PY_SUFFIXES = {".py", ".pyi"}
 
 
 def run_test(cmd: str, cwd: Path) -> tuple[int, str]:
@@ -87,7 +110,40 @@ def summarize(output: str) -> str:
     n = sum(1 for ln in output.splitlines() if ln.startswith("FAILED"))
     if n:
         return f"{n} FAILED line(s)"
-    return "(no pytest summary line)"
+    return NO_SUMMARY
+
+
+def newline_style(text: str) -> str:
+    """The file's dominant line terminator."""
+    crlf = text.count("\r\n")
+    return "\r\n" if crlf and crlf >= text.count("\n") - crlf else "\n"
+
+
+def to_lf(text: str) -> str:
+    return text.replace("\r\n", "\n")
+
+
+def from_lf(text: str, newline: str) -> str:
+    return text.replace("\n", newline) if newline == "\r\n" else text
+
+
+def syntax_error(source: bytes, filename: Path) -> str | None:
+    """None if `source` parses as Python, else a one-line reason.
+
+    Takes BYTES so the check sees exactly what landed on disk: `compile()`
+    applies the same encoding-cookie and universal-newline handling the
+    interpreter would. Non-Python targets are not our business to judge.
+    """
+    if filename.suffix.lower() not in PY_SUFFIXES:
+        return None
+    try:
+        compile(source, str(filename), "exec")
+    except SyntaxError as e:
+        where = f" (line {e.lineno})" if e.lineno else ""
+        return f"{type(e).__name__}: {e.msg}{where}"
+    except ValueError as e:  # null bytes, bad encoding declaration
+        return f"{type(e).__name__}: {e}"
+    return None
 
 
 def apply_mutations(
@@ -151,33 +207,78 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     print(f"  green ({summarize(out)})")
 
-    mutated, errors = apply_mutations(
-        original.decode("utf-8"), pairs, args.regex
-    )
+    # Match and mutate in LF space so a multi-line --replace typed with "\n"
+    # still finds its target in a CRLF file, then put the file's own line
+    # terminator back. Only when that round-trip is provably lossless for THIS
+    # file (uniform endings); a mixed-ending file is matched as-is rather than
+    # silently normalized. Either way the write below is bytes, so the mutated
+    # file differs from the original in the replacement and nowhere else.
+    text = original.decode("utf-8")
+    newline = newline_style(text)
+    if from_lf(to_lf(text), newline) == text:
+        work_pairs = [(to_lf(o), to_lf(n)) for o, n in pairs]
+        mutated_text, errors = apply_mutations(to_lf(text), work_pairs, args.regex)
+        mutated_text = from_lf(mutated_text, newline)
+    else:
+        mutated_text, errors = apply_mutations(text, pairs, args.regex)
     if errors:
         print("=== 2/4 REGRESS ===")
         for e in errors:
             print(f"  ERROR: {e}")
         return 3
+    mutated = mutated_text.encode("utf-8")
 
+    # A mutation that breaks the parser makes every run red regardless of what
+    # the suite asserts, so it can never be evidence. Refuse before writing.
+    original_parses = syntax_error(original, src) is None
+    broken = syntax_error(mutated, src) if original_parses else None
+    if broken:
+        print("=== 2/4 REGRESS ===")
+        print(f"  BROKEN MUTATION: the mutated source does not compile -- {broken}")
+        print("  That is a bad --with, not a biting test: a source that cannot "
+              "parse fails\n  every run. Source untouched. Fix the replacement "
+              "and re-run.")
+        return 5
+
+    bites = False
+    summary = NO_SUMMARY
     try:
         print(f"=== 2/4 REGRESS ===\n  disabled the fix in {src}", flush=True)
-        src.write_text(mutated, encoding="utf-8")
+        src.write_bytes(mutated)
 
-        print(f"=== 3/4 BITE ===\n  $ {args.test}", flush=True)
-        rc, out = run_test(args.test, cwd)
-        bites = rc != 0
-        print(f"  {'RED' if bites else 'still green'} ({summarize(out)})")
-        if bites:
-            for line in out.splitlines():
-                if line.startswith("FAILED") or " FAILED" in line:
-                    print(f"    {line.strip()[:200]}")
+        # Re-read from disk: this is the instrument check. If a write path ever
+        # mangles the file again (the 2026-09-17 CRLF doubling), the red that
+        # follows would be a syntax error wearing a bite's clothes.
+        if original_parses:
+            broken = syntax_error(src.read_bytes(), src)
+        if broken is None:
+            print(f"=== 3/4 BITE ===\n  $ {args.test}", flush=True)
+            rc, out = run_test(args.test, cwd)
+            bites, summary = rc != 0, summarize(out)
+            print(f"  {'RED' if bites else 'still green'} ({summary})")
+            if bites:
+                for line in out.splitlines():
+                    if line.startswith("FAILED") or " FAILED" in line:
+                        print(f"    {line.strip()[:200]}")
+                if summary == NO_SUMMARY:
+                    print("  UNATTRIBUTED: the command exited non-zero but named "
+                          "no failing test, so\n  this red cannot be traced to an "
+                          "assertion. Read the tail below before\n  treating it as "
+                          "proof the suite bites:")
+                    for line in out.strip().splitlines()[-25:]:
+                        print(f"    | {line[:200]}")
     finally:
         src.write_bytes(original)
 
     if src.read_bytes() != original:
         print("=== 4/4 RESTORE ===\n  RESTORE FAILED -- inspect the file now.")
         return 4
+
+    if broken:
+        print(f"=== 3/4 BITE ===\n  SKIPPED -- the mutated bytes on disk do not "
+              f"compile: {broken}")
+        print("  This is a broken mutation, not a red suite. Source restored.")
+        return 5
     print(f"=== 4/4 RESTORE ===\n  {src} restored; re-running", flush=True)
     rc, out = run_test(args.test, cwd)
     if rc != 0:
@@ -195,6 +296,16 @@ def main(argv: list[str] | None = None) -> int:
             "fix-bites-the-caller)."
         )
         return 1
+
+    if summary == NO_SUMMARY:
+        print(
+            "\nTEST BITES (UNATTRIBUTED): green -> red under mutation -> green "
+            "again, but the\nred named no failing test. The mutated source did "
+            "compile, so this is not a\nbroken mutation; it is still worth "
+            "confirming from the output above that an\nassertion failed rather "
+            "than the runner itself."
+        )
+        return 0
 
     print("\nTEST BITES: green -> red under mutation -> green again.")
     return 0

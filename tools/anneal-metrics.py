@@ -172,6 +172,25 @@ def _lead_int(cell: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def fix_layer(fix: str) -> str:
+    """Remediation layer a register Fix cell names, by its leading token.
+
+    `pattern-rule:<name>` is a declarative rule under `.claude/patterns/`,
+    enforced by pattern-rules-gate.py, so it counts as structural (the "1b"
+    rung of the rule_behaviors self-annealing ladder) and never as memory,
+    even when its rule name contains the word."""
+    f = (fix or "").strip().lower()
+    if f.startswith("pattern-rule:"):
+        return "pattern-rule"
+    if f.startswith(("structural", "hook", "tool")):
+        return "structural"
+    if f.startswith("memory"):
+        return "memory"
+    if f.startswith("documented"):
+        return "documented"
+    return "other"
+
+
 def build_metrics(repo: Path, today: str) -> dict:
     fw = _load_friction_watch()
     register_path = repo / "docs" / "friction-register.md"
@@ -191,8 +210,13 @@ def build_metrics(repo: Path, today: str) -> dict:
     recur_sigs = len(recurrence)
     distinct_sigs = len({(r["type"], " ".join(re.findall(r"\w+", r["desc"].lower())[:6])) for r in rows}) or 1
     recur_pct = round(100 * recur_sigs / distinct_sigs, 1)
-    mem_rows = sum(1 for r in rows if "memory" in r["fix"].lower())
+    layers = [fix_layer(r["fix"]) for r in rows]
+    mem_rows = sum(1 for r, layer in zip(rows, layers)
+                   if "memory" in r["fix"].lower() and layer != "pattern-rule")
     mem_pct = round(100 * mem_rows / total_rows, 1) if total_rows else 0.0
+    pattern_rule_rows = layers.count("pattern-rule")
+    structural_rows = layers.count("structural") + pattern_rule_rows
+    structural_pct = round(100 * structural_rows / total_rows, 1) if total_rows else 0.0
     drift = compute_drift(repo, assets)
 
     prior = last_ledger_row(ledger_path)
@@ -223,6 +247,8 @@ def build_metrics(repo: Path, today: str) -> dict:
                      "gate_held": gate_held, "actionable": actionable},
         "recurrence_pct": recur_pct,
         "memory_fix_pct": mem_pct,
+        "structural_fix_pct": structural_pct,
+        "pattern_rule_fixes": pattern_rule_rows,
         "drift": drift,
         "changeset_size": changeset,
         "net_asset_delta": net_delta,
@@ -271,7 +297,9 @@ def render_text(m: dict) -> str:
         f"({m['register']['actionable']} actionable, "
         f"{m['register']['gate_held']} gate-held); "
         f"recurrence {m['recurrence_pct']}%, "
-        f"memory-fix {m['memory_fix_pct']}%",
+        f"memory-fix {m['memory_fix_pct']}%, "
+        f"structural-fix {m['structural_fix_pct']}% "
+        f"({m['pattern_rule_fixes']} pattern-rule)",
     ]
     if m["net_asset_delta"] is not None:
         lines.append(

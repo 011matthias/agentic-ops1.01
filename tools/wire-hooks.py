@@ -84,7 +84,15 @@ CANONICAL_HOOKS = {
                     "type": "command",
                     "command": _cmd(".claude/hooks/input-classifier.py"),
                     "timeout": 10000,
-                }
+                },
+                {
+                    # Prompt arm of the declarative pattern rules
+                    # (.claude/patterns/*.md, event: prompt). Also delivers
+                    # stop-event warnings parked on the previous turn.
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/pattern-rules-gate.py"),
+                    "timeout": 10000,
+                },
             ],
         }
     ],
@@ -123,6 +131,22 @@ CANONICAL_HOOKS = {
                     "timeout": 10000,
                 },
                 {
+                    # Existing ruff.toml / pytest.ini / .pre-commit-config.yaml
+                    # / tools/preflight-hooks.py -> ask: fix the source, not
+                    # the check. First-time creation passes. (ECC port item 10)
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/config-protection-gate.py"),
+                    "timeout": 10000,
+                },
+                {
+                    # File arm of the declarative pattern rules (event: file).
+                    # A regex-shaped lesson becomes a warn/ask/block in one
+                    # markdown file, no new hook (ECC port item 1).
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/pattern-rules-gate.py"),
+                    "timeout": 10000,
+                },
+                {
                     "type": "command",
                     "command": _cmd(".claude/hooks/scorer-lock-gate.py"),
                     "timeout": 10000,
@@ -151,6 +175,14 @@ CANONICAL_HOOKS = {
                     "type": "command",
                     "command": _cmd(".claude/hooks/ruff-push-gate.py"),
                     "timeout": 10000,
+                },
+                {
+                    # Item 127: score the six real labelled months before a
+                    # `flyctl deploy` of brisken-expense-recon; ask on a drop.
+                    # 120 s because the check itself is budgeted at 100 s.
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/recon-accuracy-deploy-gate.py"),
+                    "timeout": 120000,
                 },
                 {
                     "type": "command",
@@ -189,6 +221,13 @@ CANONICAL_HOOKS = {
                 {
                     "type": "command",
                     "command": _cmd(".claude/hooks/vercel-scope-gate.py"),
+                    "timeout": 10000,
+                },
+                {
+                    # Bash arm of the declarative pattern rules (event: bash),
+                    # matched on the _shell.py normalized command view.
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/pattern-rules-gate.py"),
                     "timeout": 10000,
                 },
                 {
@@ -254,6 +293,24 @@ CANONICAL_HOOKS = {
             ],
         },
     ],
+    "PostToolUseFailure": [
+        {
+            # Classifies a failed tool call: file lock / 429 / 5xx + network
+            # timeout / MCP transport -> "[TRANSIENT] {class}: retry with
+            # backoff in this turn" + transient_blocks++. Everything else is
+            # silent. 2026-05-11: 8 EBUSY edits were queued for the user
+            # instead of retried; the memory fix depended on recall at the
+            # exact moment of the error.
+            "matcher": ".*",
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/tool-failure-gate.py"),
+                    "timeout": 10000,
+                }
+            ],
+        }
+    ],
     "Stop": [
         {
             "matcher": "",
@@ -271,6 +328,15 @@ CANONICAL_HOOKS = {
                     # a wedge.
                     "type": "command",
                     "command": _cmd(".claude/hooks/deploy-consumer-gate.py"),
+                    "timeout": 10000,
+                },
+                {
+                    # Stop arm of the declarative pattern rules (event: stop).
+                    # block honors stop_hook_active; warn is parked and shown
+                    # by the prompt arm on the next turn (Stop has no context
+                    # channel).
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/pattern-rules-gate.py"),
                     "timeout": 10000,
                 },
             ],
@@ -343,12 +409,14 @@ EXPECTED_HOOK_SCRIPTS = {
     "instantly-invasive-gate.py",
     "no-auto-commit-gate.py",
     "ruff-push-gate.py",
+    "recon-accuracy-deploy-gate.py",
     "cd-guard.py",
     "heredoc-size-gate.py",
     "msys-mangle-gate.py",
     "git-stash-gate.py",
     "git-restore-gate.py",
     "write-shrink-gate.py",
+    "config-protection-gate.py",
     "deploy-consumer-gate.py",
     "vercel-scope-gate.py",
     "em-dash-strip-gate.py",
@@ -356,10 +424,12 @@ EXPECTED_HOOK_SCRIPTS = {
     "post-action-gate.py",
     "gate-skip-detector.py",
     "session-pressure-meter.py",
+    "tool-failure-gate.py",
     "stop-b1-gate.py",
     "sibling-session-gate.py",
     "scorer-lock-gate.py",
     "optimize-run-gate.py",
+    "pattern-rules-gate.py",
 }
 
 # Canonical hook count, derived so the assertion strings can never drift out

@@ -32,15 +32,18 @@ import requests
 BASE = "https://expenses.brisken.com"
 
 # The round under audit. Field names the applied renderer must contain.
+# Case 9 build 5 (item 204). `month_suggestion` is left out on purpose: it is
+# a TypeScript type (src/lib/api.ts), erased at build, so it can never appear
+# in a bundle; the renderer reads advisory_detail.code instead.
 NEW = {
-    "month_health": "item 57: the health object",
-    "n_exact_pairs": "item 57: the pair count",
-    "wb.health": "item 57: the health i18n namespace",
-    "n_charges_no_entity": "item 59: the charge count",
-    "cardNotDefined": "item 59: the Card not defined chip",
-    "chargesNoEntity": "item 59: the tile label key",
-    "held_by": "item 60: the holder on a candidate",
-    "n_charges_receipt_taken": "item 60: the contested-pick count",
+    "waits_for_statements": "case 9: the API list of cards a receipt waits for",
+    "waits_for_statement": "case 9: the waiting-line i18n key",
+    "card_suggestion": "case 9: the suggested card on a row",
+    "cardSuggest": "case 9: the suggestion chip namespace",
+    "cards/by-vendor": "case 9: the apply-to-vendor endpoint",
+    "cardVendor": "case 9: the by-vendor offer namespace",
+    "dry_run": "case 9: the by-vendor preview flag",
+    "statement_month_differs": "case 9: the statement-month advisory",
 }
 
 # Fields known to be rendered today. If any is absent the crawl is blind and

@@ -51,6 +51,7 @@ gitignored.
 |---|---|
 | `tools/` (+ a row in `tools/INDEX.md`) · `tools/tests/` · `tools/fixtures/` | reusable tools · tests · fixtures |
 | `.claude/{rules, skills/{n}/SKILL.md, agents, hooks}/` | Claude primitives |
+| `.claude/patterns/` | declarative pattern rules (read by `pattern-rules-gate.py`, NOT auto-loaded like `rules/`) |
 | `scripts/` (`.<name>` → **gi**) | one-off automation scripts |
 | `docs/{YYYY-MM-DD} - Topic/` · `docs/sessions/` · `docs/references/` · `docs/digests/` | session logs · checkpoints · internal reports (`sessions/*-context.yaml` → **gi**) |
 | `.github/` · `.agents/` | CI workflows · vendored skill assets (NOT `.claude/agents/`) |

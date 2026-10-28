@@ -19,6 +19,9 @@ Subcommands:
                     append friction-register rows. Prints the confirm line.
   archive-register  Move resolved rows older than --days to
                     docs/friction-register-archive.md.
+  not-worked        Print the WHAT NOT TO RETRY block from the latest context
+                    YAML (per --client when given). /comd_resume renders it
+                    before anything else.
 
 Payload shape for finalize (--payload FILE, or '-' for stdin):
 {
@@ -34,6 +37,7 @@ Payload shape for finalize (--payload FILE, or '-' for stdin):
   "friction_rows": [{"client": "x", "type": "slow-path", "desc": "...",
                       "resolved": "No", "fix": "structural",
                       "regression": "No"}],
+  "not_worked": [{"approach": "...", "reason": "..."}],   // required; or "None"
   "yaml_clients": {"brisken": {"orchestrator": "fastapi", ...}}
 }
 """
@@ -43,9 +47,11 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 from urllib.parse import quote
 
@@ -65,11 +71,44 @@ SESSION_ENTRY_FIELDS = [
     ("focus", "Focus"),
     ("projects_line", "Projects"),
     ("built", "Built"),
+    ("not_worked_line", "Did NOT work"),
     ("friction", "Friction"),
     ("gates", "Gates"),
     ("autonomy", "Autonomy"),
     ("outcome", "Outcome"),
 ]
+
+
+def normalize_not_worked(value) -> tuple[list[dict] | str | None, str]:
+    """Validate the payload's `not_worked` field. Returns (normalized, error).
+
+    Failed approaches are first-class checkpoint content (ECC port item 7): the
+    next session must not re-run a dead end because it only survived as a line
+    buried in Working Notes. So the field is REQUIRED, "None" must be written
+    explicitly (an omitted field and an empty list are both refused, since
+    either can mean "forgot"), and every entry names the approach AND the exact
+    reason it failed."""
+    if isinstance(value, str) and value.strip().lower() == "none":
+        return "None", ""
+    if not isinstance(value, list) or not value:
+        return None, ('payload missing required field: not_worked (a list of '
+                      '{"approach", "reason"} entries, or "None" when nothing failed)')
+    out = []
+    for i, item in enumerate(value, 1):
+        if not isinstance(item, dict):
+            return None, f"not_worked entry {i} must be an object with approach + reason"
+        approach = " ".join(str(item.get("approach", "")).split())
+        reason = " ".join(str(item.get("reason", "")).split())
+        if not approach or not reason:
+            return None, f"not_worked entry {i} needs both a non-empty approach and reason"
+        out.append({"approach": approach, "reason": reason})
+    return out, ""
+
+
+def not_worked_line(value: list[dict] | str) -> str:
+    if value == "None":
+        return "None"
+    return "; ".join(f"{e['approach']} (why not: {e['reason']})" for e in value)
 
 
 def _utf8_stdout() -> None:
@@ -88,11 +127,29 @@ def folder_for(root: Path, date: str, topic: str) -> Path:
     return root / "docs" / f"{date} - {topic}"
 
 
+MINI_NAME = re.compile(r"^Mini-Checkpoint-(\d+)\.md$")
+
+
 def checkpoint_filename(folder: Path, mini: bool) -> str:
+    """The one naming rule `pre` and `finalize` share, so they cannot disagree.
+
+    The skill has the prose written at `pre`'s target BEFORE `finalize` runs, so
+    the highest-numbered mini file that INDEX does not link yet is this
+    checkpoint's own and is reused. Counting files + 1 (the old rule) renamed it
+    to N+1 and linked INDEX to a file that never existed, in seven register rows
+    across 2026-09-15..17. A linked top file means a finished checkpoint, so the
+    next one takes top + 1 (max, not count, so a gap cannot cause a collision)."""
     if not mini:
         return "Checkpoint.md"
-    n = len(list(folder.glob("Mini-Checkpoint-*.md"))) + 1 if folder.exists() else 1
-    return f"Mini-Checkpoint-{n}.md"
+    found = [int(m.group(1)) for p in (folder.glob("Mini-Checkpoint-*.md") if folder.exists() else [])
+             if (m := MINI_NAME.match(p.name))]
+    if not found:
+        return "Mini-Checkpoint-1.md"
+    top = max(found)
+    index = folder.parent / "INDEX.md"
+    link = f"]({encode_link(f'docs/{folder.name}/Mini-Checkpoint-{top}.md')})"
+    linked = index.is_file() and link in index.read_text(encoding="utf-8")
+    return f"Mini-Checkpoint-{top + 1 if linked else top}.md"
 
 
 def encode_link(path: str) -> str:
@@ -147,6 +204,8 @@ def update_session_log(root: Path, payload: dict) -> tuple[int, Path]:
     heading_suffix = " (mini)" if payload.get("mini") else ""
     lines = [f"\n### Session {n} — {payload['topic']}{heading_suffix}", f"**Type:** {work_type}"]
     entry = {**entry, "projects_line": ", ".join(projects)} if projects else dict(entry)
+    if payload.get("not_worked"):
+        entry["not_worked_line"] = not_worked_line(payload["not_worked"])
     for key, label in SESSION_ENTRY_FIELDS:
         if entry.get(key):
             lines.append(f"**{label}:** {entry[key]}")
@@ -247,26 +306,56 @@ def main_worktree(root: Path) -> Path:
         return root
 
 
+def context_path(root: Path, payload: dict, context_root: Path | None = None) -> Path:
+    return (context_root or root) / "docs" / "sessions" / f"{payload['date']}-context.yaml"
+
+
+def context_read_error(path: Path) -> str | None:
+    """Why the existing context file cannot be merged into, or None.
+
+    The file is shared by every same-day session, so an unreadable one must
+    stop finalize: rewriting it fresh deletes the sibling sessions' client
+    entries, and it is gitignored, so nothing can bring them back (2026-09-17:
+    a `python tools/checkpoint_scaffold.py` run skipped the inline pyyaml
+    dependency, failed to read the YAML as JSON, and wiped four clients)."""
+    if not path.exists():
+        return None
+    try:
+        load_context_text(path.read_text(encoding="utf-8"))
+        return None
+    except Exception as e:
+        hint = (
+            "pyyaml is not importable, so the file was read as JSON: run "
+            "`uv run tools/checkpoint_scaffold.py ...` so the inline dependency loads"
+            if _yaml() is None
+            else "repair or move the file aside"
+        )
+        return (f"existing context file {path} is unparseable ({e}); refusing to "
+                f"overwrite it, nothing was written. {hint}.")
+
+
 def merge_context_yaml(root: Path, payload: dict, checkpoint_rel: str, context_root: Path | None = None) -> Path:
-    base = context_root or root
-    path = base / "docs" / "sessions" / f"{payload['date']}-context.yaml"
-    data: dict = {}
-    if path.exists():
-        try:
-            data = load_context_text(path.read_text(encoding="utf-8"))
-        except Exception as e:
-            print(f"WARN: existing context YAML unparseable ({e}); rewriting fresh")
-            data = {}
+    path = context_path(root, payload, context_root)
+    # cmd_finalize checks context_read_error first; a parse failure here raises
+    # rather than rewriting the shared file fresh.
+    data: dict = load_context_text(path.read_text(encoding="utf-8")) if path.exists() else {}
     data.update(
         checkpoint_date=payload["date"],
         checkpoint_topic=payload["topic"],
         checkpoint_file=checkpoint_rel,
         work_type=payload["work_type"],
     )
+    if payload.get("not_worked"):
+        data["not_worked"] = payload["not_worked"]
     clients = data.setdefault("clients", {})
     for cid, fragment in (payload.get("yaml_clients") or {}).items():
         base = clients.get(cid) or {}
         base.update(fragment)
+        # Per client too: a later checkpoint for another client overwrites the
+        # top-level list, and /resume {client} reads the client's own entry.
+        if payload.get("not_worked"):
+            base["not_worked"] = payload["not_worked"]
+            base["not_worked_checkpoint"] = payload["topic"]
         clients[cid] = base
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(dump_context(data), encoding="utf-8")
@@ -410,13 +499,39 @@ def _run(cmd: list[str], cwd: Path) -> str:
         return f"unavailable: {e}"
 
 
+LEGACY_PAYLOAD_NAME = "checkpoint-payload.json"
+PAYLOAD_MAX_AGE_H = 3
+
+
+def session_token() -> str:
+    """Stable per-session token. The harness exports CLAUDE_CODE_SESSION_ID to
+    tools as well as hooks; pid is the fallback for a bare shell."""
+    sid = re.sub(r"[^A-Za-z0-9_-]", "", os.environ.get("CLAUDE_CODE_SESSION_ID", ""))[:8]
+    return sid or f"pid{os.getpid()}"
+
+
+def payload_path(root: Path) -> Path:
+    """Where THIS session's finalize payload belongs.
+
+    The shared `.scratch/checkpoint-payload.json` is a collision by design in a
+    clone that runs concurrent sessions: on 2026-09-09 a sibling wrote its own
+    payload there between this session's write and its finalize, so finalize
+    appended the sibling's INDEX row and session entry (register row,
+    boundary-violation). A per-session filename makes that race impossible.
+    """
+    return root / ".scratch" / f"checkpoint-payload-{session_token()}.json"
+
+
 def cmd_pre(root: Path, args: argparse.Namespace) -> int:
     date = args.date or today()
     if args.topic:
         folder = folder_for(root, date, args.topic)
         fname = checkpoint_filename(folder, args.mini)
         print("== target ==")
-        print(f"write checkpoint prose to: {folder / fname}")
+        print(f"write checkpoint prose to: {folder / fname}"
+              + ("  (exists, not yet in INDEX: finalize will link this file)"
+                 if (folder / fname).exists() else ""))
+    print(f"write the finalize payload to: {payload_path(root)}")
 
     print("\n== friction candidates (classify: promote or discard; then --clear-candidates) ==")
     print(_run(["uv", "run", "tools/session_state.py", "--list-candidates"], root))
@@ -483,24 +598,142 @@ def cmd_pre(root: Path, args: argparse.Namespace) -> int:
     return 0
 
 
+# ----------------------------------------------------------------- not-worked
+
+
+def _context_yamls(sessions: Path) -> list[Path]:
+    """Context YAMLs newest date first (the file name carries the date)."""
+    return sorted(sessions.glob("*-context.yaml"), key=lambda p: p.name, reverse=True)
+
+
+def cmd_not_worked(root: Path, args: argparse.Namespace) -> int:
+    """Always prints a block, so its absence at resume is itself visible."""
+    base = Path(args.context_root).resolve() if args.context_root else main_worktree(root)
+    client = (args.client or "").strip()
+    docs = []
+    for path in _context_yamls(base / "docs" / "sessions"):
+        try:
+            data = load_context_text(path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            continue
+        if isinstance(data, dict):
+            docs.append((str(data.get("checkpoint_date") or path.name[:10]), data))
+    found, source, value = False, "", None
+    for date, data in docs if client else []:
+        entry = (data.get("clients") or {}).get(client)
+        if isinstance(entry, dict):
+            # The top-level topic belongs to the day's LAST checkpoint, which
+            # may be another client's; the client entry names its own.
+            topic = entry.get("not_worked_checkpoint") or ""
+            found, value = True, entry.get("not_worked")
+            source = f"{date} {topic}, {client}" if topic else f"{date}, {client}"
+            break
+    if not found and docs:  # no client scope, or the client has no entry yet
+        date, data = docs[0]
+        found, value = True, data.get("not_worked")
+        source = f"{date} {data.get('checkpoint_topic') or ''}".strip()
+    print("WHAT NOT TO RETRY" + (f" (latest checkpoint: {source})" if found else ""))
+    if not found:
+        print("- no checkpoint context YAML found")
+    elif value is None:
+        print("- not recorded (that checkpoint predates the required field)")
+    elif value == "None" or not isinstance(value, list):
+        print("- None")
+    else:
+        for e in value:
+            if isinstance(e, dict):
+                print(f"- {e.get('approach', '?')} (why not: {e.get('reason', '?')})")
+    return 0
+
+
 # ------------------------------------------------------------------- finalize
 
 
+PATTERN_RULE_FIX = re.compile(r"^\s*pattern-rule\s*:\s*(.*?)\s*$", re.IGNORECASE)
+PATTERN_RULE_NAME = re.compile(r"^(warn|block|require)-[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+def check_pattern_rule_fixes(root: Path, payload: dict) -> tuple[str | None, list[str]]:
+    """Validate friction rows whose Fix is `pattern-rule:<name>` (a declarative
+    rule in `.claude/patterns/`, counted as structural by anneal-metrics).
+
+    Returns (error, advisories). A malformed value is an error: the cell must
+    read exactly `pattern-rule:<name>` or anneal-metrics cannot classify it.
+    A rule file missing from this checkout is only an advisory, because the
+    ledger lands via its own docs PR and may be written before the rule's PR
+    merges. The cell is normalized in place (`pattern-rule: X` -> `pattern-rule:X`)."""
+    advisories: list[str] = []
+    for i, row in enumerate(payload.get("friction_rows") or [], 1):
+        m = PATTERN_RULE_FIX.match(str(row.get("fix", "")))
+        if not m:
+            continue
+        name = m.group(1)
+        if not PATTERN_RULE_NAME.match(name):
+            return (f"friction_rows[{i}].fix {row.get('fix')!r}: expected pattern-rule:<name> with a "
+                    "verb-first kebab name (warn-*, block-*, require-*)"), advisories
+        row["fix"] = f"pattern-rule:{name}"
+        if not (root / ".claude" / "patterns" / f"{name}.md").is_file():
+            advisories.append(
+                f"advisory: friction_rows[{i}] names pattern rule {name!r}, which is not in "
+                f"{root / '.claude' / 'patterns'} yet; make sure its PR lands "
+                "(uv run tools/pattern_rules.py new ...)."
+            )
+    return None, advisories
+
+
 def cmd_finalize(root: Path, args: argparse.Namespace) -> int:
+    if args.payload != "-":
+        src = Path(args.payload)
+        if src.name == LEGACY_PAYLOAD_NAME:
+            print(
+                f"refusing the shared payload path {LEGACY_PAYLOAD_NAME}: in a clone "
+                "that runs concurrent sessions a sibling can overwrite it between "
+                "your write and this call, and finalize then applies THEIR "
+                "checkpoint (2026-09-09 register row). Write the payload to\n"
+                f"  {payload_path(root)}\n"
+                "and pass that path instead."
+            )
+            return 2
+        if src.exists():
+            age_h = (time.time() - src.stat().st_mtime) / 3600
+            if age_h > PAYLOAD_MAX_AGE_H:
+                print(
+                    f"refusing a stale payload: {src} was last written "
+                    f"{age_h:.1f}h ago (cap {PAYLOAD_MAX_AGE_H}h). A payload older "
+                    "than the work it describes is usually a leftover from an "
+                    "earlier session. Re-write it, then finalize."
+                )
+                return 2
     raw = sys.stdin.read() if args.payload == "-" else Path(args.payload).read_text(encoding="utf-8")
     payload = json.loads(raw)
     for field in ("topic", "work_type"):
         if not payload.get(field):
             print(f"payload missing required field: {field}")
             return 2
+    not_worked, err = normalize_not_worked(payload.get("not_worked"))
+    if err:
+        print(err)
+        return 2
+    payload["not_worked"] = not_worked
+    err, pattern_advisories = check_pattern_rule_fixes(root, payload)
+    if err:
+        print(err)
+        return 2
+    for line in pattern_advisories:
+        print(line)
     payload.setdefault("date", today())
+
+    ctx_root = Path(args.context_root).resolve() if args.context_root else main_worktree(root)
+    # Before any write: an unreadable shared context file stops everything.
+    err = context_read_error(context_path(root, payload, ctx_root))
+    if err:
+        print(err)
+        return 2
 
     folder = folder_for(root, payload["date"], payload["topic"])
     folder.mkdir(parents=True, exist_ok=True)
     fname = checkpoint_filename(folder, payload.get("mini", False))
     rel = f"docs/{payload['date']} - {payload['topic']}/{fname}"
-
-    ctx_root = Path(args.context_root).resolve() if args.context_root else main_worktree(root)
 
     n, log_path = update_session_log(root, payload)
     link_text = fname.removesuffix(".md") if payload.get("mini") else "→"
@@ -547,12 +780,25 @@ def main(argv: list[str] | None = None) -> int:
     p_arc.add_argument("--dry-run", action="store_true",
                        help="report what would move; write nothing")
 
+    p_nw = sub.add_parser("not-worked", help="print WHAT NOT TO RETRY from the latest checkpoint")
+    p_nw.add_argument("--client", help="scope to this client's latest checkpoint entry")
+    p_nw.add_argument("--context-root", help="where the context YAMLs live (default: primary clone)")
+
+    # `--root` is also accepted after the subcommand: `finalize --root X` was
+    # refused as an unrecognized argument and `pre` silently used the cwd
+    # (register rows 2026-09-16). SUPPRESS keeps an absent subcommand-level
+    # value from overwriting the top-level one.
+    for p in (p_pre, p_fin, p_arc, p_nw):
+        p.add_argument("--root", default=argparse.SUPPRESS, help="repo root (either position)")
+
     args = ap.parse_args(argv)
     root = Path(args.root).resolve()
     if args.cmd == "pre":
         return cmd_pre(root, args)
     if args.cmd == "finalize":
         return cmd_finalize(root, args)
+    if args.cmd == "not-worked":
+        return cmd_not_worked(root, args)
     return archive_register(root, args.days, dry_run=args.dry_run)
 
 

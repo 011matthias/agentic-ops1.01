@@ -26,8 +26,23 @@ not (a gate firing CORRECTLY is the system working, not friction).
 
 DESIGN
 ------
-- One JSON file in the OS temp dir (transient working state; never committed,
-  per rule_no_file_bloat). Path: {tempdir}/agentic-ops-session-state.json.
+- One JSON file PER SESSION in the OS temp dir (transient working state; never
+  committed, per rule_no_file_bloat).
+  Path: {tempdir}/agentic-ops-session-state-{session_id}.json.
+  Until 2026-09-17 every session on the machine shared one file, and a
+  sibling's first write reset this session's counters, B1 primer state and
+  friction candidates (a checkpoint `pre` drained zero candidates from a
+  session that had produced them).
+- Path resolution, first hit wins: AGENTIC_OPS_SESSION_STATE (tests); the id a
+  hook bound from its payload via bind_session(); CLAUDE_CODE_SESSION_ID from
+  the environment (set in the agent's Bash env; hooks may or may not inherit
+  it, so nothing depends on that); the legacy shared file, which is also READ
+  when this session has no file yet but the legacy file records its id (hooks
+  running from a checkout that predates the split still write there).
+- A hook MUST call bind_session(payload) after parsing stdin. An unbound hook
+  writes to a file the CLI and the other hooks never read.
+- Per-session files untouched for _STALE_AFTER_S are swept when a session
+  creates its file.
 - Session boundary is detected by the hook payload's `session_id`. A changed
   id => new session => reset (counts start at zero). An unchanged id across a
   compaction => counts PRESERVED. This is why there is no SessionStart reset
@@ -45,31 +60,84 @@ result. A hook importing this module must NEVER break the tool call it rides.
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 import random
+import re
 import sys
 import tempfile
 import time
 from datetime import datetime, timezone
 
-# State-file path is overridable via env so smoke tests run in isolation
-# without clobbering a live session's counters.
-STATE_FILE = os.environ.get("AGENTIC_OPS_SESSION_STATE") or os.path.join(
-    tempfile.gettempdir(), "agentic-ops-session-state.json"
-)
+_STATE_PREFIX = "agentic-ops-session-state"
+LEGACY_STATE_FILE = os.path.join(tempfile.gettempdir(), f"{_STATE_PREFIX}.json")
+# A per-session file older than this is an ended session's residue.
+_STALE_AFTER_S = 7 * 86400
+_SID_UNSAFE = re.compile(r"[^A-Za-z0-9_-]")
+
+
+def _override() -> str:
+    """AGENTIC_OPS_SESSION_STATE pins one exact file (tests, smoke runs)."""
+    return os.environ.get("AGENTIC_OPS_SESSION_STATE") or ""
+
+
+def _safe_sid(session_id) -> str:
+    """Session id reduced to filename-safe characters ("" for a non-string)."""
+    if not isinstance(session_id, str):
+        return ""
+    return _SID_UNSAFE.sub("", session_id)[:64]
+
+
+def state_path(session_id: str = "") -> str:
+    """State file for `session_id`: the env override, else the per-session
+    file, else (no id) the legacy shared file."""
+    if _override():
+        return _override()
+    sid = _safe_sid(session_id)
+    if sid:
+        return os.path.join(tempfile.gettempdir(), f"{_STATE_PREFIX}-{sid}.json")
+    return LEGACY_STATE_FILE
+
+
+BOUND_SESSION = _safe_sid(os.environ.get("CLAUDE_CODE_SESSION_ID", ""))
+STATE_FILE = state_path(BOUND_SESSION)
 LOCK_FILE = STATE_FILE + ".lock"
 
-# Pressure thresholds, mirrored from rule_session-pressure.md. A band is
-# crossed when EITHER the tool-call count OR the distinct-file count reaches
-# the threshold (whichever trips first -- a read-heavy session trips on files,
-# a build-heavy one on calls).
+# FALLBACK pressure thresholds, mirrored from rule_session-pressure.md. Used
+# only when the transcript's context size cannot be read. A band is crossed
+# when EITHER the tool-call count OR the distinct-file count reaches the
+# threshold (whichever trips first -- a read-heavy session trips on files, a
+# build-heavy one on calls).
 BANDS = (
     ("critical", 250, 80),
     ("high", 150, 50),
     ("moderate", 80, 30),
 )
 _BAND_RANK = {None: 0, "moderate": 1, "high": 2, "critical": 3}
+
+# PRIMARY pressure signal (2026-09-17, ECC port item 2): the real context size,
+# read from the latest assistant `usage` record in the session transcript.
+# Tool calls are a weak proxy (a few large reads fill the window in few calls),
+# and the counters above live in ONE file shared by every session on the
+# machine, so a sibling session resets them mid-session. The transcript is
+# per-session by construction. Fractions of the window, calibrated on 120
+# transcripts: median session peak 402k; 23 compactions (all manual) at
+# 468k-920k, 2 of them below 500k, 18 at or below 700k.
+CONTEXT_BANDS = (
+    ("critical", 0.70),
+    ("high", 0.50),
+    ("moderate", 0.30),
+)
+_USAGE_KEYS = ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")
+# Transcripts reach 100+ MB, and the meter runs on every tool call, so only the
+# tail is read: start small, grow 4x until a usage record turns up, give up
+# (-> tool-call fallback) past the cap.
+_TAIL_START = 256 * 1024
+_TAIL_MAX = 8 * 1024 * 1024
+# Per-session emitted-band memory survives the reset a sibling session causes;
+# bounded so the shared file cannot grow without limit.
+_BANDS_BY_SESSION_MAX = 20
 
 # Candidate context is truncated to keep the file small and dedup stable.
 _CTX_MAX = 300
@@ -95,6 +163,21 @@ def _default_state(session_id: str = "") -> dict:
         # a block is waiting to prime the NEXT turn. See rule_behaviors.md B1.
         "b1_blocks": 0,
         "b1_primed": 0,
+        # Latest measured context size (transcript usage), or None when the
+        # transcript was unreadable. See read_context_usage().
+        "context_tokens": None,
+        "context_model": "",
+        "context_measured_at": None,
+        # {session_id: highest band advised}. Carried across the reset in
+        # ensure_session so interleaved sibling sessions do not re-advise.
+        "bands_by_session": {},
+        # Transient tool failures (lock / 429 / 5xx / MCP transport) that
+        # tool-failure-gate turned into an in-turn retry advisory.
+        "transient_blocks": 0,
+        # One-shot advisory claims, {key: True}. load() rebuilds state from
+        # this schema and drops anything not declared here, so a once-key
+        # must live in the default or it never persists. See mark_once().
+        "once": {},
     }
 
 
@@ -166,19 +249,32 @@ def _release_lock(token: str | None) -> None:
         pass
 
 
-def load() -> dict:
-    """Read state, returning a default dict on any failure."""
+def _read_json(path: str) -> dict | None:
     try:
-        with open(STATE_FILE, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        if not isinstance(data, dict):
-            return _default_state()
-        # Heal any missing keys from a prior schema.
-        base = _default_state(data.get("session_id", ""))
-        base.update({k: data[k] for k in base if k in data})
-        return base
-    except (OSError, json.JSONDecodeError, ValueError):
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def load() -> dict:
+    """Read state, returning a default dict on any failure. A session with no
+    file of its own yet reads the legacy shared file when that file records
+    this session's id, so the first write carries it over."""
+    data = _read_json(STATE_FILE)
+    if (data is None and BOUND_SESSION and not _override()
+            and STATE_FILE != LEGACY_STATE_FILE
+            and not os.path.exists(STATE_FILE)):
+        legacy = _read_json(LEGACY_STATE_FILE)
+        if legacy is not None and _safe_sid(legacy.get("session_id")) == BOUND_SESSION:
+            data = legacy
+    if data is None:
         return _default_state()
+    # Heal any missing keys from a prior schema.
+    base = _default_state(data.get("session_id", ""))
+    base.update({k: data[k] for k in base if k in data})
+    return base
 
 
 def save(state: dict) -> None:
@@ -219,28 +315,184 @@ def _modify(fn):
 # --------------------------------------------------------------------------
 # Public API (used by hooks)
 # --------------------------------------------------------------------------
+def bind_session(session) -> str:
+    """Point this process at the state file of `session` (a hook payload dict
+    or a bare session id) and return the path now in use. A blank or missing
+    id keeps the current binding. Creating a session's file sweeps stale ones.
+    Never raises."""
+    global STATE_FILE, LOCK_FILE, BOUND_SESSION
+    try:
+        sid = _safe_sid(session.get("session_id") if isinstance(session, dict)
+                        else session)
+        if not sid:
+            return STATE_FILE
+        BOUND_SESSION = sid
+        path = state_path(sid)
+        STATE_FILE, LOCK_FILE = path, path + ".lock"
+        if not _override() and not os.path.exists(path):
+            sweep_stale()
+    except Exception:
+        pass
+    return STATE_FILE
+
+
+def sweep_stale(max_age_s: float = _STALE_AFTER_S) -> int:
+    """Delete per-session state files (and their lock / temp residue) not
+    modified for `max_age_s`. The legacy shared file is left alone. Returns
+    the number of files removed; never raises."""
+    removed = 0
+    cutoff = time.time() - max_age_s
+    try:
+        pattern = os.path.join(tempfile.gettempdir(), f"{_STATE_PREFIX}-*")
+        for path in glob.glob(pattern):
+            if path == STATE_FILE or path.startswith(STATE_FILE + "."):
+                continue
+            try:
+                if os.path.getmtime(path) < cutoff:
+                    os.unlink(path)
+                    removed += 1
+            except OSError:
+                pass
+    except Exception:
+        pass
+    return removed
+
+
 def ensure_session(session_id: str) -> dict:
     """Reset counters if the session_id changed (new session). A blank id or
     an unchanged id is a no-op (compaction keeps the same id => preserve)."""
     def _fn(state: dict) -> dict:
         if session_id and state.get("session_id") != session_id:
-            return _default_state(session_id)
+            fresh = _default_state(session_id)
+            fresh["bands_by_session"] = _bounded_bands(state.get("bands_by_session"))
+            return fresh
         if session_id and not state.get("session_id"):
             state["session_id"] = session_id
         return state
     return _modify(_fn)
 
 
-def bump_tool(tool_name: str, file_path: str | None = None) -> dict:
-    """Increment the tool-call count; track a distinct file when relevant."""
+def bump_tool(tool_name: str, file_path: str | None = None,
+              context: dict | None = None) -> dict:
+    """Increment the tool-call count; track a distinct file when relevant.
+    `context` (a read_context_usage() result) records the measured context
+    size in the same locked write; None leaves the last reading in place."""
     def _fn(state: dict) -> dict:
         state["tool_calls"] = int(state.get("tool_calls", 0)) + 1
         if tool_name in _FILE_TOOLS and file_path:
             files = state.setdefault("distinct_files", [])
             if file_path not in files:
                 files.append(file_path)
+        if context:
+            state["context_tokens"] = int(context.get("tokens", 0))
+            state["context_model"] = context.get("model", "") or ""
+            state["context_measured_at"] = _now_iso()
         return state
     return _modify(_fn)
+
+
+def context_window() -> int:
+    """Context window in tokens (AGENTIC_OPS_CONTEXT_WINDOW, default 1M).
+    A malformed override falls back to the default rather than raising at
+    import, which would silently unload the meter."""
+    try:
+        n = int(os.environ.get("AGENTIC_OPS_CONTEXT_WINDOW") or 1_000_000)
+        return n if n > 0 else 1_000_000
+    except ValueError:
+        return 1_000_000
+
+
+def _usage_line(raw: bytes) -> dict | None:
+    """Parse one transcript line. Returns {"tokens", "model", "message_id"} for
+    a main-thread assistant usage record, {"compact": True} for a compaction
+    boundary, else None."""
+    if b'"usage"' not in raw and b'"compact_boundary"' not in raw:
+        return None  # cheap prefilter; most lines are neither
+    try:
+        entry = json.loads(raw)
+    except ValueError:
+        return None
+    if not isinstance(entry, dict):
+        return None
+    if entry.get("type") == "system" and entry.get("subtype") == "compact_boundary":
+        return {"compact": True}
+    if entry.get("type") != "assistant" or entry.get("isSidechain"):
+        return None
+    msg = entry.get("message")
+    usage = msg.get("usage") if isinstance(msg, dict) else None
+    if not isinstance(usage, dict):
+        return None
+    try:
+        tokens = sum(int(usage.get(k) or 0) for k in _USAGE_KEYS)
+    except (TypeError, ValueError):
+        return None
+    if tokens <= 0:
+        return None  # synthetic / error turns carry an all-zero usage
+    return {"tokens": tokens, "model": msg.get("model", "") or "",
+            "message_id": msg.get("id", "") or ""}
+
+
+def read_context_usage(transcript_path: str) -> dict | None:
+    """Current context size from the session transcript, or None if unknown.
+
+    context = input_tokens + cache_read_input_tokens +
+    cache_creation_input_tokens of the LATEST main-thread assistant record.
+    Only the latest record matters, so no per-message.id dedupe is needed (that
+    applies to summing session totals, which this does not do). A compaction
+    boundary newer than any usage record means the last reading is pre-compact
+    and stale: return None so the caller falls back instead of over-reporting.
+    Claude Code writes the transcript asynchronously, so the reading can lag
+    the in-flight turn by one response. Never raises."""
+    if not transcript_path:
+        return None
+    try:
+        size = os.path.getsize(transcript_path)
+    except OSError:
+        return None
+    window = _TAIL_START
+    try:
+        with open(transcript_path, "rb") as f:
+            while True:
+                start = max(0, size - window)
+                f.seek(start)
+                lines = f.read(size - start).split(b"\n")
+                if start > 0:
+                    lines = lines[1:]  # first line is cut mid-record
+                for raw in reversed(lines):
+                    hit = _usage_line(raw)
+                    if hit is None:
+                        continue
+                    return None if hit.get("compact") else hit
+                if start == 0 or window >= _TAIL_MAX:
+                    return None
+                window *= 4
+    except OSError:
+        return None
+
+
+def context_band(tokens: int | None, window: int | None = None) -> str | None:
+    """Highest context band crossed by `tokens`, or None."""
+    if not tokens:
+        return None
+    w = window or context_window()
+    for name, frac in CONTEXT_BANDS:  # critical-first
+        if tokens >= frac * w:
+            return name
+    return None
+
+
+def format_tokens(n: int) -> str:
+    """312456 -> '312k', 1000000 -> '1M'."""
+    if n >= 1_000_000 and n % 1_000_000 == 0:
+        return f"{n // 1_000_000}M"
+    return f"{round(n / 1000)}k"
+
+
+def _bounded_bands(bands) -> dict:
+    if not isinstance(bands, dict):
+        return {}
+    items = list(bands.items())[-_BANDS_BY_SESSION_MAX:]
+    return dict(items)
 
 
 def bump_b1_block() -> dict:
@@ -258,6 +510,16 @@ def bump_b1_block() -> dict:
     return _modify(_fn)
 
 
+def bump_transient_block() -> dict:
+    """Record a transient tool failure (tool-failure-gate). The 2026-05-11
+    EBUSY incident queued 8 edits for the user instead of retrying; the count
+    makes a session that keeps hitting transient blocks visible at checkpoint."""
+    def _fn(state: dict) -> dict:
+        state["transient_blocks"] = int(state.get("transient_blocks", 0)) + 1
+        return state
+    return _modify(_fn)
+
+
 def b1_priming_due(state: dict | None = None) -> int:
     """Blocks recorded but not yet surfaced as a primer (0 = nothing due)."""
     st = state if state is not None else load()
@@ -271,6 +533,26 @@ def mark_b1_primed() -> dict:
         state["b1_primed"] = int(state.get("b1_blocks", 0))
         return state
     return _modify(_fn)
+
+
+def mark_once(key: str) -> bool:
+    """Claim `key` for this session: True the first time, False afterwards.
+
+    For advisories that are worth saying once and become noise if repeated.
+    Fail-closed on a state error (no claim, so no advisory) rather than
+    risking one on every prompt.
+    """
+    claimed = {"v": False}
+
+    def _fn(state: dict) -> dict:
+        flags = state.setdefault("once", {})
+        if not flags.get(key):
+            flags[key] = True
+            claimed["v"] = True
+        return state
+
+    _modify(_fn)
+    return claimed["v"]
 
 
 def add_candidate(signal: str, source: str, context: str = "") -> bool:
@@ -308,10 +590,29 @@ def pressure_band(state: dict | None = None) -> str | None:
     return None
 
 
-def mark_band_emitted(band: str | None) -> dict:
-    """Record the highest band already advised on (dedup per band)."""
+def emitted_band(state: dict, session_id: str = "") -> str | None:
+    """Highest band already advised for `session_id` (falls back to the
+    unkeyed field for callers without a session id)."""
+    if session_id:
+        bands = state.get("bands_by_session")
+        if isinstance(bands, dict) and session_id in bands:
+            return bands[session_id]
+    return state.get("pressure_band_emitted")
+
+
+def mark_band_emitted(band: str | None, session_id: str = "") -> dict:
+    """Record the highest band already advised on (dedup per band). With a
+    session id the record is keyed, so it survives a sibling-session reset.
+    Lowering it (band below the previous one) is how a compaction re-arms the
+    advisories."""
     def _fn(state: dict) -> dict:
         state["pressure_band_emitted"] = band
+        if session_id:
+            bands = state.get("bands_by_session")
+            bands = dict(bands) if isinstance(bands, dict) else {}
+            bands.pop(session_id, None)  # re-insert last -> most recent survives pruning
+            bands[session_id] = band
+            state["bands_by_session"] = _bounded_bands(bands)
         return state
     return _modify(_fn)
 
@@ -343,26 +644,62 @@ def reset() -> dict:
 # --------------------------------------------------------------------------
 # CLI (used by /comd_checkpoint and ad-hoc inspection)
 # --------------------------------------------------------------------------
+def find_transcript(session_id: str) -> str:
+    """Path of `session_id`'s transcript under the Claude config dir, or ""."""
+    sid = _safe_sid(session_id)
+    if not sid:
+        return ""
+    base = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(
+        os.path.expanduser("~"), ".claude")
+    try:
+        hits = glob.glob(os.path.join(base, "projects", "*", f"{sid}.jsonl"))
+    except Exception:
+        return ""
+    return max(hits, key=os.path.getmtime) if hits else ""
+
+
 def _cmd_status(as_json: bool) -> int:
     st = load()
-    band = pressure_band(st)
+    sid = st.get("session_id", "") or BOUND_SESSION
+    # The transcript is fresher than the meter's last write (and exists even
+    # when the live hooks predate the per-session file).
+    live = read_context_usage(find_transcript(sid)) if sid else None
+    ctx = live["tokens"] if live else st.get("context_tokens")
+    window = context_window()
+    if ctx:
+        band, signal = context_band(ctx, window), "context"
+    else:
+        band, signal = pressure_band(st), "tool-calls"
     if as_json:
         print(json.dumps({
-            "session_id": st.get("session_id", ""),
+            "session_id": sid,
+            "state_file": STATE_FILE,
             "tool_calls": st.get("tool_calls", 0),
             "distinct_files": len(st.get("distinct_files", []) or []),
             "pressure_band": band,
-            "pressure_band_emitted": st.get("pressure_band_emitted"),
+            "pressure_signal": signal,
+            "pressure_band_emitted": emitted_band(st, sid),
+            "context_tokens": ctx,
+            "context_source": "transcript" if live else ("meter" if ctx else None),
+            "context_window": window,
+            "context_model": live["model"] if live else st.get("context_model", ""),
+            "context_measured_at": st.get("context_measured_at"),
             "candidates": len(st.get("candidates", []) or []),
             "b1_blocks": st.get("b1_blocks", 0),
             "b1_priming_due": b1_priming_due(st),
+            "transient_blocks": st.get("transient_blocks", 0),
         }))
     else:
-        print(f"[session-state] band={band or 'none'} "
+        ctx_txt = (f"{format_tokens(ctx)}/{format_tokens(window)}" if ctx
+                   else "unread")
+        # The session prefix shows whose reading this is.
+        print(f"[session-state] session={sid[:8] or '-'} "
+              f"band={band or 'none'} ({signal}) context={ctx_txt} "
               f"calls={st.get('tool_calls', 0)} "
               f"files={len(st.get('distinct_files', []) or [])} "
               f"candidates={len(st.get('candidates', []) or [])} "
-              f"b1_blocks={st.get('b1_blocks', 0)}")
+              f"b1_blocks={st.get('b1_blocks', 0)} "
+              f"transient_blocks={st.get('transient_blocks', 0)}")
     return 0
 
 
@@ -396,7 +733,11 @@ def main(argv: list[str]) -> int:
                    help="drop all candidates (after reconciliation)")
     g.add_argument("--reset", action="store_true", help="full reset (new session)")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
+    ap.add_argument("--session-id", default="",
+                    help="session to read (default: CLAUDE_CODE_SESSION_ID)")
     args = ap.parse_args(argv)
+    if args.session_id:
+        bind_session(args.session_id)
 
     if args.list_candidates:
         return _cmd_list(args.json)

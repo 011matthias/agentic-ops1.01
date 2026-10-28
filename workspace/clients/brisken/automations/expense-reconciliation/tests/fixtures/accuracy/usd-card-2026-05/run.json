@@ -1,0 +1,22 @@
+{
+  "statement": {
+    "path": "statement.csv",
+    "account_id": "usd-card",
+    "legal_entity_id": "synthetic-le",
+    "account_card_currency": "USD",
+    "column_map": {
+      "transaction_date": "Transaction Date",
+      "posting_date": "Post Date",
+      "amount": "Amount",
+      "vendor": "Description",
+      "type": "Type"
+    }
+  },
+  "receipts": {
+    "path": "receipts.csv",
+    "source": "csv"
+  },
+  "output": {
+    "path": "report.xlsx"
+  }
+}

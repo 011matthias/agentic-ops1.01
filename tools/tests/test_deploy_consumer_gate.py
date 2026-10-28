@@ -257,6 +257,74 @@ def test_an_unreadable_response_still_closes_the_marker(tmp_path):
     )
 
 
+# ---- 2026-09-16/17: holes the register kept logging after #885 -----------
+
+
+def test_a_drive_the_harness_backgrounded_at_its_timeout_does_not_close(tmp_path):
+    """A FOREGROUND command moved to the background at 120 s has no
+    run_in_background in its input; the result says so instead (the shape
+    items 73, 77, 80, 81 and 83 hit)."""
+    post(tmp_path, "Bash", "fly deploy")
+    text = post(
+        tmp_path, "Bash",
+        "agent-browser --session recon open https://x && agent-browser --session recon wait --load networkidle && agent-browser --session recon snapshot -i",
+        response={"stdout": "", "stderr": "", "interrupted": False, "isImage": False,
+                  "noOutputExpected": False, "backgroundTaskId": "bw73s5jh3",
+                  "timedOutAfterMs": 120000},
+    )
+    assert "DRIVE NOT COMPLETE" in text
+    assert stop(tmp_path, CLAIM) is not None
+
+
+def test_a_background_notice_as_text_does_not_close(tmp_path):
+    post(tmp_path, "Bash", "fly deploy")
+    assert "DRIVE NOT COMPLETE" in post(
+        tmp_path, "Bash", "agent-browser snapshot -i",
+        response={"stdout": "Command running in background with ID: bx1. Output is being written to: C:\\t\\bx1.output"},
+    )
+
+
+def test_an_agent_browser_failure_line_does_not_close(tmp_path):
+    post(tmp_path, "Bash", "fly deploy")
+    text = post(
+        tmp_path, "Bash", "agent-browser --cdp 9222 get url",
+        response={"stdout": "✗ Failed to read: connection timed out (os error 10060)", "stderr": ""},
+    )
+    assert "DRIVE NOT COMPLETE" in text
+    assert stop(tmp_path, CLAIM) is not None
+
+
+@pytest.mark.parametrize("cmd", [
+    "ls $LOCALAPPDATA/ms-playwright",
+    'Get-ChildItem "$env:LOCALAPPDATA\\ms-playwright"',
+    'uv run tools/pattern_rules.py test --text "agent-browser --session x snapshot -i" --event bash',
+    'grep -rn "agent-browser snapshot" .claude/hooks',
+    "echo agent-browser get url",
+    "uv run --with playwright python -m playwright install chromium",
+])
+def test_a_mention_of_a_browser_command_does_not_close(tmp_path, cmd):
+    post(tmp_path, "Bash", "fly deploy")
+    assert post(tmp_path, "Bash", cmd, response={"stdout": "ok"}) == "", cmd
+    assert stop(tmp_path, CLAIM) is not None
+
+
+@pytest.mark.parametrize("cmd", [
+    'B="agent-browser --session recon-item77"; $B eval "document.title"',
+    "AB='agent-browser --session s'\n$AB snapshot -i",
+    '$ab = "agent-browser"; & $ab get text @e1',
+    'agent-browser --session s open https://x && agent-browser --session s wait --text "Arriving"',
+    "npx playwright test e2e/smoke.spec.ts",
+    "uv run --with playwright python drive.py",
+    'uv run python -c "from playwright.sync_api import sync_playwright; print(1)"',
+    "python - <<'EOF'\nfrom playwright.sync_api import sync_playwright\n"
+    "with sync_playwright() as p:\n    b = p.chromium.connect_over_cdp('http://localhost:9333')\nEOF",
+])
+def test_a_real_observation_still_closes(tmp_path, cmd):
+    post(tmp_path, "Bash", "fly deploy")
+    assert "CONSUMER DRIVEN" in post(tmp_path, "Bash", cmd, response={"stdout": "ok"}), cmd
+    assert stop(tmp_path, CLAIM) is None
+
+
 def test_a_backgrounded_navigation_says_nothing_extra(tmp_path):
     """Navigation is silent whether or not it is backgrounded: it was never
     going to close the marker, so there is nothing to explain."""
@@ -466,6 +534,33 @@ def test_a_real_deploy_beside_a_commit_still_opens(tmp_path):
     out = post(tmp_path, "Bash",
                'flyctl deploy -a brisken-recon && git commit -m "ship it"')
     assert "CONSUMER NOT DRIVEN" in out
+
+
+@pytest.mark.parametrize("cmd", [
+    # register 2026-09-17 slow-path (session f9a82399): a read-only search
+    'B=/c/x/agentic-ops1-audit; grep -rn "flyctl deploy" $B/docs | head',
+    # the same class, live the next session
+    'MSYS_NO_PATHCONV=1 git -C C:/x show origin/main:f.md'
+    ' | grep -n -E "f9a82399|flyctl deploy" | cut -c1-900',
+    "rg -F -e 'flyctl deploy' docs",
+    "echo fly deploy",
+    "grep -n vercel-force-deploy tools/INDEX.md",
+])
+def test_a_search_naming_a_deploy_opens_nothing(tmp_path, cmd):
+    assert post(tmp_path, "Bash", cmd) == ""
+    assert stop(tmp_path, CLAIM) is None
+
+
+@pytest.mark.parametrize("cmd,label", [
+    ('& "C:\\Users\\x\\.fly\\bin\\flyctl.exe" deploy -a app', "app"),
+    ("( cd workspace/x && flyctl deploy -a app )", "app"),
+    ("FLY_API_TOKEN=abc timeout 900 flyctl deploy -a app", "app"),
+    ("bash -c 'flyctl deploy -a app'", "app"),
+])
+def test_real_deploy_shapes_still_open(tmp_path, cmd, label):
+    out = post(tmp_path, "PowerShell" if cmd.startswith("&") else "Bash", cmd)
+    assert "CONSUMER NOT DRIVEN" in out
+    assert f"{label} deployed" in out
 
 
 def test_a_commit_message_does_not_close_an_open_marker(tmp_path):

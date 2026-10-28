@@ -27,6 +27,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from ..llm.client import ExtractedReceipt, LLMClient
+from .. import untrusted
 from ..matching.types import LineItem, Receipt
 from ..vendor_names import clean_vendor_name
 from ._common import ParseIssue, parse_date
@@ -211,6 +212,7 @@ def _to_receipt(
         detected_time=extraction.time,
         invoice_number=extraction.invoice_number,
         receipt_number=extraction.receipt_number,
+        document_kind=extraction.document_kind,
         detected_tax=_parse_decimal_lenient(extraction.tax),
         tax_label=extraction.tax_label,
         # Folder OCR has no ER "payment_mode"; the receipt's own card/tender
@@ -218,6 +220,10 @@ def _to_receipt(
         payment_mode=_payment_mode(extraction),
         document_type=extraction.document_type or "receipt",
         ocr_text=ocr_text,
+        # The document's own text is untrusted: a receipt whose body talks
+        # to an assistant is flagged for a human, never acted on.
+        untrusted_instructions=untrusted.scan(
+            ocr_text, document_id, extraction.notes),
         line_items=tuple(
             LineItem(
                 description=item.description,

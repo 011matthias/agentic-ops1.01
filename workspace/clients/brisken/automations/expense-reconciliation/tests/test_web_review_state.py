@@ -95,7 +95,7 @@ def test_reason_codes():
     assert _rv(_rec(_cat(source=ClassificationSource.VENDOR)))["reason_code"] == "vendor_guess"
     assert _rv(_rec(_cat(source=None)))["reason_code"] == "unknown_provenance"
     assert _rv(_rec(_cat()))["reason_code"] is None  # ready
-    cc = {"category": "M", "zoho_account": "M", "source": "LEARNED"}
+    cc = {"category": "M", "zoho_account": "M", "source": "VENDOR"}
     assert _rv(effective_bucket="unmatched", charge_category=cc)["reason_code"] == "receiptless_suggested"
     assert _rv(effective_bucket="refund")["reason_code"] is None
 
@@ -189,10 +189,19 @@ def test_override_is_ready():
 # ── receiptless ─────────────────────────────────────────────────────
 
 
-def test_receiptless_with_category_is_check():
-    cc = {"category": "Meals", "zoho_account": "M", "source": "LEARNED"}
+def test_receiptless_with_a_model_guess_is_check():
+    cc = {"category": "Meals", "zoho_account": "M", "source": "VENDOR"}
     r = _rv(effective_bucket="unmatched", charge_category=cc)
     assert r["state"] == "check" and r["reason"]
+
+
+@pytest.mark.parametrize("source", ["LEARNED", "REGISTRY", "EDITED"])
+def test_receiptless_with_a_decided_answer_asks_nothing(source):
+    """Item 216 cause 1: a remembered rule, a merchant-list rule and the
+    reviewer's own pick are answers (`answer_origin`), so the row no longer
+    says the tool guessed them from the bank's description."""
+    cc = {"category": "Meals", "zoho_account": "M", "source": source}
+    assert _rv(effective_bucket="unmatched", charge_category=cc)["state"] == "none"
 
 
 def test_receiptless_no_category_is_none():
@@ -227,10 +236,12 @@ def test_ready_confirm_pairs_excludes_check_and_pick():
         _rec(_cat(source=ClassificationSource.VENDOR), doc="rB"),         # check
         _rec(None, doc="rC"),                                             # pick
     ]
+    # vendor_score 1.0: each pairing passes the owner's pairing rule (item
+    # 133), so only the CATEGORY state separates the three rows here.
     outcome = MatchOutcome(matches=[
-        Match(transaction_id="A", document_id="rA", match_type=MatchType.EXACT, confidence=1.0, reason="x"),
-        Match(transaction_id="B", document_id="rB", match_type=MatchType.EXACT, confidence=1.0, reason="x"),
-        Match(transaction_id="C", document_id="rC", match_type=MatchType.EXACT, confidence=1.0, reason="x"),
+        Match(transaction_id="A", document_id="rA", match_type=MatchType.EXACT, confidence=1.0, reason="x", vendor_score=1.0),
+        Match(transaction_id="B", document_id="rB", match_type=MatchType.EXACT, confidence=1.0, reason="x", vendor_score=1.0),
+        Match(transaction_id="C", document_id="rC", match_type=MatchType.EXACT, confidence=1.0, reason="x", vendor_score=1.0),
     ])
     snap = snapshot_to_dict(txs, recs, outcome, [])
     pairs = ready_confirm_pairs(_run_row(snap), {}, {})
@@ -290,12 +301,19 @@ def test_confirm_ready_endpoint_shape_and_safety(tmp_path):
             row for row in pre
             if row["review"]["state"] == "ready" and row["status"] == "pending"
         ]
+        # Item 133: a ready category is not a pairing verdict; the row must
+        # also pass the owner's pairing rule, and on the example month one
+        # ready row does not.
+        from expense_recon.web.service import confirmable_pair
+        eligible = [row for row in ready_pending if confirmable_pair(row)]
+        assert 0 < len(eligible) < len(ready_pending)
         r = c.post(f"/api/runs/{run_id}/decisions/confirm-ready")
         assert r.status_code == 200
         body = r.json()
         assert {"ok", "confirmed", "remaining", "summary"} <= set(body)
-        # It confirmed exactly the ready+pending rows, no more.
-        assert body["confirmed"] == len(ready_pending)
+        # It confirmed exactly the ready+pending rows the pairing rule
+        # passes, no more.
+        assert body["confirmed"] == len(eligible)
         # Safety: the bulk action never confirmed a check / pick row.
         post = c.get(f"/api/runs/{run_id}").json()["rows"]
         assert all(

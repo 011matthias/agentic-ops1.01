@@ -9,18 +9,24 @@ carry the first part and none of the others, and nothing reads it.
 
 So the document is:
 
-1. the header — the month, the statement account, how many charges matched,
-   and what is still unreconciled per currency,
+1. the header — the month, how many charges matched, what is still
+   unreconciled per currency, and what is booked without a receipt,
 2. **Per-card coverage**, when the month holds more than one card: which
    statements were loaded for each, over what span, and how far each one
-   has got. A month is reconciled card by card, and a single unreconciled
-   figure over three cards tells the reader nothing about which pile of
-   receipts to go and find,
-3. **Exceptions first**, because they are the only part anyone must act on:
-   unmatched charges, unmatched receipts, duplicate groups,
-4. the full charge listing, each line with its matched receipt and status,
-   sectioned per card when there is more than one,
-5. the receipts themselves, behind captions naming the charge they settle.
+   has got,
+3. then **one section per card** (item 138, owner 2026-09-17: "the output
+   (PDF) is also not organized in the different cards that were
+   reconciled"), because a month is reconciled card by card: one statement,
+   one pile of receipts. Each section states that card's statement and its
+   figures, then what needs attention on that card (exceptions first,
+   because they are the only part anyone must act on), then its charges
+   with their receipts, then that card's receipt pages. A last section,
+   never dropped, takes the charges no card claims and the receipts with no
+   card.
+
+A month with a single card and nothing outside it renders the one flat
+document it always did: a heading restating the only card is structure the
+content does not earn.
 
 The XLSX stays the working sidecar (Criss works in Excel, and her fill-colour
 is real data); the CSV stays available and demoted.
@@ -30,7 +36,15 @@ from __future__ import annotations
 import io
 from collections.abc import Sequence
 
+from ..unmatched_reasons import RECEIPT_REASON_SHORT
+from .posting_common import suggested_cell
 from ._pdf_common import (
+    PAGE_MARGIN_MM,
+    booked_without_receipt,
+    caption_mark,
+    card_name,
+    card_sections,
+    card_statement_line,
     esc,
     make_styles,
     prepare_evidence,
@@ -39,25 +53,32 @@ from ._pdf_common import (
     table_style,
 )
 
+# Column widths in points. Every table fits `TABLE_WIDTH_MAX` (503.9 pt, the
+# A4 portrait frame): until item 143 the charge table was 672 pt, so it ran
+# off both sides of the paper and its `#`, Date and Account were cut off,
+# and the coverage table (572 pt) sat in both margins. Counts, dates and
+# amounts fit their values on one line in DejaVu Sans, the widest font
+# `register_fonts` picks; the text columns wrap between words. The charge column keeps room
+# for a statement descriptor with no space in it (WEB*NETWORKSOLUTIONS).
 _COVERAGE = (
-    ("Card", 118),
-    ("Statements", 118),
-    ("Period", 100),
+    ("Card", 90),
+    ("Statements", 110),
+    ("Period", 80),
     ("Charges", 46),
-    ("Matched", 46),
-    ("No receipt", 52),
-    ("Unreconciled", 92),
+    ("Matched", 48),
+    ("No receipt", 56),
+    ("Unreconciled", 72),
 )
 
 _CHARGES = (
     ("#", 24),
-    ("Date", 60),
-    ("Charge", 150),
-    ("Amount", 70),
-    ("Ccy", 32),
-    ("Status", 74),
-    ("Receipt", 140),
-    ("Account", 122),
+    ("Date", 55),
+    ("Charge", 118),
+    ("Amount", 54),
+    ("Ccy", 26),
+    ("Status", 64),
+    ("Receipt", 80),
+    ("Account", 82),
 )
 
 
@@ -74,6 +95,17 @@ def _status_label(row: dict) -> str:
         return "already posted"
     if row.get("chosen_document_id"):
         return "matched"
+    if booked_without_receipt(row):
+        # Item 96: Criss's yellow row is in her books, and the screen folds it
+        # away as already booked. Only the reviewer's verdict reached this
+        # word before, so 48 July rows printed "no receipt" as if still open.
+        return "already posted"
+    # Front 1: the two other verdicts that close a charge with no receipt
+    # (`unmatched_reasons`), so paper and screen agree nothing is owed.
+    if row.get("reason_code") == "closed_recurring":
+        return "booked as recurring"
+    if row.get("reason_code") == "no_receipt_expected":
+        return "no receipt expected"
     if bucket in ("unmatched", ""):
         return "no receipt"
     if bucket == "refund":
@@ -96,6 +128,8 @@ def build_reconciliation_report_pdf(
     *,
     title: str,
     evidence: Sequence[dict] | None = None,
+    receipt_cards: dict[str, tuple[str, str]] | None = None,
+    card_parents: dict[str, str] | None = None,
 ) -> bytes:
     """Render the reconciliation document from the workbench's OWN view.
 
@@ -103,15 +137,20 @@ def build_reconciliation_report_pdf(
     review screen states — a reader and a reviewer cannot be looking at
     different reconciliations. `evidence` is one entry per receipt document
     (see `month_report_pdf`), captioned with the charge it settles.
+
+    `receipt_cards` (item 138) is `{document_id: (card key, card label)}`
+    for every receipt in the pool, the card the tool resolved for it
+    (`service.report_receipt_cards`); it decides the section of a receipt no
+    charge holds. Omitted, such a receipt files under the no-card section.
+
+    `card_parents` (item 147) is `{subcard key: account key}` from the
+    registry (`cards.card_parents`). Given one, an account's section comes
+    first and the cards under it follow, its heading states the group's
+    figures and names the statement once, and each subcard's heading points
+    back at the account instead of repeating the file. Omitted, the sections
+    are the flat list they were.
     """
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.units import mm
-    from reportlab.platypus import (
-        PageBreak,
-        Paragraph,
-        SimpleDocTemplate,
-        Spacer,
-    )
+    from reportlab.platypus import Paragraph
 
     body_font, bold_font = register_fonts()
     styles = make_styles(body_font, bold_font)
@@ -139,9 +178,12 @@ def build_reconciliation_report_pdf(
     if rate is not None:
         headline += f" ({rate}%)"
     if unreconciled:
-        headline += "  ·  unreconciled " + ", ".join(
-            f"{ccy} {amt}" for ccy, amt in sorted(unreconciled.items())
-        )
+        headline += "  ·  unreconciled " + _money(unreconciled)
+    # Item 102: booked is not evidenced. The figure sits beside the
+    # unreconciled one so neither changes meaning.
+    booked = summary.get("booked_no_receipt_by_ccy") or {}
+    if booked:
+        headline += "  ·  booked without a receipt " + _money(booked)
     story.append(Paragraph(esc(headline), styles["sub"]))
 
     # ── per-card coverage ───────────────────────────────────────────
@@ -155,33 +197,152 @@ def build_reconciliation_report_pdf(
         story.append(_table([
             [name for name, _w in _COVERAGE],
             *[[
-                _coverage_name(c),
+                card_name(c),
                 ", ".join(c.get("statements") or []) or "not recorded",
                 _period(c),
                 str(c.get("n_transactions") or 0),
                 str(c.get("n_reconciled") or 0),
                 str(c.get("n_unmatched_tx") or 0),
-                ", ".join(
-                    f"{ccy} {amt}"
-                    for ccy, amt in sorted(
-                        (c.get("unreconciled_by_ccy") or {}).items()
-                    )
-                ) or "nothing",
+                _money(c.get("unreconciled_by_ccy") or {}) or "nothing",
             ] for c in coverage],
         ], [w for _n, w in _COVERAGE], styles))
 
-    # ── exceptions first: the only part anyone must act on ──────────
-    story.append(Paragraph("What needs attention", styles["h2"]))
-    unmatched_tx = list(view.get("unmatched_transactions") or [])
-    unmatched_rec = list(view.get("unmatched_receipts") or [])
+    items = list(evidence or [])
+    cards = dict(receipt_cards or {})
+    for item in items:
+        cards.setdefault(str(item.get("document_id") or ""), ("", ""))
+    cards.pop("", None)
+    sections = card_sections(view, cards, card_parents)
+
+    if sum(1 for s in sections if s["key"]) < 2:
+        # One card at most (every run older than the card axis, a one-card
+        # month, even with receipts that carry no card): the flat document,
+        # exactly as before. Its headline already describes the one card,
+        # and "What needs attention" already lists the receipts nobody placed.
+        _attention(story, view, rows, None, styles)
+        story.append(Paragraph("All charges", styles["h2"]))
+        story.append(_charge_table(rows, styles))
+        prepared = prepare_evidence(items)
+        _evidence(story, prepared, styles, None)
+        return _build(story, title, prepared, None)
+
+    by_doc = {str(i.get("document_id") or ""): i for i in items}
+    section_of = {d: s["key"] for s in sections for d in s["receipt_docs"]}
+    ordered: list[dict] = []
+    marks: list[int] = []
+    story_parts: list[tuple[dict, list[dict]]] = []
+    for sec in sections:
+        sec_items = [by_doc[d] for d in sec["receipt_docs"] if d in by_doc]
+        ordered.extend(sec_items)
+        story_parts.append((sec, sec_items))
+    placed = {id(i) for i in ordered}
+    # An evidence item with no document id cannot be placed by card; it
+    # still prints, in the last section, rather than disappearing.
+    stray = [i for i in items if id(i) not in placed]
+    if stray:
+        ordered.extend(stray)
+        story_parts[-1][1].extend(stray)
+    prepared = prepare_evidence(ordered)
+    prepared_by_item = {id(pair[0]): pair for pair in prepared}
+
+    for sec, sec_items in story_parts:
+        _card_section(story, view, sec, section_of, styles)
+        _evidence(
+            story, [prepared_by_item[id(i)] for i in sec_items], styles, marks,
+            differ=_differ_by_doc(sec["rows"]),
+        )
+    return _build(story, title, prepared, marks)
+
+
+def _card_section(
+    story: list, view: dict, sec: dict, section_of: dict[str, str], styles: dict
+) -> None:
+    """One card: its statement and figures, what needs attention on it, its
+    charges. Its receipt pages follow (see `_evidence`)."""
+    from reportlab.platypus import PageBreak, Paragraph, Spacer
+
+    story.append(PageBreak())
+    story.append(Paragraph(esc(sec["label"]), styles["h2"]))
+    n_docs = len(sec["receipt_docs"])
+    # Item 147: an account's heading states the GROUP's charges and money
+    # (`card_statement_line` sums its subcards), but the receipt pages behind
+    # it are its own card's; each subcard's pages follow in its own section
+    # below. Saying which stops the count reading as a group figure it is not.
+    receipts = f"{n_docs} receipt{'' if n_docs == 1 else 's'}" + (
+        " on this card" if sec.get("children") else ""
+    )
+    line = "  ·  ".join(x for x in (card_statement_line(sec), receipts) if x)
+    story.append(Paragraph(esc(line), styles["sub"]))
+    story.append(Spacer(1, 4))
+
+    _attention(story, view, sec["rows"], (sec["key"], section_of), styles)
+    if sec["rows"]:
+        story.append(Spacer(1, 8))
+        story.append(Paragraph("Charges", styles["capsub"]))
+        story.append(Spacer(1, 3))
+        story.append(_charge_table(sec["rows"], styles))
+        # Item 137: a receipt held here whose own card is another. It stays
+        # with the charge (the statement decides the card a charge is on) and
+        # is named, so the reader knows which of the two is wrong.
+        for row in sec["rows"]:
+            differ = row.get("cards_differ") or {}
+            if not differ:
+                continue
+            story.append(Spacer(1, 4))
+            story.append(Paragraph(esc(
+                f"{row.get('vendor') or 'A charge'} {row.get('amount') or ''} "
+                f"{row.get('currency') or ''} of {row.get('date') or ''}: the "
+                f"receipt held on it is on "
+                f"{differ.get('receipt_card_label') or 'another card'}, "
+                f"not this card."
+            ), styles["capsub"]))
+
+
+def _attention(
+    story: list,
+    view: dict,
+    rows: list[dict],
+    scope: tuple[str, dict[str, str]] | None,
+    styles: dict,
+) -> None:
+    """What needs attention, then the charges already booked (one line),
+    then the copies set aside. `scope` is
+    `(section key, {document_id: section key})` for one card, or None for
+    the whole month."""
+    from reportlab.platypus import Paragraph, Spacer
+
+    heading = "What needs attention"
+    story.append(Paragraph(heading, styles["h2"] if scope is None else styles["capsub"]))
+    tx_ids = {str(r.get("transaction_id") or "") for r in rows}
+    row_of = {
+        str(r.get("transaction_id") or ""): r for r in (view.get("rows") or [])
+    }
+    unmatched_all = [
+        t for t in (view.get("unmatched_transactions") or [])
+        if scope is None or str(t.get("transaction_id") or "") in tx_ids
+    ]
+    # Item 96: a charge already booked in the workbook is not a to-do. The
+    # screen folds it away; here it leaves the table for one line below and
+    # keeps its place in the listing, labelled already posted.
+    booked_tx = [
+        t for t in unmatched_all
+        if booked_without_receipt(row_of.get(str(t.get("transaction_id") or "")) or t)
+    ]
+    unmatched_tx = [t for t in unmatched_all if t not in booked_tx]
+    unmatched_rec = [
+        r for r in (view.get("unmatched_receipts") or [])
+        if scope is None or _in_scope(str(r.get("document_id") or ""), scope)
+    ]
     # Item 74: only a group nobody has decided is something to act on. The
     # tool decides every group it can and a reviewer's ruling decides the
     # rest; a decided copy leaves this section for the record below it
     # (owner ruling 2026-09-16: resolved items leave the to-do area). A view
     # built before `state` existed reads as today: open unless dismissed.
+    # Per card, a group sits with its first member that has a card section.
     all_groups = [
         g for g in (view.get("duplicate_groups") or [])
         if g.get("kind", "receipt") == "receipt"
+        and (scope is None or _group_in_scope(g, scope))
     ]
     dup_groups = [
         g for g in all_groups
@@ -192,9 +353,14 @@ def build_reconciliation_report_pdf(
         if g.get("state") == "decided" and g.get("verdict") == "copy"
     ]
     if not (unmatched_tx or unmatched_rec or dup_groups):
+        every_charge = (
+            "Every charge has a receipt or is already booked"
+            if booked_tx else "Every charge has a receipt"
+        )
         story.append(Paragraph(
-            "Nothing. Every charge has a receipt, every receipt has a charge, "
-            "and no duplicate is left undecided.", styles["capsub"],
+            f"Nothing. {every_charge}, every receipt has a charge, "
+            "and no duplicate is left undecided." if scope is None else
+            "Nothing on this card.", styles["capsub"],
         ))
     else:
         if unmatched_tx:
@@ -215,13 +381,15 @@ def build_reconciliation_report_pdf(
                 esc(f"{len(unmatched_rec)} receipts with no charge"), styles["capsub"]
             ))
             story.append(Spacer(1, 3))
+            # Item 96: the reason the screen prints beside each one.
             story.append(_table([
-                ["Date", "Vendor", "Amount", "Ccy"],
+                ["Date", "Vendor", "Amount", "Ccy", "Why"],
                 *[[
                     str(r.get("date") or ""), str(r.get("vendor") or ""),
                     str(r.get("total") or ""), str(r.get("currency") or ""),
+                    RECEIPT_REASON_SHORT.get(str(r.get("reason_code") or ""), ""),
                 ] for r in unmatched_rec],
-            ], [60, 250, 80, 40], styles))
+            ], [60, 170, 70, 35, 120], styles))
             story.append(Spacer(1, 8))
         if dup_groups:
             story.append(Paragraph(
@@ -234,6 +402,15 @@ def build_reconciliation_report_pdf(
                 ["What", "Date", "Amount", "Ccy", "Copies"],
                 *_duplicate_rows(dup_groups, view),
             ], [230, 60, 80, 40, 50], styles))
+
+    if booked_tx:
+        n_booked = len(booked_tx)
+        story.append(Spacer(1, 8))
+        story.append(Paragraph(esc(
+            f"Already booked in your workbook: {n_booked} "
+            f"charge{'' if n_booked == 1 else 's'} with no receipt, marked "
+            f"already posted in the listing below."
+        ), styles["capsub"]))
 
     # ── copies set aside: decided, recorded, nothing to do ──────────
     #
@@ -254,48 +431,54 @@ def build_reconciliation_report_pdf(
             ],
         ], [170, 55, 65, 35, 40, 105], styles))
 
-    # ── the full charge listing ─────────────────────────────────────
-    #
-    # Sectioned per card when the month holds more than one, because that is
-    # how the reconciling is done: one card, one statement, one pile of
-    # receipts. The grouping key comes off the row (`coverage_key`) rather
-    # than being re-derived from `account_id` here, so a section and the
-    # coverage table above can never disagree about which card a charge is
-    # on. One card, or a payload with no coverage at all (every run older
-    # than this), renders exactly the one flat table it always did.
-    story.append(Paragraph("All charges", styles["h2"]))
-    if len(coverage) > 1:
-        by_key: dict[str, list[dict]] = {}
-        for row in rows:
-            by_key.setdefault(str(row.get("coverage_key") or ""), []).append(row)
-        for entry in coverage:
-            group = by_key.pop(entry.get("key") or "", [])
-            if not group:
-                continue
-            story.append(Paragraph(esc(_coverage_name(entry)), styles["capsub"]))
-            story.append(Spacer(1, 3))
-            story.append(_charge_table(group, styles))
-            story.append(Spacer(1, 8))
-        # Anything the coverage list did not claim still has to be printed:
-        # a listing that silently drops charges is worse than an ugly one.
-        leftover = [r for group in by_key.values() for r in group]
-        if leftover:
-            story.append(Paragraph("Other charges", styles["capsub"]))
-            story.append(Spacer(1, 3))
-            story.append(_charge_table(leftover, styles))
-    else:
-        story.append(_charge_table(rows, styles))
 
-    # ── evidence ────────────────────────────────────────────────────
-    items = list(evidence or [])
-    prepared = prepare_evidence(items)
+def _in_scope(doc: str, scope: tuple[str, dict[str, str]]) -> bool:
+    key, section_of = scope
+    return section_of.get(doc, "") == key
+
+
+def _group_in_scope(group: dict, scope: tuple[str, dict[str, str]]) -> bool:
+    key, section_of = scope
+    members = [str(m) for m in (group.get("members") or [])]
+    home = next((section_of[m] for m in members if m in section_of), "")
+    return home == key
+
+
+def _differ_by_doc(rows: list[dict]) -> dict[str, dict]:
+    return {
+        str((r.get("cards_differ") or {}).get("document_id") or ""):
+            r["cards_differ"]
+        for r in rows if r.get("cards_differ")
+    }
+
+
+def _evidence(
+    story: list,
+    prepared: list[tuple[dict, bytes | None]],
+    styles: dict,
+    marks: list[int] | None,
+    differ: dict[str, dict] | None = None,
+) -> None:
+    """One caption page per receipt. With `marks`, each caption records its
+    page so `stitch` puts the receipt's own pages right behind it."""
+    from reportlab.platypus import PageBreak, Paragraph, Spacer
+
     for item, pdf_bytes in prepared:
         story.append(PageBreak())
+        if marks is not None:
+            story.append(caption_mark(marks))
         story.append(Paragraph(
             esc(str(item.get("label") or "Receipt")), styles["caption"]
         ))
-        if item.get("detail"):
-            story.append(Paragraph(esc(str(item["detail"])), styles["capsub"]))
+        detail = str(item.get("detail") or "")
+        own = (differ or {}).get(str(item.get("document_id") or ""))
+        if own:
+            detail = "  ·  ".join(x for x in (
+                detail,
+                f"the receipt's own card: {own.get('receipt_card_label') or '?'}",
+            ) if x)
+        if detail:
+            story.append(Paragraph(esc(detail), styles["capsub"]))
         story.append(Spacer(1, 6))
         name = str(item.get("name") or "")
         note = str(item.get("render_note") or "")
@@ -312,23 +495,30 @@ def build_reconciliation_report_pdf(
         else:
             story.append(Paragraph("No receipt document.", styles["capsub"]))
 
+
+def _build(
+    story: list,
+    title: str,
+    prepared: list[tuple[dict, bytes | None]],
+    marks: list[int] | None,
+) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate
+
     buf = io.BytesIO()
+    margin = PAGE_MARGIN_MM * mm
     SimpleDocTemplate(
         buf, pagesize=A4,
-        leftMargin=14 * mm, rightMargin=14 * mm,
-        topMargin=14 * mm, bottomMargin=14 * mm,
+        leftMargin=margin, rightMargin=margin,
+        topMargin=margin, bottomMargin=margin,
         title=title,
     ).build(story)
-    return stitch(buf.getvalue(), prepared)
+    return stitch(buf.getvalue(), prepared, marks)
 
 
-def _coverage_name(entry: dict) -> str:
-    """A card's name for the document: its label, with the digits beside it
-    when they add something the label does not already say."""
-    label = str(entry.get("label") or "").strip()
-    digits = [str(d) for d in (entry.get("digits") or []) if str(d).strip()]
-    extra = [d for d in digits if d not in label]
-    return f"{label} ({'/'.join(extra)})" if label and extra else (label or "-")
+def _money(by_ccy: dict) -> str:
+    return ", ".join(f"{ccy} {amt}" for ccy, amt in sorted(by_ccy.items()))
 
 
 def _duplicate_rows(groups: list[dict], view: dict) -> list[list[str]]:
@@ -387,8 +577,8 @@ def _basis_label(group: dict) -> str:
     return _BASIS_LABELS.get(str(group.get("basis") or ""), "copy")
 
 
-def _period(entry: dict) -> str:
-    start, end = entry.get("period_start"), entry.get("period_end")
+def _period(entry: dict | None) -> str:
+    start, end = (entry or {}).get("period_start"), (entry or {}).get("period_end")
     if not (start or end):
         return "no dated charge"
     return f"{start or '?'} to {end or '?'}"
@@ -407,6 +597,19 @@ def _charge_table(rows: list[dict], styles: dict):
             {} if row.get("posting_category_proposed")
             else row.get("posting_category") or {}
         )
+        posting_text = posting.get("zoho_account") or posting.get("category") or ""
+        suggested = (
+            {} if row.get("posting_category_proposed")
+            else row.get("suggested_category") or {}
+        )
+        suggested_text = (
+            suggested.get("zoho_account") or suggested.get("category") or ""
+        )
+        if suggested_text:
+            # Item 216 Build 2 step 2: the model's answer on a GL month is
+            # printed labelled, as `expenses.csv` writes it, never as a posting.
+            suggested_text = suggested_cell(suggested_text)
+        account_text = "; ".join(t for t in (posting_text, suggested_text) if t)
         matched_vendor = ""
         for cand in row.get("candidates") or []:
             if cand.get("document_id") == row.get("chosen_document_id"):
@@ -414,18 +617,18 @@ def _charge_table(rows: list[dict], styles: dict):
                     (cand.get("receipt") or {}).get("vendor") or ""
                 )
                 break
+        status = _status_label(row)
+        if row.get("cards_differ"):
+            status += ", cards differ"
         table_rows.append([
             Paragraph(str(n), styles["cell"]),
             Paragraph(esc(row.get("date") or ""), styles["cell"]),
             Paragraph(esc(row.get("vendor") or ""), styles["cell"]),
             Paragraph(esc(row.get("amount") or ""), styles["cellr"]),
             Paragraph(esc(row.get("currency") or ""), styles["cell"]),
-            Paragraph(esc(_status_label(row)), styles["cell"]),
+            Paragraph(esc(status), styles["cell"]),
             Paragraph(esc(matched_vendor or "none"), styles["cell"]),
-            Paragraph(
-                esc(posting.get("zoho_account") or posting.get("category") or ""),
-                styles["cell"],
-            ),
+            Paragraph(esc(account_text), styles["cell"]),
         ])
     table = Table(table_rows, colWidths=[w for _n, w in _CHARGES], repeatRows=1)
     table.setStyle(table_style())

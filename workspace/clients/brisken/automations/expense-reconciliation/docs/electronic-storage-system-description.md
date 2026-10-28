@@ -5,7 +5,7 @@ kind: compliance-description
 backlog_item: 48
 state: draft-pending-owner-and-cpa-review
 created: 2026-09-08
-updated: 2026-09-08
+updated: 2026-09-18
 revision: 2
 ---
 
@@ -150,14 +150,19 @@ and directories different from those described in 5.1 and 6.1.
 **4.1 By e-mail.** The application runs its own mail listener. The MX record
 for `expenses.brisken.com` points at it, and anyone may send a receipt to
 that domain; there is deliberately no sender allowlist, because suppliers
-and staff both send receipts. The listener accepts plain, unauthenticated
-SMTP on port 25 and offers neither transport encryption nor authentication,
-so a message and its attachments travel to it in cleartext across the public
-internet. Nothing in the system detects a message that was altered,
-substituted or injected in transit, and because no digest of the received
-bytes is retained as an integrity control (8.1), there is no later means of
-establishing that what is on the volume is what the sender transmitted.
-Adding transport security to the listener is on the remediation list.
+and staff both send receipts. The listener accepts SMTP on port 25 and,
+since 2026-09-18 (backlog item 125), offers opportunistic STARTTLS (TLS 1.2
+or newer) with a self-signed certificate, recording on each receipt whether
+its session was encrypted (`transport_tls`). STARTTLS is not required: a
+sender that supports it is encrypted on the wire, while a sender that does
+not, or that declines a self-signed certificate, still delivers in cleartext,
+so the encryption is opportunistic rather than guaranteed. The listener
+remains unauthenticated. Nothing in the system detects a message that was
+altered, substituted or injected in transit, and because no digest of the
+received bytes is retained as an integrity control (8.1), there is no later
+means of establishing that what is on the volume is what the sender
+transmitted. A certificate from a public authority, which a verifying sender
+would accept, is the remaining transport step.
 
 Boundaries that do apply: the envelope recipient must be inside the intake
 domain, so the listener is not an open relay; at most 10 recipients and 25
@@ -377,9 +382,19 @@ mentioned only because an earlier internal assessment credited the deployed
 system with its properties in error.
 
 **5.4 Durability.** One volume, one region, one machine. There is no
-replication, no second region, and no application-level backup or restore
-procedure. The only automated durability is the platform's scheduled
-snapshots, with a 5-day retention window.
+replication and no second region. The only automated durability in
+operation is the platform's scheduled snapshots, with a 5-day retention
+window.
+
+An application-level backup exists since 2026-09-17: the whole data
+folder, zipped with live databases copied through SQLite's backup API, to
+a SharePoint library the client controls, on a schedule inside the
+application or from the command line
+(`docs/backup-and-restore.md`). Two things keep this from closing the
+gap. It is off unless the deployment sets `EXPENSE_RECON_BACKUP`, so at
+the time of writing no copy has been taken in production; and the restore
+procedure is written but has never been rehearsed, so it is documented
+rather than demonstrated.
 
 ---
 
@@ -842,15 +857,22 @@ the transmission of every receipt to OpenAI under default retention terms
 are the taxpayer's own compliance positions now, not questions deferred to a
 vendor.
 
-**11.3 Outbound notification mail** is sent through Microsoft Graph in two
+**11.3 Outbound notification mail** is sent through Microsoft Graph in three
 forms. An acknowledgement to a submitter carries a file count, the
-submitter's own subject line echoed back, and the month or trip label; it
-adds no amounts, vendors or images of its own, though a submitter's subject
-line may itself contain a vendor or an amount, and acknowledgements go to
+submitter's own subject line echoed back, and the month or trip label; when
+the mail added no expense it instead names each of the submitter's own file
+names and how that file was treated (set aside and how it read, already on
+file, not readable). It adds no amounts, vendors or images of its own, though
+a submitter's subject line or file name may itself contain a vendor or an
+amount, and acknowledgements go to
 addresses outside the tenant where an operator has listed the sender. An
 alert to the operator when mail is held carries the submitting address, that
-subject line, the archive identifier and the recorded error text. Neither
-carries a receipt image or an extracted amount. The system reads no mailbox
+subject line, the archive identifier and the recorded error text. A notice
+to the submitter of that held mail carries the submitter's own subject line
+and fixed wording saying the mail was not filed and what resolves it, with no
+archive identifier and no error text; it goes only to an address an
+acknowledgement may reach, and is withheld on the same conditions. None of
+the three carries a receipt image or an extracted amount. The system reads no mailbox
 through Graph; the only Graph call it makes is a send.
 
 ---
@@ -868,8 +890,8 @@ open.
 | 2 | 4.01(2)(b), 4.02(2) | One permission level; no per-person attribution on any stored record; no audit log; deletion effectively unrecorded | Highest |
 | 3 | 4.01(8) | No retention control over the run store; one request deletes a period. ~~Queued-file replacement and same-name re-attach destroy bytes silently~~ REMEDIATED 2026-09-15 (backlog item 66): both archive the superseded file under a versioned name instead of destroying it | High |
 | 4 | 4.01(2)(c) | No inspection or quality-assurance program | High |
-| 5 | 4.01(1) | Preservation: one volume, one region, no replication, no application-level backup or restore | High |
-| 6 | 4.01(2)(b) | Mail arrives over unauthenticated, unencrypted SMTP; no transport security and no means of establishing what the sender transmitted | High |
+| 5 | 4.01(1) | Preservation: one volume, one region, no replication. NARROWED 2026-09-17 (backlog item 119): an application-level backup to a client-controlled SharePoint library and a written restore procedure now exist, but the backup is off by default and the restore has never been rehearsed, so preservation is documented rather than demonstrated | High |
+| 6 | 4.01(2)(b) | ~~Mail arrives over unauthenticated, unencrypted SMTP; no transport security~~ NARROWED 2026-09-18 (backlog item 125): the listener now offers opportunistic STARTTLS (TLS 1.2 or newer) with a self-signed certificate, and records on each receipt whether the session was encrypted (`transport_tls`). It is not required, so a sender that does not support STARTTLS, or does not accept a self-signed certificate, still delivers in cleartext; a CA-issued certificate is the remaining transport step. The listener remains unauthenticated, and there is still no means of establishing what the sender transmitted | High |
 | 7 | 4.01(1), 4.01(6) | A single unreadable PDF makes a whole period unreproducible, with no message naming the file; a large period may exhaust memory and produce nothing | High |
 | 8 | 4.01(4) | Receipt-location column empty on every row of both exports; no receipt carries a stored location | Medium |
 | 9 | 4.01(4) | The export is not retained, so the version posted to the books cannot be reproduced after a later edit | Medium |

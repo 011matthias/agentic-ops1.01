@@ -21,20 +21,205 @@ from .store import (
 )
 
 
-class MerchantCategoryLookup:
-    """An in-memory (legal_entity_id, vendor_norm) -> MerchantCategory map.
-    Empty by construction when there is nothing learned, so an absent or
-    fresh store leaves Sort behaving exactly as before."""
+# Which rule a recall used (item 115). `company`: the receipt's own company
+# and vendor. `no_company`: a rule saved from a row that had no company, used
+# for a receipt whose company is known but has no rule of its own; it never
+# belonged to another company. `vendor_only`: the receipt has no company, so
+# the vendor's rules decide, and only when they agree on the category.
+RECALL_COMPANY = "company"
+RECALL_NO_COMPANY = "no_company"
+RECALL_VENDOR_ONLY = "vendor_only"
 
-    def __init__(self, rows: list[MerchantCategory] | None = None):
+# Rows seeded from Zoho Books posting history carry this source_run prefix.
+ZOHO_SEED_PREFIX = "zoho-seed"
+
+
+@dataclass(frozen=True)
+class LearnedRecall:
+    """What memory recalls for one receipt (item 115): the category and
+    account to apply, the rows that decided it, and which rule fired."""
+
+    category: str
+    zoho_account: str | None
+    rows: tuple[MerchantCategory, ...]
+    kind: str
+
+    @property
+    def taught_by_person(self) -> bool:
+        """At least one deciding row is a person's decision: a correction
+        saved at sign-off or by the button, or a Memory-page edit. A row
+        seeded from Zoho Books history is not, until someone validates it."""
+        return any(
+            not (r.source_run or "").startswith(ZOHO_SEED_PREFIX)
+            or r.validated_at
+            for r in self.rows
+        )
+
+    @property
+    def validated(self) -> bool:
+        """A person validated at least one deciding row on the Memory page."""
+        return any(r.validated_at for r in self.rows)
+
+
+def _person_row(r: MerchantCategory) -> bool:
+    """`LearnedRecall.taught_by_person` for one row."""
+    return not (r.source_run or "").startswith(ZOHO_SEED_PREFIX) or bool(r.validated_at)
+
+
+@dataclass(frozen=True)
+class IdentityFold:
+    """One (company, merchant) whose stored rules sit under two or more
+    spellings (item 216 cause 3). `decided` is False when they disagree: then
+    no spelling speaks for the merchant and each keeps answering only for its
+    own exact spelling, as before."""
+
+    legal_entity_id: str
+    key: str
+    vendor_norms: tuple[str, ...]
+    decided: bool
+    category: str | None = None
+    zoho_account: str | None = None
+
+
+def fold_rows(
+    rows: list[MerchantCategory],
+) -> tuple[tuple[MerchantCategory, ...] | None, bool]:
+    """The rows that speak for one merchant in one company, or None when they
+    disagree. Rules a person stands behind outrank rules seeded from Zoho
+    history (the recall's own `taught_by_person` order); within the deciding
+    tier every row must name the same category and account."""
+    person = [r for r in rows if _person_row(r)]
+    deciding = person or rows
+    values = {(r.category, r.zoho_account) for r in deciding}
+    if len(values) != 1:
+        return None, False
+    return tuple(sorted(deciding, key=lambda r: r.vendor_norm)), True
+
+
+class MerchantCategoryLookup:
+    """An in-memory (legal_entity_id, merchant) -> MerchantCategory map.
+    Empty by construction when there is nothing learned, so an absent or
+    fresh store leaves Sort behaving exactly as before.
+
+    Item 216 cause 3: recall keys on the merchant IDENTITY
+    (`merchant_identity.MerchantIdentityResolver.key`), not on the raw
+    spelling, so a rule stored under `anthropic` answers a receipt reading
+    `Anthropic, PBC (@anthropic)`, and rules stored under several spellings of
+    one merchant fold into one. The fold happens here, at read time, rather
+    than by rewriting the store: nothing on disk changes, the Memory page and
+    the undo journal keep their keys, and a disagreement is simply not
+    folded (`folds` reports it) so each spelling keeps answering for itself
+    exactly as before. Pass `identity` built on the registry so the
+    registry's aliases join the fold; without one the name-only identity
+    applies."""
+
+    def __init__(
+        self, rows: list[MerchantCategory] | None = None, *, identity=None,
+    ):
+        from ..merchant_identity import MerchantIdentityResolver
+
+        self._rows: list[MerchantCategory] = list(rows or [])
+        self.identity = identity or MerchantIdentityResolver()
         self._by_key: dict[tuple[str, str], MerchantCategory] = {
-            (r.legal_entity_id, r.vendor_norm): r for r in (rows or [])
+            (r.legal_entity_id, r.vendor_norm): r for r in self._rows
         }
+        self._by_vendor: dict[str, list[MerchantCategory]] = {}
+        for r in self._by_key.values():
+            self._by_vendor.setdefault(r.vendor_norm, []).append(r)
+        grouped: dict[tuple[str, str], list[MerchantCategory]] = {}
+        for r in self._by_key.values():
+            ikey = self.identity.key(r.vendor_norm) or r.vendor_norm
+            grouped.setdefault((r.legal_entity_id, ikey), []).append(r)
+        # (entity, identity key) -> the rows that speak for it; absent when
+        # its spellings disagree.
+        self._by_ident: dict[tuple[str, str], tuple[MerchantCategory, ...]] = {}
+        self._ident_vendor: dict[str, list[tuple[MerchantCategory, ...]]] = {}
+        self.folds: list[IdentityFold] = []
+        for (entity, ikey), group in sorted(grouped.items()):
+            speaking, decided = fold_rows(group)
+            if len(group) > 1:
+                first = speaking[0] if speaking else None
+                self.folds.append(IdentityFold(
+                    entity, ikey, tuple(sorted(r.vendor_norm for r in group)),
+                    decided,
+                    first.category if first else None,
+                    first.zoho_account if first else None,
+                ))
+            if speaking:
+                self._by_ident[(entity, ikey)] = speaking
+                self._ident_vendor.setdefault(ikey, []).append(speaking)
+
+    def with_identity(self, identity) -> "MerchantCategoryLookup":
+        """The same rules folded by another resolver (one carrying the
+        registry, so its aliases join the fold)."""
+        return MerchantCategoryLookup(self._rows, identity=identity)
+
+    def _speaking(
+        self, entity: str, vendor: str, vnorm: str, ikey: str,
+    ) -> tuple[MerchantCategory, ...] | None:
+        """The rows answering for (entity, merchant): the folded identity,
+        else, when the merchant's spellings disagree, the exact spelling's own
+        row as before item 216."""
+        hit = self._by_ident.get((entity, ikey))
+        if hit is not None:
+            return hit
+        exact = self._by_key.get((entity, vnorm))
+        return (exact,) if exact is not None else None
 
     def get(self, legal_entity_id: str, vendor: str | None) -> MerchantCategory | None:
         if not vendor:
             return None
         return self._by_key.get((legal_entity_id, normalize_vendor(vendor)))
+
+    def recall(
+        self, legal_entity_id: str | None, vendor: str | None
+    ) -> LearnedRecall | None:
+        """The remembered category for a receipt, or None (item 115).
+
+        A receipt takes the rule saved under its own company and vendor
+        first -- and a receipt with no company has one of those too, the
+        rule saved with no company. A receipt with a company but no rule of
+        its own falls back to a rule saved with no company, which never
+        belonged to another company. Only a receipt with no company and no
+        company-less rule reaches the vendor's other rules, and then only
+        when they agree on the category (or exactly one exists); rules that
+        disagree decide nothing, so one company's rule never files another
+        company's receipt against the other rules. The account is kept on
+        that path only when every rule names the same one, because an
+        account belongs to one company's chart."""
+        if not vendor:
+            return None
+        vnorm = normalize_vendor(vendor)
+        if not vnorm:
+            return None
+        ikey = self.identity.key(vendor) or vnorm
+        entity = (legal_entity_id or "").strip()
+        hit = self._speaking(entity, vendor, vnorm, ikey)
+        if hit is not None and hit[0].category:
+            return LearnedRecall(
+                hit[0].category, hit[0].zoho_account, hit, RECALL_COMPANY
+            )
+        if entity:
+            no_company = self._speaking("", vendor, vnorm, ikey)
+            if no_company is not None and no_company[0].category:
+                return LearnedRecall(
+                    no_company[0].category, no_company[0].zoho_account,
+                    no_company, RECALL_NO_COMPANY,
+                )
+            return None
+        groups = self._ident_vendor.get(ikey)
+        if groups is None:
+            groups = [(r,) for r in self._by_vendor.get(vnorm, [])]
+        rows = [r for g in groups for r in g if g[0].category]
+        if not rows or len({r.category for r in rows}) != 1:
+            return None
+        accounts = {r.zoho_account for r in rows}
+        return LearnedRecall(
+            rows[0].category,
+            accounts.pop() if len(accounts) == 1 else None,
+            tuple(sorted(rows, key=lambda r: r.legal_entity_id)),
+            RECALL_VENDOR_ONLY,
+        )
 
     def __len__(self) -> int:
         return len(self._by_key)

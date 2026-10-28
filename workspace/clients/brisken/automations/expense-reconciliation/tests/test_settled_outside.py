@@ -258,16 +258,22 @@ def test_the_expense_grid_keeps_the_row_and_says_how_it_was_settled(
     client, monkeypatch
 ):
     """Owner ruling: the EXPENSE view removes nothing. The row carries the
-    disposition so the grid can caption it."""
+    disposition so the grid can caption it.
+
+    Build 4 / item 218 (owner decisions 2026-09-25): a bank transfer is now a
+    BILL. The row stays on screen (`n_receipts` does not move) and leaves the
+    card-side count `n_expenses` for `n_bills` (test_bills_path_218)."""
     batch_id = _month(client, monkeypatch)
     doc = _doc_id(_view(client, batch_id), "Konsultancy Finance")
-    n_before = _grid(client, batch_id)["summary"]["n_expenses"]
+    before = _grid(client, batch_id)["summary"]
     assert _mark(
         client, batch_id, doc, how="bank_transfer", note="wire 2026-08-11"
     ).status_code == 200
 
     grid = _grid(client, batch_id)
-    assert grid["summary"]["n_expenses"] == n_before
+    assert grid["summary"]["n_receipts"] == before["n_receipts"]
+    assert grid["summary"]["n_expenses"] == before["n_expenses"] - 1
+    assert grid["summary"]["n_bills"] == before["n_bills"] + 1
     assert grid["summary"]["n_settled_outside"] == 1
     row = next(e for e in grid["expenses"] if e["document_id"] == doc)
     assert row["settled_outside"]["how"] == "bank_transfer"

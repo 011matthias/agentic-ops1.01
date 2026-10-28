@@ -54,6 +54,8 @@ jobs:
           workspace/clients/brisken/automations/expense-reconciliation/tests
       - name: tools/INDEX.md membership
         run: uv run tools/check-index.py
+      - name: Pattern rules lint
+        run: uv run tools/pattern_rules.py lint
       - name: Run enforcement-layer test suite
         run: uv run --no-project --with pytest --with python-pptx --with requests --with httpx --with pyyaml --with openpyxl pytest tools/tests
 
@@ -83,7 +85,8 @@ jobs:
 
   smoke:
     name: Playwright smoke tests
-    runs-on: ubuntu-latest
+    # pinned: ubuntu-latest moved to 26.04, where `playwright install chromium` fails (2026-10-28)
+    runs-on: ubuntu-24.04
     needs: quality
     if: github.event_name == 'pull_request'
     defaults:

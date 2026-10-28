@@ -311,10 +311,16 @@ def test_two_uploads_of_the_same_filename_do_not_overwrite_each_other(
     work_dir = Path(_run(client, batch_id).work_dir)
     assert b"STAPLES" in (work_dir / "statement.csv").read_bytes()
     assert b"HERTZ" in (work_dir / "statement-2.csv").read_bytes()
-    # And each file's anchors are its own, not the other's.
+    # And each file's anchors are its own, not the other's. Since note item
+    # T2 (2026-09-18) each map is also recorded under the upload's
+    # content id, so the key set is the two names plus the two ids.
     anchors = (_run(client, batch_id).snapshot or {})["statement_anchors"]
-    assert set(anchors) == {"statement.csv", "statement-2.csv"}
+    ids = [e["statement_id"] for e in _statements(client, batch_id)]
+    assert len(set(ids)) == 2, ids
+    assert set(anchors) == {"statement.csv", "statement-2.csv", *ids}
     assert not (set(anchors["statement.csv"]) & set(anchors["statement-2.csv"]))
+    assert anchors[ids[0]] == anchors["statement.csv"]
+    assert anchors[ids[1]] == anchors["statement-2.csv"]
 
 
 def test_each_upload_records_the_rows_that_charge_occupies_in_it(

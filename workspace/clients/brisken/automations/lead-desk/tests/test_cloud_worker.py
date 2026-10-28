@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from lead_desk.cloud_worker import WORKER_ID, execute_one, filter_payloads, \
     replay_pending, run_tick
 from lead_desk.graph_mail import DIRK_SMTP, SEND_FROM, GraphSendError
-from lead_desk.web import cadence
+from lead_desk.web import approval, cadence
 from lead_desk.web.service import now_iso
 from lead_desk.web.store import ContactStore
 from lead_desk.worker.journal import Journal
@@ -170,24 +170,43 @@ def test_second_tick_is_idempotent(tmp_path):
     assert len(events_for(store, "c1")) == 1
 
 
-def test_graph_500_requeues_graph_400_parks(tmp_path):
-    data, store = setup(tmp_path)
-    m = FakeMailer()
-    m.send_exc = GraphSendError(503, "throttled")
-    tick(data, m)
-    attempt = store.conn.execute("SELECT * FROM send_attempts").fetchone()
-    assert attempt["status"] == "queued"      # transient: server re-queues
-    m2 = FakeMailer()
-    m2.send_exc = GraphSendError(400, "bad request")
-    tick(data, m2)
-    attempt = store.conn.execute("SELECT * FROM send_attempts").fetchone()
-    assert attempt["status"] == "parked"      # permanent: a human decides
+def test_graph_rejection_after_dispatch_is_unknown_never_requeued(tmp_path):
+    """A non-202 after begin_dispatch is not proof the mail did not go (a 5xx
+    can land after acceptance). Both the 503 that used to requeue and the 400
+    that used to park now hold as unknown, and no later tick sends."""
+    for status in (503, 400):
+        base = tmp_path / str(status)
+        base.mkdir()
+        data, store = setup(base)
+        m = FakeMailer()
+        m.send_exc = GraphSendError(status, "rejected")
+        rep = tick(data, m)
+        attempt = store.conn.execute("SELECT * FROM send_attempts").fetchone()
+        assert attempt["status"] == "unknown"
+        assert approval.latest_claim(store, attempt["attempt_key"])["state"] == "unknown"
+        assert rep["counters"]["ambiguous"] == 1 and rep["alerts"]
+        m2 = FakeMailer()
+        rep2 = tick(data, m2)
+        assert rep2["claimed"] == 0 and m2.sent == []
+        assert store.get_attempt(attempt["attempt_key"])["status"] == "unknown"
+        store.close()
 
 
 def test_never_auto_sends_as_dirk(tmp_path):
     data, store = setup(tmp_path)
+    # Layer 1: a from_address changed AFTER approval no longer matches the
+    # approved destination, so the claim itself is refused. Nothing leases.
     store.conn.execute("UPDATE campaigns SET from_address = ?", (DIRK_SMTP,))
     store.conn.commit()
+    rep = tick(data, FakeMailer())
+    assert rep["claimed"] == 0
+    assert store.conn.execute("SELECT COUNT(*) FROM send_attempts").fetchone()[0] == 0
+    alert = store.get_state("send_guard_alert:camp1") or ""
+    assert "approval_stale" in alert
+    # Layer 2: even when Dirk's address WAS approved as the sender, the worker
+    # refuses before the dispatch boundary and no request fires.
+    assert cadence.approve_campaign(store, "camp1", "tester", "camp1")["ok"]
+    assert cadence.start_sending(store, "camp1", "tester", "camp1")["ok"]
     from lead_desk.graph_mail import GraphMailer
     # use the REAL GraphMailer with a fake transport so the allowlist runs
     class NoHttp:
@@ -201,6 +220,8 @@ def test_never_auto_sends_as_dirk(tmp_path):
     assert attempt["status"] == "parked"
     assert "matthias-only" in (attempt["failure_reason"] or "")
     assert rep["counters"]["failed"] == 1
+    # stopped before dispatch: the claim is released, not held as unknown
+    assert approval.latest_claim(store, attempt["attempt_key"])["state"] == "cancelled"
 
 
 def test_body_hash_mismatch_parks_without_sending(tmp_path):
@@ -228,17 +249,30 @@ def crash_inside_send_window(data, store):
     return send, j
 
 
-def test_reconcile_with_evidence_acks_sent(tmp_path):
+def test_reconcile_with_evidence_suggests_never_auto_acks(tmp_path):
+    """Sent Items evidence for a crash inside the send window is attached to
+    the unknown claim as a suggestion; only the trusted manual reconcile
+    records the send."""
     data, store = setup(tmp_path)
     send, j = crash_inside_send_window(data, store)
     m = FakeMailer()
     m.evidence = {"imid": "<found>", "ts": "2026-07-15T09:00:10Z"}
     alerts: list[str] = []
     counters = replay_pending(store, m, j, alerts, now=IN_WINDOW)
-    assert counters["replayed"] == 1 and alerts == []
+    assert counters["ambiguous"] == 1 and counters["replayed"] == 0
+    assert alerts and "<found>" in alerts[0] and "NOT auto-reconciled" in alerts[0]
     attempt = store.get_attempt(send["attempt_key"])
-    assert attempt["status"] == "sent"
-    assert attempt["internet_message_id"] == "<found>"
+    assert attempt["status"] == "unknown"
+    claim = approval.latest_claim(store, send["attempt_key"])
+    assert claim["state"] == "unknown" and "<found>" in claim["outcome_detail"]
+    assert events_for(store, "c1") == [] and m.sent == []
+    res = approval.reconcile(store, send["attempt_key"], "delivered",
+                             coordinate="<found>", evidence="Sent Items checked",
+                             user="matthias", now=now_iso())
+    assert res["ok"]
+    attempt = store.get_attempt(send["attempt_key"])
+    assert attempt["status"] == "sent" and attempt["internet_message_id"] == "<found>"
+    assert [e["type"] for e in events_for(store, "c1")] == ["sent"]
     assert m.sent == []  # reconciled from evidence, never re-sent
 
 
@@ -251,7 +285,7 @@ def test_reconcile_without_evidence_flags_never_resends(tmp_path):
     assert counters["ambiguous"] == 1
     assert alerts and "NOT resending" in alerts[0]
     attempt = store.get_attempt(send["attempt_key"])
-    assert attempt["status"] == "leased"   # untouched; lease expiry -> stalled
+    assert attempt["status"] == "unknown"   # held; never expires or re-leases
     assert m.sent == []
 
 
@@ -267,21 +301,27 @@ def test_reconcile_claimed_state_requeues(tmp_path):
     assert store.get_attempt(send["attempt_key"])["status"] == "queued"
 
 
-def test_network_error_leaves_ambiguous_then_reconciles(tmp_path):
+def test_network_error_holds_unknown_then_manual_reconcile(tmp_path):
     data, store = setup(tmp_path)
     m = FakeMailer()
     m.send_exc = ConnectionError("socket dropped mid-request")
-    rep = tick(data, m)
+    tick(data, m)
     attempt = store.conn.execute("SELECT * FROM send_attempts").fetchone()
-    assert attempt["status"] == "leased"   # NOT nacked, NOT requeued
+    assert attempt["status"] == "unknown"   # NOT nacked, NOT requeued
     assert events_for(store, "c1") == []
-    # next tick: evidence appears in Sent Items -> reconciled, still one send
+    # next tick: evidence appears in Sent Items -> suggested, still unknown
     m2 = FakeMailer()
     m2.evidence = {"imid": "<late>", "ts": "2026-07-15T09:00:40Z"}
     rep2 = tick(data, m2)
     attempt = store.conn.execute("SELECT * FROM send_attempts").fetchone()
-    assert attempt["status"] == "sent" and m2.sent == []
-    assert rep2["replay"]["replayed"] == 1
+    assert attempt["status"] == "unknown" and m2.sent == []
+    assert rep2["claimed"] == 0 and rep2["replay"]["replayed"] == 0
+    claim = approval.latest_claim(store, attempt["attempt_key"])
+    assert "<late>" in (claim["outcome_detail"] or "")
+    assert approval.reconcile(store, attempt["attempt_key"], "delivered",
+                              coordinate="<late>", evidence="Sent Items 09:00:40",
+                              user="matthias", now=now_iso())["ok"]
+    assert store.get_attempt(attempt["attempt_key"])["status"] == "sent"
 
 
 # -- draft-dirk (warm) ---------------------------------------------------------

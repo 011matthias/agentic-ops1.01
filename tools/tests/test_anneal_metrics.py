@@ -162,3 +162,18 @@ def test_live_tree_runs():
     assert m["asset_total"] > 0
     assert m["register"]["total_rows"] > 0
     assert isinstance(m["drift"], list)
+
+
+def test_pattern_rule_fix_counts_as_structural_not_memory(tmp_path):
+    rows = ("| 2026-06-01 | meji | strategic-gap | conceded | No | pattern-rule:block-pre-conceding-comms |\n"
+            "| 2026-06-02 | system | slow-path | lock | No | memory (feedback_open_files_directly) |\n"
+            "| 2026-06-03 | system | slow-path | other | Yes | structural hook |\n"
+            "| 2026-06-04 | system | slow-path | x | No | pattern-rule:warn-memory-hygiene |\n")
+    _make_repo(tmp_path, register_rows=rows, claude_md="x")
+    m = AM.build_metrics(tmp_path, "2026-09-17")
+    assert m["pattern_rule_fixes"] == 2
+    assert m["structural_fix_pct"] == 75.0
+    # a rule whose name contains "memory" is still not a memory-only fix
+    assert m["memory_fix_pct"] == 25.0
+    assert AM.fix_layer("  Pattern-Rule:warn-x ") == "pattern-rule"
+    assert AM.fix_layer("documented") == "documented"

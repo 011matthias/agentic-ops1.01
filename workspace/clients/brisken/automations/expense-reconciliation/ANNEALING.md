@@ -755,7 +755,51 @@ recorded 2026-06-11). README restructured around what the tool does:
 "Run the tests" → data-needs / rationale / layout. The slice-vs-phase
 chronology inversion is gone.
 
-### E4. Spec divorced from build state
+### ~~E4. Spec divorced from build state~~
+
+**Closed 2026-09-20 as superseded, not done** (backlog item 120's
+doc-reconciliation half). The original entry is kept below because the
+decision is only legible beside what it declines to do.
+
+E4 asked for a `§32.1 Tool-first build path` block reconciling the v2
+spec's phase ordering with the slice-based build. That was a small edit in
+June, when the spec and the build had diverged by one pivot. It is not a
+small edit now, and doing it would make things worse rather than better.
+
+**Why superseded.** The v2 spec is not a stale description of this
+program; it is the design for a DIFFERENT product. It specifies a
+multi-tenant SaaS on Firebase/Cloud SQL, with Anthropic Claude as the
+judgment layer and a mobile receipt-capture page. Dirk descoped all of
+that on 2026-05-27, and what shipped is a single-tenant tool on Fly with
+a FastAPI API, OpenAI, and a Lovable SPA. Its frontmatter still reads
+`updated: 2026-05-24` and `orchestrator: tbd`; it was last touched by a
+commit on 2026-06-07.
+
+Reconciling a 66 KB SaaS spec to a tool three months and several hundred
+commits past it is a rewrite, not an annotation. And the rewritten
+document would immediately start re-rotting at the rate the build actually
+moves, which is the failure this entry records in the first place. Writing
+it would create a second thing claiming to describe the build, and two
+descriptions of one thing drift apart.
+
+**What answers the question instead.** The build already has authorities
+that are maintained because they are used: `SPEC-GAP-REGISTER.md` maps the
+spec to the build section by section, `BLUEPRINT.md` holds the design as
+built, this file holds the rough edges, `docs/api-contract.md` holds the
+surface, and `../../status/p1-expense-reconciliation.md` holds where the
+work stands. Item 120 added `README.md` (cut to what is true),
+`docs/operating.md` and `docs/screen-field-map.md`.
+
+The spec keeps a header saying what it is and what to read instead, so a
+reader who opens it first is not misled. That header is the whole of the
+remedy.
+
+**This closes SPEC-GAP-REGISTER shortlist item 1 too**, which is the same
+ask in the other document. TARGET-ARCHITECTURE P5 is sometimes named
+alongside these two; it is not doc reconciliation at all, it is the
+hosting migration, and it stays open as an owner decision.
+
+<details><summary>The original entry</summary>
 
 **Where:** v2 spec §32 phase ordering says Phase 0 first
 **Symptom:** We did Phase 4 (matching), then Phase 2 (ingest),
@@ -768,6 +812,8 @@ slices are the path through them.
 **Effort:** S
 **Trigger:** Next spec update OR before any new joint-call with
 Dirk where build sequencing comes up.
+
+</details>
 
 ### ~~E5. No CI~~
 

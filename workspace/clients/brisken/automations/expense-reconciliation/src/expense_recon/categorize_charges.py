@@ -40,7 +40,10 @@ charge `entry_status="subscription"` when its vendor recurs in >= 2
 distinct PRIOR months of the built `StatementStore` — the source-
 agnostic twin of the gray-fill channel Criss's xlsx already carries.
 Annotation only; fill/operator precedence (an already-set entry_status
-is never overwritten).
+is never overwritten). A derived mark carries `entry_status_source=
+"derived"`: under the 2026-09-17 owner ruling a gray FILL closes the
+charge for month completeness (booked through Zoho recurring) and a
+derived mark, being a guess, closes nothing.
 """
 from __future__ import annotations
 
@@ -85,6 +88,8 @@ def categorize_charges(
     chart_of_accounts: list[str] | None = None,
     learned: "MerchantCategoryLookup | None" = None,
     override_er_category: bool = False,
+    registry=None,
+    entity_orgs=None,
 ) -> dict[str, Categorization]:
     """Categorize every unmatched (receiptless) charge.
 
@@ -96,6 +101,19 @@ def categorize_charges(
     `client` / `chart_of_accounts` / `learned` are passed through to
     `categorize_receipts` unchanged, so the charge path consults the
     same memory and account labels as the receipt path.
+
+    `registry` (note item M1, 2026-09-18) is the merchant registry the
+    month's receipts already consult. A bank description that names a
+    registry merchant ("LOVABLE", "OPENAI") takes that merchant's default
+    category, with the account the charge's company has a rule for,
+    instead of a model guess (live July read LOVABLE as Meals &
+    Entertainment four times). None keeps the pre-M1 path, and the
+    registry's canonical name is NOT written anywhere: the charge keeps the
+    bank's own description on every surface.
+
+    `entity_orgs` (Phase 1, item 3) runs the charges on the GL engine, each
+    judged against the curated leaves of the company the charge belongs to
+    (`categorize.categorize_receipts`). None keeps the bucket path.
     """
     tx_by_id = {tx.transaction_id: tx for tx in transactions}
     pseudo: list[Receipt] = []
@@ -107,10 +125,21 @@ def categorize_charges(
     if not pseudo:
         return {}
 
-    categorized = categorize_receipts(
-        pseudo, client=client, chart_of_accounts=chart_of_accounts, learned=learned,
-        override_er_category=override_er_category,
-    )
+    if registry:
+        from .categorize import categorize_receipts_with_registry
+
+        categorized, _matches = categorize_receipts_with_registry(
+            pseudo, registry=registry, client=client,
+            chart_of_accounts=chart_of_accounts, learned=learned,
+            override_er_category=override_er_category,
+            entity_orgs=entity_orgs,
+        )
+    else:
+        categorized = categorize_receipts(
+            pseudo, client=client, chart_of_accounts=chart_of_accounts,
+            learned=learned, override_er_category=override_er_category,
+            entity_orgs=entity_orgs,
+        )
 
     out: dict[str, Categorization] = {}
     for rec in categorized:
@@ -170,7 +199,9 @@ def derive_subscription_status(
         own_month = tx.transaction_date.strftime("%Y-%m")
         prior = {m for m in months if m < own_month}
         if len(prior) >= min_prior_months:
-            out.append(replace(tx, entry_status="subscription"))
+            out.append(replace(
+                tx, entry_status="subscription", entry_status_source="derived",
+            ))
         else:
             out.append(tx)
     return out

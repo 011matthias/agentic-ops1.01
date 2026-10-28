@@ -156,3 +156,39 @@ def test_fail_open_on_corrupt_state(tmp_path):
     proc = _prompt(state)
     assert proc.returncode == 0
     assert "[B1 PRIMER]" not in _ctx(proc)
+
+
+# --- session header primer -------------------------------------------------
+#
+# rule_session-start step 7 makes the header mandatory whenever scope is
+# evident, and nothing enforced it: four sessions skipped it (2026-09-09,
+# 09-15, 09-16, 09-17), each self-caught only at checkpoint.
+
+def test_mark_once_claims_exactly_once(tmp_path):
+    st = _load_state_module(tmp_path / "s.json")
+    assert st.mark_once("k") is True
+    assert st.mark_once("k") is False
+    assert st.mark_once("other") is True
+
+
+def test_scoped_prompt_primes_the_header(tmp_path):
+    ctx = _ctx(_prompt(tmp_path / "s.json", "pick up the brisken recon work"))
+    assert "[SESSION HEADER]" in ctx
+    assert "rename-chat" in ctx
+
+
+def test_header_primer_fires_only_once_per_session(tmp_path):
+    state = tmp_path / "s.json"
+    assert "[SESSION HEADER]" in _ctx(_prompt(state, "brisken please"))
+    assert "[SESSION HEADER]" not in _ctx(_prompt(state, "brisken again"))
+
+
+def test_unscoped_prompt_stays_silent(tmp_path):
+    assert "[SESSION HEADER]" not in _ctx(_prompt(tmp_path / "s.json", "what time is it"))
+
+
+def test_header_primer_fails_open_on_corrupt_state(tmp_path):
+    state = tmp_path / "s.json"
+    state.write_text("{ nope", encoding="utf-8")
+    proc = _prompt(state, "brisken recon")
+    assert proc.returncode == 0

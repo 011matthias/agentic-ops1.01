@@ -323,6 +323,13 @@ def test_outbox_claim_bearer_auth(tmp_path, monkeypatch):
         r = client.post("/api/outbox/claim", json={"worker_id": "w1"},
                         headers={"Authorization": "Bearer s3cret"})
         assert r.status_code == 200
+        # Live HTTP claims are refused: that path cannot run begin_dispatch.
+        body = r.json()
+        assert body["paused"] is True and body["claims"] == []
+        assert "in-process cloud worker" in body["reason"]
+        r = client.post("/api/outbox/claim", json={"worker_id": "w1", "peek": True},
+                        headers={"Authorization": "Bearer s3cret"})
+        assert r.status_code == 200
         assert r.json() == {"paused": False, "claims": []}
 
 

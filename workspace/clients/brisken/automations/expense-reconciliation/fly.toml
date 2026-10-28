@@ -18,6 +18,10 @@ primary_region = "fra"
 
 [env]
   EXPENSE_RECON_WEB_DATA = "/data"
+  # 2026-09-25, owner "memo + warm-up": rebuild the months card strip's
+  # roll-up in the background once writes have been quiet for 20 s, so the
+  # strip is ready before it is opened (web/card_status_memo.py).
+  EXPENSE_RECON_CARD_STATUS_WARM = "1"
   # Mail intake (the app's own mailbox): the in-app SMTP listener on :2525,
   # published on public port 25 below (needs the app's dedicated IPv4 —
   # MX targets can only be port 25). expenses.brisken.com MX points here.
@@ -33,6 +37,13 @@ primary_region = "fra"
   # answered from the store — deterministic and free. Delete the file to
   # force fresh readings; prompt/schema edits invalidate it automatically.
   EXPENSE_RECON_EXTRACTION_CACHE = "/data/extraction-cache.sqlite"
+  # Item 239 (2026-09-28, owner: build, test, switch where it wins): Gemini
+  # 3.8 Flash reads every receipt (text-layer PDFs and pictures); categories
+  # and judgments stay on OpenAI. It won the blind A/B on the 251 stored
+  # documents on both paths. The key is the Fly secret GEMINI_API_KEY; until
+  # it is set OpenAI keeps reading and /healthz shows key_set false. Any
+  # reading Gemini cannot give falls back to OpenAI. Off: remove this line.
+  EXPENSE_RECON_GEMINI_READS = "all"
 
 [http_service]
   internal_port = 8080
@@ -68,7 +79,12 @@ primary_region = "fra"
 
 # 1024 MB since 2026-09-11 (owner order, backlog item 50: the live machine
 # was raised to 1024 on 2026-09-11 and a deploy at 512 would shrink it).
+# 4 shared vCPUs since 2026-09-25 (owner order). One shared vCPU gets a
+# 6.25% baseline once its ~500 s burst balance is spent; on 2026-09-25 a
+# day of deploys, jobs and SPA traffic spent it, steal hit 92.7%, /healthz
+# took 2-27 s against the 5 s check, and the proxy refused every request.
+# A deploy at cpus = 1 would put the machine back on that quota.
 [[vm]]
   memory = "1024mb"
   cpu_kind = "shared"
-  cpus = 1
+  cpus = 4

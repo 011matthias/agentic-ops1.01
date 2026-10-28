@@ -149,14 +149,15 @@ def test_an_unreadable_amount_is_captioned_and_counted_not_dropped(
 
     from expense_recon.web import service as svc
 
-    real = svc.build_expense_rows
+    real = svc.build_expense_row_groups
 
     def corrupt(*args, **kwargs):
-        rows = [list(r) for r in real(*args, **kwargs)]
+        groups = [(doc, [list(r) for r in rows]) for doc, rows in real(*args, **kwargs)]
+        rows = [row for _doc, doc_rows in groups for row in doc_rows]
         rows[1][COL_AMOUNT] = "eighteen euro"
-        return rows
+        return groups
 
-    monkeypatch.setattr(svc, "build_expense_rows", corrupt)
+    monkeypatch.setattr(svc, "build_expense_row_groups", corrupt)
 
     text = _report_text(client, batch_id)
 
@@ -185,15 +186,16 @@ def test_two_unreadable_amounts_are_both_named(client, monkeypatch):
 
     from expense_recon.web import service as svc
 
-    real = svc.build_expense_rows
+    real = svc.build_expense_row_groups
 
     def corrupt(*args, **kwargs):
-        rows = [list(r) for r in real(*args, **kwargs)]
+        groups = [(doc, [list(r) for r in rows]) for doc, rows in real(*args, **kwargs)]
+        rows = [row for _doc, doc_rows in groups for row in doc_rows]
         rows[0][COL_AMOUNT] = "n/a"
         rows[2][COL_AMOUNT] = "see attached"
-        return rows
+        return groups
 
-    monkeypatch.setattr(svc, "build_expense_rows", corrupt)
+    monkeypatch.setattr(svc, "build_expense_row_groups", corrupt)
 
     text = _report_text(client, batch_id)
     assert "2 receipts excluded from the total: expenses 1, 3." in text
