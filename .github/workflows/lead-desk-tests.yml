@@ -1,0 +1,32 @@
+name: Lead Desk tests
+
+# Brisken Lead Desk suite, split out of ci.yml (layout plan W1-1) and
+# path-filtered like expense-recon-tests.yml: it runs when the app or this
+# workflow changes, not on every docs or client PR.
+
+on:
+  pull_request:
+    paths:
+      - "workspace/clients/brisken/automations/lead-desk/**"
+      - ".github/workflows/lead-desk-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "workspace/clients/brisken/automations/lead-desk/**"
+      - ".github/workflows/lead-desk-tests.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lead-desk:
+    name: Lead Desk tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.12'
+      - name: Run lead-desk test suite (web + dev extras)
+        run: uv run --directory workspace/clients/brisken/automations/lead-desk --extra web --extra dev pytest -q

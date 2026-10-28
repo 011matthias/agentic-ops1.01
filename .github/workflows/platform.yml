@@ -1,0 +1,106 @@
+name: Platform
+
+# The legacy platform/ app's type check, lint, build, spell check and smoke
+# tests, split out of ci.yml (layout plan W1-1) so a docs or client PR does not
+# wait 3 minutes on jobs that cannot fail on its diff. main has no branch
+# protection, so a workflow filtered out of a PR blocks nothing; ci.yml keeps
+# the unconditional secrets + hooks jobs so `gh pr checks` always has checks.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "platform/**"
+      - ".github/workflows/platform.yml"
+  push:
+    branches: [main]
+    paths:
+      - "platform/**"
+      - ".github/workflows/platform.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  quality:
+    name: Type check, lint, and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: platform
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: platform/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript check
+        run: npx tsc --noEmit
+      - name: ESLint
+        run: npx eslint src/ --max-warnings 0
+      - name: Build
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost/placeholder
+          AUTH_SECRET: placeholder-secret-for-build-only
+
+  spell:
+    name: Spell check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+      - name: Install cspell
+        run: npm install -g cspell
+      - name: Spell check
+        run: cspell "platform/src/**/*.{tsx,ts,md}" --config platform/cspell.config.json
+
+  smoke:
+    name: Playwright smoke tests
+    # pinned: ubuntu-latest moved to 26.04, where `playwright install chromium` fails (2026-10-28)
+    runs-on: ubuntu-24.04
+    needs: quality
+    if: github.event_name == 'pull_request'
+    defaults:
+      run:
+        working-directory: platform
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: platform/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Read the Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - name: Install Playwright browsers
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Install Playwright system dependencies (browsers cached)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      - name: Run smoke tests
+        run: npx playwright test --project=chromium
+        env:
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost/placeholder
+          AUTH_SECRET: placeholder-secret-for-build-only
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: platform/playwright-report/
