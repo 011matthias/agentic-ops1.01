@@ -224,7 +224,9 @@ wired in `tools/wire-hooks.py` as one of the canonical hooks). It:
 3. Classifies the band from the command + live current branch
    (`git rev-parse --abbrev-ref HEAD`). Band 1 (feature-branch
    commit / non-main non-force push / `gh pr create`) → allow.
-4. For `gh pr merge`, calls `ci_is_green()` (`gh pr checks`): green
+4. For `gh pr merge`, calls `merge_verdict()` (`gh pr view --json
+   mergeable,statusCheckRollup` via `.claude/hooks/_gh.py`, shared with
+   repo-sweep; CONFLICTING asks with the merge-main remedy): green
    → allow (Band 2); otherwise fall through.
 5. Gated floor + non-green merge → scan recent user turns for an
    explicit order; allow if found, else `permissionDecision: "ask"`.

@@ -15,7 +15,15 @@ absolute paths, so cwd never affects their reading. AGENTIC_OPS_SESSION_STATE
 is redirected into the tmp dir so the ask-path friction capture can't touch
 live session state.
 """
-from hooklib import FIXTURES, permission_decision, run_hook
+import json
+import subprocess
+import sys
+
+from hooklib import FIXTURES, HOOKS, load_hook, permission_decision, run_hook
+
+# load_hook imports the gate in-process, where its sibling `_gh` resolves only
+# if the hooks dir is importable (a script run gets it as sys.path[0]).
+sys.path.insert(0, str(HOOKS))
 
 FX = FIXTURES / "no-auto-commit-gate"
 AUTH = str(FX / "auth.jsonl")        # user message: "ok ship it to PR and merge"
@@ -141,6 +149,73 @@ def test_D_merge_missing_transcript_defaults_ask(tmp_path):
     # Non-green merge + no transcript -> floor -> ASK. CI forced red to stay
     # hermetic (no live `gh` call).
     assert permission_decision(_run("gh pr merge 99 --squash", "", tmp_path, branch="feature", ci="red").stdout) == "ask"
+
+
+# --- 2026-10-28 (layout plan W1-3): mergeability, not only checks -----------
+# `gh pr checks` exited 0 on #1638 while GitHub reported it CONFLICTING, so
+# the gate allowed a merge GitHub refused. The verdict now reads
+# `gh pr view --json mergeable,statusCheckRollup` through _gh.py.
+
+def _reason(stdout: str) -> str:
+    return json.loads(stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_merge_conflicting_asks_with_remedy(tmp_path):
+    p = _run("gh pr merge 5 --squash", NO_AUTH, tmp_path, branch="feature", ci="conflicting")
+    assert permission_decision(p.stdout) == "ask"
+    assert _reason(p.stdout).startswith("CONFLICTING: merge origin/main locally")
+
+
+def test_merge_conflicting_not_cleared_by_merge_anyway(tmp_path):
+    # GitHub refuses a conflicting merge, so the override must not wave it on.
+    p = _run("gh pr merge 5 --squash", MERGE_ANYWAY, tmp_path, branch="feature", ci="conflicting")
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_merge_zero_checks_asks_without_override(tmp_path):
+    p = _run("gh pr merge 5 --squash", NO_AUTH, tmp_path, branch="feature", ci="none")
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_merge_zero_checks_named_override_allows(tmp_path):
+    assert _allowed(_run("gh pr merge 5 --squash", MERGE_ANYWAY, tmp_path,
+                         branch="feature", ci="none"))
+
+
+def _fake_gh(monkeypatch, gate, payload, returncode=0):
+    """Stub the `gh pr view` subprocess the gate reaches through _gh.py."""
+    calls = []
+
+    def run(args, **kw):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, returncode, json.dumps(payload), "")
+
+    monkeypatch.delenv("NO_AUTO_COMMIT_GATE_CI", raising=False)
+    monkeypatch.setattr(sys.modules["_gh"].subprocess, "run", run)
+    return calls
+
+
+_GREEN = [{"__typename": "CheckRun", "status": "COMPLETED", "conclusion": "SUCCESS"}]
+
+
+def test_merge_verdict_reads_mergeable_through_gh_view(monkeypatch):
+    gate = load_hook("no-auto-commit-gate.py")
+    calls = _fake_gh(monkeypatch, gate, {"mergeable": "CONFLICTING", "statusCheckRollup": _GREEN})
+    assert gate.merge_verdict("gh pr merge 1638 --squash") == "conflicting"
+    assert calls[0][:4] == ["gh", "pr", "view", "1638"]
+    assert "mergeable,statusCheckRollup" in calls[0]
+
+
+def test_merge_verdict_green_when_mergeable(monkeypatch):
+    gate = load_hook("no-auto-commit-gate.py")
+    _fake_gh(monkeypatch, gate, {"mergeable": "MERGEABLE", "statusCheckRollup": _GREEN})
+    assert gate.merge_verdict("gh pr merge 7") == "green"
+
+
+def test_merge_verdict_unknown_when_gh_fails(monkeypatch):
+    gate = load_hook("no-auto-commit-gate.py")
+    _fake_gh(monkeypatch, gate, {}, returncode=1)
+    assert gate.merge_verdict("gh pr merge 7") == "unknown"
 
 
 # --- 2026-07-10: PowerShell / .cmd spellings (normalized matching view) -----
