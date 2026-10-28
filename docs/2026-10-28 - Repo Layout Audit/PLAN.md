@@ -8,6 +8,35 @@ Date: 2026-10-28. Source: Workflow run wf_6956c984-be3 (10 audit lenses over ori
 - Wave 1 (W1-1 .. W1-30, plus W1-0 and W1-31 .. W1-36 from section G; the synthesis summary's '29' is a miscount, the list has 30): mechanical, no owner decision, one PR each, ordered by what every session or PR pays first. Wave 2 (D1 .. D16): owner decisions, each with a recommendation and consequence; ask with AskUserQuestion, recommendation first. Wave 3 (X1 .. X8): deferred. Section G (G1 .. G12): gaps the completeness critic raised after the lenses, each with the 2026-10-28 live verification; the additions they produced are W1-31 .. W1-36, W1-0 and D17 .. D19 at the end.
 - Ordering that matters: W1-13, W1-14, W1-35, W1-16 .. W1-20, D1 .. D4, D16, D17 and D18 land BEFORE the Waerme Wimmer migration prompt (already issued on 2026-10-27) is executed, because they define where WW files land and the gate that keeps personal data out of the public tree.
 
+## Client-ops guard (owner, 2026-10-28)
+
+Owner, verbatim: "i cannot risk this jeopardizing any ongoing client operations." Chosen mode (AskUserQuestion, 2026-10-28): guarded per item. This outranks the queue order and every earlier approval.
+
+An item whose changed paths reach a surface in the table runs only after (1) its PR body names the surfaces it reaches, (2) a read-only before-check of each, (3) the owner's yes for THAT item at execution time, through AskUserQuestion with the surface named (a D item's earlier approval does not cover this step), and (4) the same check after the merge or deploy, stated in the checkpoint. An item that reaches none of them runs as before.
+
+Surfaces, read 2026-10-28 from Get-ScheduledTask, the workflow triggers on main and the jobs' own code:
+
+| Surface | Runs from | Reads by path | How a repo change reaches it |
+|---|---|---|---|
+| BriskenReconNotify, every 15 min (Criss's "result ready" + dev pings) | the separate clone `Repo/agentic-ops1-notify` | its own `tools/brisken-recon-notify*.py`; the PRIMARY's `workspace/clients/brisken/context/.env` and `.scratch/recon-notify-state.json` | the clone fast-forwards to origin/main every run: a merge is live within 15 min; moving the primary's brisken `context/` or `.scratch/` breaks it at once |
+| MejiReplySLA (daily 08:05), MejiWeeklyReview (Mon 05:17) | gitignored scripts in the primary's `workspace/clients/meji-media/context/analysis-scripts/` (uv `--directory`) | that folder | moving the folder or retargeting the task (D4 moves `meji_reply_sla_daily.py`) |
+| RepoSweep (02:30), AgenticOpsWeeklySynthesis, ClaudeRemoteControl | tracked code in whatever branch the primary has checked out | the primary's git state | the primary's branch: an old branch brings back old sweep code |
+| Fly apps: brisken-expense-recon (api.expenses.brisken.com), Lead Desk, one-assessment-demo, brisken-onepilot-proto | deployed by hand from their source dirs under `workspace/clients/` | the source dir at deploy time | a merge deploys nothing; the next deploy ships what main holds, and a deleted source dir leaves the app running but undeployable |
+| Scheduled Actions: expense-recon-uptime (10 min), morning-briefing, eod-capture, weekly-review | main's workflow files | the tools they call | any merge to main |
+| Client tenants: WW n8n + Hero (held R1 test on HUK-106488), Meji Make + Instantly, Brisken M365 | nothing in this plan writes to them | | only a test, activation or send, each already under its per-action yes |
+| unpauseai.com gated client docs (`/docs/warme-wimmer`) | akkton/unpauseai-web | | D3(a) removes files from the live site |
+
+Per-item checks:
+- W1-14 pii-push-gate: `ask` with fail-open, never `deny`, so an urgent client fix can still push; calibrate on the current tree first.
+- W1-18 client homes: rename or move nothing a row above reads by path, or migrate that reader in the same PR and check it after.
+- W1-19: CI runs fixtures only, holds no tenant credential and never calls n8n or Hero; the new n8n test mode and activation shape are not exercised against WW in this item.
+- W1-24: the protected roots it already names (`agentic-ops1-notify`, `-watcher`, `-deploy`) are part of its Verify.
+- W1-31: no global `PYTHONUTF8=1`; it would change how every session-launched client script decodes a file opened without `encoding=` (a cp1252 bank CSV, an Excel export). Ship the per-call helper only.
+- D1: enumerate Railway and Trigger.dev live before deleting the lane; `/comd_deploy` must still route Brisken recon to its `deploy.py`.
+- D3(a): remove from the public tree first; remove from the live site only after confirming WW no longer uses `m-mail-abgleich.html` and the downloads.
+- D4: confirm the notifier and the recon deploy import none of the deleted `tools/brisken-*.py`; confirm `onepilot-site/` is not brisken-onepilot-proto's deploy source; MejiReplySLA runs once from its new path with LastTaskResult 0 before the old file goes.
+- D17, D18: copy only. No `context/` path changes, because the notifier and the Meji tasks read those paths.
+
 ## Summary (synthesis agent)
 
 123 verified findings merged into 29 Wave-1 PRs (mechanical, ordered by what every session or PR pays first), 16 Wave-2 owner decisions (each with a recommendation and consequence), and 8 deferrals. Settled conflicts: path-scope all three platform rules (unpauseai.com is edited in its own checkout, which loads its own rules; the voice bans stay unconditional in rule_anti_slop); keep comd_test and a thin comd_deploy router, delete the Trigger/Railway agents, and put the n8n activate/verify steps in agnt_n8n-builder + skil_build-test-fix (harness-1 vs onboard-8/10); repo-sweep skips when the primary is parked instead of branching off a feature HEAD (exposure-1); pii_scan thresholds recalibrated per exposure-4's verifier. Sequencing that matters for the WW migration next session: items 16-19 (n8n client shape, export/test/CI conventions, import pre-flight) and 14 (pii push gate) land first; item 4 re-lands the stranded WW Hero checkpoint PR #1638 so /comd_resume can find it.
@@ -60,7 +89,7 @@ Files: `.claude/hooks/no-auto-commit-gate.py`, `.claude/hooks/_gh.py`, `tools/re
 
 ### W1-4 [machine-4, machine-9, machine-3, machine-5] cost M
 
-Status: partly done 2026-10-28: (a) all eight PRs merged (#1638 #1226 #1198 #1178 #1161 #1073 #970 #955), serially, because GitHub's merge ignores the union drivers and each merge re-conflicts the rest on INDEX.md; (b) fetch.prune=true; (c) 10 husks removed (Repo 107 -> 97 entries). (d) OPEN: three live sibling sessions on the primary at every check.
+Status: partly done 2026-10-28: (a) all eight PRs merged (#1638 #1226 #1198 #1178 #1161 #1073 #970 #955), serially, because GitHub's merge ignores the union drivers and each merge re-conflicts the rest on INDEX.md; (b) fetch.prune=true; (c) 10 husks removed (Repo 107 -> 97 entries). Done 2026-10-28 22:29: (d) the primary moved to main in one check-then-act (porcelain empty, session_registry "no live sibling"), 0 behind; `repo-sweep.py` dry run from it: all three repos clean.
 
 Depends on: none
 
@@ -950,7 +979,7 @@ Files: `.claude/settings.json`, `~/.claude/settings.json`, `.claude/hooks/no-aut
 
 ### W1-31 [G5] cost S
 
-Status: todo. Scope measured 2026-10-28: 50 non-test and 50 test `text=True` calls lack `encoding=`; .claude/settings.json has PYTHONIOENCODING only. Larger than its S label.
+Status: todo. Scope measured 2026-10-28: 50 non-test and 50 test `text=True` calls lack `encoding=`; .claude/settings.json has PYTHONIOENCODING only. Larger than its S label. Rescoped 2026-10-28 under the client-ops guard: drop the `PYTHONUTF8=1` part of the Action; the helper, doctor.py and the CI leg stay.
 
 Depends on: none
 
@@ -964,7 +993,7 @@ Files: `.claude/settings.json`, `tools/project_status.py`, `tools/doctor.py`, `.
 
 ### W1-32 [G4] cost S
 
-Status: todo
+Status: todo. Found 2026-10-28: BriskenReconNotify had exited nonzero on ~3 of 4 runs every day since at least 10-16 (SSLEOFError on /api/login): this machine's IPv6 route to Fly drops the TLS handshake (IPv4 4/4, IPv6 2/4 and 0/4). Notifications were delayed, never lost (state advances only after a send). Fixed on branch client/brisken/recon-notify-ipv4 (owner yes): IPv4 pin in main(); dry runs 0/3 before, 3/3 after.
 
 Depends on: W1-24
 
