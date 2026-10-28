@@ -77,6 +77,7 @@ ROOT_ALLOWLIST = {
     # existing repo config + top-level docs
     "claude.md", "readme.md", "delivery-guide.md", ".gitignore", ".mcp.json",
     "pytest.ini", "ruff.toml", ".pre-commit-config.yaml", "skills-lock.json",
+    ".gitleaks.toml",  # gitleaks reads it from the repo root (W1-35)
     ".python-version", ".editorconfig", ".gitattributes", "license",
     "license.md", "skills.lock.json",
     # conventional root-only build / tooling config (no other sensible home)
