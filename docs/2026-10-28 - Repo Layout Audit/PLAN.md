@@ -442,7 +442,7 @@ Deletions, repo settings, convention changes and anything the verifiers flagged 
 
 ### D1 [harness-1, harness-3, truth-3, fit-4, truth-15, homes-8, truth-5, onboard-1, harness-5] cost M
 
-Status: todo
+Status: approved 2026-10-28 (owner, AskUserQuestion): retire now, one PR before the WW migration.
 
 Depends on: item 5, item 16
 
@@ -458,7 +458,7 @@ Files: `.claude/agents/`, `.claude/commands/`, `.claude/skills/skil_trigger-pack
 
 ### D2 [truth-4] cost S
 
-Status: todo
+Status: decided 2026-10-28 (owner): handoff repos live under UnpauseAI's GitHub, created at handoff and transferred to the client later (not the recommended client-owned repo). The Action's 'repo the client owns (org parameterised)' becomes 'a repo under the UnpauseAI account, transferable'.
 
 Depends on: item 5
 
@@ -474,7 +474,7 @@ Files: `CLAUDE.md`, `workspace/clients/brisken/OWNERSHIP-HANDOFF.md`
 
 ### D3 [exposure-3, homes-3, exposure-5, exposure-6, exposure-7, ledger-7, homes-9, machine-8, exposure-1, homes-11, exposure-2] cost M
 
-Status: todo
+Status: approved 2026-10-28 (owner): all of (a)-(g). (g)'s two remote-branch deletions were ordered in the 2026-10-28 session; a later session executing (g) needs a fresh explicit order. Rotation: hand the owner only the step that needs their login.
 
 Depends on: item 10, item 14
 
@@ -490,7 +490,7 @@ Files: `platform/public/docs/warme-wimmer/`, `workspace/clients/brisken/delivera
 
 ### D4 [homes-2, homes-4, homes-6, homes-7, truth-13, ledger-12, truth-6, fit-11, exposure-9] cost M
 
-Status: todo
+Status: approved 2026-10-28 (owner): whole list as one order, including the one-time repo-sweep pre-authorization to close and delete the REMOTE head of a red/conflicting/no-checks sweep PR (local branch kept).
 
 Depends on: item 13, item 29
 
@@ -506,7 +506,7 @@ Files: `tools/`, `tools/INDEX.md`, `workspace/clients/brisken/`, `workspace/clie
 
 ### D5 [machine-1, machine-2, machine-3, machine-7, machine-10, machine-11] cost S
 
-Status: todo
+Status: todo: ask after W1-24 builds tools/worktree_prune.py; the dry-run table does not exist yet (the tool is missing on main, 2026-10-28).
 
 Depends on: item 24, item 4
 
@@ -682,7 +682,7 @@ Files: `tools/checkpoint_scaffold.py`, `tools/repo-sweep.py`, `.gitattributes`, 
 
 ### D16 [onboard-7, exposure-8] cost S
 
-Status: todo
+Status: approved 2026-10-28 (owner): leave both out of the public tree.
 
 Depends on: item 20
 
@@ -936,7 +936,7 @@ The critic's twelve gaps were checked live before this plan was written; the res
 
 ### W1-0 [G6] cost S, the first ten minutes of the next session
 
-Status: todo
+Status: done PR #1654 (2026-10-28): a hook `ask` is a real prompt under `auto`, the mode all 40 recent sessions ran in; git-stash-gate held `git stash push` 2 h 19 min (ASK 14:53:28, first line ran 17:13:02) despite the project's blanket `Bash` allow. No session ever ran in bypassPermissions. No deny conversion needed. Allow-list prune dropped by the owner (AskUserQuestion 2026-10-28: tidiness, not safety).
 
 Depends on: none
 
@@ -1034,7 +1034,7 @@ Files: `.mcp.json` (untracked, per machine), `tools/mcp_config.py`, `tools/docto
 
 ### D17 [G1] cost M
 
-Status: todo
+Status: decided 2026-10-28 (owner): backup only; the Jochen code stays untracked and joins the D18 backup. The move, CI and status-file Action is dropped.
 
 Depends on: W1-14, W1-35
 
@@ -1048,7 +1048,7 @@ Files: `.gitignore`, `workspace/clients/jochen/`, `README.md`, `.github/workflow
 
 ### D18 [G2] cost M
 
-Status: todo
+Status: decided 2026-10-28 (owner): private repo 011matthias/agentic-ops1-context, nightly via RepoSweep, text and small files with version history; .env and key files EXCLUDED; binaries above the size cap not covered.
 
 Depends on: none
 
