@@ -61,6 +61,7 @@ from ..output.posting_common import (
     _REIMBURSABLE_PLACEHOLDER,
     _UNCATEGORIZED,
     _UNMAPPED,
+    is_suggested_cell,
 )
 from ..output.zoho_export import ZOHO_COLUMNS
 from .client import ZohoAPIError, ZohoAuthError
@@ -264,8 +265,11 @@ def entries_from_rows(
             account_id = ""
             if not account_ref:
                 blockers.append("blank Account")
-            elif account_ref in _PLACEHOLDER_ACCOUNTS or account_ref.startswith(
-                _CARD_PLACEHOLDER_PREFIX
+            elif (
+                account_ref in _PLACEHOLDER_ACCOUNTS
+                or account_ref.startswith(_CARD_PLACEHOLDER_PREFIX)
+                # item 216 Build 2 step 2: a model suggestion is no account
+                or is_suggested_cell(account_ref)
             ):
                 blockers.append(
                     f"placeholder account {account_ref!r} (review flag, not postable)"

@@ -3216,6 +3216,39 @@ def test_create_refusal_pools_the_mail(client, monkeypatch):
     assert _runs(client) == []
 
 
+def test_a_month_the_mail_creates_classifies_by_the_senders_note(
+    client, monkeypatch,
+):
+    """Item 250, the second arrival path: a mail that creates its own month
+    runs `generate_expenses`, not the add path, and the sender's note must
+    reach the receipt there too. Created months carry no default company,
+    so without the note this row would read "none"."""
+    _patch_notify(monkeypatch)
+    _flag_on(monkeypatch)
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction(vendor="Noted"),
+               _extraction(vendor="Noted"))
+    body = (
+        "BTS only\n\n"
+        "From: Lovable Labs Incorporated <invoice+statements@lovable.dev>\n"
+        "Date: Monday, August 31, 2026 at 3:53 AM\n"
+        "To: dirk@neumanns.org\n"
+        "Subject: Your receipt from Lovable Labs Incorporated\n\n"
+        "Receipt from Lovable Labs Incorporated\n$15.00\n"
+    )
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com", subject="noted",
+              attachments=[("noted.jpg", JPG + b"noted")], body=body),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_INGESTED and res["materialized"] is True, res
+    grid = client.get(f"/api/expense-batches/{res['batch_id']}").json()
+    (row,) = [e for e in grid["expenses"] if e["vendor"]["display"] == "Noted"]
+    assert (row["legal_entity_id"], row["entity_source"]) == (
+        "Consulting", "sender_note")
+
+
 def test_backfill_materializes_confident_months_only(client, monkeypatch):
     """T6: the explicit operator backfill. materialize:true creates a
     month per confidently-stamped pooled mail group and the claim drains

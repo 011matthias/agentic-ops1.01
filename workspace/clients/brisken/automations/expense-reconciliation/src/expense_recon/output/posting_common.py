@@ -14,15 +14,32 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from ..matching.types import Categorization, ClassificationSource
+from ..matching.types import Categorization, ClassificationSource, is_suggestion_only
 
 if TYPE_CHECKING:
     from ..ingest.chart_of_accounts import Account, ChartOfAccounts
+    from ..matching.types import Receipt
 
 
 _CARD_ACCOUNT = "Card: {account_id}"
 _UNCATEGORIZED = "(uncategorized - assign)"
 _UNMAPPED = "(account unmapped - assign)"
+# Item 216 Build 2 step 2: the account cell of a model answer on a GL month
+# (`is_suggestion_only`). The account stays readable so a person can confirm
+# it, and the prefix keeps it out of every posting: the API poster and the
+# journal check refuse a cell that starts with it, as they refuse the
+# placeholders above.
+SUGGESTED_PREFIX = "suggested: "
+
+
+def suggested_cell(account: str) -> str:
+    """The account cell for a suggestion: `suggested: <account>`."""
+    return f"{SUGGESTED_PREFIX}{account}"
+
+
+def is_suggested_cell(text: str | None) -> bool:
+    """Whether an account cell holds a suggestion rather than an account."""
+    return str(text or "").strip().startswith(SUGGESTED_PREFIX)
 
 # §17 disposition values (string-typed copies of web.store's
 # VALID_DISPOSITIONS members; the output layer stays import-free of the
@@ -82,6 +99,40 @@ def _posting_amounts(
     return out
 
 
+# Item 224 step 6: how far a receipt's lines may sit from its printed total
+# before the two are said to disagree, and the words the export adds to the
+# description of a split receipt whose lines do.
+LINE_SUM_TOLERANCE = Decimal("0.05")
+LINES_DISAGREE_MARK = "(lines do not add up)"
+
+
+def line_sum_gap(receipt: "Receipt") -> Decimal | None:
+    """The receipt's lines minus its printed total, when the two disagree.
+
+    None when they agree within `LINE_SUM_TOLERANCE`, when the lines equal
+    the total less the printed tax (a receipt priced net: Anthropic's 180.00
+    of lines under a 214.20 total carrying 34.20 VAT), and when there is no
+    total or no line to compare.
+
+    `_posting_amounts` pro-rates the charged amount across the lines, so the
+    TOTAL posts either way and a single-account receipt books right whatever
+    its lines say. Only a receipt split across accounts posts wrong, because
+    each account takes the share its misread lines give it.
+    """
+    total = receipt.detected_total
+    items = receipt.line_items or ()
+    if total is None or not items:
+        return None
+    lines = sum((i.line_total for i in items), Decimal("0"))
+    gap = lines - total
+    if abs(gap) <= LINE_SUM_TOLERANCE:
+        return None
+    tax = receipt.detected_tax
+    if tax is not None and abs(lines - (total - tax)) <= LINE_SUM_TOLERANCE:
+        return None
+    return gap
+
+
 def _str(value: str | None) -> str:
     """A reference cell: the value, or blank when unknown (never guessed)."""
     return value or ""
@@ -128,14 +179,27 @@ def _debit_account_and_note(
     REVIEW / no-category lines stay flagged. With a chart, the picked
     `zoho_account` is resolved to a real account; an unresolvable pick
     is flagged `(account unmapped - assign)` rather than guessed.
+
+    A line with no account is flagged the same way with or without a
+    chart. The account column never carries the CATEGORY: a bucket label
+    is no account in any org, and under the GL engine a category is a leaf
+    code, so either one there reads as an account nobody picked. It used
+    to, whenever no chart loaded, which is every entity-less batch (its
+    multi-entity gate has no single chart) and every uncharted CLI run.
     """
     if cat is None or cat.source is ClassificationSource.REVIEW or not cat.category:
         return _UNCATEGORIZED, "needs category"
     note = f"{cat.source.value} conf={cat.confidence:.2f}"
-    if coa is None:
-        # Legacy: no chart to resolve against — pass the label through.
-        return (cat.zoho_account or cat.category), note
-    resolved = _resolve_account(cat.zoho_account, coa)
-    if resolved is None:
+    if not cat.zoho_account:
         return _UNMAPPED, f"{cat.category} (no account match), assign"
+    if coa is None:
+        # No chart to resolve against: the pick passes through as written.
+        resolved = cat.zoho_account
+    else:
+        resolved = _resolve_account(cat.zoho_account, coa)
+        if resolved is None:
+            return _UNMAPPED, f"{cat.category} (no account match), assign"
+    if is_suggestion_only(cat):
+        # Item 216 Build 2 step 2: the model's answer is a suggestion.
+        return suggested_cell(resolved), f"{note}, suggestion: confirm it"
     return resolved, note

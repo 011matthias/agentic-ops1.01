@@ -209,6 +209,21 @@ def test_stop_code_stripped(env):
     assert _stop(env, "The gate catches `say the word` offers.").stdout.strip() == ""
 
 
+def test_stop_raw_text_keeps_what_the_strip_drops(env):
+    """2026-10-02 gate-precision: the publish-prompt rule fired twice on
+    closings that named the prompt file, because house style puts the name in
+    backticks and the strip removed it before the exemption looked."""
+    _rule(env["dir"], "warn-unnamed", "stop", conditions=[
+        ("final_text", "regex_match", r"(?i)paste"),
+        ("final_text_raw", "not_regex_match", r"lovable-[a-z0-9-]+-prompt\.md"),
+    ])
+    named = _stop(env, "Paste `docs/lovable-x-prompt.md` into Lovable.", session="raw1")
+    assert named.stdout.strip() == ""
+    assert _prompt(env, "next", session="raw1").stdout.strip() == ""
+    _stop(env, "Paste the new screen into Lovable.", session="raw2")
+    assert "warn-unnamed" in _context(_prompt(env, "next", session="raw2"))
+
+
 def test_stop_warn_is_parked_then_delivered_on_next_prompt_once(env):
     _rule(env["dir"], "warn-queue", "stop", pattern=r"(?i)queued")
     stop = _stop(env, "3 edits queued.", session="abc")
@@ -311,6 +326,11 @@ SEEDS = [
     ("warn-attach-busy-cdp-9222", "bash",
      {"command": "python -c \"b=pw.chromium.connect_over_cdp('http://127.0.0.1:9222')\""},
      {"command": "agent-browser --session recon open http://127.0.0.1:8765"}),
+    ("warn-owner-publish-without-named-prompt", "stop",
+     {"final_text": "Waits on the owner publishing the Lovable change.",
+      "final_text_raw": "Waits on the owner publishing the Lovable change."},
+     {"final_text": "Paste  into Lovable and publish it.",
+      "final_text_raw": "Paste `docs/lovable-nav-no-scroll-bill-tip-prompt.md` into Lovable and publish it."}),
 ]
 
 

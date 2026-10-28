@@ -58,6 +58,13 @@ _COA = ChartOfAccounts.from_api(
             "account_type": "expense",
             "is_active": True,
         },
+        {
+            "account_id": CARD,
+            "account_name": "Visa dummy card Matthias",
+            "account_code": "",
+            "account_type": "credit_card",
+            "is_active": True,
+        },
     ]
 )
 
@@ -67,7 +74,7 @@ def _row(**over):
     row.update(
         {
             "Expense Date": "2026-07-30",
-            "Expense Account": "Software & Subscriptions",
+            "Expense Account": "IT: Cloud Subscriptions-Others",
             "Expense Amount": "100.00",
             "Currency Code": "EUR",
             "Exchange Rate": "1.162275",

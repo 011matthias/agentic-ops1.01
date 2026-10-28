@@ -433,9 +433,9 @@ def test_fx_judgment_falls_back_to_the_account_id_for_the_card():
 def test_fx_judgment_prompt_carries_the_cards():
     """The prompt template must actually render both cards; a kwarg that
     never reaches the text would be silent."""
-    from expense_recon.llm.client import _FX_JUDGMENT_PROMPT_TEMPLATE
+    from expense_recon.llm.client import render_fx_judgment_prompt
 
-    prompt = _FX_JUDGMENT_PROMPT_TEMPLATE.format(
+    prompt = render_fx_judgment_prompt(
         tx_amount="16.23", tx_currency="USD", tx_date="2026-04-29",
         tx_vendor="ADOBE  *800-833-6687",
         receipt_amount="16.20", receipt_currency="EUR",

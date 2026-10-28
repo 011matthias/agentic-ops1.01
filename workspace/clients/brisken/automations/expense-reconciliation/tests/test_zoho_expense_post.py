@@ -52,6 +52,14 @@ _COA = ChartOfAccounts.from_api(
             "account_type": "cost_of_goods_sold",
             "is_active": True,
         },
+        # The card the payloads are paid from (item 184 checks it here).
+        {
+            "account_id": CARD_ID,
+            "account_name": "Visa dummy card Matthias",
+            "account_code": "",
+            "account_type": "credit_card",
+            "is_active": True,
+        },
     ]
 )
 

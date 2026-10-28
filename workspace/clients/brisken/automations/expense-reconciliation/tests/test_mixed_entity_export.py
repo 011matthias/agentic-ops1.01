@@ -249,6 +249,9 @@ def test_an_entityless_batch_is_provisioned_against_every_entity_chart(tmp_path)
         "Cloud Services", "Corporate Services",
     ]
 
+    # Judged by the chart rule, as a bucket batch is; on a GL batch these
+    # synthetic codes are off Dirk's list (test_coa_gate_curated_item_4b).
+    cfg.pop("gl_entity_orgs")
     gate = _build_coa_gate(cfg, tmp_path)
     assert isinstance(gate, MultiEntityCoaGate)
     assert set(gate.gates) == {"Cloud Services", "Corporate Services"}
@@ -279,6 +282,7 @@ def test_an_entityless_batch_is_provisioned_against_every_entity_chart(tmp_path)
 
 COL_AMOUNT = EXPENSE_COLUMNS.index("Expense Amount")
 ACCOUNT_PLACEHOLDER = "(uncategorized - assign)"
+UNMAPPED = "(account unmapped - assign)"
 
 
 def _provision_charts(tmp_path, monkeypatch) -> None:
@@ -323,6 +327,12 @@ def test_a_categorized_row_with_a_company_exports_its_category(client, monkeypat
     from expense_recon.llm.client import ClassificationResult, ExtractedLineItem
 
     _provision_charts(client._data_root, monkeypatch)
+    # Pins the BUCKET-era export, which every batch created before the GL
+    # engine keeps using (their config carries no entity -> org map). Without
+    # this the provisioning above would put the batch on the GL engine; item
+    # 5 retires the leak this test documents.
+    monkeypatch.setattr(
+        "expense_recon.coa_provision.entity_org_ids", lambda *a, **k: {})
     mock = MockLLMClient(
         extraction_responses=[
             _extraction(vendor="Uber", total="42.50"),
@@ -378,14 +388,16 @@ def test_a_categorized_row_with_a_company_exports_its_category(client, monkeypat
         )
         assert resp.status_code == 200, resp.text
 
+    # Categorized with no account: the account column flags it rather than
+    # carrying the category (item 5, owner ruled "everywhere").
     screen = _books_as_by_vendor(client, batch_id)
     assert screen == {
-        "Uber": [("Travel & Transport", "42.50")],
+        "Uber": [(UNMAPPED, "42.50")],
         "Microsoft": [
-            ("Software & Subscriptions", "693.00"),
+            (UNMAPPED, "693.00"),
             (ACCOUNT_PLACEHOLDER, "25.20"),
         ],
-        "Parada Obrigatoria": [("Meals & Entertainment", "32.00")],
+        "Parada Obrigatoria": [(UNMAPPED, "32.00")],
     }
     rows = _export_rows(client, batch_id)
     assert {r[COL_ENTITY] for r in rows} == {"Corporate Services"}, "precondition: gated"
@@ -394,9 +406,10 @@ def test_a_categorized_row_with_a_company_exports_its_category(client, monkeypat
 
 def test_a_gated_line_keeps_its_category_and_loses_only_its_account():
     """The gate still keeps a non-postable account out of the export: the
-    line books as a category with no account, which the item-70 account
-    rule renders as the category label with no chart wired and as
-    `(account unmapped - assign)` with one. Never as uncategorized."""
+    line books as a category with no account, which renders as
+    `(account unmapped - assign)` with a chart wired or without (item 5;
+    without one it used to print the category label). Never as
+    uncategorized."""
     from decimal import Decimal
 
     from expense_recon.matching.types import Categorization, ClassificationSource, LineItem, Receipt
@@ -423,7 +436,7 @@ def test_a_gated_line_keeps_its_category_and_loses_only_its_account():
 
     multi = gate_for_entities({"Corporate Services": single})
     (row,) = build_expense_rows([receipt], coa_gate=multi)
-    assert row[COL_ACCOUNT] == "Travel & Transport"
+    assert row[COL_ACCOUNT] == "(account unmapped - assign)"
     assert "Phantom" not in row[COL_ACCOUNT], "the gate let a non-postable account through"
 
 

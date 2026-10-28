@@ -74,6 +74,14 @@ CHART = [
         "account_type": "expense",
         "is_active": True,
     },
+    # The profile's card, as the sandbox chart carries it (item 184).
+    {
+        "account_id": CARD,
+        "account_name": CARD_NAME,
+        "account_code": "",
+        "account_type": "credit_card",
+        "is_active": True,
+    },
 ]
 
 
@@ -85,7 +93,7 @@ def _row(**over):
     row.update(
         {
             "Expense Date": "2026-07-14",
-            "Expense Account": "Software & Subscriptions",
+            "Expense Account": "IT: Cloud Subscriptions-Others",
             "Expense Amount": "100.00",
             "Currency Code": "USD",
             "Exchange Rate": "",
@@ -245,7 +253,7 @@ THE_BATCH = [
             "Currency Code": "EUR", "Exchange Rate": "1.162275"}),
     _row(**{"Reference#": "SPLIT", "Expense Amount": "10.00"}),
     _row(**{"Reference#": "SPLIT", "Expense Amount": "5.50",
-            "Expense Account": "Office Supplies & Consumables"}),
+            "Expense Account": "Office Supplies"}),
     _row(**{"Reference#": "OLD", "Expense Date": "2026-03-30"}),
     _row(**{"Reference#": "UNMAPPED", "Expense Account": "Travel & Transport"}),
 ]
@@ -487,7 +495,7 @@ def test_a_split_refuses_when_only_its_second_line_is_unassigned(tmp_path):
         _row(**{"Reference#": "SPLIT", "Expense Amount": "10.00"}),
         _unassigned(
             "SPLIT",
-            **{"Expense Amount": "5.50", "Expense Account": "Office Supplies & Consumables"},
+            **{"Expense Amount": "5.50", "Expense Account": "Office Supplies"},
         ),
     ]
     run, _ = _run(tmp_path, rows, client=FakeClient())
@@ -543,7 +551,7 @@ def test_a_genuine_split_on_one_date_still_posts_as_one_expense(tmp_path):
     rows = [
         _row(**{"Reference#": "SPLIT", "Expense Amount": "10.00"}),
         _row(**{"Reference#": "SPLIT", "Expense Amount": "5.50",
-                "Expense Account": "Office Supplies & Consumables"}),
+                "Expense Account": "Office Supplies"}),
     ]
     run, _ = _run(tmp_path, rows, client=FakeClient())
 
@@ -565,7 +573,7 @@ def test_the_boundary_is_two_days(tmp_path, second_date, posts):
         _row(**{"Reference#": "SPLIT", "Expense Amount": "10.00"}),
         _row(**{"Reference#": "SPLIT", "Expense Date": second_date,
                 "Expense Amount": "5.50",
-                "Expense Account": "Office Supplies & Consumables"}),
+                "Expense Account": "Office Supplies"}),
     ]
     run, _ = _run(tmp_path, rows, client=FakeClient())
 
@@ -584,7 +592,7 @@ def test_a_group_with_one_unreadable_date_keeps_the_stale_date_reason(tmp_path):
     rows = [
         _row(**{"Reference#": "00000031010", "Expense Date": ""}),
         _row(**{"Reference#": "00000031010", "Expense Date": "2026-07-28",
-                "Expense Account": "Office Supplies & Consumables"}),
+                "Expense Account": "Office Supplies"}),
     ]
     run, _ = _run(tmp_path, rows, client=FakeClient())
 
@@ -603,7 +611,7 @@ def test_conflicting_dates_outrank_a_stale_date(tmp_path):
     rows = [
         _row(**{"Reference#": "OLD", "Expense Date": "2026-03-30"}),
         _row(**{"Reference#": "OLD", "Expense Date": "2026-03-05",
-                "Expense Account": "Office Supplies & Consumables"}),
+                "Expense Account": "Office Supplies"}),
     ]
     run, _ = _run(tmp_path, rows, client=FakeClient())
 

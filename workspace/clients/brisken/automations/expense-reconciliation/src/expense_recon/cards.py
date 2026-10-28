@@ -91,6 +91,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass, replace
+from functools import lru_cache
 
 from .cards_provision import CardPreset
 from .error_codes import CodedValueError
@@ -122,6 +123,11 @@ SOURCE_PRESET = "preset"
 # extractor's floor, identifies nothing, and does not block genericity
 # (backlog item 35, 2026-08-28: three real April tender phrases rendered
 # as assignable cards because of vocabulary gaps + the "30").
+# The last group (owner ruling 2026-09-24, card-attribution case 6) holds
+# the neutral "a card was used" words real receipts print ("saved payment
+# method", "Link", "VENDA CREDITO VISA", "OUTRO", "Kartenzahlung
+# erhalten"), so "Remember for future months" can never turn one of those
+# phrases into a card alias.
 GENERIC_TENDER_WORDS = frozenset({
     # networks
     "visa", "mastercard", "master", "amex", "american", "express", "elo",
@@ -136,9 +142,17 @@ GENERIC_TENDER_WORDS = frozenset({
     # DE
     "kreditkarte", "karte", "ec", "bar", "lastschrift", "girokarte",
     "uberweisung", "ueberweisung", "zahlung", "kredit",
+    # "a card was used" (case 6)
+    "saved", "payment", "method", "link", "venda", "outro", "outros",
+    "kartenzahlung", "erhalten", "olv", "stored", "wallet", "pagamento",
+    "recebido", "forma", "paid", "received",
 })
 
 
+# Pure over the text, and `resolve_card` asks it of every alias of every card
+# for every string it resolves (~9,700 resolutions in one all-months card
+# roll-up, 2026-09-25), so each distinct alias is read once per process.
+@lru_cache(maxsize=4096)
 def is_generic_tender(text: str | None) -> bool:
     """True when a hint names only a tender type / card network: no digit
     token, at least one vocabulary word, and EVERY word is either generic
@@ -150,9 +164,7 @@ def is_generic_tender(text: str | None) -> bool:
         return False
     if _card_keys(text) or masked_short_ending(text):
         return False
-    folded = unicodedata.normalize("NFKD", text)
-    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
-    words = _normalize(folded).split()
+    words = payment_words(text)
     return (
         any(w in GENERIC_TENDER_WORDS for w in words)
         and all(
@@ -163,6 +175,506 @@ def is_generic_tender(text: str | None) -> bool:
     )
 
 
+# Card-attribution case 6 (owner ruling 2026-09-24): receipts glue words
+# together. "CreditCard" is "credit card" and "girocardOLV" is a girocard
+# (OLV, the German signature variant), so every payment-hint classifier here
+# reads the same split words. A token splits at a lower-to-upper case
+# boundary, and a known network or kind word of 5+ letters splits off the
+# FRONT of a longer token ("CREDITCARD"). Shorter words (bar, ec, pay, de,
+# elo, visa) never prefix-split, or "Barbecue" would read as cash and
+# "Visagem" as a Visa; a remainder under 3 letters keeps the token whole, so
+# "creditos" and "creditor" stay single words.
+_CASE_BOUNDARY = re.compile(r"(?<=[a-z])(?=[A-Z])")
+_PREFIX_WORDS = (
+    "mastercard", "girocard", "maestro", "credito", "debito", "credit",
+    "kredit", "cartao", "debit",
+)
+_PREFIX_REST_MIN = 3
+
+
+def payment_words(text: str) -> list[str]:
+    """Lower-case ASCII words of a payment hint: diacritics folded ("Cartão
+    de crédito" -> cartao, de, credito), glued words split ("CreditCard" ->
+    credit, card; "girocardOLV" -> girocard, olv). A token that is itself a
+    known word stays whole ("PayPal", "PagSeguro", "Kreditkarte")."""
+    folded = unicodedata.normalize("NFKD", text or "")
+    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
+    words: list[str] = []
+    for raw in re.split(r"[^A-Za-z0-9]+", folded):
+        if not raw:
+            continue
+        if raw.lower() in _WHOLE_WORDS:
+            words.append(raw.lower())
+            continue
+        for part in _CASE_BOUNDARY.split(raw):
+            words.extend(_split_prefix(part.lower()))
+    return words
+
+
+def _split_prefix(token: str) -> list[str]:
+    if token in _WHOLE_WORDS:
+        return [token]
+    for word in _PREFIX_WORDS:
+        if token.startswith(word) and len(token) - len(word) >= _PREFIX_REST_MIN:
+            return [word, *_split_prefix(token[len(word):])]
+    return [token]
+
+
+# The card networks and kinds, read two ways. `registry_card_types` reads
+# Brisken's own from the registry's wording (case 5, 2026-09-24: "VISA
+# CREDIT" on a receipt is no evidence against a Visa credit card), and
+# `positive_non_brisken_evidence` reads a hint's against them. "express" and
+# "club" count toward amex / diners in the registry's controlled wording
+# only; anywhere in a receipt's free text they are ordinary words.
+CARD_NETWORK_WORDS = {
+    "visa": "visa",
+    "mastercard": "mastercard", "master": "mastercard",
+    "amex": "amex", "american": "amex", "express": "amex",
+    "elo": "elo",
+    "maestro": "maestro",
+    "discover": "discover",
+    "diners": "diners", "club": "diners",
+    "girocard": "girocard", "girokarte": "girocard", "ec": "girocard",
+}
+CARD_KIND_WORDS = {
+    "credit": "credit", "credito": "credit", "kredit": "credit",
+    "kreditkarte": "credit",
+    "debit": "debit", "debito": "debit", "lastschrift": "debit",
+}
+# The words a hint must carry for its network to count, anywhere in it:
+# CARD_NETWORK_WORDS without the fragments, plus the full amex name.
+_HINT_NETWORK_WORDS = {
+    w: n for w, n in CARD_NETWORK_WORDS.items()
+    if w not in ("american", "express", "club")
+}
+_HINT_NETWORK_PHRASES = {"american express": "amex"}
+# Today's cash words: the settled-outside chip's cash tender
+# (`web.service._TENDER_PATTERNS`, pinned equal by test) plus "bar" as a
+# whole word. Not widened here (out of scope of case 6).
+CASH_WORDS = frozenset({
+    "cash", "dinheiro", "especes", "contanti", "bargeld", "bar",
+})
+_CASH_PHRASES = {"em especie": "cash"}
+# Card issuers and banks that are NOT Brisken's: a conservative starting
+# list (owner ruling 2026-09-24). A name counts as evidence only while no
+# active card's label or account names it. Whole words only; "db" and
+# "deutsche bank" are deliberately absent, because DB on these receipts is
+# Deutsche Bahn.
+NON_BRISKEN_ISSUERS = (
+    "nubank", "revolut", "n26", "wise", "sparkasse", "volksbank",
+    "raiffeisen", "commerzbank", "dkb", "comdirect", "ing", "itau",
+    "bradesco", "santander", "caixa", "banco do brasil", "banco inter",
+    "c6 bank", "picpay", "mercado pago",
+)
+# The issuer names Brisken's registry is read for (live 2026-09-24: Chase,
+# GSBANK / Goldman Sachs for the Apple card, the United co-brand). Brisken's
+# issuers are whatever of these, or of NON_BRISKEN_ISSUERS, an active card's
+# wording names; this list only teaches the reader the names.
+_ISSUER_IDS = {
+    "chase": "chase", "gsbank": "goldman", "goldman sachs": "goldman",
+    "apple": "apple", "united": "united",
+    **{name: name for name in NON_BRISKEN_ISSUERS},
+}
+# POS acquirers and wallets print the terminal operator or the wallet, never
+# the card behind it, so they are NEUTRAL: never evidence either way. Taken
+# out of a hint before issuers are read ("Apple Pay" is not the Apple card).
+NEUTRAL_PAYMENT_NAMES = (
+    "cielo", "rede", "stone", "getnet", "pagseguro", "sumup", "adyen",
+    "worldline", "stripe", "square", "apple pay", "google pay",
+)
+_WHOLE_WORDS = GENERIC_TENDER_WORDS | frozenset(
+    name for name in (*_ISSUER_IDS, *NEUTRAL_PAYMENT_NAMES) if " " not in name
+)
+
+
+def _registry_wording(cards: "dict[str, Card]") -> tuple[str, ...]:
+    """The only input the two readers below take from a registry: each
+    ACTIVE card's `label` and `zoho_account` wording, sorted because both
+    readers return sets."""
+    return tuple(sorted(
+        f"{card.label} {card.zoho_account or ''}"
+        for card in (cards or {}).values() if card.active
+    ))
+
+
+# 2026-09-25: `positive_non_brisken_evidence` asks both readers once per
+# payment hint, and each re-tokenized every active card: ~2.9 ms a hint and
+# ~0.7 s of the all-months card roll-up. Keyed on the wording itself, so a
+# Settings edit to a label, an account or `active` is a new key, never a
+# stale answer.
+_REGISTRY_READS_MAX = 32
+
+
+@lru_cache(maxsize=_REGISTRY_READS_MAX)
+def _card_types_of(wording: tuple[str, ...]) -> tuple[frozenset[str], frozenset[str]]:
+    networks: set[str] = set()
+    kinds: set[str] = set()
+    for text in wording:
+        for word in payment_words(text):
+            if word in CARD_NETWORK_WORDS:
+                networks.add(CARD_NETWORK_WORDS[word])
+            if word in CARD_KIND_WORDS:
+                kinds.add(CARD_KIND_WORDS[word])
+    return frozenset(networks), frozenset(kinds)
+
+
+@lru_cache(maxsize=_REGISTRY_READS_MAX)
+def _issuers_of(wording: tuple[str, ...]) -> frozenset[str]:
+    found: set[str] = set()
+    for text in wording:
+        found |= _phrases_in(payment_words(text), _ISSUER_IDS)
+    return frozenset(found)
+
+
+def registry_card_types(
+    cards: "dict[str, Card]",
+) -> tuple[frozenset[str], frozenset[str]]:
+    """The card networks and kinds the ACTIVE cards carry, read from each
+    card's own `label` and `zoho_account` wording ("Credit Card Chase Visa -
+    3645" -> visa, credit; "GSBANK Apple Master Card 0113" -> mastercard).
+    Derived, never stored: the Settings cards editor replaces the whole map
+    on save, so a new card field would be erased by the published screen."""
+    return _card_types_of(_registry_wording(cards))
+
+
+def registry_issuers(cards: "dict[str, Card]") -> frozenset[str]:
+    """The issuers the ACTIVE cards come from, read from each card's `label`
+    and `zoho_account` wording like `registry_card_types` ("Chase United
+    Visa 8311" -> chase, united; "GSBANK Apple Master Card" -> goldman,
+    apple). Derived, never stored, for the same reason."""
+    return _issuers_of(_registry_wording(cards))
+
+
+def _phrases_in(words: list[str], names: "dict[str, str]") -> set[str]:
+    """The ids of every name in `names` (one or more words) that `words`
+    holds as consecutive whole words."""
+    found: set[str] = set()
+    for name, ident in names.items():
+        parts = name.split()
+        n = len(parts)
+        if any(words[i:i + n] == parts for i in range(len(words) - n + 1)):
+            found.add(ident)
+    return found
+
+
+def _without_phrases(words: list[str], names: "tuple[str, ...]") -> list[str]:
+    """`words` with every occurrence of the given names cut out."""
+    out = list(words)
+    for name in sorted(names, key=len, reverse=True):
+        parts = name.split()
+        n = len(parts)
+        i = 0
+        while i <= len(out) - n:
+            if out[i:i + n] == parts:
+                del out[i:i + n]
+            else:
+                i += 1
+    return out
+
+
+def positive_non_brisken_evidence(
+    hint: str | None, cards: "dict[str, Card]"
+) -> str | None:
+    """What in a payment hint proves the payment did NOT come from Brisken,
+    or None when nothing does (owner ruling 2026-09-24, card-attribution
+    case 6). A private expense is SUGGESTED only on such evidence; every
+    other payment text waits for the statement charge, the remembered card,
+    the merchant's card and Criss's own assignment, including phrases nobody
+    has seen yet. Supersedes item 41's trigger ("not defined in the system"
+    became "positively not Brisken's").
+
+    The reasons, first match wins:
+
+    * ``"number"``: a 3+ digit card number naming no active Brisken card
+      (a number always outranks words: "DEBIT-MASTERCARD 3281" is decided
+      by 3281). A number or alias that does name a Brisken card, or two of
+      them, is None.
+    * ``"ending"``: a masked two-digit ending no active card ends in.
+    * ``"cash"``: a cash word (`CASH_WORDS`).
+    * ``"network"`` / ``"kind"``: a network (girocard, EC, maestro, amex,
+      elo, diners, discover) or a kind (debit) no active card carries, read
+      anywhere in the hint ("Visa Debit" is a debit card, not Brisken's).
+    * ``"issuer"``: an issuer from `NON_BRISKEN_ISSUERS` no active card
+      names.
+
+    Conflict means wait: a hint naming, within networks, kinds or issuers,
+    one that is Brisken's AND one that is not ("credit or debit card", a
+    checkout's list of options), or a cash word beside anything Brisken's,
+    is None. Acquirers and wallets (`NEUTRAL_PAYMENT_NAMES`) say nothing.
+    Pure: the registry is the batch's own snapshot, and nothing is stored.
+    """
+    text = (hint or "").strip()
+    if not text:
+        return None
+    card, ambiguous = resolve_hinted_card_ex(text, cards)
+    if card is not None or ambiguous:
+        return None
+    if _card_keys(text):
+        return "number"
+    ending = masked_short_ending(text)
+    if ending:
+        return None if cards_ending_in(ending, cards) else "ending"
+    words = _without_phrases(payment_words(text), NEUTRAL_PAYMENT_NAMES)
+    networks, kinds = registry_card_types(cards)
+    named = {
+        "network": {_HINT_NETWORK_WORDS[w] for w in words
+                    if w in _HINT_NETWORK_WORDS}
+        | _phrases_in(words, _HINT_NETWORK_PHRASES),
+        "kind": {CARD_KIND_WORDS[w] for w in words if w in CARD_KIND_WORDS},
+        "issuer": _phrases_in(words, _ISSUER_IDS),
+    }
+    brisken = {
+        "network": networks, "kind": kinds, "issuer": registry_issuers(cards),
+    }
+    ours = {dim: named[dim] & brisken[dim] for dim in named}
+    theirs = {dim: named[dim] - brisken[dim] for dim in named}
+    theirs["issuer"] &= set(NON_BRISKEN_ISSUERS)
+    if any(ours[dim] and theirs[dim] for dim in named):
+        return None
+    if any(w in CASH_WORDS for w in words) or _phrases_in(words, _CASH_PHRASES):
+        return None if any(ours.values()) else "cash"
+    for dim in ("network", "kind", "issuer"):
+        if theirs[dim]:
+            return dim
+    return None
+
+
+# ── the private-card list (owner direction 2026-09-24, cases 2 + 4) ────
+#
+# "fuze items 2 and 4 together, fix a) by setting up private card
+# memory/registry and b) any credit card types or numbers that dont belong
+# to brisken will then be suggested as private expenses". Case 6 above is
+# half (b); the list below is half (a): a card that is NOT Brisken's, known
+# by its last four digits and the person it belongs to, so a personal card
+# that recurs (3281 every month) is confirmed private once, in Settings or
+# from the unknown-card strip, and never again by hand.
+#
+# It is `settings["private_cards"]`, a SEPARATE key from `cards`: every
+# company-card consumer iterates `cards` (the matcher's card scope, the
+# coverage rows, the months strip, the Cards overview, statement linking,
+# `/api/cards`), and the SPA's Cards editor replaces that whole map on save,
+# so a flag on a company card would be read as a company card everywhere
+# and erased by the published screen. Read LIVE at view time (like the
+# remembered card since item 169 and the merchant registry since M2), never
+# snapshotted into a batch, so an entry reaches every existing month at
+# once with no refresh and no write to any month.
+
+
+@dataclass(frozen=True)
+class PrivateCard:
+    """One entry of `settings["private_cards"]`."""
+
+    digits: str
+    person: str
+    note: str = ""
+    active: bool = True
+
+
+PRIVATE_SOURCE_ROW = "row"
+PRIVATE_SOURCE_MONTH = "month"
+PRIVATE_SOURCE_LIST = "private_card_list"
+PRIVATE_SOURCES = (PRIVATE_SOURCE_ROW, PRIVATE_SOURCE_MONTH, PRIVATE_SOURCE_LIST, "")
+
+
+def private_card_digits(text: str | None) -> str | None:
+    """The four digits a private-card entry is keyed on: the last 4 of the
+    LAST 4+ digit run in `text`, read with the matcher's own extraction
+    (`hint_digit_run`: a run followed by a mask is a BIN and is skipped), the
+    leading zero kept ("0340" stays "0340"). None for text with no such run
+    and for a two-digit ending: money owed to a person needs the full last
+    4, so "xx78" never names a private card."""
+    run = hint_digit_run(text)
+    if not run or not run.isdigit() or len(run) < 4:
+        return None
+    return run[-4:]
+
+
+def private_cards_from_setting(raw: object) -> dict[str, PrivateCard]:
+    """`{last4: PrivateCard}` from the stored map. Tolerant: read-time never
+    400s, so an entry that cannot be read is dropped rather than raised."""
+    out: dict[str, PrivateCard] = {}
+    if not isinstance(raw, dict):
+        return out
+    for key, entry in raw.items():
+        digits = private_card_digits(str(key))
+        if digits is None or not isinstance(entry, dict):
+            continue
+        person = str(entry.get("person") or "").strip()
+        if not person:
+            continue
+        out[digits] = PrivateCard(
+            digits=digits,
+            person=person,
+            note=str(entry.get("note") or "").strip(),
+            active=entry.get("active", True) is not False,
+        )
+    return out
+
+
+def normalize_private_cards_setting(
+    raw: object, *, company_cards: "dict[str, Card] | None" = None
+) -> dict:
+    """Validate + clean a ``settings["private_cards"]`` payload at the edge.
+
+    Same contract family as ``normalize_cards_setting``: the whole map
+    replaces the stored one; a malformed entry raises ``CodedValueError``
+    (the API answers 400 with the code). Keys normalize to the four digits
+    (`private_card_digits`), so "***3281" and "3281" are one entry, and
+    `person` is required and trimmed. Refused, by code:
+
+    * ``private_card_digits_short``: the key holds no 4+ digit run (a
+      two-digit ending, a word). Money owed to a person needs the full
+      last 4.
+    * ``private_card_person_required``: no person to reimburse.
+    * ``private_card_duplicate``: two keys normalize to the same digits.
+    * ``private_card_is_company_card``: an ACTIVE company card in
+      `company_cards` carries the digits. A card is Brisken's OR private,
+      never both (the same rule the per-row routes enforce), and the
+      company-card PUT refuses the reverse with the same code.
+    """
+    if not isinstance(raw, dict):
+        raise CodedValueError(
+            "private_cards must be an object", code="invalid_body"
+        )
+    cleaned: dict[str, dict] = {}
+    for key, entry in raw.items():
+        label = str(key).strip()
+        if not label:
+            continue
+        digits = private_card_digits(label)
+        if digits is None:
+            raise CodedValueError(
+                f"private card {label!r} needs the full last 4 digits of "
+                "the card",
+                code="private_card_digits_short", private_card=label,
+            )
+        if not isinstance(entry, dict):
+            raise CodedValueError(
+                f"private_cards[{label!r}] must be an object",
+                code="invalid_body", private_card=label,
+            )
+        person = str(entry.get("person") or "").strip()
+        if not person:
+            raise CodedValueError(
+                f"private card {digits} needs the person to reimburse",
+                code="private_card_person_required", private_card=digits,
+            )
+        if digits in cleaned:
+            raise CodedValueError(
+                f"private card {digits} is listed twice ({label!r})",
+                code="private_card_duplicate", private_card=digits,
+            )
+        cleaned[digits] = {
+            "person": person,
+            "note": str(entry.get("note") or "").strip(),
+            "active": entry.get("active", True) is not False,
+        }
+    hit = private_company_collision(
+        company_cards or {}, private_cards_from_setting(cleaned)
+    )
+    if hit is not None:
+        digits, card_key = hit
+        raise CodedValueError(
+            f"private card {digits} is the company card {card_key!r}; a "
+            "card is Brisken's or private, never both",
+            code="private_card_is_company_card",
+            private_card=digits, card=card_key,
+        )
+    return cleaned
+
+
+def private_company_collision(
+    company_cards: "dict[str, Card]", private_cards: dict[str, PrivateCard]
+) -> tuple[str, str] | None:
+    """`(private digits, company card key)` of the first ACTIVE private
+    entry an ACTIVE company card also carries, else None. Both directions
+    of the "company OR private, never both" rule read this: the private
+    list's PUT (and the strip's learn path) against the composed registry,
+    and the company cards' PUT against the stored list."""
+    for digits, entry in private_cards.items():
+        if not entry.active:
+            continue
+        keys = _card_keys(digits)
+        for key, card in (company_cards or {}).items():
+            if card.active and (card.digit_keys() & keys):
+                return digits, key
+    return None
+
+
+def private_card_for(
+    hint: str | None, private_cards: dict[str, PrivateCard] | None
+) -> PrivateCard | None:
+    """The ACTIVE private-card entry a hint's printed number names, else
+    None. The number is read with the matcher's extraction (`_card_keys`:
+    3+ digit runs, a masked BIN skipped, "0340" and "340" one key), so the
+    list is consulted exactly where the company registry would have been.
+    A two-digit ending never reaches it (the extraction floor), and a
+    hint printing no number never does."""
+    text = (hint or "").strip()
+    if not text or not private_cards:
+        return None
+    keys = _card_keys(text)
+    if not keys:
+        return None
+    for digits, entry in private_cards.items():
+        if entry.active and (_card_keys(digits) & keys):
+            return entry
+    return None
+
+
+def private_card_fits_hint(hint: str | None, digits: str) -> bool:
+    """Whether the card strip may assign `hint` to the listed private card
+    `digits` (item 214, owner ruling 2026-09-25: the dropdown holds cards
+    only). A hint printing no number fits every card: the receipt says
+    nothing about which card paid, so the reviewer's pick decides. A hint
+    printing a number fits only the card that number is: its last 4, or for
+    a shorter ending ("xx78") a card ending in it. A printed number outranks
+    a pick, so "3281" never answers a receipt that prints 2598; that number
+    goes on the list in Settings > Private cards."""
+    run = hint_digit_run(hint)
+    if not run:
+        return True
+    tail = run[-4:]
+    return digits == tail if len(tail) == 4 else digits.endswith(tail)
+
+
+def classify_payment_evidence(
+    hint: str | None,
+    cards: "dict[str, Card]",
+    private_cards: dict[str, PrivateCard] | None,
+    hints: dict | None = None,
+) -> "tuple[PrivateCard | None, str | None]":
+    """Whose money a payment hint says paid, steps 1-4 of the decision
+    order (`docs/api-contract.md`, "Whose money paid"), as ONE entry point
+    so the resolver reaches the private-card answer and the private
+    suggestion through one function and not two sets of conditions:
+
+    1. a printed number (or an assigned hint, `hints`) naming a Brisken
+       card, or 2. a Brisken card type with no number: `(None, None)`, no
+       private answer of any kind (the card chain decides);
+    3. a printed number on the PRIVATE-CARD LIST: `(entry, None)`, the row
+       is private and the listed person is reimbursed;
+    4. positive evidence the payment was not Brisken's
+       (`positive_non_brisken_evidence`): `(None, reason)`, suggested
+       private.
+
+    Everything else is `(None, None)` and waits. A number always outranks a
+    type word in the same hint, so step 3 is read before step 4's `number`
+    reason ("DEBIT-MASTERCARD 3281" is decided by 3281). A two-digit ending
+    is never looked up on the list; one two Brisken cards share stays
+    unguessed and is not private. Pure, like its parts."""
+    text = (hint or "").strip()
+    if not text:
+        return None, None
+    card, ambiguous = resolve_hinted_card_ex(text, cards, hints)
+    if card is not None or ambiguous:
+        return None, None
+    listed = private_card_for(text, private_cards)
+    if listed is not None:
+        return listed, None
+    return None, positive_non_brisken_evidence(text, cards)
+
+
 # Note #60 (owner, 2026-09-17): some receipts print only the last TWO
 # digits of the card ("42463153XXXXXX38" on the June Fenix and August SARL
 # TRAIN'S receipts). Two digits sit below the matcher's 3-digit floor, so
@@ -171,23 +683,75 @@ def is_generic_tender(text: str | None) -> bool:
 # them: they are the card's own tail, not a quantity. A bare two-digit
 # number ("Cartao Credito 30 Dias", "$15.00") is not, so it never counts.
 # A single "x" is not a mask here ("3x" is an instalment count); "xx" is.
+_ENDING_MASKS = r"[Xx]{2,}|[*#•●]+|\.{2,}|…"
+# Item 199 (owner, 2026-09-24): the ending words, one EXPLICIT phrase per
+# entry, matched on diacritic-folded text. September's GoDaddy printed "card
+# ending with the last two digits: 38", which the old two-word list missed.
+# A lead is followed only by separators and the two digits, never by other
+# words: allowing words in between is what would read "ending balance 38" or
+# "final total 38" as a card. A new wording is one line here.
+_ENDING_LEADS = (
+    # EN ("card no. ending" is covered by "ending")
+    r"ending(?:\s+(?:in|with))?(?:\s+the\s+digits)?",
+    r"ends\s+(?:in|with)",
+    r"(?:the\s+)?last\s+(?:two|2)\s+digits",
+    r"last\s+digits",
+    # PT ("com final" is covered by "final")
+    r"final",
+    r"terminad[oa]\s+em",
+    r"terminacao(?:\s+em)?",
+    r"(?:os\s+)?ultimos\s+(?:dois|2)\s+digitos",
+    # DE
+    r"endet\s+auf",
+    r"endend\s+auf",
+    r"(?:mit\s+)?endung",
+    r"endziffern",
+    r"letzten?\s+(?:zwei|2)\s+(?:ziffern|stellen)",
+    # FR
+    r"(?:se\s+)?terminant\s+par",
+    r"finissant\s+par",
+    r"(?:les\s+)?(?:deux|2)\s+derniers\s+chiffres",
+    r"derniers\s+chiffres",
+    # ES
+    r"termina(?:da)?\s+en",
+    r"(?:los\s+)?ultimos\s+(?:dos|2)\s+digitos",
+)
+# Two digits followed by a decimal separator and a digit are an amount
+# ("valor final 38,00"), never an ending: the `(?![.,]\d)` guard.
+_ENDING_DIGITS = r"(?<!\d)(\d{2})(?!\d)(?![.,]\d)"
 _SHORT_ENDING = re.compile(
-    r"(?:[Xx]{2,}|[*#\u2022\u25cf]+|\.{2,}|\u2026|\bending(?:\s+(?:in|with))?|\bfinal)"
-    r"\s*[:.\u2026]*\s*(?<!\d)(\d{2})(?!\d)",
+    rf"(?:{_ENDING_MASKS}|\b(?:{'|'.join(_ENDING_LEADS)}))"
+    rf"\s*[:.…]*\s*{_ENDING_DIGITS}",
+    re.IGNORECASE,
+)
+# "last two digits: 38 and 49" prints two endings, which name nothing: the
+# number after a list word counts as a second ending.
+_SECOND_ENDING = re.compile(
+    rf"\s*(?:[,;/&]|\s(?:and|or|e|ou|und|oder|et|y|o)\s)\s*{_ENDING_DIGITS}",
     re.IGNORECASE,
 )
 
 
 def masked_short_ending(text: str | None) -> str | None:
     """The two-digit card ending a hint prints behind a mask or an ending
-    word ("XXXXXX38", "**38", "••38", "ending in 38", "final 38"), or None.
+    phrase ("XXXXXX38", "**38", "••38", "ending in 38", "final 38", "last
+    two digits: 38", "endet auf 38"), or None.
 
     Only consulted for a hint that carries NO card number the matcher can
     use (`_card_keys` empty): a printed last-4 always outranks two digits.
-    Two different endings in one hint ("xx38; xx49") name nothing."""
+    Two different endings in one hint ("xx38; xx49", "last two digits: 38
+    and 49") name nothing. Diacritics fold first, so "últimos dígitos" and
+    "terminação" match their ASCII leads."""
     if not text or _card_keys(text):
         return None
-    endings = {m.group(1) for m in _SHORT_ENDING.finditer(text)}
+    folded = unicodedata.normalize("NFKD", text)
+    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
+    endings: set[str] = set()
+    for m in _SHORT_ENDING.finditer(folded):
+        endings.add(m.group(1))
+        second = _SECOND_ENDING.match(folded, m.end())
+        if second:
+            endings.add(second.group(1))
     return endings.pop() if len(endings) == 1 else None
 
 
@@ -246,6 +810,11 @@ class Card:
     currency: str = ""
     active: bool = True
     source: str = SOURCE_SETTINGS
+    # Item 220 step 4: False on a card whose statements will not be loaded
+    # (a dormant fee-only card, one nobody can export). Read LIVE from
+    # settings by `card_suggestion.statement_evidence`, which then never
+    # makes a receipt wait for it; never snapshotted into a batch.
+    statement_expected: bool = True
 
     @property
     def display_label(self) -> str:
@@ -254,11 +823,20 @@ class Card:
     def digit_keys(self) -> set[str]:
         """The normalized digit tokens that identify this card, using the
         SAME extraction the matcher uses so statement markers, payment-mode
-        labels, and stored digits land on one key space."""
-        keys: set[str] = set()
-        for d in self.digits:
-            keys |= _card_keys(d)
-        return keys
+        labels, and stored digits land on one key space. A fresh set every
+        call; the extraction behind it runs once per digits tuple."""
+        return set(_digit_keys_of(tuple(self.digits)))
+
+
+@lru_cache(maxsize=1024)
+def _digit_keys_of(digits: tuple[str, ...]) -> frozenset[str]:
+    """`Card.digit_keys` without the copy. `resolve_card` asks it of every
+    card on every resolution (~44,000 times in one all-months card roll-up,
+    2026-09-25), and the answer depends on the digits alone."""
+    keys: set[str] = set()
+    for d in digits:
+        keys |= _card_keys(d)
+    return frozenset(keys)
 
 
 def card_to_dict(card: Card) -> dict:
@@ -277,6 +855,7 @@ def card_to_dict(card: Card) -> dict:
         "currency": card.currency,
         "active": card.active,
         "source": card.source,
+        "statement_expected": card.statement_expected,
     }
 
 
@@ -369,9 +948,44 @@ def normalize_cards_setting(raw: object, *, known: dict | None = None) -> dict:
             out["aliases"] = aliases
         if entry.get("active") is False:
             out["active"] = False
+        # Item 220 step 4: stored only when False, like `active`.
+        expected = entry.get("statement_expected", True)
+        if not isinstance(expected, bool):
+            raise CodedValueError(
+                f"cards[{slug!r}].statement_expected must be true or false",
+                code="invalid_body", field=f"cards[{slug}].statement_expected",
+            )
+        if expected is False:
+            out["statement_expected"] = False
         cleaned[slug] = out
     _validate_card_parents(cleaned, known)
     return cleaned
+
+
+def keep_unsent_statement_expected(
+    cleaned: dict[str, dict], raw: object, stored: object
+) -> dict[str, dict]:
+    """The settings PUT's cards map with `statement_expected: false` carried
+    over onto every entry whose PAYLOAD did not mention the key (item 220
+    step 4).
+
+    The cards map is whole-map replace, and an SPA build that does not read
+    and write a field erases it on save (`person`, `default_cost_center`
+    before their prompts landed). This flag is set by the owner's order, not
+    on a screen, so a Settings > Cards save of a label must not quietly put
+    three cards nobody can export back into every waiting list. An explicit
+    `true` still clears it; a card left out of the map goes with its flag."""
+    raw_map = raw if isinstance(raw, dict) else {}
+    stored_map = stored if isinstance(stored, dict) else {}
+    out = dict(cleaned)
+    for slug, entry in cleaned.items():
+        sent = raw_map.get(slug)
+        if isinstance(sent, dict) and "statement_expected" in sent:
+            continue
+        before = stored_map.get(slug)
+        if isinstance(before, dict) and before.get("statement_expected") is False:
+            out[slug] = {**entry, "statement_expected": False}
+    return out
 
 
 def _validate_card_parents(cleaned: dict[str, dict], known: dict | None) -> None:
@@ -637,6 +1251,7 @@ def _card_from_setting(slug: str, entry: dict) -> Card:
         currency=str(entry.get("currency") or "").strip().upper(),
         active=entry.get("active") is not False,
         source=SOURCE_SETTINGS,
+        statement_expected=entry.get("statement_expected") is not False,
     )
 
 
@@ -779,6 +1394,18 @@ def effective_cards(
     return cards
 
 
+@lru_cache(maxsize=1024)
+def _matchable_aliases(aliases: tuple[str, ...]) -> tuple[str, ...]:
+    """A card's aliases as `resolve_card` compares them: normalized, in
+    order, blank and generic-tender ones left out. Read once per alias set
+    rather than once per resolution (2026-09-25: ~126,000 normalizations in
+    one all-months card roll-up)."""
+    return tuple(
+        a for a, alias in ((_normalize(alias), alias) for alias in aliases)
+        if a and not is_generic_tender(alias)
+    )
+
+
 def resolve_card(
     observed: str | None,
     cards: dict[str, Card],
@@ -846,10 +1473,7 @@ def resolve_card(
     exact_hits: list[Card] = []
     for card in live.values():
         matched = exact = False
-        for alias in card.aliases:
-            a = _normalize(alias)
-            if not a or is_generic_tender(alias):
-                continue
+        for a in _matchable_aliases(tuple(card.aliases)):
             if obs_norm == a:
                 matched = exact = True
                 break

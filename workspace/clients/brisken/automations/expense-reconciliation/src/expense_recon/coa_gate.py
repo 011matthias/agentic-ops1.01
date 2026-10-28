@@ -39,6 +39,17 @@ Three pieces:
 `CoaGate` bundles a loaded chart + the run's scope so the export seam
 takes one object. A run targets ONE legal entity, so one `CoaGate` per
 run.
+
+**Two rules for "postable", and a GL batch uses Dirk's (item 4b).** A
+bucket batch keeps the chart rule: a parent diverts, and `scope_groups`
+bounds the rest. A GL batch (its config carries `gl_entity_orgs`, the same
+test the engine uses) gets `curated_org` set by `cli._build_coa_gate` for
+an org Dirk curated, and there his `Expense Relevant` marking decides, the
+same marking `zoho.accounts.resolve_account_id` judges by. The chart rule
+contradicted it: on the live provisioning it diverted 56 of his 194 Y
+accounts (35 of them roll-ups he marked postable, `COGS - DEV
+Infrastructure` among the rest) and passed 105 he marked N, so the engine
+would categorize a receipt into a leaf the export then blanked.
 """
 from __future__ import annotations
 
@@ -58,6 +69,7 @@ from .matching.types import (
     LineItem,
     Receipt,
 )
+from .zoho import curated_leaves
 
 
 def _resolve_label(ref: str, chart: ChartOfAccounts) -> Account | None:
@@ -93,6 +105,11 @@ class CoaVerdict(str, Enum):
     DO_NOT_USE = "DO_NOT_USE"         # resolves but is_do_not_use
     NON_LEAF = "NON_LEAF"             # resolves but a parent / header account
     OUT_OF_SCOPE = "OUT_OF_SCOPE"     # postable but root_group not in scope
+    # A GL batch in an org Dirk curated (item 4b); the resolver's three
+    # postability refusals, one each.
+    NOT_EXPENSE_RELEVANT = "NOT_EXPENSE_RELEVANT"  # he marked it N
+    OUTSIDE_CURATED_LIST = "OUTSIDE_CURATED_LIST"  # not on his list for this org
+    CHART_ORG_MISMATCH = "CHART_ORG_MISMATCH"      # chart id is not this org's
 
 
 # Human-readable reason fragments for the appended review note, keyed by
@@ -104,6 +121,9 @@ _VERDICT_REASON: dict[CoaVerdict, str] = {
     CoaVerdict.DO_NOT_USE: "account is marked DO NOT USE",
     CoaVerdict.NON_LEAF: "account is a parent/header, not postable",
     CoaVerdict.OUT_OF_SCOPE: "account is outside the run's scope groups",
+    CoaVerdict.NOT_EXPENSE_RELEVANT: "account is marked not expense relevant for this company",
+    CoaVerdict.OUTSIDE_CURATED_LIST: "account is not on this company's curated expense list",
+    CoaVerdict.CHART_ORG_MISMATCH: "the chart's id for this account is not this company's",
 }
 
 
@@ -170,8 +190,15 @@ def classify_account(
     *,
     scope_groups: Iterable[str] | None = None,
     types: Iterable[str] = EXPENSE_ACCOUNT_TYPES,
+    curated_org: str | None = None,
 ) -> tuple[CoaVerdict, Account | None]:
     """Verdict + resolved Account for one posting-account string.
+
+    `curated_org` (item 4b, GL batches only) replaces steps 5 and 6 with
+    Dirk's marking for that org when he curated it: N -> NOT_EXPENSE_RELEVANT,
+    absent from his list -> OUTSIDE_CURATED_LIST, the chart's id not his id
+    for this org -> CHART_ORG_MISMATCH, otherwise OK, roll-ups included.
+    `scope_groups` does not apply there; the marking already is the scope.
 
     Resolution mirrors the export's own `ChartOfAccounts.resolve` (exact
     code, then exact name). The checks are ordered most-specific-failure
@@ -207,6 +234,9 @@ def classify_account(
     if account.is_do_not_use:
         return CoaVerdict.DO_NOT_USE, account
 
+    if curated_leaves.covers_org(curated_org):
+        return _curated_verdict(account, curated_org), account
+
     # Leaf check: a parent / header account is not postable in Zoho.
     if account.name in chart._parent_names():  # noqa: SLF001 (intentional reuse)
         return CoaVerdict.NON_LEAF, account
@@ -219,6 +249,20 @@ def classify_account(
     return CoaVerdict.OK, account
 
 
+def _curated_verdict(account: Account, org_id: str) -> CoaVerdict:
+    """Dirk's marking for one account in one curated org. The same three
+    tests, in the same order, as `zoho.accounts._postability_refusal`, so
+    what the export lets through is what the API poster accepts."""
+    why = curated_leaves.refusal_reason(org_id, account.code)
+    if why == curated_leaves.NO_SUCH_CODE:
+        return CoaVerdict.OUTSIDE_CURATED_LIST
+    if why:
+        return CoaVerdict.NOT_EXPENSE_RELEVANT
+    if curated_leaves.account_id_for(org_id, account.code) != account.account_id:
+        return CoaVerdict.CHART_ORG_MISMATCH
+    return CoaVerdict.OK
+
+
 def validate_postings(
     receipts: Sequence[Receipt],
     chart: ChartOfAccounts,
@@ -226,6 +270,7 @@ def validate_postings(
     scope_groups: Iterable[str] | None = None,
     types: Iterable[str] = EXPENSE_ACCOUNT_TYPES,
     entity: str = "",
+    curated_org: str | None = None,
 ) -> CoaGateReport:
     """Validate every categorized posting line across `receipts`.
 
@@ -248,7 +293,8 @@ def validate_postings(
             if cat is None:
                 continue
             verdict, account = classify_account(
-                cat.zoho_account, chart, scope_groups=scope_groups, types=types
+                cat.zoho_account, chart, scope_groups=scope_groups, types=types,
+                curated_org=curated_org,
             )
             counts[verdict.value] += 1
             verdicts.append(
@@ -366,6 +412,9 @@ class CoaGate:
     scope_groups: tuple[str, ...] | None = None
     types: tuple[str, ...] = EXPENSE_ACCOUNT_TYPES
     entity: str = ""
+    # Set by `cli._build_coa_gate` on a GL batch whose org Dirk curated
+    # (item 4b); None keeps the chart rule, which is every bucket batch.
+    curated_org: str | None = None
 
     def validate(self, receipts: Sequence[Receipt]) -> CoaGateReport:
         return validate_postings(
@@ -374,6 +423,7 @@ class CoaGate:
             scope_groups=self.scope_groups,
             types=self.types,
             entity=self.entity,
+            curated_org=self.curated_org,
         )
 
     def run(

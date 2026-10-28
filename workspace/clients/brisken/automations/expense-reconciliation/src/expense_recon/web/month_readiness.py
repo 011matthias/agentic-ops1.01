@@ -127,7 +127,12 @@ def charge_category_guessed(row: dict) -> bool:
     """A receiptless charge whose category is still the tool's guess, counted
     only where no receipt is due (a charge that needs one is counted there)
     and never on a gray-filled charge, whose category lives in the recurring
-    entry it was booked through."""
+    entry it was booked through.
+
+    It counts the guesses that BLOCK the month, not every guess: item 216
+    read its 0 / 0 / 1 as "the tool reports no guesses" while 164 charges
+    carried one. `summary.categories_by_origin` (item 216 Build 2 step 3)
+    counts who answered every row."""
     if charge_booked_recurring(row):
         return False
     review = row.get("review") or {}
@@ -149,7 +154,8 @@ def receipt_needs_charge(
     private expense (`private_docs`: the flag AND who is reimbursed,
     `service._private_reimbursements`): it was paid on someone's own card, so
     no company card charge will ever exist for it. Settled-outside receipts
-    never reach the lists."""
+    never reach the lists, and neither do bills paid by bank transfer (Build 4
+    / item 218: `build_view` drops both through its effective map)."""
     doc = receipt.get("document_id")
     return (
         "settled_by" not in receipt
@@ -194,6 +200,31 @@ def completeness_counts(
     }
 
 
+def receipts_waiting_statement(
+    receipts_without_charge: list[dict],
+    *,
+    waiting_codes=frozenset(),
+    private_docs=frozenset(),
+    copy_docs=frozenset(),
+) -> tuple[int, list[str]]:
+    """Item 220: of the receipts `n_receipts_need_charge` counts, how many
+    are only waiting for a statement (their `reason_code` is one of
+    `waiting_codes`), and the cards they wait on (sorted labels, from each
+    row's `waits_for_statements`). A SUBSET, so `n_receipts_need_charge`
+    keeps its one question: September 2026's refusal read "49 receipts have
+    no charge" while 38 of them were dated after the last loaded charge."""
+    n = 0
+    cards: set[str] = set()
+    for r in receipts_without_charge:
+        if r.get("reason_code") not in waiting_codes:
+            continue
+        if not receipt_needs_charge(r, private_docs=private_docs, copy_docs=copy_docs):
+            continue
+        n += 1
+        cards.update(r.get("waits_for_statements") or ())
+    return n, sorted(cards)
+
+
 def is_month_complete(*, ready_to_post: bool, counts: dict) -> bool:
     return bool(ready_to_post) and not any(
         counts[k] for k in (
@@ -222,10 +253,30 @@ def not_complete_detail(summary: dict) -> str:
             "charge still needs a receipt", "charges still need a receipt",
         ))
     if summary.get("n_receipts_need_charge"):
-        parts.append(_plural(
+        # Item 220: name the receipts that only wait for a statement apart
+        # from the ones no loaded statement settles, so the sentence points
+        # at the right fix (upload the statement vs. look for the charge).
+        waiting = min(
+            summary.get("n_receipts_waiting_statement") or 0,
             summary["n_receipts_need_charge"],
-            "receipt has no charge", "receipts have no charge",
-        ))
+        )
+        rest = summary["n_receipts_need_charge"] - waiting
+        if waiting:
+            cards = summary.get("receipts_waiting_cards") or []
+            on = f" (cards {', '.join(cards)})" if cards else ""
+            parts.append(_plural(
+                waiting,
+                f"receipt waits for a statement{on}",
+                f"receipts wait for a statement{on}",
+            ))
+        if rest:
+            parts.append(_plural(
+                rest,
+                "receipt has no charge on any loaded statement",
+                "receipts have no charge on any loaded statement",
+            ) if waiting else _plural(
+                rest, "receipt has no charge", "receipts have no charge",
+            ))
     if summary.get("n_charges_category_guessed"):
         parts.append(_plural(
             summary["n_charges_category_guessed"],
@@ -235,6 +286,7 @@ def not_complete_detail(summary: dict) -> str:
     blockers = "; ".join(parts) or "it is not complete"
     return (
         f"This month cannot be published yet: {blockers}. "
+        f"{cards_uncovered_sentence(summary)}"
         "Publish with override to sign it off anyway."
     )
 
@@ -249,6 +301,8 @@ READINESS_KEYS = (
     "n_charges_closed_recurring",
     "n_charges_receipt_requested",
     "n_charges_no_receipt_expected",
+    "n_receipts_waiting_statement",
+    "n_cards_uncovered",
 )
 
 
@@ -258,3 +312,41 @@ def readiness_of(summary: dict) -> dict:
     out = {k: summary.get(k) for k in READINESS_KEYS}
     out["month_health_state"] = (summary.get("month_health") or {}).get("state")
     return out
+
+
+def cards_uncovered(coverage: list[dict]) -> list[str]:
+    """Front 1 step 2: the active registry cards this month has NOTHING
+    loaded for, by label (`coverage[]` entries with a registry `card_key`,
+    no statement and no charge).
+
+    Completeness is a sum over the charges the month holds, so a card whose
+    statement is not loaded contributes no open charge: September 2026 read
+    "28 charges need a receipt" with 7 of its 9 cards absent. Advisory only
+    (whether Publish should refuse on it is the owner's decision); a card
+    with charges but no recorded upload arrived under another card's file
+    and is not counted. A dormant card (fee-only, or one that exists
+    nowhere) is counted too: nothing here can tell dormant from missing,
+    which is why the sentence names them."""
+    return sorted(
+        str(c.get("label") or c.get("key") or "")
+        for c in coverage or []
+        if c.get("card_key")
+        and not c.get("statements")
+        and not c.get("n_transactions")
+    )
+
+
+def cards_uncovered_sentence(summary: dict) -> str:
+    """The refusal's coverage sentence, or "" when every active card has a
+    statement: "0 charges need a receipt" must not read as "nothing owed"
+    while a card is missing."""
+    n = summary.get("n_cards_uncovered") or 0
+    if not n:
+        return ""
+    names = ", ".join(summary.get("cards_uncovered") or [])
+    verb = "has" if n == 1 else "have"
+    return (
+        f"{_plural(n, 'active card', 'active cards')} {verb} no statement "
+        f"loaded for this month ({names}), so none of their charges is "
+        "counted above. "
+    )

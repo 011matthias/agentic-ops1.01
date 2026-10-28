@@ -20,6 +20,7 @@ locking is sufficient.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from dataclasses import dataclass
@@ -27,6 +28,10 @@ from pathlib import Path
 
 # Note item T3: which statement upload printed a charge. Its own module,
 # not `service.py`, because the service imports this file.
+from ..learning.store import (
+    CATEGORY_SOURCE_HUMAN,
+    CATEGORY_SOURCES,
+)
 from .decision_history import ROW_CHARGE, ROW_RECEIPT
 from .statement_origin import origins_from_snapshot
 
@@ -168,6 +173,14 @@ SETTINGS_DEFAULTS: dict = {
     # missing-receipts list and still composes the mail for preview, and
     # nothing sends either way (receipt_chase.py sends nothing at all).
     "receipt_requests": {"enabled": False, "holders": {}},
+    # The private-card list (owner direction 2026-09-24, card-attribution
+    # cases 2 + 4): {last4: {person, note, active}}, cards that are NOT
+    # Brisken's, whose printed number makes a receipt a private expense
+    # reimbursed to `person`. Empty until Criss or the owner lists one;
+    # never seeded by the tool (nobody here knows who owns 3281). A
+    # separate key from `cards` on purpose: every company-card consumer
+    # iterates `cards`, and the SPA's Cards editor replaces that map whole.
+    "private_cards": {},
 }
 
 # Settings keys holding a {str: str} map. Values are kept as STRINGS: a
@@ -189,6 +202,7 @@ SETTINGS_WRITABLE_KEYS = (
     "cost_centers",
     "intake",
     "receipt_requests",
+    "private_cards",
 )
 
 # Keys `GET /api/settings` DERIVES and the PUT never stores. A client that
@@ -198,11 +212,23 @@ SETTINGS_WRITABLE_KEYS = (
 # are the PUT response's own fields, listed here for the same reason.
 SETTINGS_DERIVED_KEYS = (
     "categories",
+    # The curated GL leaves, per entity, and the taxonomy revision they came
+    # from. Derived beside `categories` rather than replacing it, so a
+    # client that reads the payload and sends the whole object back does not
+    # trip `unknown_settings_keys` on them (2026-09-23).
+    "gl_accounts",
+    "gl_revision",
     "entity_options",
     "cards_effective",
     "merchants_inert",
     "cost_center_options",
     "fx_daily_rates",
+    # Items 180/181: each merchant's account per company with that
+    # company's name for it, the companies a picker offers, and the
+    # merchants booked to a company their map names no account for.
+    "account_companies",
+    "merchant_accounts",
+    "needs_account",
     "applied",
     "ignored",
 )
@@ -396,6 +422,7 @@ class RunStore:
                 category     TEXT,
                 zoho_account TEXT,
                 updated_at   TEXT,
+                category_source TEXT,
                 PRIMARY KEY (run_id, document_id, line_index)
             );
             CREATE TABLE IF NOT EXISTS intakes (
@@ -681,6 +708,29 @@ class RunStore:
                     f"ALTER TABLE client_errors ADD COLUMN {column} "
                     "TEXT NOT NULL DEFAULT ''"
                 )
+
+        # category_overrides.category_source (the learning-leak marker,
+        # 2026-09-24): whether a PERSON stated this line's category, or the
+        # row merely carries the model's own guess because the edit was
+        # about something else. Two edits store a category nobody stated -
+        # the note-#62 Confirm (keep the guess as it is) and an
+        # account-only PUT - and sign-off then taught both as corrections.
+        # NULL reads as CATEGORY_SOURCE_HUMAN: every row written before this
+        # column existed is overwhelmingly an explicit pick, and defaulting
+        # the other way would stop every already-reviewed month teaching
+        # anything. The account half needs no marker: `category_edit_account`
+        # stores an explicit pick or an earlier override's account, never
+        # the model's.
+        override_cols = {
+            row["name"]
+            for row in self.conn.execute(
+                "PRAGMA table_info(category_overrides)"
+            ).fetchall()
+        }
+        if "category_source" not in override_cols:
+            self.conn.execute(
+                "ALTER TABLE category_overrides ADD COLUMN category_source TEXT"
+            )
 
     # -- where a charge was printed (note item T3) --------------------------
     #
@@ -1585,16 +1635,30 @@ class RunStore:
 
     # -- category overrides ----------------------------------------------
 
+    def delete_category_overrides(self, run_id: str) -> int:
+        """Remove every category / account pick on a run; returns how many.
+
+        Only the GL switch calls this (`gl_conversion`), after it has copied
+        the rows into the run's snapshot: a bucket pick cannot stand on a
+        month whose categories are account codes."""
+        cur = self.conn.execute(
+            "DELETE FROM category_overrides WHERE run_id = ?", (run_id,))
+        self.conn.commit()
+        return cur.rowcount
+
     def get_category_overrides(self, run_id: str) -> dict[tuple[str, int], dict]:
         rows = self.conn.execute(
-            "SELECT document_id, line_index, category, zoho_account "
-            "FROM category_overrides WHERE run_id = ?",
+            "SELECT document_id, line_index, category, zoho_account, "
+            "category_source FROM category_overrides WHERE run_id = ?",
             (run_id,),
         ).fetchall()
         return {
             (r["document_id"], r["line_index"]): {
                 "category": r["category"],
                 "zoho_account": r["zoho_account"],
+                # A row written before the column existed reads as a
+                # person's own pick; see the migration note above.
+                "category_source": r["category_source"] or CATEGORY_SOURCE_HUMAN,
             }
             for r in rows
         }
@@ -1607,15 +1671,32 @@ class RunStore:
         category: str | None,
         zoho_account: str | None,
         updated_at: str,
+        *,
+        category_source: str,
     ) -> None:
+        """Upsert one line's category / account pick.
+
+        `category_source` is REQUIRED and keyword-only on purpose: it is the
+        one fact the learning path cannot recover afterwards, and every
+        writer knows it at the moment it writes. A default here would let a
+        new caller teach the model its own guess by omission, which is the
+        leak this column closed."""
+        if category_source not in CATEGORY_SOURCES:
+            raise ValueError(
+                f"invalid category_source {category_source!r}; "
+                f"expected {CATEGORY_SOURCES}"
+            )
         self.conn.execute(
             "INSERT INTO category_overrides (run_id, document_id, line_index, "
-            "category, zoho_account, updated_at) VALUES (?, ?, ?, ?, ?, ?) "
+            "category, zoho_account, updated_at, category_source) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(run_id, document_id, line_index) DO UPDATE SET "
             "category = excluded.category, "
             "zoho_account = excluded.zoho_account, "
-            "updated_at = excluded.updated_at",
-            (run_id, document_id, line_index, category, zoho_account, updated_at),
+            "updated_at = excluded.updated_at, "
+            "category_source = excluded.category_source",
+            (run_id, document_id, line_index, category, zoho_account, updated_at,
+             category_source),
         )
         self.conn.commit()
 
@@ -1966,6 +2047,29 @@ class RunStore:
         ).fetchall()
         return {r["group_id"]: r["resolution"] for r in rows}
 
+    # Item 204 step 4 follow-up: the tables a month's own derivations read.
+    RUN_INPUT_TABLES = (
+        "runs", "decisions", "duplicate_resolutions",
+        "expense_field_overrides", "expense_edits",
+    )
+
+    def run_inputs_digest(self, run_id: str) -> str:
+        """A digest of every row of this run in `RUN_INPUT_TABLES`: the run
+        row (snapshot, config, label) and its decisions, duplicate rulings,
+        field overrides and edits. Equal digests mean equal inputs, so a
+        caller may reuse what it derived from them; any write to one of
+        those rows changes the digest."""
+        h = hashlib.sha256()
+        for table in self.RUN_INPUT_TABLES:
+            h.update(f"\x00{table}\x00".encode())
+            rows = self.conn.execute(
+                f"SELECT * FROM {table} WHERE run_id = ?", (run_id,)
+            ).fetchall()
+            for text in sorted(repr(tuple(r)) for r in rows):
+                h.update(text.encode("utf-8"))
+                h.update(b"\x00")
+        return h.hexdigest()
+
     def set_duplicate_resolution(
         self, run_id: str, group_id: str, resolution: str, updated_at: str
     ) -> None:
@@ -2239,3 +2343,26 @@ class RunStore:
             (caller, float(since)),
         ).fetchone()
         return int(row["n"])
+
+
+def open_read_only(db_path: str | Path) -> RunStore | None:
+    """Case 9 build 3 (item 204): a `RunStore` over a READ-ONLY connection to
+    an existing database, or None when there is no such file.
+
+    For a reader that runs inside another request's view build: the month's
+    settled-cards map reads the claim a neighbour month holds on one of its
+    receipts, and the functions that build it are handed a run, not a store.
+    It skips `_init_schema` and `_migrate` on purpose. The request building
+    the view opened this database the normal way, so the schema is current;
+    a second connection issuing even no-op DDL could wait on that request's
+    own write lock. `mode=ro` cannot write, so it never takes the lock, and a
+    wrong path yields None rather than a fresh empty database.
+    """
+    path = Path(db_path)
+    if not path.is_file():
+        return None
+    store = RunStore.__new__(RunStore)
+    store.db_path = path
+    store.conn = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
+    store.conn.row_factory = sqlite3.Row
+    return store

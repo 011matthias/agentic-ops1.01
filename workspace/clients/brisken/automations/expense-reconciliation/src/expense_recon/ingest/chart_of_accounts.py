@@ -161,6 +161,10 @@ class ChartOfAccounts:
         name = name.strip().lower()
         return next((a for a in self.accounts if a.name.lower() == name), None)
 
+    def by_account_id(self, account_id: str) -> Account | None:
+        account_id = account_id.strip()
+        return next((a for a in self.accounts if a.account_id == account_id), None)
+
     def resolve(self, name_or_code: str) -> Account | None:
         """Resolve by exact code first, then exact name. The categorizer
         returns either form; this collapses both to one Account."""

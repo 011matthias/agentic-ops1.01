@@ -1,379 +1,111 @@
 # Agentic Ops
 
-**Code-based automation infrastructure for client projects.**
+The working repo for UnpauseAI's client automation. Claude Code does most of the
+building here, under rules and hooks that check its work, and every change ships
+through a pull request and CI.
 
-Build, test, and deploy Python automations with AI-powered self-healing capabilities.
+It holds three things: client work, a few internal projects, and the harness
+itself (the rules, hooks, skills and tools that make the agent's output checkable).
 
-```
-     ___                    __  _         ____
-    /   | ____ ____  ____  / /_(_)____   / __ \____  _____
-   / /| |/ __ `/ _ \/ __ \/ __/ / ___/  / / / / __ \/ ___/
-  / ___ / /_/ /  __/ / / / /_/ / /__   / /_/ / /_/ (__  )
- /_/  |_\__, /\___/_/ /_/\__/_/\___/   \____/ .___/____/
-       /____/                              /_/
-```
+> This repository is public. Anything tracked is world-readable, so client
+> context, credentials and personal data live only in gitignored paths
+> (`workspace/clients/*/context/`, `.env`).
 
----
+## Current work
 
-## How It Works
+The state of each workstream lives in its status file, not in this README.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              AGENTIC OPS                                    │
-│                                                                             │
-│   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
-│   │  N8N JSON   │    │  NATURAL    │    │   MANUAL    │    │  EXISTING   │  │
-│   │   EXPORT    │    │  LANGUAGE   │    │    SPEC     │    │    CODE     │  │
-│   └──────┬──────┘    └──────┬──────┘    └──────┬──────┘    └──────┬──────┘  │
-│          │                  │                  │                  │         │
-│          ▼                  ▼                  ▼                  ▼         │
-│   ┌──────────────────────────────────────────────────────────────────────┐  │
-│   │                        SPEC GENERATION                               │  │
-│   │                                                                      │  │
-│   │   /n8n-converter  │  /spec-creator  │  /spec-updater                 │  │
-│   └──────────────────────────────────────────────────────────────────────┘  │
-│                                    │                                        │
-│                                    ▼                                        │
-│   ┌──────────────────────────────────────────────────────────────────────┐  │
-│   │                     AUTOMATION SPEC (.md)                            │  │
-│   │  ┌──────────────────────────────────────────────────────────────┐    │  │
-│   │  │  - Mermaid flow diagram                                      │    │  │
-│   │  │  - API references                                            │    │  │
-│   │  │  - Edge cases & error handling                               │    │  │
-│   │  │  - Testing criteria                                          │    │  │
-│   │  └──────────────────────────────────────────────────────────────┘    │  │
-│   └──────────────────────────────────────────────────────────────────────┘  │
-│                                    │                                        │
-│                                    ▼                                        │
-│   ┌──────────────────────────────────────────────────────────────────────┐  │
-│   │                       IMPLEMENTATION                                 │  │
-│   │                                                                      │  │
-│   │   Claude Code implements automation from spec                        │  │
-│   │   ├── app/automations/{name}.py                                      │  │
-│   │   ├── app/routers/{webhooks}.py                                      │  │
-│   │   └── tests/test_{name}.py                                           │  │
-│   └──────────────────────────────────────────────────────────────────────┘  │
-│                                    │                                        │
-│                                    ▼                                        │
-│   ┌──────────────────────────────────────────────────────────────────────┐  │
-│   │                         VALIDATION                                   │  │
-│   │                                                                      │  │
-│   │   testing-agent validates against spec                               │  │
-│   │   ├── Unit tests                                                     │  │
-│   │   ├── Dry-run execution                                              │  │
-│   │   └── Acceptance criteria check                                      │  │
-│   └──────────────────────────────────────────────────────────────────────┘  │
-│                                    │                                        │
-│                                    ▼                                        │
-│   ┌──────────────────────────────────────────────────────────────────────┐  │
-│   │                          DEPLOY                                      │  │
-│   │                                                                      │  │
-│   │   deployer pushes to Railway                                         │  │
-│   │   ├── GitHub repo (git subtree)                                      │  │
-│   │   ├── Railway deployment                                             │  │
-│   │   └── Environment configuration                                      │  │
-│   └──────────────────────────────────────────────────────────────────────┘  │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+| Client or project | What | Runs on | Status |
+| --- | --- | --- | --- |
+| **Brisken** | Expense reconciliation (p1); lead generation for Rome 2026, the outreach engine and the Lead Desk (p2) | Python services on Fly.io, Microsoft Graph, a Lovable frontend | [`clients/brisken/status/`](workspace/clients/brisken/status/) |
+| **Meji Media** | Christmas-enquiry pipeline (live), opportunity radar | Make.com | [`clients/meji-media/status/`](workspace/clients/meji-media/status/) |
+| **Upwork independence** | Finding clients outside Upwork | | [`projects/upwork-independence/status/`](workspace/projects/upwork-independence/status/) |
+
+Smaller internal projects (local-business demo sites, an AI-visibility probe,
+service ideas) sit in [`workspace/projects/`](workspace/projects/), each with its
+own README.
+
+## Layout
+
+```text
+workspace/
+  clients/{client}/
+    specs/            1-spec -> 2-build -> 3-test -> 4-live
+    automations/      the code that runs for the client
+    deliverables/     what the client sees
+    status/           one file per workstream, kept current
+    context/          IDs, comms log, client data (gitignored)
+  projects/{project}/ internal work, same shape where it applies
+.claude/
+  rules/              constraints loaded into every session
+  hooks/              enforcement that fires on tool calls
+  patterns/           regex-shaped rules read by one generic hook
+  skills/ agents/ commands/
+tools/                scripts and their tests, indexed in tools/INDEX.md
+docs/                 checkpoints, daily session logs, friction register
+platform/             legacy website source, kept for local proposal builds
 ```
 
----
+## How a piece of work runs
 
-## Architecture
-
-### Multi-Client Isolation
-
-Each client gets their own isolated infrastructure:
-
-```
-                    ┌───────────────────────────────────────┐
-                    │           AGENTIC OPS REPO            │
-                    │                                       │
-                    │  ┌─────────────────────────────────┐  │
-                    │  │           api-docs/             │  │
-                    │  │   (shared API documentation)    │  │
-                    │  └─────────────────────────────────┘  │
-                    │                                       │
-                    │  ┌─────────────────────────────────┐  │
-                    │  │           templates/            │  │
-                    │  │   (boilerplate for new clients) │  │
-                    │  └─────────────────────────────────┘  │
-                    │                                       │
-                    │  ┌────────────────────────────────┐  │
-                    │  │            clients/            │  │
-                    │  │                                │  │
-┌───────────────────┼──┼─── client-a/ ──────────────────┼──┼───────────────────┐
-│                   │  │    │                           │  │                   │
-│                   │  │    ├── specs/                  │  │                   │
-│  GIT SUBTREE      │  │    │   └── automations/        │  │    RAILWAY        │
-│  ────────────►    │  │    │       ├── a1-xxx.md       │  │    ────────►      │
-│                   │  │    │       └── a2-xxx.md       │  │                   │
-│  akkton/  │  │    │                           │  │   herbox-sweden   │
-│  agentic-ops--    │  │    └── automations/ ──────────►│──┼──► Railway App    │
-│  herbox-sweden    │  │        └── (FastAPI app)       │  │                   │
-│                   │  │                                │  │                   │
-└───────────────────┼──┼────────────────────────────────┼──┼───────────────────┘
-                    │  │                                │  │
-┌───────────────────┼──┼─── uplifted-consulting/ ───────┼──┼───────────────────┐
-│                   │  │    │                           │  │                   │
-│  GIT SUBTREE      │  │    ├── specs/                  │  │    RAILWAY        │
-│  ────────────►    │  │    │   └── automations/        │  │    ────────►      │
-│                   │  │    │                           │  │                   │
-│  akkton/  │  │    └── automations/ ──────────►│──┼──► uplifted       │
-│  agentic-ops--    │  │        └── (FastAPI app)       │  │    Railway App    │
-│  uplifted-...     │  │                                 │  │                   │
-│                   │  │                                 │  │                   │
-└───────────────────┼──┼─────────────────────────────────┼──┼───────────────────┘
-                    │  │                                 │  │
-                    │  └─────────────────────────────────┘  │
-                    │                                       │
-                    └───────────────────────────────────────┘
+```text
+/comd_resume {client}              reload the last checkpoint and status files
+/comd_build-automation {client}    plan, build, test and deploy against a spec
+/comd_test {client} {id}           local, then dev, then production
+/comd_deploy {client}              ship behind the test gates
+/comd_checkpoint                   save state, log friction, update status files
 ```
 
-### Self-Healing Loop
+A spec drives each build. It moves from `specs/1-spec` to `specs/4-live`, and its
+frontmatter `stage` says where it stands. `/comd_help-system` lists every command.
 
-When automations fail, they can self-heal:
+## How changes ship
 
-```
-     ┌─────────────────────────────────────────────────────────────┐
-     │                   AUTOMATION RUNNING                        │
-     └─────────────────────────────┬───────────────────────────────┘
-                                   │
-                                   ▼
-                          ┌───────────────┐
-                          │  Error occurs │
-                          └───────┬───────┘
-                                  │
-                                  ▼
-              ┌───────────────────────────────────────┐
-              │        Log error + step history       │
-              │          to client database           │
-              └───────────────────┬───────────────────┘
-                                  │
-                                  ▼
-              ┌───────────────────────────────────────┐
-              │     Trigger self-healing webhook      │
-              │         (if configured)               │
-              └───────────────────┬───────────────────┘
-                                  │
-                                  ▼
-              ┌───────────────────────────────────────┐
-              │    Claude agent receives context:     │
-              │    - Error message                    │
-              │    - Step history                     │
-              │    - Automation code                  │
-              └───────────────────┬───────────────────┘
-                                  │
-                                  ▼
-                       ┌─────────────────────┐
-                       │  Analyze & attempt  │
-                       │       fix           │
-                       └──────────┬──────────┘
-                                  │
-                    ┌─────────────┴─────────────┐
-                    │                           │
-                    ▼                           ▼
-          ┌─────────────────┐         ┌─────────────────┐
-          │     SUCCESS     │         │     FAILURE     │
-          │  auto_resolved  │         │  notify user    │
-          └─────────────────┘         └─────────────────┘
-```
+1. Every change starts on a branch (`client/{client}/...`, `docs/...`, `sys/...`).
+   Nothing is committed to `main` directly.
+2. Once the change is verified, commit, push and pull request run without asking.
+3. CI decides the merge: type check, lint and build, the enforcement-hook test
+   suite, a gitleaks secret scan, spell check and Playwright smoke tests. A green
+   PR merges automatically; a red one waits.
+4. Anything irreversible or outward-facing needs an explicit yes from the owner:
+   deploys, force pushes, and any write to a client's live systems (sending mail,
+   starting a campaign, changing records).
 
----
+The full rules: [`rule_no_auto_commit.md`](.claude/rules/rule_no_auto_commit.md)
+and [`rule_instantly_invasive.md`](.claude/rules/rule_instantly_invasive.md).
 
-## Automation Status Legend
+## The harness
 
-Each automation progresses through a well-defined lifecycle:
+The agent does most of the work, so its mistakes have to be caught by something
+sturdier than its own memory. Fixes are ranked by how reliably they fire:
 
-| Status | Description | What Happens |
-|--------|-------------|--------------|
-| `planned` | Automation is planned but no spec exists | Requirements gathering |
-| `spec_created` | Spec document exists, implementation not started | Spec review |
-| `implemented` | Code written, not tested | Ready for testing |
-| `tested_locally` | Local tests pass (unit + dry-run) | Ready for dev testing |
-| `tested_dev` | Live dev test passed with real APIs | Ready for deployment |
-| `deployed` | Deployed to Railway | Ready for production testing |
-| `tested_production` | Limited production test passed | Monitoring live execution |
-| `tested_live` | Working in production (verified via logs) | Ready for documentation |
-| `documentation_created` | Technical + client docs generated | Complete |
-| `completed` | Fully live and documented | Maintenance mode |
-| `needs_fixes` | Requires bug fixes or maintenance | Fix required |
+1. **Tools and hooks** run on every tool call and cannot be forgotten.
+2. **Rules** in `.claude/rules/` are loaded into every session and apply at the
+   moment of decision.
+3. **Memory** depends on recall and is the last resort.
 
-**Status Flow:**
-```
-planned → spec_created → implemented → tested_locally → tested_dev → deployed → tested_production → tested_live → documentation_created → completed
-                                        ↑                                                    ↑
-                                        └── Any status can revert to needs_fixes ──────────┘
-```
+When a slip repeats, its fix moves up a rung. Every slip is logged in
+[`docs/friction-register.md`](docs/friction-register.md), and `/comd_system-dev`
+turns the patterns there into new hooks and rules.
 
----
+## Related repositories
 
-## Quick Start
-
-### 1\. New Client Setup
-
-```bash
-# Initialize folder structure
-/new-client acme-corp
-
-# Creates:
-# clients/acme-corp/
-# ├── specs/
-# │   └── automations/
-# ├── context/
-# └── automations/   (from template)
-```
-
-### 2\. Build an Automation
-
-```bash
-# End-to-end automation building
-/build-automation acme-corp
-```
-
-This orchestrates the full pipeline:
-
-```
-  /build-automation
-         │
-         ├──► 1. PLAN      ─► spec-creator skill
-         │                    generates spec with Mermaid diagram
-         │
-         ├──► 2. CODE      ─► implement automation from spec
-         │                    extends BaseAutomation class
-         │
-         ├──► 3. TEST      ─► testing-agent validates
-         │                    runs tests, dry-run, checks criteria
-         │
-         ├──► 4. DOCS      ─► doc-generator creates
-         │                    technical + client-facing docs
-         │
-         └──► 5. DEPLOY    ─► deployer pushes
-                              GitHub + Railway deployment
-```
-
-### 3\. Client Handoff
-
-When ready to give client their own repo:
-
-```bash
-/client-handoff acme-corp
-
-# Creates:
-# - GitHub repo: akkton/agentic-ops--acme-corp
-# - Git subtree connection for future syncs
-```
-
----
-
-## Skills, Agents & Commands
-
-### Skills (Specialized Workflows)
-
-| Skill | Command | Purpose |
+| Repository | What it holds | Relation to this repo |
 | --- | --- | --- |
-| spec-creator | /spec-creator | Create automation specs from requirements |
-| spec-updater | /spec-updater | Add features to existing specs |
-| n8n-converter | /n8n-converter | Convert N8N workflows to Python specs |
-| api-docs-fetcher | /fetch-api | Download API documentation |
-| api-boilerplate | /api-boilerplate | Generate Python API clients |
-| meta-builder | /meta-builder | Create new skills, commands, agents |
+| `akkton/agentic-ops` (private) | Nico's copy of this system, with his clients, including Wärme Wimmer | This repo was copied from it on 2026-05-07; the two have not synced since |
+| `011matthias/brisken-expense-review` (private) | The Lovable-built frontend of the Brisken expense app | Lovable keeps its own repo; the backend lives here |
+| `akkton/unpauseai-web` (private) | unpauseai.com | Moved out of `platform/` on 2026-07-25; the site publishes from there |
+| `011matthias/agentic-dev1` | Software products, and the production build for any local-web prospect who signs | Product builds kept apart from client operations |
 
-### Agents (Autonomous Workers)
+## Working here
 
-| Agent | Purpose |
-| --- | --- |
-| testing-agent | Validate implementations against specs |
-| doc-generator | Generate technical + client documentation |
-| deployer | Deploy to Railway with test gates |
-
-### Commands (User Actions)
-
-| Command | Purpose |
-| --- | --- |
-| /new-client {name} | Initialize client folder structure |
-| /client-handoff {name} | Create GitHub repo + git subtree |
-| /build-automation {name} | End-to-end automation building |
-| /deploy {name} | Deploy to Railway |
-| /checkpoint | Save conversation state |
-
----
-
-## Folder Structure
-
-```
-Agentic Ops/
-│
-├── api-docs/                    # Shared API documentation
-│   ├── fortnox/
-│   └── upsales/
-│
-├── clients/                     # Per-client isolation
-│   └── {client-name}/
-│       ├── reference/           # Symlink to client data
-│       ├── specs/
-│       │   ├── README.md        # Index of automations
-│       │   └── automations/     # Individual spec files
-│       │       ├── a1-xxx.md
-│       │       └── a2-xxx.md
-│       ├── context/             # Client notes
-│       └── automations/         # Deployable app (git subtree)
-│           ├── app/
-│           │   ├── automations/ # Automation classes
-│           │   ├── routers/     # Webhooks, dashboard
-│           │   └── templates/   # Dashboard UI
-│           ├── docs/
-│           │   ├── technical/   # Developer docs
-│           │   └── client/      # End-user docs
-│           └── tests/
-│
-├── templates/
-│   ├── client-automation/       # Boilerplate for new clients
-│   ├── api-clients/             # Generated API client templates
-│   └── specs/                   # Spec templates
-│
-└── .claude/
-    ├── skills/                  # AI skills
-    ├── agents/                  # Specialized agents
-    └── commands/                # User commands
-```
-
----
-
-## Tech Stack
-
-| Component | Technology |
-| --- | --- |
-| Runtime | Python 3.11+ with UV |
-| Framework | FastAPI |
-| AI | Claude Code (Anthropic) |
-| Deployment | Railway |
-| Version Control | Git subtrees for client isolation |
-| Database | SQLite (per-client) |
-
----
-
-## Running Locally
-
-```bash
-# Navigate to client automations
-cd clients/{client-name}/automations
-
-# Install dependencies
-uv sync
-
-# Run tests
-uv run pytest tests/
-
-# Run specific automation (dry-run)
-uv run python -m app.automations.{name} --dry-run
-
-# Start development server
-uv run uvicorn app.main:app --reload
-```
-
----
-
-## License
-
-Private repository. All rights reserved.
+- Python tooling runs through [uv](https://github.com/astral-sh/uv); each script
+  declares its own dependencies inline (PEP 723).
+- `uv run tools/doctor.py` runs the full health-check battery.
+- Before pushing a change under `tools/` or `.claude/hooks/`, run
+  `uv run tools/preflight-hooks.py --full`; it reproduces the CI hook job.
+- Two Claude sessions at once need two `git worktree`s. A shared checkout shares
+  HEAD, index and stash, and the sessions collide.
+- Further reading: [`CLAUDE.md`](CLAUDE.md) (the agent's operating manual),
+  [`tools/INDEX.md`](tools/INDEX.md) (every tool, one line each),
+  [`docs/INDEX.md`](docs/INDEX.md) (checkpoint index).
