@@ -167,15 +167,31 @@ def test_api_memory_put_category_upserts_count_preserving(client):
 
 
 def test_api_memory_put_category_validation(client):
+    """A row key is still required; the vocabulary is no longer refused.
+
+    This row is durable memory, consulted ahead of the model on every later
+    run, so an unrecognised string is DROPPED rather than stored: it would
+    never match anything again and would sit there looking like a decision
+    somebody made. Nothing is written and the reply says so.
+    """
     r = client.put("/api/memory/categories", json={
         "legal_entity_id": LE, "vendor": "X", "category": "Not A Category",
     })
-    assert r.status_code == 400
-    assert "categories" in r.json()  # the allowed list rides the error
+    assert r.status_code == 200, r.text
+    assert r.json()["ignored"] == {"category": "Not A Category"}
+    assert r.json()["category"] == ""
+    with LearningStore(client._data_root / "learning.sqlite") as s:
+        assert s.get_merchant_category(LE, normalize_vendor("X")) is None
+
     r = client.put("/api/memory/categories", json={
         "legal_entity_id": LE, "vendor": "  ", "category": "Office Supplies & Consumables",
     })
     assert r.status_code == 400
+    r = client.put("/api/memory/categories", json={
+        "legal_entity_id": LE, "vendor": "X", "category": "",
+    })
+    assert r.status_code == 400
+    assert r.json()["code"] == "category_required"
 
 
 def test_api_memory_delete_category_leaves_siblings(client):

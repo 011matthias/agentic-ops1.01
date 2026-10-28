@@ -322,6 +322,20 @@ def main():
         write_engagement(ws, table, rows, lo, hi)
         engagements.append((ws.title, name))
 
+    def open_on_expense_recon(wb):
+        """Land on the expense-recon tab, resolved by TABLE name not title.
+
+        Whichever sheet was touched last is otherwise the one Excel opens on,
+        which put these books on Lead Generation or Week Summary (owner flagged
+        it 2026-09-28). June's tab is titled "Timesheet", so the title is not a
+        safe key; HoursLog is.
+        """
+        for i, ws in enumerate(wb.worksheets):
+            if "HoursLog" in ws.tables:
+                for j, other in enumerate(wb.worksheets):
+                    other.sheet_view.tabSelected = j == i
+                wb.active = i
+                return
     orphan = set(per_table) - {n for _t, n in engagements}
     if orphan:
         print("error: hours in {} have no tab in {}".format(sorted(orphan), base.name),
@@ -329,6 +343,7 @@ def main():
         return 1
 
     build_summary(wb, week_label, engagements, summary)
+    open_on_expense_recon(wb)
     wb.save(out)
     print("\nwrote {}".format(out))
     return 0

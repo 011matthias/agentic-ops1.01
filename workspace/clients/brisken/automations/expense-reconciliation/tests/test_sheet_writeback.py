@@ -308,6 +308,28 @@ def test_vendor_guess_carries_confirm_marker(tmp_path):
     out = write_sheet_writeback(
         src, tmp_path / "out.xlsx", outcome, [_tx(2)], [],
         charge_categorizations={
+            "card-1:2": _charge_cat(source=ClassificationSource.VENDOR)
+        },
+    )
+
+    ws = load_workbook(out).active
+    assert ws.cell(row=2, column=4).value == (
+        "Other Infra and IT Costs for Cloud Business (confirm)"
+    )
+
+
+def test_a_guess_with_no_account_never_writes_its_category(tmp_path):
+    """Item 5. The column is the ACCOUNT; a category guess with no account
+    used to land here as `Software & Subscriptions (confirm)`, which reads
+    as an account to confirm. It is flagged instead, with nothing to
+    confirm."""
+    src = tmp_path / "chris.xlsx"
+    _write_workbook(src)
+    outcome = MatchOutcome(unmatched_transactions=["card-1:2"])
+
+    out = write_sheet_writeback(
+        src, tmp_path / "out.xlsx", outcome, [_tx(2)], [],
+        charge_categorizations={
             "card-1:2": _charge_cat(
                 source=ClassificationSource.VENDOR, account=None
             )
@@ -315,7 +337,7 @@ def test_vendor_guess_carries_confirm_marker(tmp_path):
     )
 
     ws = load_workbook(out).active
-    assert ws.cell(row=2, column=4).value == "Software & Subscriptions (confirm)"
+    assert ws.cell(row=2, column=4).value == "(account unmapped - assign)"
 
 
 def test_review_charge_keeps_no_receipt_placeholder(tmp_path):

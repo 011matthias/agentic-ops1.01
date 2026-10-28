@@ -126,6 +126,8 @@ def build_expense_report_pdf(
     conversions: "Mapping[int, object] | None" = None,
     conversion_total: str = "",
     conversion_note: str = "",
+    bills: Sequence[dict] | None = None,
+    bills_totals: dict[str, str] | None = None,
 ) -> bytes:
     """Render the month's report: listing first, then the receipts.
 
@@ -231,6 +233,17 @@ def build_expense_report_pdf(
     which a total reads as zero, so the caller names them: each gets the
     "amount unreadable, not in total" caption and a place in the footer,
     the same as a cell that would not parse.
+
+    `bills` (Build 4 / backlog item 218, owner decisions 2026-09-25) are the
+    month's invoices paid by bank transfer, already left out of `rows`:
+
+        {"n": 14, "date": "2026-07-30", "vendor": "Tricarico",
+         "amount": "27,203.34", "currency": "BRL", "company": ""}
+
+    rendered as their own "Bills (paid by bank transfer)" section after the
+    reimbursements, with `bills_totals` (per currency, preformatted) as its
+    sums line. Numbers continue the listing's, as the reimbursements' do.
+    Omitted => nothing printed, as before.
     """
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
@@ -587,6 +600,37 @@ def build_expense_report_pdf(
             story.append(Paragraph(
                 _esc(f"Owed to {person}: {owed_line}"), styles["sub"]
             ))
+
+    # ── bills paid by bank transfer (Build 4 / item 218) ─────────────
+    if bills:
+        _flow(Spacer(1, 12))
+        story.append(Paragraph("Bills (paid by bank transfer)", styles["caption"]))
+        story.append(Paragraph(
+            "Not paid by a company card, so no card statement covers them. "
+            "Not part of the listing or its totals above; booked by hand in "
+            "Zoho.",
+            styles["capsub"],
+        ))
+        b_rows: list[list] = [[
+            Paragraph(_esc(name), styles["cellhead"])
+            for name in ("#", "Date", "Supplier", "Company", "Amount", "Ccy")
+        ]]
+        for row in bills:
+            b_rows.append([
+                Paragraph(_esc(str(row.get("n", ""))), styles["cell"]),
+                Paragraph(_esc(str(row.get("date", ""))), styles["cell"]),
+                Paragraph(_esc(str(row.get("vendor", ""))), styles["cell"]),
+                Paragraph(_esc(str(row.get("company", ""))), styles["cell"]),
+                Paragraph(_esc(str(row.get("amount", ""))), styles["cellr"]),
+                Paragraph(_esc(str(row.get("currency", ""))), styles["cell"]),
+            ])
+        b_table = Table(b_rows, colWidths=[26, 70, 160, 80, 90, 40], repeatRows=1)
+        b_table.setStyle(table_style())
+        story.append(b_table)
+        bills_line = "  ·  ".join(
+            f"{ccy} {amount}" for ccy, amount in sorted((bills_totals or {}).items())
+        ) or "no amounts read"
+        story.append(Paragraph(_esc(f"Bills total: {bills_line}"), styles["sub"]))
 
     if prepared_note:
         _flow(Spacer(1, 8))

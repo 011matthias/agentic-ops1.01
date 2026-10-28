@@ -60,6 +60,9 @@ def categorization_to_dict(c: Categorization | None) -> dict | None:
         "source": c.source.value,
         "reasoning": c.reasoning,
         "decision": c.decision,
+        # Only a refusal carries one; omitted otherwise so every snapshot the
+        # bucket path writes stays byte-identical.
+        **({"refusal": c.refusal} if c.refusal else {}),
     }
 
 
@@ -67,13 +70,21 @@ def categorization_from_dict(d: dict | None) -> Categorization | None:
     if d is None:
         return None
     return Categorization(
-        category=d["category"],
-        zoho_account=d["zoho_account"],
+        # .get on both halves of the classification: the eight-bucket
+        # vocabulary is being retired in favour of a GL leaf, so a snapshot
+        # written by a later version may carry the account and omit the
+        # category. A bare subscript would KeyError on load, and a month
+        # that cannot be opened is not a recoverable state. Same reasoning
+        # as `decision` below; this read has to tolerate the absence BEFORE
+        # any writer stops emitting the key.
+        category=d.get("category"),
+        zoho_account=d.get("zoho_account"),
         confidence=d["confidence"],
         source=ClassificationSource(d["source"]),
         reasoning=d.get("reasoning", ""),
         # .get keeps pre-WS2 snapshots loadable (no decision key).
         decision=d.get("decision"),
+        refusal=d.get("refusal"),
     )
 
 
@@ -240,8 +251,14 @@ def receipt_to_dict(r: Receipt) -> dict:
         "detected_time": r.detected_time,
         "invoice_number": r.invoice_number,
         "receipt_number": r.receipt_number,
+        # Item 223 step 4 (2026-09-27).
+        "document_kind": r.document_kind,
         # Item 87 (2026-09-17).
         "card_key": r.card_key,
+        # Item 250 (2026-10-07).
+        "sender_note": r.sender_note,
+        "sender_note_entity": r.sender_note_entity,
+        "sender_note_split": r.sender_note_split,
     }
 
 
@@ -285,8 +302,14 @@ def receipt_from_dict(d: dict) -> Receipt:
         detected_time=d.get("detected_time"),
         invoice_number=d.get("invoice_number"),
         receipt_number=d.get("receipt_number"),
+        # .get keeps pre-2026-09-27 snapshots loadable (no item-223 key).
+        document_kind=d.get("document_kind"),
         # .get keeps pre-2026-09-17 snapshots loadable (no item-87 key).
         card_key=d.get("card_key"),
+        # .get keeps pre-2026-10-07 snapshots loadable (no item-250 keys).
+        sender_note=d.get("sender_note") or "",
+        sender_note_entity=d.get("sender_note_entity") or "",
+        sender_note_split=bool(d.get("sender_note_split")),
     )
 
 

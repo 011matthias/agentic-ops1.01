@@ -79,9 +79,49 @@ def test_a_masked_two_digit_tail_is_an_ending(hint, ending):
     "VISA",
     "",
     None,
+    # item 199: an ending word next to an amount, a balance or a period
+    "valor final 38,00",
+    "Total final: 38.50",
+    "ending balance 38",
+    "final total 38",
+    "last 30 days",
+    "due in 30 days",
+    "Endbetrag 38,00",
+    "in 12 instalments",
+    "last two digits: 38 and 49",       # two endings, through the new leads
+    "terminado em 38 e 49",
 ])
 def test_anything_else_is_not_an_ending(hint):
     assert masked_short_ending(hint) is None
+
+
+# Item 199 (owner, 2026-09-24): more wordings. September's GoDaddy printed
+# the first one verbatim and stayed card-less under the two-word list.
+@pytest.mark.parametrize("hint", [
+    "We have billed your Visa card ending with the last two digits: 38",
+    "credit card ending with 38",
+    "card no. ending 38",
+    "ends in 38",
+    "last 2 digits: 38",
+    "last digits: 38",
+    "com final 38",
+    "terminado em 38",
+    "Cartão com terminação 38",
+    "últimos dois dígitos 38",
+    "endet auf 38",
+    "mit Endung 38",
+    "Endziffern 38",
+    "letzten 2 Stellen: 38",
+    "se terminant par 38",
+    "finissant par 38",
+    "2 derniers chiffres : 38",
+    "terminada en 38",
+    "los últimos dos dígitos: 38",
+])
+def test_an_ending_phrase_names_two_digits(hint):
+    assert masked_short_ending(hint) == "38"
+    assert hint_digit_run(hint) == "38"
+    assert is_generic_tender(hint) is False
 
 
 def test_the_bin_is_never_shown_as_the_card_number():
@@ -239,3 +279,32 @@ def test_the_strip_groups_the_contest_on_its_two_digits(client, monkeypatch):
     assert groups[0]["digits"] == "76"
     assert groups[0]["ambiguous"] is True
     assert groups[0]["n_rows"] == 2
+
+
+GODADDY = "We have billed your Visa card ending with the last two digits: 38"
+
+
+def test_the_godaddy_wording_gets_its_card_and_is_not_private(client, monkeypatch):
+    # item 199: September's GoDaddy, 446.99 EUR, card-less and suggested
+    # private under the two-word list although only card-2838 ends in 38
+    client.put("/api/settings", json={"cards": _live_setting()})
+    view, rows = _batch(
+        client, monkeypatch,
+        _extraction(vendor="GoDaddy", total="446.99", payment_hint=GODADDY),
+        _extraction(vendor="Padaria", total="12.00",
+                    payment_hint="Visa card ending with the last two digits: 76"),
+    )
+    row = rows[GODADDY]
+    assert row["card"]["key"] == "card-2838"
+    assert row["card_source"] == "hint"
+    assert row["card_ending"] == "38"
+    assert row["legal_entity_id"] == "Corporate Services"
+    assert row["person"] == "owner of 2838"
+    assert row["suggested_private"] is False
+
+    shared = rows["Visa card ending with the last two digits: 76"]
+    assert shared["card"] is None and shared["card_ending"] == ""
+    assert shared["suggested_private"] is False
+    groups = view["card_review"]["unresolved_hints"]
+    assert [g["digits"] for g in groups] == ["76"], groups
+    assert groups[0]["ambiguous"] is True

@@ -91,7 +91,23 @@ def test_null_clears_like_an_empty_string(client, monkeypatch):
     assert _category(_row(client, batch)) is None
 
 
-def test_a_category_outside_the_eight_is_still_refused(client, monkeypatch):
+def test_a_category_from_neither_vocabulary_is_dropped_not_refused(
+    client, monkeypatch
+):
+    """Two vocabularies are live, so the route stopped refusing by name.
+
+    A string from neither is accepted, dropped, and named under `ignored`
+    (the `RETIRED_ENTITY_KEYS` precedent), and the pick already stored is
+    left alone: clearing it would destroy a reviewer's choice to honour a
+    client bug, and refusing would 400 a round-trip the client did not
+    author.
+    """
     batch, row = _batch_with_one_receipt(client, monkeypatch)
-    resp = _set_category(client, batch, row["document_id"], "Groceries")
-    assert resp.status_code == 400
+    doc = row["document_id"]
+    assert _set_category(client, batch, doc, "Travel & Transport"
+                         ).status_code == 200
+
+    resp = _set_category(client, batch, doc, "Groceries")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["ignored"] == {"category": "Groceries"}
+    assert _category(_row(client, batch)) == "Travel & Transport"

@@ -1,6 +1,11 @@
-"""Items 90 + 132: a tighter clean band for the ECB rate, and a warning when a
-typed Settings rate has drifted from it (owner ruling 2026-09-17: tighten the
-band first, then the Settings rates go).
+"""Item 90: a tighter clean band for a central-bank rate.
+
+The typed Settings rates this module also covered were RETIRED on
+2026-09-23 ("no more typing them in settings you can remove that function
+entirely"), so item 132's drift warning -- which existed to say a typed rate
+had drifted from the ECB's -- went with them, and its four tests with it.
+What is left is the band, plus one test pinning that a typed rate still
+sitting in a stored config is ignored rather than obeyed.
 
 Measured before building, Settings rates removed, on a copy of the live July
 month: at the old shared 3% band the ECB rate auto-matched two receipts the
@@ -181,8 +186,9 @@ def test_route_an_ecb_pair_two_and_a_half_percent_off_is_reviewed_not_reconciled
 
 def test_the_matchers_reason_names_the_band_the_rate_source_got():
     """The model's answer replaces the matcher's reason on screen, so the
-    wording is pinned on the matcher: the ECB pair cites 2%, the same gap at
-    a typed rate reconciles, and a whole percentage prints as it always did."""
+    wording is pinned on the matcher: the ECB pair cites 2%, the same gap on
+    a rate the run derived from its own documents reconciles at 3%, and a
+    whole percentage prints as it always did."""
     from datetime import date
     from decimal import Decimal
 
@@ -204,13 +210,55 @@ def test_the_matchers_reason_names_the_band_the_rate_source_got():
     assert m.match_type == MatchType.FX_JUDGMENT, m
     assert f"ECB monthly average rate {JULY_EUR_USD} (2026-07): deviation 2.5% (above 2%;" in m.reason, m.reason
 
-    typed = MatchingConfig.from_dict({"fx_reference_rates": {"EUR:USD": JULY_EUR_USD}})
-    assert match_one(tx, rec, typed).match_type == MatchType.FX_REFERENCE
+    derived = {("EUR", "USD"): (Decimal(JULY_EUR_USD), "receipts", 3)}
+    assert match_one(
+        tx, rec, ecb, derived_rates=derived
+    ).match_type == MatchType.FX_REFERENCE
 
     tx_far = Transaction(**{**tx.__dict__, "amount": Decimal("331.00")})  # 5.0% off
-    m = match_one(tx_far, rec, typed)
+    m = match_one(tx_far, rec, ecb, derived_rates=derived)
     assert m.match_type == MatchType.FX_JUDGMENT
     assert "(above 3%;" in m.reason, m.reason
+
+
+def test_a_rate_typed_in_settings_is_no_longer_read_from_a_stored_config():
+    """The retirement, pinned (owner 2026-09-23: "no more typing them in
+    settings you can remove that function entirely").
+
+    July's and August's stored configs still carry the two rates that used
+    to outrank everything, and the shipped scorer asset still carries the
+    key. Both must keep LOADING -- refusing the key would make an existing
+    month unopenable -- and the rate must be IGNORED, so the pair resolves
+    on the ECB table sitting in the same config. Regress the drop in
+    `_RETIRED_TUNABLES` and this goes red."""
+    from datetime import date
+    from decimal import Decimal
+
+    from expense_recon.matching.deterministic import MatchingConfig, MatchType, match_one
+    from expense_recon.matching.types import Receipt, Transaction
+
+    tx = Transaction(
+        transaction_id="t1", legal_entity_id="", account_id="2838",
+        transaction_date=date(2026, 7, 2), posting_date=None,
+        amount=Decimal("323.09"), transaction_currency="USD",
+        account_card_currency="USD", vendor_from_statement="AMAZON",
+    )
+    rec = Receipt(
+        document_id="r1", legal_entity_id="", detected_date=date(2026, 7, 2),
+        detected_total=Decimal("276.08"), detected_currency="EUR", detected_vendor="Amazon.de",
+    )
+    # The live July shape: the retired typed rate beside the ECB table.
+    cfg = MatchingConfig.from_dict({
+        "fx_ecb_monthly_rates": ECB,
+        "fx_reference_rates": {"EUR:USD": "1.162275"},
+    })
+    assert not hasattr(cfg, "fx_reference_rates")
+    m = match_one(tx, rec, cfg)
+    # At the typed 1.162275 this pair reconciled; at the ECB rate it is
+    # 2.5% off, outside the 2% band, so it defers instead.
+    assert m.match_type == MatchType.FX_JUDGMENT, m
+    assert f"ECB monthly average rate {JULY_EUR_USD}" in m.reason, m.reason
+    assert "1.162275" not in m.reason, m.reason
 
 
 @pytest.mark.parametrize("source", ["statement", "receipts"])
@@ -243,54 +291,6 @@ def test_a_self_derived_rate_keeps_the_three_percent_band(source):
     assert cfg.reference_match_pct("ecb_month") == Decimal("0.02")
 
 
-def test_the_advisory_follows_the_matchers_own_rate_lookup():
-    """Two stored Settings shapes the matcher does not read as a usable
-    EUR:USD rate stay quiet instead of warning or failing the month: a
-    lower-case key (the matcher's lookup is exact, so the pair really runs on
-    the ECB rate) and an absurd rate Settings accepted ("1e30"), whose gap
-    arithmetic overflows."""
-    from datetime import date
-    from decimal import Decimal
-
-    from expense_recon.matching.types import Receipt, Transaction
-    from expense_recon.web.service import _setup_advisories
-
-    tx = Transaction(
-        transaction_id="t1", legal_entity_id="", account_id="2838",
-        transaction_date=date(2026, 7, 2), posting_date=None,
-        amount=Decimal("315.56"), transaction_currency="USD",
-        account_card_currency="USD", vendor_from_statement="AMAZON",
-    )
-    rec = Receipt(
-        document_id="r1", legal_entity_id="", detected_date=date(2026, 7, 2),
-        detected_total=Decimal("276.08"), detected_currency="EUR", detected_vendor="Amazon.de",
-    )
-
-    def drift(rates):
-        cfg = {"matching": {"fx_reference_rates": rates, "fx_ecb_monthly_rates": ECB}}
-        return [a for a in _setup_advisories(cfg, [tx], [rec], has_coa=True)
-                if a.get("code") == "fx_rate_drift"]
-
-    assert len(drift({"EUR:USD": "1.162275"})) == 1  # control: the live rate warns
-    assert drift({"eur:usd": "1.162275"}) == []
-    assert drift({"EUR:USD": "1e30"}) == []
-
-
-def test_route_the_same_gap_at_a_rate_typed_in_settings_still_reconciles(
-    client, monkeypatch
-):
-    """The tighter band is the ECB's only: the same 2.50% at the same rate,
-    typed in Settings, keeps the 3% band and reconciles deterministically."""
-    view = _july(client, monkeypatch, rates={"EUR:USD": JULY_EUR_USD}, charge=GAP_2_5_CHARGE)
-    row = _amazon(view)
-    assert row["effective_bucket"] == "reconciled", row
-    cand = _eur_candidate(row)
-    assert cand["match_type"] == "fx_reference", cand
-    assert cand["fx"]["reference_rate_source"] == "settings"
-    assert cand["fx"]["reference_gap_band"] == "match"
-    assert _drift(view) == []  # typed equal to the ECB: nothing drifted
-
-
 def test_route_an_ecb_pair_inside_two_percent_still_reconciles(client, monkeypatch):
     """Note #43's own pair (315.56 against 315.21, +0.11%) is untouched."""
     view = _july(client, monkeypatch, rates=None, charge=-315.56)
@@ -316,33 +316,3 @@ def test_route_the_judgment_floor_reads_the_ecb_band(client, monkeypatch):
 # ── the drift advisory ───────────────────────────────────────────────────
 
 
-def test_route_a_typed_rate_that_drifted_from_the_ecb_says_so_for_the_month(
-    client, monkeypatch
-):
-    """The live Settings EUR:USD 1.162275 is 1.80% above July's ECB average:
-    more than the 1 point the two bands leave, so July says so, with the
-    numbers beside the sentence for the screen to translate."""
-    view = _july(client, monkeypatch, rates={"EUR:USD": "1.162275"}, charge=-315.56)
-    drift = _drift(view)
-    assert len(drift) == 1, view["summary"]["setup_advisories"]
-    a = drift[0]
-    assert a["setting"] == "fx_reference_rates"
-    assert a["pair"] == "EUR:USD"
-    assert a["settings_rate"] == "1.162275"
-    assert a["ecb_rate"] == JULY_EUR_USD
-    assert a["ecb_month"] == "2026-07"
-    assert a["gap_pct"] == 1.8
-    assert a["limit_pct"] == 1.0
-    assert a["n_receipts"] == 1
-    assert "1.8% above the ECB's 2026-07 average" in a["message"], a["message"]
-
-
-def test_route_a_typed_rate_close_to_the_ecb_or_unused_this_month_is_quiet(
-    client, monkeypatch
-):
-    """EUR:USD 1.15 sits 0.72% above July's average, inside the 1 point; a
-    BRL:USD rate far off (0.15) is not used by a month with no BRL receipt."""
-    view = _july(
-        client, monkeypatch, rates={"EUR:USD": "1.15", "BRL:USD": "0.15"}, charge=-315.56,
-    )
-    assert _drift(view) == [], view["summary"]["setup_advisories"]

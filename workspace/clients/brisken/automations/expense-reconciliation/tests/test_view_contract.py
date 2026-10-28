@@ -55,6 +55,7 @@ pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+from expense_recon.learning import CATEGORY_SOURCE_HUMAN  # noqa: E402
 from expense_recon.llm.client import ExtractedReceipt, MockLLMClient  # noqa: E402
 from expense_recon.matching.types import (  # noqa: E402
     CellFill,
@@ -79,8 +80,16 @@ JPG = b"\xff\xd8\xff\xe0fake-jpeg-bytes"
 # view means editing this table, `docs/api-contract.md`, and the SPA in the
 # same change. That is the point: the edit is the reminder.
 
+# Maps whose keys are DATA rather than field names: the probe collapses each
+# key to `*`, so a new entity is not a new field.
+DATA_KEYED_MAPS = {"gl_accounts"}
+
 EXPENSE_BATCH_CONTRACT = {
     "account_options[]": "string",
+    # Phase 1: per entity label (the row's `legal_entity_id`), the curated
+    # leaves `{code, name, category}` that entity may post to. The SPA picks
+    # this picker only when `category_vocabulary` is "gl".
+    "gl_accounts.*[]": "object",
     "card_review.resolved[]": "object",
     "card_review.resolved[].hints[]": "string",
     "card_review.unresolved_hints[]": "object",
@@ -90,6 +99,11 @@ EXPENSE_BATCH_CONTRACT = {
     # stale SPA renders one truthful row while an updated one shows the
     # group and submits every spelling on Assign.
     "card_review.unresolved_hints[].spellings[]": "string",
+    # Item 214: the strip dropdown's private half. `private_cards[]` are
+    # objects `{digits, person, label}` (active list entries only), and each
+    # group's `private_card_options[]` the digits strings the route accepts.
+    "card_review.private_cards[]": "object",
+    "card_review.unresolved_hints[].private_card_options[]": "string",
     # Item 138: the month page's card tabs. Objects in the PDFs' section
     # order, No card last; `digits[]` and `statements[]` are strings. Empty
     # on a month with fewer than two cards and on a trip.
@@ -158,10 +172,24 @@ EXPENSE_BATCH_CONTRACT = {
     # Item 160: the receipt lines with no category yet -- the exact set
     # the `partial_uncategorized` review reason is about.
     "expenses[].uncategorized_lines[]": "object",
+    # Item 204, case 9: the card labels a card-less row waits for (on the row
+    # and on its `waits_for_statement` review). `card_suggestion.evidence[]`
+    # is typed by `test_case9_row_fields_are_absent_or_well_formed`: these
+    # fixtures load no recurring charge, so a pin here could never be seen.
+    "expenses[].waits_for_statements[]": "string",
+    "expenses[].review.waits_for_statements[]": "string",
+    # Item 223 step 5: this month's receipts that repeat another month's
+    # (vendor, date, total, currency): `{document_id, batch_id,
+    # other_document_id}`. ABSENT when there are none.
+    "cross_month_copies[]": "object",
 }
 
 RUN_CONTRACT = {
     "assignable_receipts[]": "object",
+    # `gl_accounts` is served here too, with the expense batch view's shape,
+    # but this view's fixtures are CLI runs with no entities, so the map is
+    # always empty here and a pin could never be observed. The expense
+    # batch table above is where its element shape is held.
     # Item 138: same list as on the expense batch view, without the two
     # Expenses-page figures.
     "card_sections[]": "object",
@@ -202,6 +230,9 @@ RUN_CONTRACT = {
     # Item 57: same field as on the expense batch view; see above.
     "summary.month_health.suspects[]": "string",
     "summary.setup_advisories[]": "object",
+    # Front 1 step 2: the labels of the active cards with nothing loaded
+    # for the month; empty when every card has a statement.
+    "summary.cards_uncovered[]": "string",
     "unmatched_receipts[]": "object",
     "unmatched_receipts[].line_items[]": "object",
     "unmatched_transactions[]": "object",
@@ -210,6 +241,12 @@ RUN_CONTRACT = {
     # objects `unmatched_receipts[]` carries.
     "copies_set_aside[]": "object",
     "copies_set_aside[].line_items[]": "object",
+    # Item 220: the card labels an unmatched receipt waits on (only with
+    # reason `card_statement_not_loaded` / `statement_not_loaded_for_date`),
+    # and the union of them the completeness sentence names. Both absent
+    # when empty; typed by `test_receipt_waits_item_220.py`.
+    "unmatched_receipts[].waits_for_statements[]": "string",
+    "summary.receipts_waiting_cards[]": "string",
 }
 
 # Paths the fixtures MUST actually populate. Everything the SPA renders as
@@ -251,6 +288,13 @@ EXPENSE_BATCH_MUST_COVER = {
     "card_sections[].statements[]",
     "coverage[].statement_ids[]",
     "expenses[].uncategorized_lines[]",
+    "gl_accounts.*[]",
+    # Item 204: the fixtures' months hold card-less rows no statement covers.
+    "expenses[].waits_for_statements[]",
+    "expenses[].review.waits_for_statements[]",
+    # Item 223 step 5: the reconciling month's Staples 12.00 of 07-02 repeats
+    # the fixture batch's, filed a batch earlier.
+    "cross_month_copies[]",
 }
 
 RUN_MUST_COVER = {
@@ -308,6 +352,8 @@ def _walk(node, path: str, out: dict[str, set[str]]) -> None:
     """
     if isinstance(node, dict):
         for key, value in node.items():
+            if path in DATA_KEYED_MAPS:
+                key = "*"  # the key is data (an entity label), not a field
             _walk(value, f"{path}.{key}" if path else key, out)
         return
     if not isinstance(node, list):
@@ -618,6 +664,9 @@ def _reconciling_month(client, monkeypatch_setattr) -> tuple[dict, dict]:
         # statement's card, `statements[]`) is observed filled.
         _extraction(vendor="Second Card Co", total="11.00", date="2026-07-02",
                     payment_hint="Visa ending 5555"),
+        # Item 223 step 5: the fixture batch's Staples 12.00 of 07-02 again,
+        # so `cross_month_copies[]` is observed filled.
+        _extraction(vendor="Staples", total="12.00", date="2026-07-02"),
     ])
     monkeypatch_setattr("expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
     # A registry card whose digits match the statement's account, so the
@@ -644,6 +693,7 @@ def _reconciling_month(client, monkeypatch_setattr) -> tuple[dict, dict]:
     resp = client.post(f"/api/expense-batches/{batch_id}/receipts", files=[
         ("files", ("m.jpg", JPG + b"m", "application/octet-stream")),
         ("files", ("n.jpg", JPG + b"n", "application/octet-stream")),
+        ("files", ("o.jpg", JPG + b"o", "application/octet-stream")),
     ])
     assert resp.status_code == 200, resp.text
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
@@ -897,7 +947,7 @@ def test_posting_category_proposed_is_absent_or_true_never_false(
         store = RunStore(tmp_path / "recon-web.sqlite")
         store.set_category_override(
             "contract-synth", "d2", 0, "Office Supplies & Consumables", None,
-            "2026-09-15T00:00:00",
+            "2026-09-15T00:00:00", category_source=CATEGORY_SOURCE_HUMAN,
         )
         store.close()
         after = client.get("/api/runs/contract-synth").json()
@@ -1123,7 +1173,7 @@ def fx_payload(tmp_path_factory):
     from expense_recon.matching.deterministic import MatchingConfig, match_month
 
     data_root = tmp_path_factory.mktemp("contract-fx")
-    config = {"matching": {"fx_reference_rates": {"EUR:USD": "1.10"}}}
+    config = {"matching": {"fx_ecb_monthly_rates": {"2026-03": {"USD": "1.10"}, "2026-04": {"USD": "1.10"}, "2026-05": {"USD": "1.10"}, "2026-06": {"USD": "1.10"}, "2026-07": {"USD": "1.10"}, "2026-08": {"USD": "1.10"}, "2026-09": {"USD": "1.10"}, "2026-10": {"USD": "1.10"}}}}
 
     def charge(tx_id, day, amount):
         return Transaction(
@@ -1218,8 +1268,8 @@ def test_month_move_and_printed_identifiers_are_absent_or_typed(
     otherwise. `summary.n_month_moves` is an int on every expense payload.
 
     The module fixtures carry no offer and no identifier, so they pin the
-    absent half; a January month with a slip whose date is typed into April
-    pins the present half."""
+    absent half; a January month holding a slip read as an April date pins
+    the present half (item 251: a TYPED April date moves the slip instead)."""
     import re
 
     for view in payloads["expense_batch"]:
@@ -1231,7 +1281,7 @@ def test_month_move_and_printed_identifiers_are_absent_or_typed(
     monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     mock = MockLLMClient(extraction_responses=[_extraction(
-        date="2026-01-15", time="23:56", invoice_number="HMVWDWIL-0029",
+        date="2026-04-15", time="23:56", invoice_number="HMVWDWIL-0029",
         receipt_number="2247-1655-6392",
     )])
     monkeypatch.setattr("expense_recon.cli._build_llm_client", lambda cfg: (mock, None))
@@ -1246,10 +1296,6 @@ def test_month_move_and_printed_identifiers_are_absent_or_typed(
             files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
         ).json()
         assert client.get(f"/jobs/{job['job_id']}").json()["status"] == "done"
-        assert client.put(
-            f"/api/runs/{batch_id}/expenses/0000__a.jpg",
-            json={"field": "date", "value": "2026-04-15"},
-        ).status_code == 200
         view = client.get(f"/api/expense-batches/{batch_id}").json()
 
     (row,) = view["expenses"]
@@ -1345,6 +1391,44 @@ def test_every_box_count_equals_the_rows_carrying_its_box(payloads):
     assert {"categorized", "uncategorized"} <= seen, seen
 
 
+def test_categories_by_origin_partitions_the_rows_each_payload_counts(payloads):
+    """Item 216 Build 2 step 3. `summary.categories_by_origin` is on both
+    payloads with exactly the keys person / rule / suggestion / none, each an
+    int, and each equals the rows whose own category fields say so (a row
+    carrying `suggested_category` is a suggestion; otherwise its
+    `posting_category.origin`; otherwise none). The four sum to `rows[]` on
+    the run view and to `n_expenses` on the grid, where a decided copy and a
+    bill (`counts_in_total: false`) are in no split, as in no box. Route-level
+    behaviour: `tests/test_counts_by_origin_item_216_build2_step3.py`."""
+    keys = {"person", "rule", "suggestion", "none"}
+
+    def origin(row):
+        if row.get("suggested_category"):
+            return "suggestion"
+        return (row.get("posting_category") or {}).get("origin") or "none"
+
+    seen: set[str] = set()
+    for kind, list_key in (("run", "rows"), ("expense_batch", "expenses")):
+        for view in payloads[kind]:
+            split = view["summary"]["categories_by_origin"]
+            assert set(split) == keys, split
+            assert all(isinstance(v, int) for v in split.values()), split
+            counted = [
+                r for r in view[list_key] if r.get("counts_in_total") is not False
+            ]
+            for key in keys:
+                assert split[key] == sum(1 for r in counted if origin(r) == key), (
+                    kind, key, split,
+                )
+            total = (
+                len(view["rows"]) if kind == "run" else view["summary"]["n_expenses"]
+            )
+            assert sum(split.values()) == total, (kind, split, total)
+            seen.update(k for k, v in split.items() if v)
+    # Non-vacuity: the fixtures carry a person's pick and an unanswered row.
+    assert {"person", "none"} <= seen, seen
+
+
 def test_unmatched_reason_code_is_on_every_unmatched_item_and_nowhere_else(payloads):
     """Items 83 + 75. `reason_code` is a string from a closed set on EVERY
     element of `unmatched_receipts[]`, `copies_set_aside[]` (always
@@ -1399,6 +1483,9 @@ def test_expense_card_source_is_on_every_row_from_a_closed_set(payloads):
             assert e["card_source"] in {
                 "hint", "override", "learned", "settled_charge", "merchant",
                 "none",
+                # Item 204 step 4: the billing account's card
+                # (`tests/test_account_card_c9.py`).
+                "account",
             }, e
             assert (e["card_source"] == "none") == (e["card"] is None), e
             seen.add(e["card_source"])
@@ -1580,21 +1667,41 @@ REVIEW_REASON_CODES_PIN = {
     # the category judgment (`_matched_category_review`, both payloads)
     "uncategorized", "partial_uncategorized", "category_account_mismatch",
     "vendor_guess", "unknown_provenance",
+    # item 216 Build 2 step 2: the model's reading on a GL month, confirmable
+    "model_suggestion",
+    # a GL-engine refusal (`_refusal_review`, receipt lines and receiptless
+    # charges); carries `refusal` beside the code. The published SPA does not
+    # localize it yet and shows the English `reason`.
+    "category_refused",
     # the run row (`resolve_review`)
     "uncertain_match", "receiptless_suggested",
     # the expense row (`_expense_review`)
     "missing_fields", "date_outside_period", "suggested_private",
     "needs_entity", "needs_entity_settled_outside", "untrusted_instructions",
     "invoice_read_as_statement", "needs_person", "needs_cost_center",
+    # item 204, case 9: a card-less row waiting for statements
+    "waits_for_statement",
+    # Build 4 / item 218: a bill paid by bank transfer (state `none`)
+    "bill",
+    # item 223 step 4: the reader called the document a payment reminder.
+    # The published SPA does not localize it yet and shows the English
+    # `reason`.
+    "reads_as_reminder",
+    # Item 224 step 6: a split receipt whose lines disagree with its total
+    "line_sum_split",
 }
 
 UNMATCHED_RECEIPT_REASON_CODES_PIN = (
     "duplicate_copy", "card_statement_not_loaded", "not_a_card_charge",
     "charge_in_neighbouring_period", "no_charge_on_any_loaded_statement",
+    # Item 220: a card whose loaded statements stop short of the date.
+    "statement_not_loaded_for_date",
 )
 UNMATCHED_CHARGE_REASON_CODES_PIN = (
     "not_a_purchase", "receipt_held_by_another_charge", "already_booked",
     "no_receipt_found",
+    # Front 1 (2026-09-25): the gray fill and the reviewer's mark.
+    "closed_recurring", "no_receipt_expected",
 )
 
 # `docs/api-contract.md` ("Re-match events") named ten of these when this pin
@@ -1604,6 +1711,9 @@ REMATCH_TRIGGERS_PIN = {
     "statement", "reread", "receipts", "cards", "master_data", "set_aside",
     "trip", "adjacent_receipts", "expense_edit", "resume", "duplicates",
     "month_move",
+    "duplicates_reapply",  # item 223 step 7: the operator's re-apply route
+    "receipts_reread",  # item 240: the operator's re-read of stored receipts
+    "sender_notes",  # item 252: our senders' notes applied to stored receipts
 }
 
 
@@ -1760,6 +1870,27 @@ def test_unmatched_reason_code_vocabulary_is_pinned():
     # every receipt code but the copy marker has the screen's words
     worded = set(UNMATCHED_RECEIPT_REASON_CODES_PIN) - {"duplicate_copy"}
     assert set(ur.RECEIPT_REASON_TEXT) == set(ur.RECEIPT_REASON_SHORT) == worded
+
+
+PRIVATE_SOURCES_PIN = ("row", "month", "private_card_list", "")
+
+
+def test_private_source_vocabulary_is_pinned(payloads):
+    """The private-card list (2026-09-24). `expenses[].private_source` is a
+    closed literal held against `cards.PRIVATE_SOURCES` (the source of
+    truth); every expense row carries it, "" on a row that is not private
+    and never "" on one that is. A new backend value goes red here until
+    this literal, `docs/api-contract.md` and the SPA label move together."""
+    from expense_recon.cards import PRIVATE_SOURCES
+
+    assert tuple(PRIVATE_SOURCES) == PRIVATE_SOURCES_PIN, PRIVATE_SOURCES
+    seen = 0
+    for view in payloads["expense_batch"]:
+        for expense in view["expenses"]:
+            seen += 1
+            assert expense["private_source"] in PRIVATE_SOURCES_PIN, expense
+            assert bool(expense["private_source"]) == bool(expense["private"]), expense
+    assert seen, "the contract fixtures carry no expense row"
 
 
 def test_month_health_vocabulary_is_pinned(payloads):
@@ -1956,3 +2087,136 @@ def test_uncategorized_lines_are_exactly_the_lines_without_a_category(payloads):
     # Not a vacuous pass: these fixtures really do build partly-uncategorized
     # rows, which is the state the owner's July row is in.
     assert seen, "no fixture row carried an uncategorized line"
+
+
+# Item 204, case 9 steps 1 and 5: the waiting status and the suggestion.
+def test_case9_row_fields_are_absent_or_well_formed(payloads):
+    """Two parallel fields on an expense row, ABSENT rather than [] or null.
+
+    `waits_for_statements` is a non-empty list of card labels, and it only
+    rides on a row that has no card and is not private. `card_suggestion` is
+    `{card_key, label, evidence: [{month, date, amount, currency,
+    description}]}` with at least one piece of evidence, and never sits on a
+    row whose `card` is set: it is a suggestion, not an assignment. A type
+    guard; the route-level proofs are `tests/test_case9_status_c9.py`.
+    """
+    for view in payloads["expense_batch"]:
+        for expense in view.get("expenses") or []:
+            if "waits_for_statements" in expense:
+                waits = expense["waits_for_statements"]
+                assert isinstance(waits, list) and waits, "absent, never empty"
+                assert all(isinstance(w, str) and w for w in waits), waits
+                assert expense["card"] is None and not expense["private"]
+            if "card_suggestion" in expense:
+                s = expense["card_suggestion"]
+                assert isinstance(s["card_key"], str) and s["card_key"], s
+                assert isinstance(s["label"], str), s
+                assert isinstance(s["evidence"], list) and s["evidence"], s
+                for ev in s["evidence"]:
+                    assert set(ev) == {
+                        "month", "date", "amount", "currency", "description"
+                    }, ev
+                assert expense["card"] is None, "a suggestion is never applied"
+
+
+def test_front5_row_fields_are_absent_or_well_formed(payloads):
+    """Front 5: `review.cause` is one of `REVIEW_CAUSES` and rides with a
+    `review.cause_detail` object naming the candidate it is about; both are
+    ABSENT together, never null. `reverses_transaction_id` is absent or the
+    id of another row on the same page, on a refund row only. A type guard;
+    the route-level proofs are `tests/test_front5_clicks.py`."""
+    from expense_recon.web.service import REVIEW_CAUSES
+
+    for view in payloads["run"]:
+        ids = {r["transaction_id"] for r in view["rows"]}
+        for row in view["rows"]:
+            review = row["review"]
+            assert ("cause" in review) == ("cause_detail" in review), review
+            if "cause" in review:
+                assert review["cause"] in REVIEW_CAUSES, review
+                assert isinstance(review["cause_detail"], dict), review
+                assert review["cause_detail"].get("document_id"), review
+            if "reverses_transaction_id" in row:
+                rev = row["reverses_transaction_id"]
+                assert isinstance(rev, str) and rev in ids
+                assert rev != row["transaction_id"]
+                assert row["row_type"] == "refund"
+
+MERCHANT_MATCH_KINDS = {"exact", "fuzzy", "descriptor"}
+
+
+def test_live_merchant_fields_are_absent_or_well_formed(payloads):
+    """Front 3 step 1 (2026-09-25). `merchant` on a run row and on a grid
+    expense is ABSENT (never null) or `{name, match}`, `match` one of exact /
+    fuzzy / descriptor. On the grid, `vendor.stamped` is absent or `{display,
+    source}` and never equals the live `{display, source}` beside it; on both
+    payloads `posting_category.stamped` is absent or the category shape
+    (`category`, `zoho_account`, `source`, `origin`) and only rides on a
+    posting a rule decided. A type guard; the route-level proofs are
+    `tests/test_front3_identity_live.py`."""
+    def check_merchant(row):
+        if "merchant" not in row:
+            return
+        m = row["merchant"]
+        assert set(m) == {"name", "match"}, m
+        assert isinstance(m["name"], str) and m["name"], m
+        assert m["match"] in MERCHANT_MATCH_KINDS, m
+
+    def check_stamped(row):
+        posting = row.get("posting_category")
+        if not posting or "stamped" not in posting:
+            return
+        was = posting["stamped"]
+        assert {"category", "zoho_account", "source", "origin"} <= set(was), was
+        assert posting["origin"] == "rule", posting
+
+    for view in payloads["run"]:
+        for row in view.get("rows") or []:
+            check_merchant(row)
+            check_stamped(row)
+    for view in payloads["expense_batch"]:
+        for expense in view.get("expenses") or []:
+            check_merchant(expense)
+            check_stamped(expense)
+            vendor = expense["vendor"]
+            if "stamped" in vendor:
+                assert set(vendor["stamped"]) == {"display", "source"}, vendor
+                assert (vendor["stamped"]["display"], vendor["stamped"]["source"]) != (
+                    vendor["display"], vendor["source"]), vendor
+
+
+def test_cross_month_copies_is_absent_or_non_empty_never_null(payloads):
+    """Item 223 step 5. `cross_month_copies` on the Expenses payload is
+    ABSENT (never null, never `[]`) or a list of `{document_id, batch_id,
+    other_document_id}` strings naming one of the month's own expenses. The
+    route-level proofs are `tests/test_cross_month_account_keys_step5.py`."""
+    seen = 0
+    for view in payloads["expense_batch"]:
+        if "cross_month_copies" not in view:
+            continue
+        entries = view["cross_month_copies"]
+        assert isinstance(entries, list) and entries, entries
+        docs = {e["document_id"] for e in view["expenses"]}
+        for entry in entries:
+            assert set(entry) == {"document_id", "batch_id", "other_document_id"}, entry
+            assert all(isinstance(v, str) and v for v in entry.values()), entry
+            assert entry["document_id"] in docs, entry
+            assert entry["batch_id"] != view["run_id"], entry
+        seen += 1
+    assert seen, "the reconciling month repeats a receipt of the fixture batch"
+
+
+def test_intake_twin_is_a_ladder_basis_and_twin_of_is_a_document_id():
+    """Item 223 step 6: `duplicate_groups[].basis` gains `intake_twin`, and
+    `submitted_by.twin_of` (absent unless recorded) names the twin's
+    `document_id`. The route-level pins are in
+    `tests/test_intake_twin_front4_step6.py`."""
+    from expense_recon.duplicates import (
+        BASIS_INTAKE_TWIN, LADDER_BASES, TWIN_OF_KEY, stamp_intake_twins,
+    )
+
+    assert BASIS_INTAKE_TWIN == "intake_twin" and BASIS_INTAKE_TWIN in LADDER_BASES
+    assert DUPLICATE_BASES <= set(LADDER_BASES)
+    assert TWIN_OF_KEY == "twin_of"
+    prov = {"a.pdf": {"person": "Dirk"}}
+    assert stamp_intake_twins(prov, []) is prov  # nothing recorded, key absent
