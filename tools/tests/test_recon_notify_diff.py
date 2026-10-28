@@ -189,3 +189,47 @@ def test_a_failed_rematch_is_announced_once_per_failure():
         "August 2026: re-match did not run (RuntimeError: model outage), owed "
         "since 2026-09-17T14:00:00+00:00, attempt 2"
     )
+
+
+def _fake_urllib3(monkeypatch):
+    """A stand-in for urllib3.util.connection: the suite's env has no
+    requests/urllib3; the notifier gets them from its inline deps."""
+    import types
+
+    conn = types.ModuleType("urllib3.util.connection")
+    conn.HAS_IPV6 = True
+    util = types.ModuleType("urllib3.util")
+    util.connection = conn
+    root = types.ModuleType("urllib3")
+    root.util = util
+    monkeypatch.setitem(sys.modules, "urllib3", root)
+    monkeypatch.setitem(sys.modules, "urllib3.util", util)
+    monkeypatch.setitem(sys.modules, "urllib3.util.connection", conn)
+    return conn
+
+
+def test_main_pins_ipv4_before_any_request(monkeypatch):
+    """The scheduled run's IPv6 route to Fly drops TLS (2026-10-28), so
+    main() must pin IPv4 before it logs in to the app."""
+    conn = _fake_urllib3(monkeypatch)
+    mod = _load()
+    seen = {}
+
+    def fake_fetch():
+        seen["has_ipv6"] = conn.HAS_IPV6
+        raise SystemExit(0)
+
+    monkeypatch.setattr(mod, "fetch_state_from_app", fake_fetch)
+    monkeypatch.setattr(mod, "load_env_file", lambda _p: None)
+    monkeypatch.setattr(sys, "argv", ["brisken-recon-notify.py", "--once", "--dry-run"])
+    try:
+        mod.main()
+    except SystemExit:
+        pass
+    assert seen["has_ipv6"] is False
+
+
+def test_import_leaves_ipv6_alone(monkeypatch):
+    conn = _fake_urllib3(monkeypatch)
+    _load()
+    assert conn.HAS_IPV6 is True
