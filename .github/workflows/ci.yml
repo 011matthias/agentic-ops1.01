@@ -85,7 +85,8 @@ jobs:
 
   smoke:
     name: Playwright smoke tests
-    runs-on: ubuntu-latest
+    # pinned: ubuntu-latest moved to 26.04, where `playwright install chromium` fails (2026-10-28)
+    runs-on: ubuntu-24.04
     needs: quality
     if: github.event_name == 'pull_request'
     defaults:
