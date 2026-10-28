@@ -53,6 +53,7 @@ import argparse
 import datetime as dt
 import fnmatch
 import json
+import math
 import os
 import re
 import subprocess
@@ -60,7 +61,9 @@ import sys
 import time
 
 REPOS = [
-    {"path": r"C:\Users\neuma_p1qrsic\Repo\agentic-ops1", "policy": "pr"},
+    # placement: untracked files must pass .claude/hooks/file-placement-gate.py
+    # silently (the gate encodes this repo's home map, not the others').
+    {"path": r"C:\Users\neuma_p1qrsic\Repo\agentic-ops1", "policy": "pr", "placement": True},
     {"path": r"C:\Users\neuma_p1qrsic\Repo\video-gen", "policy": "push"},
     {"path": r"C:\Users\neuma_p1qrsic\Repo\agentic-dev1", "policy": "push"},
 ]
@@ -99,6 +102,66 @@ def is_credential_name(path: str) -> bool:
     if base in CREDENTIAL_ALLOW:
         return False
     return any(fnmatch.fnmatch(base, p) for p in CREDENTIAL_PATTERNS)
+
+
+# Shapes the name-based credential list missed: tok.txt (a bare token) reached
+# two public branches this way (2026-08-23), and live Hero snapshots ride in
+# under *.live.json / *snapshot* names. Untracked files only.
+SECRET_NAME_PATTERNS = ["tok*", "*.tok", "*.token", "*.live.json", "*snapshot*"]
+
+
+def _entropy(s: str) -> float:
+    counts = {c: s.count(c) for c in set(s)}
+    return -sum(n / len(s) * math.log2(n / len(s)) for n in counts.values())
+
+
+def secret_shape(full: str, rel: str) -> str | None:
+    """Skip reason for a token-shaped untracked file, else None: a snapshot or
+    token basename, or a small file whose only line is one high-entropy word."""
+    base = os.path.basename(rel).lower()
+    if any(fnmatch.fnmatch(base, p) for p in SECRET_NAME_PATTERNS):
+        return "token/snapshot-shaped name"
+    try:
+        if not 0 < os.path.getsize(full) <= 4096:
+            return None
+        with open(full, "rb") as f:
+            text = f.read().decode("utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if len(lines) == 1 and len(lines[0]) >= 20 and " " not in lines[0] \
+            and _entropy(lines[0]) >= 3.5:
+        return "single-line high-entropy content"
+    return None
+
+
+PLACEMENT_GATE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              "..", ".claude", "hooks", "file-placement-gate.py")
+
+
+def placement_verdict(repo: str, rel: str) -> str | None:
+    """Run one untracked file through file-placement-gate.py as a synthetic
+    Write payload. None when the gate stays silent; otherwise the skip reason.
+    An unattended committer takes only what the gate passes without comment,
+    so deny, ask and advisory all skip, and so does a gate that cannot run."""
+    payload = json.dumps({"tool_name": "Write",
+                          "tool_input": {"file_path": os.path.join(repo, rel)}})
+    env = dict(os.environ, FILE_PLACEMENT_GATE_REPO=repo)
+    try:
+        out = subprocess.run([sys.executable, PLACEMENT_GATE], input=payload,
+                             capture_output=True, text=True, encoding="utf-8",
+                             errors="replace", timeout=30, env=env)
+    except Exception as exc:
+        return f"placement gate did not run ({type(exc).__name__})"
+    if not out.stdout.strip():
+        return None
+    try:
+        spec = json.loads(out.stdout).get("hookSpecificOutput") or {}
+    except ValueError:
+        return "placement gate output unreadable"
+    decision = spec.get("permissionDecision") or "advisory"
+    why = spec.get("permissionDecisionReason") or spec.get("additionalContext") or ""
+    return f"placement {decision}: {why.strip()[:90]}"
 
 
 def group_for_path(path: str) -> str:
@@ -344,8 +407,13 @@ def expand_entry(repo: str, status: str, rel: str) -> list[tuple[str, str]]:
     return out
 
 
-def plan(repo: str, entries: list[tuple[str, str]]) -> tuple[dict[str, list[str]], list[str]]:
-    """(group -> paths to commit, skipped-with-reason lines)."""
+def plan(repo: str, entries: list[tuple[str, str]],
+         placement=None) -> tuple[dict[str, list[str]], list[str]]:
+    """(group -> paths to commit, skipped-with-reason lines).
+
+    `placement(repo, rel) -> reason | None` vets each untracked file; the
+    sweep passes placement_verdict for repos flagged `placement`, tests pass a
+    stub."""
     groups: dict[str, list[str]] = {}
     skipped: list[str] = []
     expanded: list[tuple[str, str]] = []
@@ -365,6 +433,11 @@ def plan(repo: str, entries: list[tuple[str, str]]) -> tuple[dict[str, list[str]
         if status != " D" and os.path.isfile(full) and os.path.getsize(full) > MAX_FILE_BYTES:
             skipped.append(f"{rel} (>50MB)")
             continue
+        if status == "??":
+            reason = secret_shape(full, rel) or (placement and placement(repo, rel))
+            if reason:
+                skipped.append(f"{rel} ({reason})")
+                continue
         groups.setdefault(group_for_path(rel), []).append(rel)
     return groups, skipped
 
@@ -512,6 +585,19 @@ def wait_for_ci_and_merge(repo: str, branch: str, lines: list[str]) -> bool:
     return False
 
 
+def pr_body(skipped: list[str], cap: int = 60) -> str:
+    """Sweep PR body; the files left behind are listed so a human sees them."""
+    body = ("Automated nightly sweep by tools/repo-sweep.py. Quiesce-gated; "
+            "credential-shaped, token-shaped, misplaced and >50MB files excluded; "
+            "conflicts self-heal via merge=union.\n")
+    if skipped:
+        body += f"\nLeft uncommitted ({len(skipped)}):\n"
+        body += "".join(f"- {s}\n" for s in skipped[:cap])
+        if len(skipped) > cap:
+            body += f"- ... and {len(skipped) - cap} more (see ~/.repo-sweep.log)\n"
+    return body + "\n\U0001F916 Generated with [Claude Code](https://claude.com/claude-code)"
+
+
 def sweep_repo(cfg: dict, execute: bool, quiesce_minutes: int) -> None:
     repo, policy = cfg["path"], cfg["policy"]
     name = os.path.basename(repo)
@@ -523,6 +609,12 @@ def sweep_repo(cfg: dict, execute: bool, quiesce_minutes: int) -> None:
     reason = blocked_state(repo)
     if reason:
         lines.append(f"  skip: {reason}")
+        return log(lines)
+    # A primary parked on a feature branch belongs to whoever parked it: the
+    # sweep would commit onto that branch and PR it (#1649, 2026-10-28).
+    parked = git(repo, "branch", "--show-current").stdout.strip()
+    if policy == "pr" and parked not in ("main", "master"):
+        lines.append(f"  skip: primary parked on {parked}")
         return log(lines)
 
     entries = dirty_entries(repo)
@@ -548,7 +640,8 @@ def sweep_repo(cfg: dict, execute: bool, quiesce_minutes: int) -> None:
             lines.append("  clean after session fold; nothing to sweep")
             return log(lines)
 
-    groups, skipped = plan(repo, entries)
+    groups, skipped = plan(repo, entries,
+                           placement_verdict if cfg.get("placement") else None)
     for s in skipped:
         lines.append(f"  excluded: {s}")
     if not groups:
@@ -599,11 +692,7 @@ def sweep_repo(cfg: dict, execute: bool, quiesce_minutes: int) -> None:
             if not existing:
                 pr = run(["gh", "pr", "create", "--fill-first",
                           "--title", f"sweep: uncommitted backlog {today}",
-                          "--body", "Automated nightly sweep by tools/repo-sweep.py. "
-                                    "Quiesce-gated; credential-shaped and >50MB files "
-                                    "excluded; conflicts self-heal via merge=union.\n\n"
-                                    "\U0001F916 Generated with [Claude Code]"
-                                    "(https://claude.com/claude-code)"],
+                          "--body", pr_body(skipped)],
                          cwd=repo)
                 lines.append(f"  PR: {'created' if pr.returncode == 0 else pr.stderr.strip()[:140]}")
             merged = wait_for_ci_and_merge(repo, sweep_branch, lines)
