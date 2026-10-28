@@ -88,8 +88,10 @@ JUNK_DIRS = {
     ".pytest_cache", ".ruff_cache", ".git", ".mypy_cache", ".tox",
 }
 
-RED_CONCLUSIONS = {"FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED",
-                   "STARTUP_FAILURE"}
+# PR check-state reading is shared with no-auto-commit-gate so the two agree.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "..", ".claude", "hooks"))
+from _gh import RED_CONCLUSIONS, classify_rollup  # noqa: E402
 
 
 def is_credential_name(path: str) -> bool:
@@ -114,32 +116,6 @@ def group_for_path(path: str) -> str:
     if top == "workspace":
         return "workspace"
     return "misc"
-
-
-def classify_rollup(rollup: list[dict]) -> str:
-    """Overall check state from gh's statusCheckRollup: none|red|pending|green."""
-    if not rollup:
-        return "none"
-    red = pending = False
-    for c in rollup:
-        if c.get("__typename") == "StatusContext":
-            state = (c.get("state") or "").upper()
-            if state in ("FAILURE", "ERROR"):
-                red = True
-            elif state in ("PENDING", "EXPECTED"):
-                pending = True
-        else:  # CheckRun
-            conclusion = (c.get("conclusion") or "").upper()
-            status = (c.get("status") or "").upper()
-            if conclusion in RED_CONCLUSIONS:
-                red = True
-            elif status != "COMPLETED":
-                pending = True
-    if red:
-        return "red"
-    if pending:
-        return "pending"
-    return "green"
 
 
 def decide_pr_action(checks: str, mergeable: str, healed: bool,
