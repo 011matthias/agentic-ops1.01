@@ -235,7 +235,10 @@ verification precondition is agent discipline plus the CI gate at
 merge. The agent cannot bypass the floor; the user authorizes via the
 permission prompt OR cancels. Mirrors the `instantly-invasive-gate.py`
 always-ask pattern. Built 2026-05-26 (Phase 6, Agent Teams series);
-tiered + auto-merge 2026-06-06.
+tiered + auto-merge 2026-06-06. The prompt is real, verified 2026-10-28
+(layout plan W1-0): under `auto`, the mode every session runs in, a hook
+`ask` held a `git stash push` for 2 h 19 min despite the project's blanket
+`Bash` allow; `bypassPermissions` is untested because no session has run in it.
 
 Edge cases: `git log`, `git status`, `git diff`, `git tag -l|--list`
 and other read-class git commands are NOT ship-class and pass through
