@@ -237,8 +237,14 @@ def load_live(
     dup_decisions: list = []
     work_dir = (Path(files) / run_id) if files is not None else None
     if dup_pool is not None:
+        # Item 217: the app keeps the copy a charge already holds; replay it
+        # with the same held set when the module has it.
+        held_fn = getattr(service, "held_documents", None)
+        pool_kw = {"work_dir": work_dir}
+        if held_fn is not None:
+            pool_kw["held"] = held_fn(store, run)
         pool, collapsed, dup_decisions = dup_pool(
-            run, pool, store.get_duplicate_resolutions(run_id), work_dir=work_dir,
+            run, pool, store.get_duplicate_resolutions(run_id), **pool_kw,
         )
     else:
         collapsed = collapsed_duplicate_copies(pool, store.get_duplicate_resolutions(run_id))
@@ -259,6 +265,11 @@ def load_live(
     match_input = [*pool, *borrowed] if borrowed else pool
     memory = MatchMemory.from_db_path(learning) if learning and Path(learning).exists() else None
     match_cfg = build_match_cfg(cfg, Path(run.work_dir), memory) or MatchingConfig()
+    # Item 220 step 5: the company keys `rematch_month` hands in, by the
+    # module's own function. An older tree has neither.
+    with_keys = getattr(service, "match_cfg_with_entity_keys", None)
+    if with_keys is not None:
+        match_cfg = with_keys(match_cfg, store.get_settings())
 
     raw = match_month(transactions, match_input, match_cfg)
     # Item 74 rung 7, as `rematch_month` runs it: once, then one re-match.
@@ -463,7 +474,12 @@ def gate_for(tx, r, cfg, trace) -> str:
         return "amount_band"  # a credit never pairs; nothing a receipt can do
     if r.detected_currency is None:
         return "currency_unknown"
-    if r.legal_entity_id and tx.legal_entity_id and r.legal_entity_id != tx.legal_entity_id:
+    from expense_recon.matching import deterministic as det
+
+    keys = getattr(cfg, "entity_keys", None)
+    if keys and not det.pair_in_scope(tx, r, set(), None, keys):
+        return "entity_mismatch"
+    if not keys and r.legal_entity_id and tx.legal_entity_id and r.legal_entity_id != tx.legal_entity_id:
         return "entity_mismatch"
     sc = trace["scope"].get(r.document_id)
     if sc is not None and not (sc & _tx_card_keys(tx)):
@@ -503,10 +519,10 @@ def _usd(r, tx_ccy: str, cfg, derived) -> Decimal | None:
         return r.base_amount
     if not ccy or ccy == tx_ccy:
         return r.detected_total
-    rate = cfg.fx_reference_rate(ccy, tx_ccy)
-    if rate is None:
-        hit = derived.get((ccy, tx_ccy))
-        rate = hit[0] if hit else None
+    # Item 168 retired the typed Settings rates (the matcher's `configured`
+    # rung and `MatchingConfig.fx_reference_rate`), so the derived rate leads.
+    hit = derived.get((ccy, tx_ccy))
+    rate = hit[0] if hit else None
     if rate is None:
         band = cfg.fx_band(ccy, tx_ccy)
         rate = (band[0] + band[1]) / 2 if band else None

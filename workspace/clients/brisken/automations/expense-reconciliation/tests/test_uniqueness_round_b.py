@@ -418,6 +418,24 @@ JPG = b"\xff\xd8\xff\xe0fake-jpeg-bytes"
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
+@pytest.fixture(autouse=True)
+def _ecb(monkeypatch):
+    """The month's EUR:USD reference rate, 1.10.
+
+    Units per ONE EUR, the ECB's own shape: a pair X:USD is
+    units["USD"] / units["X"], and EUR itself is 1. Every month answers the
+    same rates, so no test has to know which month its charges fall in.
+    Typed Settings rates were retired 2026-09-23; a rate now reaches a
+    month only by being fetched."""
+    from expense_recon.web import ecb_rates
+
+    def _fetch(start, end, **kw):
+        months = ["2026-%02d" % m for m in range(1, 13)]
+        return {m: {"USD": "1.10"} for m in months if start <= m <= end}
+
+    monkeypatch.setattr(ecb_rates, "fetch_monthly", _fetch)
+
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("EXPENSE_RECON_RECEIPT_FIRST", "1")
@@ -452,7 +470,7 @@ def test_route_a_spoken_for_rival_lets_the_true_pair_reconcile(
 
     The EUR receipt agrees with the ENCHILADA charge at the month's
     reference rate (30.00 x 1.10 = 33.00, exact) and ALSO lands within the
-    3% reference band of the WIX charge at 33.50. Before round B that rival
+    clean reference band of the WIX charge at 33.50. Before round B that rival
     demoted it and the reviewer had to pick a pair the tool had already
     solved. WIX holds a bank-printed exact match with its own USD receipt,
     so it was never available: the EUR pair reconciles on its own, and the
@@ -491,7 +509,6 @@ def test_route_a_spoken_for_rival_lets_the_true_pair_reconcile(
                 "entity": "Corporate Services", "currency": "USD",
             },
         },
-        "fx_reference_rates": {"EUR:USD": "1.10"},
     })
     assert resp.status_code == 200, resp.text
 

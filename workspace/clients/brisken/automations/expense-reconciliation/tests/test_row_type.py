@@ -239,13 +239,16 @@ def test_a_csv_statement_types_its_rows_the_same_way(client):
 
 
 def test_no_type_column_reads_a_credit_by_its_sign(client):
-    """The fallback, stated rather than hidden: without a label the tool can
-    only say "credit", and it says what it always said."""
+    """The fallback, stated rather than hidden: without a label a credit reads
+    by its sign ("refund"), except a card payoff, which the statement names in
+    its description (front 5, 2026-09-25: the Chase PDF printed six payoffs as
+    refunds). The bucket is the sign's either way."""
     headers = ("Card", "Date", "Description", "Amount")
     rows_in = [(c, d, v, a) for c, d, v, _t, a in CHASE_ROWS]
     rows = _rows_by_vendor(client, _month(client, rows_in, headers))
-    assert rows["Payment Thank You-Mobile"]["row_type"] == "refund"
+    assert rows["Payment Thank You-Mobile"]["row_type"] == "payment"
     assert rows["Payment Thank You-Mobile"]["effective_bucket"] == "refund"
+    assert rows["AMAZON MKTPL"]["row_type"] == "refund"
     assert rows["LOVABLE"]["row_type"] == "purchase"
 
 

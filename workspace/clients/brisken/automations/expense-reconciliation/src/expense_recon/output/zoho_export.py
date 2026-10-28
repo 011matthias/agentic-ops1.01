@@ -78,12 +78,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ..matching.types import (
+    DECIDED_ORIGINS,
     Categorization,
-    ClassificationSource,
     LineItem,
     MatchOutcome,
     Receipt,
     Transaction,
+    answer_origin,
 )
 
 if TYPE_CHECKING:
@@ -356,12 +357,18 @@ def build_journal_rows(
     return rows
 
 
-# Charge-level categorizations trusted enough to post with no receipt:
-# memory recalled from a prior confirmed decision, and (item 109) a category
-# the reviewer set on the charge herself. A VENDOR guess never posts.
-_POSTABLE_CHARGE_SOURCES = frozenset(
-    {ClassificationSource.LEARNED, ClassificationSource.EDITED}
-)
+# Charge-level categorizations trusted enough to post with no receipt: a
+# decided answer (item 216 cause 1, `answer_origin`): the reviewer's own pick (item
+# 109), a remembered correction, or a merchant-list rule (owner ruling
+# 2026-09-25: an account comes from a rule or a person). The model's guess
+# never posts. This used to list LEARNED and EDITED only, so a merchant-list
+# answer the rest of the app treats as decided stayed out of the journal.
+def _postable_charge(cat: "Categorization | None") -> bool:
+    return (
+        cat is not None
+        and bool(cat.category)
+        and answer_origin(cat) in DECIDED_ORIGINS
+    )
 
 
 def _receiptless_charge_rows(
@@ -376,7 +383,8 @@ def _receiptless_charge_rows(
     reimbursable_account: str | None = None,
 ) -> list[list[str]]:
     """Journal rows for the unmatched charges whose categorization is
-    Tier-1 LEARNED or the reviewer's own (item 109). Each becomes one debit
+    a decided answer (item 216 cause 1: the reviewer's own, a remembered correction
+    or a merchant-list rule). Each becomes one debit
     row (the learned account) +
     one balancing credit row (the card account), Reference# = the
     transaction id. The receipt-URL / report-reference columns stay
@@ -395,8 +403,8 @@ def _receiptless_charge_rows(
         cat = charge_categorizations.get(tx_id)
         if tx is None or cat is None:
             continue
-        if not cat.category or cat.source not in _POSTABLE_CHARGE_SOURCES:
-            continue  # VENDOR / REVIEW charges stay review-only
+        if not _postable_charge(cat):
+            continue  # the model's guess / REVIEW charges stay review-only
         # L1 posting policy, same as the matched loop: an already-in-Zoho
         # row never reaches the journal again.
         if tx.entry_status == "posted":
@@ -422,11 +430,7 @@ def _receiptless_charge_rows(
     for rec in pseudo:
         item = rec.line_items[0]
         cat = item.categorization
-        if (
-            cat is None
-            or cat.source not in _POSTABLE_CHARGE_SOURCES
-            or not cat.category
-        ):
+        if not _postable_charge(cat):
             continue  # gate-diverted -> review, not the journal
         tx = tx_by_id[rec.document_id[len(CHARGE_DOC_PREFIX):]]
         account, note = _debit_account_and_note(cat, chart_of_accounts)

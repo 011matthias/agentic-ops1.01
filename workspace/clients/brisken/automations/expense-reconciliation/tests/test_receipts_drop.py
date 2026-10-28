@@ -379,3 +379,293 @@ def test_job_result_round_trips_through_store(tmp_path):
         job = store.get_job("j1")
     assert job["status"] == "done"
     assert job["result"] == {"n_filed": 2}
+
+
+# --- 4. zips on the Receipts page (2026-09-27) -----------------------------
+#
+# A dropped zip is opened on the server and every member files on its own row,
+# month and dedupe, exactly as if its files had been dropped one by one. Every
+# test here drives POST /api/receipts, so unwiring `expand_dropped_zips` from
+# `route_dropped_receipts` turns them red (the zip then reads unsupported-type).
+
+
+def _zip(entries: list[tuple[str, bytes]]) -> bytes:
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        for name, data in entries:
+            if name.endswith("/"):
+                zf.writestr(zipfile.ZipInfo(name), b"")  # a directory entry
+            else:
+                zf.writestr(name, data)
+    return buf.getvalue()
+
+
+def test_drop_zip_members_file_on_their_own(client, monkeypatch):
+    """The Nicolas case: one zip spanning two months, receipts in a
+    subfolder, macOS resource forks, a spreadsheet and a zip inside the zip.
+    Each receipt routes by its OWN date; the junk is named, not silent; the
+    forks and folder entries produce no row at all; order follows the drop."""
+    _patch_ocr_by_name(monkeypatch, {
+        "loose.jpg": _extraction(DAY_M1, vendor="Loose"),
+        "a.jpg": _extraction(DAY_M1, vendor="Alpha"),
+        "b.jpg": _extraction(DAY_M2, vendor="Beta"),
+        "mystery.jpg": ExtractedReceipt(
+            date="", total="1.00", currency="EUR", vendor="Mystery",
+            reference="", line_items=(), confidence=0.9, notes="",
+        ),
+    })
+    bundle = _zip([
+        ("receipts/", b""),
+        ("receipts/a.jpg", JPG + b"a"),
+        ("receipts/deeper/b.jpg", JPG + b"b"),
+        ("mystery.jpg", JPG + b"m"),
+        ("__MACOSX/receipts/._a.jpg", b"fork" * 2000),
+        ("coverage.xlsx", b"PK not a receipt"),
+        ("inner.zip", _zip([("c.jpg", JPG + b"c")])),
+    ])
+    result = _drop(client, [("loose.jpg", JPG + b"l"), ("bundle.zip", bundle)])
+
+    assert [r["file"] for r in result["files"]] == [
+        "loose.jpg", "a.jpg", "b.jpg", "mystery.jpg", "coverage.xlsx",
+        "inner.zip",
+    ]
+    by_file = {r["file"]: r for r in result["files"]}
+    assert by_file["a.jpg"]["status"] == "filed"
+    assert by_file["a.jpg"]["month"] == MONTH_M1
+    assert by_file["b.jpg"]["status"] == "filed"
+    assert by_file["b.jpg"]["month"] == MONTH_M2
+    for junk in ("coverage.xlsx", "inner.zip"):
+        assert by_file[junk]["status"] == "rejected"
+        assert by_file[junk]["reason"] == "unsupported-type"
+    assert result["n_filed"] == 3
+    assert result["n_rejected"] == 2
+    # A member that needs a month says which zip it came from: the page
+    # holds the zip, not the file, so it cannot re-send the file alone.
+    assert by_file["mystery.jpg"]["status"] == "needs_month"
+    for name in ("a.jpg", "b.jpg", "mystery.jpg", "coverage.xlsx", "inner.zip"):
+        assert by_file[name]["from_zip"] == "bundle.zip"
+    assert "from_zip" not in by_file["loose.jpg"]
+
+    months = {m["month"]: m for m in result["months"]}
+    assert months[MONTH_M1]["n_added"] == 2   # loose.jpg + a.jpg
+    assert months[MONTH_M2]["n_added"] == 1
+    vendors = set()
+    for m in months.values():
+        view = client.get(f"/api/expense-batches/{m['batch_id']}").json()
+        vendors |= {e["vendor"]["display"] for e in view["expenses"]}
+    assert vendors == {"Loose", "Alpha", "Beta"}
+
+
+def test_drop_zip_member_already_on_file_is_skipped(client, monkeypatch):
+    """A zip re-sending receipts the tool already holds: each member lands in
+    its own month, where content dedupe skips identical bytes. This is what
+    makes dropping a mixed backfill zip safe (the month upload would re-add
+    every member that lives in another month)."""
+    _patch_ocr(
+        monkeypatch,
+        _extraction(DAY_M1), _extraction(DAY_M1),  # first drop: read + ingest
+        _extraction(DAY_M1),                        # zip member: read only
+    )
+    first = _drop(client, [("a.jpg", JPG)])
+    assert first["months"][0]["created_batch"] is True
+    second = _drop(client, [("again.zip", _zip([("copy-of-a.jpg", JPG)]))])
+    row = second["files"][0]
+    assert row["file"] == "copy-of-a.jpg"
+    assert row["status"] == "filed"
+    entry = second["months"][0]
+    assert entry["created_batch"] is False
+    assert entry["n_added"] == 0
+    assert len(_batches(client)) == 1
+
+
+def test_drop_unreadable_zip_is_one_named_row(client, monkeypatch):
+    _patch_ocr(monkeypatch)  # nothing may be read
+    result = _drop(client, [("broken.zip", b"this is not a zip at all")])
+    (row,) = result["files"]
+    assert row == {
+        "file": "broken.zip", "status": "rejected", "reason": "zip-unreadable",
+        "reason_label": (
+            "this zip could not be opened (it is damaged, or not really a zip)"
+        ),
+    }
+    assert _batches(client) == []
+
+
+def test_drop_zip_over_the_cap_is_refused_whole(client, monkeypatch):
+    """Checked before anything is written or read: a zip bigger than one
+    drop never half-files, and the operator is told to split it."""
+    monkeypatch.setattr("expense_recon.web.service.FOLDER_MAX_FILES", 2)
+    _patch_ocr(monkeypatch)  # a read would fail loudly (dateless queue)
+    bundle = _zip([(f"r{i}.jpg", JPG + bytes([i])) for i in range(3)])
+    result = _drop(client, [("big.zip", bundle)])
+    (row,) = result["files"]
+    assert row["status"] == "rejected"
+    assert row["reason"] == "zip-too-many-files"
+    assert row["limit"] == 2
+    assert "past 2 files" in row["reason_label"]
+    assert result["n_filed"] == 0
+    assert _batches(client) == []
+
+
+def test_drop_zip_refused_when_unpacking_would_breach_disk_floor(
+    client, monkeypatch,
+):
+    """The mailbox refuses mail below the free-disk floor, so unpacking a
+    big zip must not be what pushes the volume under it."""
+    monkeypatch.setattr(
+        "expense_recon.web.intake_mail.free_disk_floor", lambda total: 10**18,
+    )
+    _patch_ocr(monkeypatch)
+    result = _drop(client, [("pile.zip", _zip([("a.jpg", JPG)]))])
+    (row,) = result["files"]
+    assert row["file"] == "pile.zip"
+    assert row["status"] == "rejected"
+    assert row["reason"] == "zip-no-space"
+    assert "free space" in row["reason_label"]
+    assert _batches(client) == []
+    # Nothing to write (only a spreadsheet) is nothing to refuse.
+    only_sheet = _drop(client, [("sheet.zip", _zip([("c.xlsx", b"x")]))])
+    (row,) = only_sheet["files"]
+    assert row["file"] == "c.xlsx"
+    assert row["reason"] == "unsupported-type"
+
+
+def test_drop_zip_damaged_member_reads_empty_not_fatal(client, monkeypatch):
+    """A member whose bytes fail the CRC check is one empty-file row; the
+    healthy member beside it still files."""
+    import zipfile
+    import io
+
+    _patch_ocr_by_name(monkeypatch, {"good.jpg": _extraction(DAY_M1)})
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_STORED) as zf:
+        zf.writestr("bad.jpg", JPG + b"bad")
+        zf.writestr("good.jpg", JPG + b"good")
+    raw = bytearray(buf.getvalue())
+    at = raw.find(JPG + b"bad")
+    raw[at + 10] ^= 0xFF  # corrupt the stored bytes; the directory is intact
+    result = _drop(client, [("mixed.zip", bytes(raw))])
+    by_file = {r["file"]: r for r in result["files"]}
+    assert by_file["bad.jpg"]["status"] == "rejected"
+    assert by_file["bad.jpg"]["reason"] == "empty-file"
+    assert by_file["good.jpg"]["status"] == "filed"
+
+
+def test_drop_zip_expansion_survives_a_restart(tmp_path):
+    """Item 114 re-runs an interrupted drop over the same folder. A kill
+    mid-expansion leaves the zip plus a partial member: re-expanding writes
+    the same names and overwrites the partial one. A kill after the zip was
+    deleted leaves plain files and nothing to open."""
+    from expense_recon.web.intake_mail import expand_dropped_zips
+
+    staging = tmp_path / "drop"
+    staging.mkdir()
+    (staging / "0000__pile.zip").write_bytes(
+        _zip([("a.jpg", JPG + b"a"), ("b.jpg", JPG + b"b")])
+    )
+    (staging / "0000-0001__a.jpg").write_bytes(b"partial")  # the kill
+
+    assert expand_dropped_zips(staging) == {}
+    assert sorted(p.name for p in staging.iterdir()) == [
+        ".zip-origins.json", "0000-0001__a.jpg", "0000-0002__b.jpg",
+    ]
+    assert (staging / "0000-0001__a.jpg").read_bytes() == JPG + b"a"
+    assert expand_dropped_zips(staging) == {}  # second pass: nothing to open
+    assert (staging / "0000-0002__b.jpg").read_bytes() == JPG + b"b"
+
+
+def test_drop_zip_write_failure_fails_the_drop(client, monkeypatch):
+    """A disk failure while writing members is the drop's failure, not the
+    zip's: the job reads error and nothing is filed, instead of a
+    `zip-unreadable` row beside half its members being filed."""
+    import re as _re
+    from pathlib import Path
+
+    _patch_ocr(monkeypatch)
+    real = Path.write_bytes
+
+    def _full_disk(self, data):
+        if _re.match(r"^\d{4}-0002__", self.name):
+            raise OSError(28, "No space left on device")
+        return real(self, data)
+
+    monkeypatch.setattr(Path, "write_bytes", _full_disk)
+    pile = _zip([("a.jpg", JPG + b"a"), ("b.jpg", JPG + b"b")])
+    resp = client.post(
+        "/api/receipts",
+        files=[("files", ("pile.zip", pile, "application/octet-stream"))],
+    )
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "error"
+    assert "No space left" in (job.get("error") or "")
+    assert _batches(client) == []
+
+
+def test_drop_zip_refused_on_resume_leaves_no_part_of_itself(
+    tmp_path, monkeypatch,
+):
+    """A kill mid-unpack leaves the zip and a partial member. If the resumed
+    pass then refuses the zip, the partial member must not survive to be
+    filed on its own (review finding 2026-09-27)."""
+    from expense_recon.web.intake_mail import expand_dropped_zips
+
+    staging = tmp_path / "drop"
+    staging.mkdir()
+    (staging / "0000__pile.zip").write_bytes(_zip([("a.jpg", JPG + b"a")]))
+    (staging / "0000-0001__a.jpg").write_bytes(b"partial")  # the kill
+    (staging / "0001__loose.jpg").write_bytes(JPG)          # not the zip's
+    monkeypatch.setattr(
+        "expense_recon.web.intake_mail.free_disk_floor", lambda total: 10**18,
+    )
+    refused = expand_dropped_zips(staging)
+    assert refused == {"0000__pile.zip": {"reason": "zip-no-space"}}
+    assert sorted(p.name for p in staging.iterdir()) == [
+        "0000__pile.zip", "0001__loose.jpg",
+    ]
+
+
+def test_drop_zip_cap_counts_every_zip_in_the_drop(client, monkeypatch):
+    """The cap is the drop's unpacked total, so two zips cannot each bring
+    FOLDER_MAX_FILES members to be read and then capped per month."""
+    monkeypatch.setattr("expense_recon.web.service.FOLDER_MAX_FILES", 3)
+    _patch_ocr(monkeypatch, *[_extraction(DAY_M1) for _ in range(2)])
+    one = _zip([("a.jpg", JPG + b"a"), ("b.jpg", JPG + b"b")])
+    two = _zip([("c.jpg", JPG + b"c"), ("d.jpg", JPG + b"d")])
+    result = _drop(client, [("one.zip", one), ("two.zip", two)],
+                   month=MONTH_M1)
+    by_file = {r["file"]: r for r in result["files"]}
+    assert by_file["a.jpg"]["status"] == "filed"
+    assert by_file["b.jpg"]["status"] == "filed"
+    assert by_file["two.zip"]["reason"] == "zip-too-many-files"
+    assert by_file["two.zip"]["limit"] == 3
+    assert "c.jpg" not in by_file
+
+
+def test_drop_zip_long_member_name_files(client, monkeypatch):
+    """A member name past the filesystem limit is cut, keeping its
+    extension, instead of failing the whole drop."""
+    _patch_ocr(monkeypatch, _extraction(DAY_M1))
+    long_name = "r" * 300 + ".jpg"
+    result = _drop(client, [("long.zip", _zip([(long_name, JPG)]))],
+                   month=MONTH_M1)
+    (row,) = result["files"]
+    assert row["status"] == "filed"
+    assert row["file"].endswith(".jpg")
+    assert len(row["file"]) <= 100
+
+
+def test_zip_member_name_rule():
+    """One naming rule for every entrance that opens a zip."""
+    import zipfile
+
+    from expense_recon.web.service import zip_member_name
+
+    assert zip_member_name(zipfile.ZipInfo("dir/")) is None
+    assert zip_member_name(zipfile.ZipInfo("__MACOSX/x/._a.pdf")) is None
+    assert zip_member_name(zipfile.ZipInfo("a/b/c.pdf")) == "c.pdf"
+    assert zip_member_name(zipfile.ZipInfo("win\\sub\\d.pdf")) == "d.pdf"
+    assert zip_member_name(zipfile.ZipInfo("../../etc/e.pdf")) == "e.pdf"

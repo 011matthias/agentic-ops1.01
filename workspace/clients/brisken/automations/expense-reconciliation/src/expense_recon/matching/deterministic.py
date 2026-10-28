@@ -26,14 +26,24 @@ if TYPE_CHECKING:  # annotations only; the body imports Path itself
 
 import difflib
 import re
+from functools import lru_cache
 from dataclasses import dataclass, field, replace
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from decimal import Decimal
 
+from ..entity_keys import entities_same
 from .types import Match, MatchOutcome, MatchType, Receipt, Transaction
 
 # A month key in `fx_ecb_monthly_rates` (item 82): the ECB's TIME_PERIOD.
 _MONTH_KEY = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
+# A day key in `fx_daily_rates` (note #79): the provider's effectiveDate.
+_DAY_KEY = re.compile(r"\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])")
+# Tuning keys a stored config may still carry that the matcher no longer
+# reads. `from_dict` accepts and drops them so an old run config and the
+# shipped scorer asset both keep loading. `fx_reference_rates` (a rate
+# typed in Settings) retired 2026-09-23: the rates come from the daily
+# OpenTickers poll and the ECB monthly average now, never from typing.
+_RETIRED_TUNABLES = frozenset({"fx_reference_rates"})
 
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
@@ -59,6 +69,7 @@ def _is_reference_token(token: str) -> bool:
     return len(token) >= 4 and sum(ch.isdigit() for ch in token) >= 3
 
 
+@lru_cache(maxsize=1 << 14)  # once per charge x receipt pair; see vendor_similarity
 def strip_reference_tokens(s: str | None) -> str:
     """The merchant words of a bank description, normalized, with its
     reference-shaped tokens taken out (item X1, 2026-09-18).
@@ -144,11 +155,36 @@ def _card_score(tx: Transaction, receipt: Receipt) -> float:
     """
     tx_keys = _tx_card_keys(tx)
     rec_keys = _card_keys(receipt.payment_mode)
+    # Item 243 (owner 2026-09-28): the print read through the card register
+    # is still printed evidence. A slip showing the plastic's "1672" names
+    # the card whose statement marks it "2838"; the register's card, resolved
+    # from that very print (`card_scope_source` "hint"), carries both. Only
+    # when the printed digits are one of that card's numbers: a hint WORD
+    # ("Visa" assigned to a card) prints none, and a pick or a remembered
+    # card is not the print, so all three stay out of this score.
+    scope = set(receipt.card_scope_keys or ())
+    if receipt.card_scope_source == "hint" and rec_keys & scope:
+        rec_keys = rec_keys | scope
     if not tx_keys or not rec_keys:
         return 0.5
     return 1.0 if (tx_keys & rec_keys) else 0.0
 
 
+@lru_cache(maxsize=1 << 16)
+def _token_ratio(a: str, b: str) -> float:
+    """`difflib` ratio of two normalized words, memoized: a month re-scores
+    the same word pairs thousands of times (see `vendor_similarity`)."""
+    return difflib.SequenceMatcher(None, a, b).ratio()
+
+
+# Memoized (2026-10-07, "removing duplicates takes way too long"): every
+# duplicate click re-matches the month, and `match_one` scores the vendor of
+# EVERY charge x receipt pair before its date and amount gates. Live September
+# made 26,163 calls over 3,710 distinct string pairs, and the two passes of a
+# re-match (item 74) repeat them all: 7 of the 14 s a "Delete this copy" took.
+# The result is a pure function of the two strings, so caching cannot move a
+# score; the bounds keep a long-lived process to ~25 MB at worst.
+@lru_cache(maxsize=1 << 15)
 def vendor_similarity(stmt_vendor: str | None, receipt_vendor: str | None) -> float:
     """Fuzzy similarity in [0,1] between a statement vendor string and a
     receipt's detected vendor (ANNEALING A3 / 3.9).
@@ -172,9 +208,7 @@ def vendor_similarity(stmt_vendor: str | None, receipt_vendor: str | None) -> fl
         ).ratio()
     total = 0.0
     for st in s_tokens:
-        total += max(
-            difflib.SequenceMatcher(None, st, rt).ratio() for rt in r_tokens
-        )
+        total += max(_token_ratio(st, rt) for rt in r_tokens)
     return total / len(s_tokens)
 
 
@@ -275,7 +309,7 @@ _TUNABLE_DECIMAL = frozenset({
 })
 _TUNABLE_INT = frozenset({
     "date_exact_window_days", "date_probable_window_days",
-    "fx_date_window_days",
+    "fx_date_window_days", "fx_daily_rate_max_gap_days",
     "fx_self_derived_min_statement_rates", "fx_self_derived_min_receipts",
 })
 _TUNABLE_FLOAT = frozenset({
@@ -289,6 +323,7 @@ _TUNABLE_BOOL = frozenset({
     "card_scoping", "fx_self_derived_rates", "fx_self_derived_review",
     "uniqueness_spoken_for",
     "vendor_ignore_reference_tokens", "no_card_rival_review",
+    "no_card_vendor_guard", "exact_vendor_lookalike_guard",
 })
 
 
@@ -330,23 +365,17 @@ class MatchingConfig:
     )
 
     # ── Deterministic reference-rate FX (3.15 / 3.7 upgrade) ───────────
-    # Monthly reference rates per (receipt_ccy, tx_ccy), e.g.
-    # ("BRL","USD") -> 0.185. When a rate is configured for the pair, a
-    # cross-currency candidate that survives the date gate is resolved
+    # A cross-currency candidate that survives the date gate is resolved
     # DETERMINISTICALLY before the band/LLM path: expected charge =
-    # receipt total x rate; deviation <= fx_reference_match_pct is a
-    # match, <= fx_reference_review_pct a match flagged for review,
-    # beyond that it falls through to the implied-rate band / FX_JUDGMENT
-    # exactly as before. Deviations reflect DCC markup + tip, which only
-    # push the charge UP, but the check is symmetric for simplicity —
-    # the band's asymmetry still guards the fall-through path. Unconfigured
-    # pairs are byte-for-byte the old behaviour. Rates come from
-    # config/match-tuning.json ("fx_reference_rates": {"BRL:USD": 0.185});
-    # they are month-scoped operator input, never derived from Zoho's
-    # per-line rate (measured wrong by up to 12.8%, LD-5).
-    fx_reference_rates: Mapping[tuple[str, str], Decimal] = field(
-        default_factory=dict
-    )
+    # receipt total x rate; deviation <= the band for the rate's source is
+    # a match, <= fx_reference_review_pct a match flagged for review,
+    # beyond that it falls through to the implied-rate band / FX_JUDGMENT.
+    # Deviations reflect DCC markup + tip, which only push the charge UP,
+    # but the check is symmetric for simplicity — the band's asymmetry
+    # still guards the fall-through path. A pair with no rate on any rung
+    # is byte-for-byte the old behaviour. See `_reference_rate_for` for the
+    # rungs; `fx_reference_rates` (a rate typed in Settings) was RETIRED on
+    # 2026-09-23 by owner directive and is no longer read from any config.
     # Item 82 (owner ruling 2026-09-16): the ECB's monthly average reference
     # rates, as the ECB publishes them, keyed by month:
     # {"2026-07": {"USD": Decimal("1.1417478"), "BRL": Decimal("5.8448957")}},
@@ -359,6 +388,23 @@ class MatchingConfig:
     fx_ecb_monthly_rates: Mapping[str, Mapping[str, Decimal]] = field(
         default_factory=dict
     )
+    # Feedback note #79 (owner 2026-09-23: "fx rates should be polled daily
+    # via open tickers API"): the daily reference rates the app polls from
+    # OpenTickers, the same shape as the ECB table but keyed by DAY:
+    # {"2026-09-22": {"USD": Decimal("1.1463"), "BRL": Decimal("5.8726")}},
+    # units per ONE EUR. A pair's rate is the cross through EUR on the
+    # CHARGE's own date, or the nearest polled day within
+    # `fx_daily_rate_max_gap_days` (a weekend or holiday has no fix; four
+    # days spans Good Friday to Easter Monday), earlier winning a tie. Sits
+    # one rung ABOVE the monthly average (a day is the grain the card locked
+    # the rate at) and below a typed rate and the self-derived rates. The
+    # hosted surface refreshes the table from its store on every re-match
+    # (`service.apply_fx_daily_rates`); empty keeps every pair on the rungs
+    # around it, byte for byte. See `daily_rate`.
+    fx_daily_rates: Mapping[str, Mapping[str, Decimal]] = field(
+        default_factory=dict
+    )
+    fx_daily_rate_max_gap_days: int = 4
     fx_reference_match_pct: Decimal = Decimal("0.03")
     fx_reference_review_pct: Decimal = Decimal("0.13")
     # Item 90 / 132 (owner ruling 2026-09-17: tighten the band first, then
@@ -454,6 +500,12 @@ class MatchingConfig:
     merchant_fx: Mapping[tuple[str, str, str, str], Decimal] = field(
         default_factory=dict
     )
+    # Item 220 step 5: `entity_keys.entity_key_map` of the current settings,
+    # handed in by `rematch_month` like the learned memory above. It feeds
+    # the ENTITY SCOPE only (`pair_in_scope`), never a score, so two spellings
+    # of one company ("Corporate Services", "Brisken Corp Services, LLC") are
+    # one company there. Empty => the exact string compare of before.
+    entity_keys: Mapping[str, str] = field(default_factory=dict)
 
     # ── Card-scoped matching (2026-06-16) ──────────────────────────
     # An expense whose Zoho payment mode names a specific Brisken card only
@@ -548,6 +600,32 @@ class MatchingConfig:
     # turns the clause off; the fallback itself (match across every card)
     # is not a knob.
     no_card_rival_review: bool = True
+    # `no_card_vendor_guard` (item 204 step 6, owner D5 2026-09-25): a pair
+    # whose receipt names no card (`card_evidence` "none") and whose merchant
+    # words disagree (`_vendor_score` below `NO_CARD_VENDOR_FLOOR`) is not
+    # booked. It keeps its assignment, so it is still the charge's top
+    # candidate and a person confirms it in one click, but it goes to
+    # `judgment_required` with `NO_CARD_VENDOR_REVIEW` instead of `matches`,
+    # so it never sits in the reconciled bucket or lends its card. A blank
+    # prompts Criss to look; a wrong card silently books the receipt to the
+    # wrong entity and person. Measured 2026-09-25 on live July and August:
+    # the two labelled-wrong no-card pairs (August BASE44 50.00 holding a
+    # Lovable invoice, 40%; July HOTEL AM TIERGARTEN holding Erste Fracht,
+    # 47%) leave reconciled, and three right pairs whose charge prints a
+    # CNPJ descriptor go to review with them. False restores booking.
+    no_card_vendor_guard: bool = True
+    # `exact_vendor_lookalike_guard` (item 222 step 6, item 133 rules 1 and
+    # 3): the card-named sibling of `no_card_vendor_guard`. A chosen EXACT
+    # same-currency pair whose receipt names a card and whose merchant words
+    # disagree (`_vendor_score` below `EXACT_VENDOR_FLOOR`) goes to
+    # `judgment_required` with `EXACT_VENDOR_LOOKALIKE_REVIEW` only when
+    # ANOTHER receipt of the same total and currency is left unmatched: two
+    # round amounts from different vendors, and the tool cannot say which is
+    # this charge's. It keeps its assignment, exactly as D5 does. A floor
+    # alone cannot be drawn (labelled-right pairs sit at 0.42 and 0.46, the
+    # wrong one at 0.40), so the waiting receipt is what separates them.
+    # False restores booking.
+    exact_vendor_lookalike_guard: bool = True
 
     @classmethod
     def from_dict(cls, data: Mapping) -> "MatchingConfig":
@@ -581,16 +659,14 @@ class MatchingConfig:
                         Decimal(str(lo)), Decimal(str(hi))
                     )
                 kwargs[key] = bands
-            elif key == "fx_reference_rates":
-                rates: dict[tuple[str, str], Decimal] = {}
-                for pair, rate in value.items():
-                    from_ccy, _, to_ccy = pair.partition(":")
-                    if not from_ccy or not to_ccy:
-                        raise ValueError(
-                            f"fx_reference_rates key {pair!r} must be 'FROM:TO'"
-                        )
-                    rates[(from_ccy, to_ccy)] = Decimal(str(rate))
-                kwargs[key] = rates
+            elif key in _RETIRED_TUNABLES:
+                # Accepted and DROPPED, never a ValueError: the shipped
+                # scorer asset still carries `fx_reference_rates` (empty),
+                # and July's and August's frozen run configs carry the two
+                # rates the owner retired on 2026-09-23. Refusing the key
+                # would make both unloadable; ignoring it is what makes the
+                # stored copies inert without rewriting client data.
+                continue
             elif key == "fx_ecb_monthly_rates":
                 table: dict[str, dict[str, Decimal]] = {}
                 for month, per_eur in value.items():
@@ -603,10 +679,22 @@ class MatchingConfig:
                         for ccy, units in (per_eur or {}).items()
                     }
                 kwargs[key] = table
+            elif key == "fx_daily_rates":
+                daily: dict[str, dict[str, Decimal]] = {}
+                for day, per_eur in value.items():
+                    if not _DAY_KEY.fullmatch(str(day)):
+                        raise ValueError(
+                            f"fx_daily_rates key {day!r} must be 'YYYY-MM-DD'"
+                        )
+                    daily[str(day)] = {
+                        str(ccy).upper(): Decimal(str(units))
+                        for ccy, units in (per_eur or {}).items()
+                    }
+                kwargs[key] = daily
             else:
                 raise ValueError(
                     f"unknown matching-tuning key {key!r} "
-                    f"(tunables: {sorted(_TUNABLE_DECIMAL | _TUNABLE_INT | _TUNABLE_FLOAT | _TUNABLE_BOOL | {'fx_rate_bands', 'fx_reference_rates', 'fx_ecb_monthly_rates'})})"
+                    f"(tunables: {sorted(_TUNABLE_DECIMAL | _TUNABLE_INT | _TUNABLE_FLOAT | _TUNABLE_BOOL | {'fx_rate_bands', 'fx_ecb_monthly_rates', 'fx_daily_rates'})})"
                 )
         return cls(**kwargs)
 
@@ -627,21 +715,72 @@ class MatchingConfig:
         or None if the pair is unprofiled."""
         return self.fx_rate_bands.get((from_ccy, to_ccy))
 
-    def fx_reference_rate(self, from_ccy: str, to_ccy: str) -> Decimal | None:
-        """Monthly reference rate for receipt->transaction currency, or
-        None when the pair has no configured rate (then the band/LLM path
-        applies unchanged)."""
-        return self.fx_reference_rates.get((from_ccy, to_ccy))
-
     def reference_match_pct(self, source: str | None) -> Decimal:
         """The clean band for a reference-rate pair, by where its rate came
         from (`_reference_rate_for`'s source): `fx_ecb_match_pct` for
-        `ecb_month`, `fx_reference_match_pct` for every other source. The
-        matcher, the band a reviewer sees (item 81) and the judgment layer's
-        rejected-pair rule (item 131) all read it here."""
-        if source == "ecb_month":
+        `ecb_month` and for `opentickers_day` (both are central-bank
+        reference rates, and the daily one is closer to the rate the card
+        locked, never further), `fx_reference_match_pct` for the rates a
+        run derives from its own statement and receipts. The matcher, the band a reviewer sees (item 81) and the
+        judgment layer's rejected-pair rule (item 131) all read it here."""
+        if source in ("ecb_month", "opentickers_day"):
             return self.fx_ecb_match_pct
         return self.fx_reference_match_pct
+
+    def daily_rate(
+        self, from_ccy: str, to_ccy: str, on: "date | str | None"
+    ) -> tuple[Decimal, str] | None:
+        """Note #79: the polled daily reference rate for receipt->charge
+        currency on the day of `on` (a date or 'YYYY-MM-DD'), as (rate, day
+        used).
+
+        The day itself when the table holds it with both currencies, else
+        the nearest day that does within `fx_daily_rate_max_gap_days`
+        (earlier wins a tie: a Saturday purchase reads Friday's fix). Cross
+        rate through EUR (EUR is 1 unit per EUR), to six decimals, the
+        precision a rate typed in Settings carries. None when `on` is
+        missing or not a full date, the table is empty, or no day inside the
+        window carries the pair; the caller then falls through to the
+        monthly average."""
+        if not self.fx_daily_rates or on is None:
+            return None
+        src, dst = (from_ccy or "").upper(), (to_ccy or "").upper()
+        if not src or not dst or src == dst:
+            return None
+        from datetime import date as _date
+
+        want = on if isinstance(on, str) else on.isoformat()
+        if not _DAY_KEY.fullmatch(want):
+            return None
+        target = _date.fromisoformat(want)
+
+        def _units(table: Mapping[str, Decimal], ccy: str) -> Decimal | None:
+            if ccy == "EUR":
+                return Decimal(1)
+            units = table.get(ccy)
+            return units if units is not None and units > 0 else None
+
+        best: tuple[tuple[int, _date], str, Mapping[str, Decimal]] | None = None
+        for day, table in self.fx_daily_rates.items():
+            if _units(table, src) is None or _units(table, dst) is None:
+                continue
+            try:
+                d = _date.fromisoformat(day)
+            except ValueError:
+                continue
+            gap = abs((d - target).days)
+            if gap > self.fx_daily_rate_max_gap_days:
+                continue
+            key = (gap, d)
+            if best is None or key < best[0]:
+                best = (key, day, table)
+        if best is None:
+            return None
+        _key, day, table = best
+        rate = (_units(table, dst) / _units(table, src)).quantize(
+            Decimal("0.000001")
+        )
+        return (rate, day) if rate > 0 else None
 
     def ecb_monthly_rate(
         self, from_ccy: str, to_ccy: str, on: "date | str | None"
@@ -916,7 +1055,7 @@ def derive_fx_reference_rates(
 
     A derived rate outside the static fx band for its pair is discarded
     (poisoned-median clamp: one mis-parsed total cannot drag the month's
-    rate somewhere implausible). Configured `fx_reference_rates` are NOT
+    rate somewhere implausible). The rungs below this one are NOT
     consulted here — the caller overlays them, so operator input always
     wins. `fx_self_derived_rates=false` disables the whole derivation.
     """
@@ -977,11 +1116,28 @@ def _reference_rate_for(
     derived: "Mapping[tuple[str, str], tuple[Decimal, str, int]] | None",
     on: "date | str | None" = None,
 ) -> tuple[Decimal, str, int] | None:
-    """The best reference rate for a pair: configured (operator intent)
-    wins, else this run's self-derived rate, else the ECB monthly average
-    for the month of `on` (the charge date, item 82). Returns (rate, source,
-    n) with source in {"configured", "statement", "receipts", "ecb_month"},
-    or None.
+    """The best reference rate for a pair: the polled daily rate for the day
+    of `on` (the charge date, note #79) wins, else this run's self-derived
+    rate (read off its own statement or receipts), else the ECB monthly
+    average for its month (item 82). Returns (rate, source, n) with source
+    in {"opentickers_day", "statement", "receipts", "ecb_month"}, or None.
+
+    Item 197 (2026-09-24) put the daily rate first. A self-derived median is
+    ONE rate for the whole month, so on a hosted month it priced a late-August
+    pair at a mid-July rate: one SAP line printed on another card's statement
+    (1.146292906 on 07-16) outranked the charge-day rate for every EUR pair,
+    at the wider self-derived band, and two clean 2838 pairs turned
+    ambiguous. A charge that printed its OWN FX line never needs a rate here:
+    `match_one` compares its original amount to the receipt directly. Where
+    no daily table exists (the CLI bundles), the order below the daily rung
+    is unchanged.
+
+    A rate typed in Settings used to outrank all of these. The owner
+    retired that on 2026-09-23 ("no more typing them in settings ... we
+    will only rely on these daily rates API"), so every rate the matcher
+    uses is now either read off the client's own documents or fetched from
+    a central bank. A stored config that still carries the typed rates is
+    ignored, not obeyed (`_RETIRED_TUNABLES`).
 
     The ECB rung sits BELOW the self-derived rates on the evidence: a
     statement's printed FX lines are the rate the card actually charged,
@@ -990,9 +1146,9 @@ def _reference_rate_for(
     hosted month has neither (the Chase export prints no FX columns and no
     mailed receipt carries a booked rate), so there the ECB rate is what
     fires whenever Settings holds none."""
-    configured = cfg.fx_reference_rate(from_ccy, to_ccy)
-    if configured is not None and configured > 0:
-        return configured, "configured", 0
+    daily = cfg.daily_rate(from_ccy, to_ccy, on)
+    if daily is not None:
+        return daily[0], "opentickers_day", 0
     if derived:
         hit = derived.get(((from_ccy or "").upper(), (to_ccy or "").upper()))
         if hit is not None:
@@ -1188,9 +1344,9 @@ def match_one(
         if receipt.base_amount is not None and receipt.base_amount > 0:
             base_dev = abs(tx.amount - receipt.base_amount) / tx.amount
 
-        # Reference-rate deviation under the best available rate:
-        # configured (operator intent) wins, else this run's self-derived
-        # median (statement FX lines, else receipt Zoho rates).
+        # Reference-rate deviation under the best available rate: the
+        # charge-day rate, else this run's self-derived median (statement
+        # FX lines, else receipt Zoho rates), else the ECB month (item 197).
         ref = _reference_rate_for(
             cfg, receipt.detected_currency, tx.transaction_currency,
             derived_rates, on=tx.transaction_date,
@@ -1207,8 +1363,12 @@ def match_one(
 
         def _rate_phrase() -> str:
             rate, source, n = ref
-            if source == "configured":
-                return f"monthly reference rate {rate}"
+            if source == "opentickers_day":
+                _rate, day = cfg.daily_rate(
+                    receipt.detected_currency, tx.transaction_currency,
+                    tx.transaction_date,
+                )
+                return f"OpenTickers daily reference rate {rate} ({day})"
             if source == "ecb_month":
                 _rate, month = cfg.ecb_monthly_rate(
                     receipt.detected_currency, tx.transaction_currency,
@@ -1349,7 +1509,7 @@ def match_one(
                 tx.legal_entity_id, receipt.detected_vendor,
                 receipt.detected_currency, tx.transaction_currency,
             )
-            if ref is not None and ref[1] in ("configured", "ecb_month"):
+            if ref is not None and ref[1] in ("opentickers_day", "ecb_month"):
                 score_rate = ref[0]
                 score_src = _rate_phrase()
             elif learned_mean is not None and lo <= learned_mean <= hi:
@@ -1651,21 +1811,43 @@ def receipt_card_scope(
     return pm_keys
 
 
+def pairing_entity(receipt: Receipt) -> str | None:
+    """The company a receipt pairs under, or None when it pairs under none.
+
+    Item 253 (owner 2026-10-07, "pair by card, book by note"): a company the
+    sender's note set (item 250) decides where the receipt BOOKS, never which
+    charge it is the evidence for. The card that paid is unchanged by the
+    note, so such a receipt pairs as if it named no company, and its card
+    scope still binds it to its own card's charges. Every other receipt
+    pairs under the company it names, as before."""
+    note = (receipt.sender_note_entity or "").strip()
+    if note and note == (receipt.legal_entity_id or "").strip():
+        return None
+    return receipt.legal_entity_id
+
+
 def pair_in_scope(
     tx: Transaction,
     receipt: Receipt,
     tx_keys: set[str],
     scope: set[str] | None,
+    entity_keys: Mapping[str, str] | None = None,
 ) -> bool:
     """Whether a (charge, receipt) pair may be scored at all: a receipt
     that NAMES another legal entity never pairs (an empty entity on either
-    side is unscoped), and a receipt scoped to a card (``receipt_card_scope``)
+    side is unscoped, and so is a company only the sender's note named,
+    `pairing_entity`), and a receipt scoped to a card (``receipt_card_scope``)
     pairs only with charges on that card (``tx_keys``, the charge's
-    ``_tx_card_keys``)."""
-    if (
-        receipt.legal_entity_id
+    ``_tx_card_keys``). ``entity_keys`` (``MatchingConfig.entity_keys``)
+    makes two spellings of one company one company (item 220 step 5)."""
+    receipt_entity = pairing_entity(receipt) or ""
+    if entity_keys:
+        if not entities_same(receipt_entity, tx.legal_entity_id, entity_keys):
+            return False
+    elif (
+        receipt_entity
         and tx.legal_entity_id
-        and receipt.legal_entity_id != tx.legal_entity_id
+        and receipt_entity != tx.legal_entity_id
     ):
         return False
     if scope is not None and not (scope & tx_keys):
@@ -1697,6 +1879,51 @@ RECEIPT_CARD_EVIDENCE = ("override", "hint", "learned", "printed", "none")
 CHARGE_CARD_EVIDENCE = ("row", "account", "none")
 # `Match.review_code` when the no-card fallback's review clause fired.
 NO_CARD_RIVAL_REVIEW = "no_card_rival_on_other_card"
+# `Match.review_code` when `no_card_vendor_guard` sent a no-card pair to
+# review because the merchant words disagree (below `NO_CARD_VENDOR_FLOOR`,
+# the same 0.5 the API shows as `vendor_pct` 50).
+NO_CARD_VENDOR_REVIEW = "no_card_vendor_disagrees"
+NO_CARD_VENDOR_FLOOR = 0.5
+# `Match.review_code` when `exact_vendor_lookalike_guard` sent a card-named
+# EXACT pair to review: the merchant words disagree (below
+# `EXACT_VENDOR_FLOOR`, the same 0.5) and a same-amount receipt waits.
+EXACT_VENDOR_LOOKALIKE_REVIEW = "exact_vendor_disagrees"
+EXACT_VENDOR_FLOOR = NO_CARD_VENDOR_FLOOR
+# `Match.review_code` when the bilateral-uniqueness gate demoted a clean
+# rate-derived pair because a rival agrees just as cleanly (front 5,
+# 2026-09-25). A card-contradiction demotion keeps no code: its cards differ.
+UNIQUENESS_RIVAL_REVIEW = "uniqueness_rival"
+
+
+def _uniqueness_rival_note(
+    verdict: "UniquenessVerdict",
+    tx_by_id: "Mapping[str, Transaction]",
+    rec_by_id: "Mapping[str, Receipt]",
+) -> str:
+    """`: <rival>, <rival>` naming the charges and receipts that blocked a
+    pair, or "" when none resolves. Charges print as the statement shows
+    them, receipts as their vendor and total; at most three, then a count."""
+    names: list[str] = []
+    for tx_id in verdict.rival_txs:
+        t = tx_by_id.get(tx_id)
+        if t is not None:
+            names.append(
+                f"charge {t.vendor_from_statement} {t.amount} "
+                f"{t.transaction_currency} on {t.transaction_date.isoformat()}"
+            )
+    for doc in verdict.rival_docs:
+        r = rec_by_id.get(doc)
+        if r is not None:
+            when = r.detected_date.isoformat() if r.detected_date else "no date"
+            names.append(
+                f"receipt {r.detected_vendor or doc} {r.detected_total} "
+                f"{r.detected_currency or ''} on {when}".replace("  ", " ")
+            )
+    if not names:
+        return ""
+    shown = ", ".join(names[:3])
+    more = f" and {len(names) - 3} more" if len(names) > 3 else ""
+    return f": {shown}{more}"
 
 
 def card_evidence(tx: Transaction, receipt: Receipt) -> tuple[str, str]:
@@ -1725,6 +1952,72 @@ def _no_card_rival_note(rival: Transaction, rival_keys: set[str]) -> str:
         f"the receipt names no card and a charge on another card also fits "
         f"({rival.vendor_from_statement} {rival.amount} {rival.transaction_currency} "
         f"on {'/'.join(sorted(rival_keys))})"
+    )
+
+
+def no_card_vendor_disagrees(
+    tx: Transaction, receipt: Receipt, match: Match, cfg: MatchingConfig
+) -> bool:
+    """True when `no_card_vendor_guard` holds a deterministic pair back from
+    booking: the receipt carries no card evidence and the merchant words do
+    not agree. Public so the attribution tool reads the matcher's rule."""
+    return (
+        cfg.no_card_vendor_guard
+        and match.match_type is not MatchType.FX_JUDGMENT
+        and match.vendor_score < NO_CARD_VENDOR_FLOOR
+        and card_evidence(tx, receipt)[0] == "none"
+    )
+
+
+def same_amount_receipts_waiting(
+    tx: Transaction,
+    receipt: Receipt,
+    match: Match,
+    unmatched: "Iterable[Receipt]",
+    cfg: MatchingConfig,
+) -> list[Receipt]:
+    """The unmatched receipts that send this chosen pair to review under
+    `exact_vendor_lookalike_guard`, or [] when the pair books as before.
+
+    Only a same-currency EXACT pair whose receipt names a card (a no-card
+    receipt is `no_card_vendor_guard`'s) and whose merchant words disagree
+    qualifies; then every OTHER unmatched receipt of the same total in the
+    same currency counts. Public so the attribution tool reads the
+    matcher's rule."""
+    if not cfg.exact_vendor_lookalike_guard:
+        return []
+    if match.match_type is not MatchType.EXACT or match.vendor_score >= EXACT_VENDOR_FLOOR:
+        return []
+    total = receipt.detected_total
+    if total is None or receipt.detected_currency != tx.transaction_currency:
+        return []
+    if card_evidence(tx, receipt)[0] == "none":
+        return []
+    return [
+        r for r in unmatched
+        if r.document_id != receipt.document_id
+        and r.detected_total is not None
+        and r.detected_currency == receipt.detected_currency
+        and abs(r.detected_total - total) <= cfg.amount_exact_tolerance
+    ]
+
+
+def _exact_vendor_lookalike_note(match: Match, waiting: "list[Receipt]") -> str:
+    r = waiting[0]
+    when = r.detected_date.isoformat() if r.detected_date else "no date"
+    more = f" and {len(waiting) - 1} more" if len(waiting) > 1 else ""
+    return (
+        f"the merchants differ ({round(match.vendor_score * 100)}%) and another "
+        f"receipt of the same amount is still unmatched ({r.detected_vendor or r.document_id} "
+        f"{r.detected_total} {r.detected_currency or ''} on {when}{more})"
+    ).replace("  ", " ")
+
+
+def _no_card_vendor_note(match: Match) -> str:
+    return (
+        f"the receipt names no card and the charge's merchant words do not "
+        f"match its vendor ({round(match.vendor_score * 100)}%), so the pair "
+        f"is not booked until someone confirms it"
     )
 
 
@@ -1788,12 +2081,12 @@ def scored_pairs(
             # payment mode names a different card never pairs either.
             if not pair_in_scope(
                 tx, receipt, tx_card_keys[tx.transaction_id],
-                receipt_scope.get(doc),
+                receipt_scope.get(doc), cfg.entity_keys,
             ):
                 if (
                     receipt.card_scope_source == CARD_SCOPE_PICKED
                     and doc in receipt_scope
-                    and pair_in_scope(tx, receipt, tx_card_keys[tx.transaction_id], None)
+                    and pair_in_scope(tx, receipt, tx_card_keys[tx.transaction_id], None, cfg.entity_keys)
                 ):
                     off_card.setdefault(doc, []).append(tx)
                 continue
@@ -2016,6 +2309,14 @@ def match_month(
                     vendor_signal=c.vendor_signal,
                 )
                 continue
+            # Front 5 (2026-09-25): a look-alike demotion names its rival and
+            # carries a code, so the judgment layer can skip the model on a
+            # pair whose own evidence is clean and the SPA can say which
+            # charge or receipt competes, instead of "more than one receipt".
+            rival_note = (
+                _uniqueness_rival_note(verdict, tx_by_id, rec_by_id)
+                if verdict.kind == "uniqueness" else ""
+            )
             demoted = replace(
                 c.match,
                 match_type=MatchType.FX_JUDGMENT,
@@ -2024,7 +2325,11 @@ def match_month(
                 reason=(
                     c.match.reason.rstrip(".")
                     + f". Demoted to judgment: this rate-derived pairing is "
-                    f"not conclusive ({verdict.note})."
+                    f"not conclusive ({verdict.note}{rival_note})."
+                ),
+                review_code=(
+                    UNIQUENESS_RIVAL_REVIEW if verdict.kind == "uniqueness"
+                    else c.match.review_code
                 ),
             )
             cands[i] = _Candidate(
@@ -2226,12 +2531,55 @@ def match_month(
             continue
         if c.match.document_id in held_by_tie:
             continue
-        if c.is_determ:
+        # Item 204 step 6 (owner D5): the chosen pair of a receipt with no
+        # card evidence whose merchant words disagree keeps its assignment
+        # (the charge and the receipt are consumed exactly as before, so it
+        # stays the top candidate) but lands in review, not reconciled.
+        guarded = c.is_determ and no_card_vendor_disagrees(
+            tx_by_id[c.match.transaction_id], rec_by_id[c.match.document_id],
+            c.match, cfg,
+        )
+        if guarded:
+            outcome.judgment_required.append(replace(
+                c.match,
+                requires_review=True,
+                review_code=c.match.review_code or NO_CARD_VENDOR_REVIEW,
+                reason=c.match.reason.rstrip(".")
+                + f". Review: {_no_card_vendor_note(c.match)}.",
+            ))
+        elif c.is_determ:
             outcome.matches.append(c.match)
         else:
             outcome.judgment_required.append(c.match)
         assigned_tx.add(c.match.transaction_id)
         assigned_rec.add(c.match.document_id)
+
+    # Item 222 step 6 (item 133 rules 1 and 3): the card-named sibling of the
+    # D5 guard above. Only after the assignment is it known which receipts
+    # are left over, so a booked EXACT pair whose merchant disagrees moves to
+    # review here when a same-amount receipt waits unmatched. Its assignment
+    # stands: the same charge and receipt stay consumed.
+    if cfg.exact_vendor_lookalike_guard and outcome.matches:
+        leftover = [
+            r for r in receipts
+            if r.document_id not in assigned_rec and r.document_id not in held_by_tie
+        ]
+        kept: list[Match] = []
+        for m in outcome.matches:
+            waiting = same_amount_receipts_waiting(
+                tx_by_id[m.transaction_id], rec_by_id[m.document_id], m, leftover, cfg,
+            )
+            if not waiting:
+                kept.append(m)
+                continue
+            outcome.judgment_required.append(replace(
+                m,
+                requires_review=True,
+                review_code=m.review_code or EXACT_VENDOR_LOOKALIKE_REVIEW,
+                reason=m.reason.rstrip(".")
+                + f". Review: {_exact_vendor_lookalike_note(m, waiting)}.",
+            ))
+        outcome.matches[:] = kept
 
     # Every transaction not assigned and not ambiguous is unmatched —
     # either it had no candidate, or every candidate receipt was claimed

@@ -13,6 +13,7 @@ import json
 from expense_recon.cli import _build_coa_gate
 from expense_recon.coa_gate import CoaVerdict
 from expense_recon.coa_provision import (
+    GL_ENTITY_ORGS_KEY,
     PROVISION_ENV,
     apply_to_config,
     coa_validation_for,
@@ -140,11 +141,17 @@ def test_apply_injects_block_for_known_entity(tmp_path):
 
 
 def test_apply_unknown_entity_leaves_config_unchanged(tmp_path):
+    """No gate for an unmapped entity. The GL engine's entity -> org map is
+    still injected (it covers every entity, not the run's own), and that key
+    is the ONLY change."""
     prov = _write_provision(tmp_path)
     cfg = {"statement": {}}
     out = apply_to_config(cfg, "Some Unmapped Account", path=prov)
-    assert out == cfg
     assert "coa_validation" not in out
+    assert {k: v for k, v in out.items() if k != GL_ENTITY_ORGS_KEY} == cfg
+    assert out[GL_ENTITY_ORGS_KEY] == {
+        "Cloud Services": "697686691", "Corporate Services": "822741658",
+    }
 
 
 def test_apply_no_path_and_no_env_leaves_config_unchanged(monkeypatch):
@@ -195,6 +202,10 @@ def test_injected_block_builds_a_gate_that_diverts_bad_accounts(tmp_path):
     DO-NOT-USE / wrong-entity / out-of-scope account before export."""
     prov = _write_provision(tmp_path)
     cfg = apply_to_config({"receipts": {}}, "Corporate Services", path=prov)
+    # The chart rule, as a bucket batch (one created before `gl_entity_orgs`
+    # existed) gets it. A GL batch is judged by Dirk's marking instead, and
+    # these synthetic codes are not on it: test_coa_gate_curated_item_4b.
+    cfg.pop(GL_ENTITY_ORGS_KEY)
     gate = _build_coa_gate(cfg, tmp_path)  # chart_path is absolute -> tmp_path ignored
     assert gate is not None
 

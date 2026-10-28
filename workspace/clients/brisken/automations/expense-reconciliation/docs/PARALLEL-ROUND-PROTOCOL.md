@@ -123,11 +123,12 @@ carries your commit too.
    carried it (`flyctl releases -a brisken-expense-recon`). Absent: deploy.
 2. Deploy from a fresh detached worktree, never from the item branch:
    `git -C C:\Users\neuma_p1qrsic\Repo\agentic-ops1 worktree add --detach C:\Users\neuma_p1qrsic\Repo\agentic-ops1-deploy-item{N} origin/main`,
-   confirm your merge commit is in `git log -1`, confirm `fly.toml` matches
-   `flyctl config show -a brisken-expense-recon` (always-on both services,
-   `recon_data_v2`, 1024 MB), then `flyctl deploy .` from the module
-   directory. If `flyctl releases` shows a release still in progress, wait
-   for it and re-probe step 1 before deploying.
+   confirm your merge commit is in `git log -1`, then run the module's
+   `deploy.py` from it (`uv run <worktree>/workspace/clients/brisken/automations/expense-reconciliation/deploy.py`).
+   It refuses a tree that is not `origin/main` and a `fly.toml` smaller than
+   the live machine; a direct `flyctl deploy` of the app is denied
+   (`docs/operating.md`, "Deploy"). If `flyctl releases` shows a release
+   still in progress, wait for it and re-probe step 1 before deploying.
 3. Remove the deploy worktree when the drive in §8 is done.
 
 ## 8. Verify: drive the SPA, with your own browser session

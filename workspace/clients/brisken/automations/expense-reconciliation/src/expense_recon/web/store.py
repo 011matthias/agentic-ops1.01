@@ -20,6 +20,7 @@ locking is sufficient.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from dataclasses import dataclass
@@ -27,6 +28,10 @@ from pathlib import Path
 
 # Note item T3: which statement upload printed a charge. Its own module,
 # not `service.py`, because the service imports this file.
+from ..learning.store import (
+    CATEGORY_SOURCE_HUMAN,
+    CATEGORY_SOURCES,
+)
 from .decision_history import ROW_CHARGE, ROW_RECEIPT
 from .statement_origin import origins_from_snapshot
 
@@ -106,7 +111,7 @@ VALID_DUP_RESOLUTIONS = (DUP_IGNORE, DUP_CONFIRMED)
 # operator input the pipeline needs, so three capabilities were dead on
 # every hosted run while working locally from a config file:
 #
-#   fx_reference_rates  {"BRL:USD": "0.192448"} — the month's reference
+#   fx_reference_rates  RETIRED 2026-09-23 (rates come from the daily
 #     rate per currency pair. Without one, a cross-currency receipt can
 #     only reach the implied-rate band / LLM judgment: the real April run
 #     matched 0 of 94 while the same two files matched 29/36 locally with
@@ -151,7 +156,6 @@ VALID_DUP_RESOLUTIONS = (DUP_IGNORE, DUP_CONFIRMED)
 #     card entry exists (no write migration).
 SETTINGS_DEFAULTS: dict = {
     "export_approved_only": False,
-    "fx_reference_rates": {},
     "card_entities": {},
     "card_accounts": {},
     "entities": {},
@@ -169,11 +173,19 @@ SETTINGS_DEFAULTS: dict = {
     # missing-receipts list and still composes the mail for preview, and
     # nothing sends either way (receipt_chase.py sends nothing at all).
     "receipt_requests": {"enabled": False, "holders": {}},
+    # The private-card list (owner direction 2026-09-24, card-attribution
+    # cases 2 + 4): {last4: {person, note, active}}, cards that are NOT
+    # Brisken's, whose printed number makes a receipt a private expense
+    # reimbursed to `person`. Empty until Criss or the owner lists one;
+    # never seeded by the tool (nobody here knows who owns 3281). A
+    # separate key from `cards` on purpose: every company-card consumer
+    # iterates `cards`, and the SPA's Cards editor replaces that map whole.
+    "private_cards": {},
 }
 
 # Settings keys holding a {str: str} map. Values are kept as STRINGS: a
 # Decimal FX rate keeps full precision as text, a json float does not.
-SETTINGS_MAP_KEYS = ("fx_reference_rates", "card_entities", "card_accounts")
+SETTINGS_MAP_KEYS = ("card_entities", "card_accounts")
 
 # Every top-level key `PUT /api/settings` actually writes. The settings
 # screen saves ONE group per request (the tabbed page sends {"cards": ...}
@@ -190,6 +202,7 @@ SETTINGS_WRITABLE_KEYS = (
     "cost_centers",
     "intake",
     "receipt_requests",
+    "private_cards",
 )
 
 # Keys `GET /api/settings` DERIVES and the PUT never stores. A client that
@@ -199,10 +212,23 @@ SETTINGS_WRITABLE_KEYS = (
 # are the PUT response's own fields, listed here for the same reason.
 SETTINGS_DERIVED_KEYS = (
     "categories",
+    # The curated GL leaves, per entity, and the taxonomy revision they came
+    # from. Derived beside `categories` rather than replacing it, so a
+    # client that reads the payload and sends the whole object back does not
+    # trip `unknown_settings_keys` on them (2026-09-23).
+    "gl_accounts",
+    "gl_revision",
     "entity_options",
     "cards_effective",
     "merchants_inert",
     "cost_center_options",
+    "fx_daily_rates",
+    # Items 180/181: each merchant's account per company with that
+    # company's name for it, the companies a picker offers, and the
+    # merchants booked to a company their map names no account for.
+    "account_companies",
+    "merchant_accounts",
+    "needs_account",
     "applied",
     "ignored",
 )
@@ -214,6 +240,25 @@ SETTINGS_DERIVED_KEYS = (
 # its prompt lands) and the settings payload never serves a value stored
 # before the removal.
 RETIRED_ENTITY_KEYS = frozenset({"account_picks"})
+
+# Whole settings keys the app no longer stores. `GET` never serves them,
+# `PUT` drops them silently (a 400 would break the published SPA, which
+# keeps sending the key until its removal prompt is applied), and
+# `_migrate` deletes them from the stored row once.
+#
+# `fx_reference_rates` retired 2026-09-23, owner directive: "no more typing
+# them in settings you can remove that function entirely, we will only rely
+# on these daily rates API stuff". The live row held EUR:USD 1.162275 and
+# BRL:USD 0.192448, which outranked every fetched rate for every month.
+RETIRED_SETTINGS_KEYS = frozenset({"fx_reference_rates"})
+
+
+def without_retired_settings_keys(settings: dict) -> dict:
+    """`settings` with every retired top-level key removed. A shallow copy:
+    the stored row is never touched (the migration does that once)."""
+    if not any(k in settings for k in RETIRED_SETTINGS_KEYS):
+        return settings
+    return {k: v for k, v in settings.items() if k not in RETIRED_SETTINGS_KEYS}
 
 
 def without_retired_entity_keys(settings: dict) -> dict:
@@ -377,6 +422,7 @@ class RunStore:
                 category     TEXT,
                 zoho_account TEXT,
                 updated_at   TEXT,
+                category_source TEXT,
                 PRIMARY KEY (run_id, document_id, line_index)
             );
             CREATE TABLE IF NOT EXISTS intakes (
@@ -486,6 +532,36 @@ class RunStore:
                 committed_at TEXT NOT NULL,
                 trigger      TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS fx_daily_rates (
+                day        TEXT NOT NULL,
+                ccy        TEXT NOT NULL,
+                per_eur    TEXT NOT NULL,
+                source     TEXT NOT NULL,
+                fetched_at TEXT NOT NULL,
+                PRIMARY KEY (day, ccy)
+            );
+            CREATE TABLE IF NOT EXISTS fx_daily_rates_meta (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+            -- Item 163: one row per memory SAVE, carrying the pre-image of
+            -- every learning row it touched and of the merchant registry,
+            -- so a save can be read back ("where did this go") and put back
+            -- ("this should be reversible"). Its own table beside
+            -- memory_commits, which holds only the last digest per run and
+            -- is overwritten by the next save.
+            CREATE TABLE IF NOT EXISTS memory_journal (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id           TEXT NOT NULL,
+                label            TEXT NOT NULL DEFAULT '',
+                committed_at     TEXT NOT NULL,
+                trigger          TEXT NOT NULL,
+                rows_json        TEXT NOT NULL,
+                merchants_before TEXT NOT NULL,
+                merchants_after  TEXT NOT NULL,
+                learned_json     TEXT NOT NULL,
+                reverted_at      TEXT
+            );
             CREATE TABLE IF NOT EXISTS decision_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_id TEXT NOT NULL,
@@ -517,7 +593,12 @@ class RunStore:
     def _migrate(self) -> None:
         """Idempotent column adds for databases created before testing mode.
         Existing runs stay published=0 (operator-visible only) until an
-        operator publishes them explicitly."""
+        operator publishes them explicitly.
+
+        Also drops any `RETIRED_SETTINGS_KEYS` still in the stored settings
+        row, so retiring a settings function actually removes its data
+        instead of merely hiding it behind the read path."""
+        self._drop_retired_settings()
         existing = {
             row["name"]
             for row in self.conn.execute("PRAGMA table_info(runs)").fetchall()
@@ -627,6 +708,29 @@ class RunStore:
                     f"ALTER TABLE client_errors ADD COLUMN {column} "
                     "TEXT NOT NULL DEFAULT ''"
                 )
+
+        # category_overrides.category_source (the learning-leak marker,
+        # 2026-09-24): whether a PERSON stated this line's category, or the
+        # row merely carries the model's own guess because the edit was
+        # about something else. Two edits store a category nobody stated -
+        # the note-#62 Confirm (keep the guess as it is) and an
+        # account-only PUT - and sign-off then taught both as corrections.
+        # NULL reads as CATEGORY_SOURCE_HUMAN: every row written before this
+        # column existed is overwhelmingly an explicit pick, and defaulting
+        # the other way would stop every already-reviewed month teaching
+        # anything. The account half needs no marker: `category_edit_account`
+        # stores an explicit pick or an earlier override's account, never
+        # the model's.
+        override_cols = {
+            row["name"]
+            for row in self.conn.execute(
+                "PRAGMA table_info(category_overrides)"
+            ).fetchall()
+        }
+        if "category_source" not in override_cols:
+            self.conn.execute(
+                "ALTER TABLE category_overrides ADD COLUMN category_source TEXT"
+            )
 
     # -- where a charge was printed (note item T3) --------------------------
     #
@@ -1531,16 +1635,30 @@ class RunStore:
 
     # -- category overrides ----------------------------------------------
 
+    def delete_category_overrides(self, run_id: str) -> int:
+        """Remove every category / account pick on a run; returns how many.
+
+        Only the GL switch calls this (`gl_conversion`), after it has copied
+        the rows into the run's snapshot: a bucket pick cannot stand on a
+        month whose categories are account codes."""
+        cur = self.conn.execute(
+            "DELETE FROM category_overrides WHERE run_id = ?", (run_id,))
+        self.conn.commit()
+        return cur.rowcount
+
     def get_category_overrides(self, run_id: str) -> dict[tuple[str, int], dict]:
         rows = self.conn.execute(
-            "SELECT document_id, line_index, category, zoho_account "
-            "FROM category_overrides WHERE run_id = ?",
+            "SELECT document_id, line_index, category, zoho_account, "
+            "category_source FROM category_overrides WHERE run_id = ?",
             (run_id,),
         ).fetchall()
         return {
             (r["document_id"], r["line_index"]): {
                 "category": r["category"],
                 "zoho_account": r["zoho_account"],
+                # A row written before the column existed reads as a
+                # person's own pick; see the migration note above.
+                "category_source": r["category_source"] or CATEGORY_SOURCE_HUMAN,
             }
             for r in rows
         }
@@ -1553,15 +1671,32 @@ class RunStore:
         category: str | None,
         zoho_account: str | None,
         updated_at: str,
+        *,
+        category_source: str,
     ) -> None:
+        """Upsert one line's category / account pick.
+
+        `category_source` is REQUIRED and keyword-only on purpose: it is the
+        one fact the learning path cannot recover afterwards, and every
+        writer knows it at the moment it writes. A default here would let a
+        new caller teach the model its own guess by omission, which is the
+        leak this column closed."""
+        if category_source not in CATEGORY_SOURCES:
+            raise ValueError(
+                f"invalid category_source {category_source!r}; "
+                f"expected {CATEGORY_SOURCES}"
+            )
         self.conn.execute(
             "INSERT INTO category_overrides (run_id, document_id, line_index, "
-            "category, zoho_account, updated_at) VALUES (?, ?, ?, ?, ?, ?) "
+            "category, zoho_account, updated_at, category_source) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(run_id, document_id, line_index) DO UPDATE SET "
             "category = excluded.category, "
             "zoho_account = excluded.zoho_account, "
-            "updated_at = excluded.updated_at",
-            (run_id, document_id, line_index, category, zoho_account, updated_at),
+            "updated_at = excluded.updated_at, "
+            "category_source = excluded.category_source",
+            (run_id, document_id, line_index, category, zoho_account, updated_at,
+             category_source),
         )
         self.conn.commit()
 
@@ -1693,6 +1828,89 @@ class RunStore:
         ).fetchone()
         return dict(row) if row else None
 
+    def clear_memory_commit(self, run_id: str) -> None:
+        """Forget that this run's corrections were saved (item 163's undo).
+        The next publish then teaches them again instead of answering
+        "unchanged" over a memory that no longer holds them."""
+        self.conn.execute("DELETE FROM memory_commits WHERE run_id = ?", (run_id,))
+        self.conn.commit()
+
+    # -- memory_journal (item 163) ------------------------------------------
+
+    def add_memory_journal(
+        self,
+        *,
+        run_id: str,
+        label: str,
+        committed_at: str,
+        trigger: str,
+        rows: list[dict],
+        merchants_before: dict,
+        merchants_after: dict,
+        learned: dict,
+    ) -> int:
+        """Record one memory save with everything an undo needs, and return
+        its id."""
+        cur = self.conn.execute(
+            "INSERT INTO memory_journal (run_id, label, committed_at, trigger, "
+            "rows_json, merchants_before, merchants_after, learned_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                run_id, label or "", committed_at, trigger,
+                json.dumps(rows, default=str),
+                json.dumps(merchants_before or {}, default=str),
+                json.dumps(merchants_after or {}, default=str),
+                json.dumps(learned or {}, default=str),
+            ),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    @staticmethod
+    def _memory_journal_row(row) -> dict:
+        return {
+            "id": int(row["id"]),
+            "run_id": row["run_id"],
+            "label": row["label"] or "",
+            "committed_at": row["committed_at"],
+            "trigger": row["trigger"],
+            "rows": json.loads(row["rows_json"]),
+            "merchants_before": json.loads(row["merchants_before"]),
+            "merchants_after": json.loads(row["merchants_after"]),
+            "learned": json.loads(row["learned_json"]),
+            "reverted_at": row["reverted_at"] or "",
+        }
+
+    def get_memory_journal(self, journal_id: int) -> dict | None:
+        row = self.conn.execute(
+            "SELECT * FROM memory_journal WHERE id = ?", (journal_id,)
+        ).fetchone()
+        return self._memory_journal_row(row) if row else None
+
+    def list_memory_journal(self, limit: int = 50) -> list[dict]:
+        """The saves, newest first."""
+        rows = self.conn.execute(
+            "SELECT * FROM memory_journal ORDER BY id DESC LIMIT ?", (int(limit),)
+        ).fetchall()
+        return [self._memory_journal_row(r) for r in rows]
+
+    def latest_memory_journal(self) -> dict | None:
+        """The newest save that has not been undone; None when every save
+        has been. Saves stack on the same rows, so this is the only one an
+        undo can put back without discarding a later one."""
+        row = self.conn.execute(
+            "SELECT * FROM memory_journal WHERE reverted_at IS NULL "
+            "ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        return self._memory_journal_row(row) if row else None
+
+    def set_memory_journal_reverted(self, journal_id: int, at: str) -> None:
+        self.conn.execute(
+            "UPDATE memory_journal SET reverted_at = ? WHERE id = ?",
+            (at, journal_id),
+        )
+        self.conn.commit()
+
     def set_memory_commit(
         self, run_id: str, digest: str, committed_at: str, trigger: str
     ) -> None:
@@ -1708,7 +1926,105 @@ class RunStore:
         )
         self.conn.commit()
 
+    # -- daily FX rates (note #79; polled from OpenTickers) ------------------
+
+    def upsert_fx_daily_rates(self, rows, fetched_at: str) -> int:
+        """Store `(day, currency, units per EUR, source)` rows, replacing a
+        (day, currency) already held: a provider revision for the same day
+        wins. Values are kept as the text they arrived as (a Decimal rate
+        keeps its digits, a float does not). Returns the row count."""
+        rows = [
+            (str(day), str(ccy).upper(), str(per_eur), str(source), fetched_at)
+            for day, ccy, per_eur, source in rows
+        ]
+        self.conn.executemany(
+            "INSERT INTO fx_daily_rates (day, ccy, per_eur, source, fetched_at) "
+            "VALUES (?, ?, ?, ?, ?) ON CONFLICT(day, ccy) DO UPDATE SET "
+            "per_eur = excluded.per_eur, source = excluded.source, "
+            "fetched_at = excluded.fetched_at",
+            rows,
+        )
+        self.conn.commit()
+        return len(rows)
+
+    def fx_daily_rates(
+        self, start: str | None = None, end: str | None = None
+    ) -> dict[str, dict[str, str]]:
+        """`{day: {currency: units per EUR}}` for start..end inclusive
+        (ISO days; either bound optional), days ascending."""
+        query = "SELECT day, ccy, per_eur FROM fx_daily_rates"
+        clauses, params = [], []
+        if start:
+            clauses.append("day >= ?")
+            params.append(str(start))
+        if end:
+            clauses.append("day <= ?")
+            params.append(str(end))
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY day, ccy"
+        out: dict[str, dict[str, str]] = {}
+        for row in self.conn.execute(query, params).fetchall():
+            out.setdefault(row["day"], {})[row["ccy"]] = row["per_eur"]
+        return out
+
+    def fx_daily_rates_status(self) -> dict:
+        """How far the table reaches: `{n_days, first_day, last_day,
+        currencies}`; zeros / None / [] when empty."""
+        row = self.conn.execute(
+            "SELECT COUNT(DISTINCT day) AS n, MIN(day) AS first, MAX(day) AS last "
+            "FROM fx_daily_rates"
+        ).fetchone()
+        ccys = [
+            r["ccy"] for r in self.conn.execute(
+                "SELECT DISTINCT ccy FROM fx_daily_rates ORDER BY ccy"
+            ).fetchall()
+        ]
+        return {
+            "n_days": int(row["n"] or 0),
+            "first_day": row["first"],
+            "last_day": row["last"],
+            "currencies": ccys,
+        }
+
+    def get_fx_meta(self, key: str) -> str | None:
+        row = self.conn.execute(
+            "SELECT value FROM fx_daily_rates_meta WHERE key = ?", (key,)
+        ).fetchone()
+        return row["value"] if row else None
+
+    def set_fx_meta(self, key: str, value: str) -> None:
+        self.conn.execute(
+            "INSERT INTO fx_daily_rates_meta (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, str(value)),
+        )
+        self.conn.commit()
+
     # -- settings (§16 export policy; one row, id=1) -----------------------
+
+    def _drop_retired_settings(self) -> None:
+        """Delete every retired key from the stored settings row, once.
+        Runs on every open and is a no-op when none is present, so it needs
+        no version stamp and a rollback simply stops dropping."""
+        row = self.conn.execute(
+            "SELECT data FROM settings WHERE id = 1"
+        ).fetchone()
+        if row is None:
+            return
+        try:
+            data = json.loads(row["data"])
+        except (TypeError, ValueError):
+            return
+        if not isinstance(data, dict):
+            return
+        keep = {k: v for k, v in data.items() if k not in RETIRED_SETTINGS_KEYS}
+        if len(keep) != len(data):
+            self.conn.execute(
+                "UPDATE settings SET data = ? WHERE id = 1",
+                (json.dumps(keep),),
+            )
+            self.conn.commit()
 
     def get_settings(self) -> dict:
         """The current settings, with defaults applied. No row yet => the
@@ -1730,6 +2046,29 @@ class RunStore:
             (run_id,),
         ).fetchall()
         return {r["group_id"]: r["resolution"] for r in rows}
+
+    # Item 204 step 4 follow-up: the tables a month's own derivations read.
+    RUN_INPUT_TABLES = (
+        "runs", "decisions", "duplicate_resolutions",
+        "expense_field_overrides", "expense_edits",
+    )
+
+    def run_inputs_digest(self, run_id: str) -> str:
+        """A digest of every row of this run in `RUN_INPUT_TABLES`: the run
+        row (snapshot, config, label) and its decisions, duplicate rulings,
+        field overrides and edits. Equal digests mean equal inputs, so a
+        caller may reuse what it derived from them; any write to one of
+        those rows changes the digest."""
+        h = hashlib.sha256()
+        for table in self.RUN_INPUT_TABLES:
+            h.update(f"\x00{table}\x00".encode())
+            rows = self.conn.execute(
+                f"SELECT * FROM {table} WHERE run_id = ?", (run_id,)
+            ).fetchall()
+            for text in sorted(repr(tuple(r)) for r in rows):
+                h.update(text.encode("utf-8"))
+                h.update(b"\x00")
+        return h.hexdigest()
 
     def set_duplicate_resolution(
         self, run_id: str, group_id: str, resolution: str, updated_at: str
@@ -2004,3 +2343,26 @@ class RunStore:
             (caller, float(since)),
         ).fetchone()
         return int(row["n"])
+
+
+def open_read_only(db_path: str | Path) -> RunStore | None:
+    """Case 9 build 3 (item 204): a `RunStore` over a READ-ONLY connection to
+    an existing database, or None when there is no such file.
+
+    For a reader that runs inside another request's view build: the month's
+    settled-cards map reads the claim a neighbour month holds on one of its
+    receipts, and the functions that build it are handed a run, not a store.
+    It skips `_init_schema` and `_migrate` on purpose. The request building
+    the view opened this database the normal way, so the schema is current;
+    a second connection issuing even no-op DDL could wait on that request's
+    own write lock. `mode=ro` cannot write, so it never takes the lock, and a
+    wrong path yields None rather than a fresh empty database.
+    """
+    path = Path(db_path)
+    if not path.is_file():
+        return None
+    store = RunStore.__new__(RunStore)
+    store.db_path = path
+    store.conn = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
+    store.conn.row_factory = sqlite3.Row
+    return store

@@ -1,4 +1,18 @@
-"""Categorization-accuracy regression gate for `calibrate` (PR 2b).
+"""Categorization-accuracy regression gate for `calibrate` (PR 2b), BUCKET
+PATH ONLY.
+
+**What this measures since Phase 1 (item 6, 2026-09-24).** The bucket path:
+`categorize_receipts` without `entity_orgs`, answering in the eight-bucket
+vocabulary through the keyword stub. That path still runs, for every batch
+created before Phase 1 (all seven live months, which stay bucket-era) and
+for every CLI run. A batch whose config carries `gl_entity_orgs` takes the
+GL chain (`_categorize_one_gl`) instead, and this gate never calls it: the
+keyword stub has no leaf vocabulary, and the chain's model tier needs an
+LLM. So a green here says nothing about the GL chain, and the report says
+that in words (`print_report`, and `path` / `gl_path_measured` in the JSON)
+rather than letting one "Gate: OK" stand for both paths.
+`test_categorization_gate.py` pins the claim both ways: the gate routes
+through the bucket categorizer and never reaches the GL one.
 
 `calibrate` already gates the reconciliation invariant + matcher scoring;
 it does NOT measure categorization. The moment memory auto-applies a
@@ -111,6 +125,12 @@ _MEMORY_VENDORS = {normalize_vendor(v) for (_le, v, _c, _s) in MEMORY_FIXTURE}
 OVERALL_FLOOR = 4 / 8
 SUBSET_FLOOR = 1.0
 
+# The one path this gate measures, and the one it does not (module
+# docstring). Carried in every measurement so a JSON consumer cannot read
+# the verdict as covering GL batches.
+PATH = "bucket"
+GL_PATH_MEASURED = False
+
 
 def _predicted_category(receipt: Receipt) -> str | None:
     cat = receipt.line_items[0].categorization if receipt.line_items else None
@@ -134,10 +154,13 @@ def measure(learned: MerchantCategoryLookup | None = None) -> dict:
     """Run the keyword categorizer over the labeled fixture and report
     overall + changed-subset accuracy. Deterministic; no LLM, no store.
     `learned` applies the Phase-2 memory consult; None = empty-store
-    baseline."""
+    baseline. `entity_orgs=None` is passed on purpose: it is what selects
+    the bucket path, the only one this gate measures."""
     receipts = [r for r, _label in LABELED]
     labels = [label for _r, label in LABELED]
-    out = categorize_receipts(receipts, client=None, learned=learned)
+    out = categorize_receipts(
+        receipts, client=None, learned=learned, entity_orgs=None
+    )
 
     n = n_ok = 0
     n_sub = n_sub_ok = 0
@@ -152,6 +175,7 @@ def measure(learned: MerchantCategoryLookup | None = None) -> dict:
     overall = n_ok / n if n else 0.0
     subset = n_sub_ok / n_sub if n_sub else 0.0
     return {
+        "path": PATH, "gl_path_measured": GL_PATH_MEASURED,
         "n": n, "n_ok": n_ok, "overall": overall, "overall_floor": OVERALL_FLOOR,
         "n_subset": n_sub, "n_subset_ok": n_sub_ok,
         "subset": subset, "subset_floor": SUBSET_FLOOR,
@@ -170,7 +194,8 @@ def run_gate() -> dict:
 
 
 def print_report(m: dict) -> None:
-    print("CATEGORIZATION ACCURACY (labeled fixture)")
+    print("CATEGORIZATION ACCURACY, BUCKET PATH (labeled fixture, keyword stub)")
+    print("  GL path (batches with gl_entity_orgs): NOT measured by this gate")
     print(
         f"  Overall:        {m['n_ok']}/{m['n']} = {m['overall'] * 100:.1f}%  "
         f"(floor {m['overall_floor'] * 100:.1f}%)"
@@ -179,4 +204,4 @@ def print_report(m: dict) -> None:
         f"  Changed subset: {m['n_subset_ok']}/{m['n_subset']} = {m['subset'] * 100:.1f}%  "
         f"(floor {m['subset_floor'] * 100:.1f}%)"
     )
-    print(f"  Gate: {'OK' if m['ok'] else 'FAIL'}")
+    print(f"  Gate (bucket path): {'OK' if m['ok'] else 'FAIL'}")

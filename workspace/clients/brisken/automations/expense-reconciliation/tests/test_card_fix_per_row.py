@@ -185,7 +185,15 @@ def test_a_card_defined_after_the_month_was_created_can_be_picked(client, monkey
 
 
 def test_publishing_remembers_the_fix_and_next_month_takes_it(client, monkeypatch):
-    client.put("/api/settings", json={"cards": CARDS})
+    # Item 173: a remembered card lends itself only to a brand the registry
+    # vouches is paid on one card, at ingest as well as at read time, so the
+    # scenario needs Marinho in the registry. A bare entry is the vouch: the
+    # registry knows the brand and has no evidence of a second card.
+    client.put("/api/settings", json={
+        "cards": CARDS,
+        "merchants": {"Marinho": {"aliases": [], "category": None,
+                                  "zoho_account": None}},
+    })
     july = _create_batch(client, monkeypatch, _extraction())
     assert _fix(client, july, _row(client, july, "")["document_id"], "corp-1672").status_code == 200
     memory = _publish(client, july)
