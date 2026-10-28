@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-23 | Zoho GL Account Relevance And Categorization Architecture | client-dev | [→](docs/2026-09-23%20-%20Zoho%20GL%20Account%20Relevance%20And%20Categorization%20Architecture/Checkpoint.md) |
 | 2026-10-21 | Recon Memory Window Portuguese And Outage Check | client-dev | [Mini-Checkpoint-1](docs/2026-10-21%20-%20Recon%20Memory%20Window%20Portuguese%20And%20Outage%20Check/Mini-Checkpoint-1.md) |
 | 2026-10-09 | Recon Card Filter Perf Fix | client-dev | [→](docs/2026-10-09%20-%20Recon%20Card%20Filter%20Perf%20Fix/Checkpoint.md) |
 | 2026-10-07 | Recon Sender Notes Classify And Backfill | client-dev | [→](docs/2026-10-07%20-%20Recon%20Sender%20Notes%20Classify%20And%20Backfill/Checkpoint.md) |
