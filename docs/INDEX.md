@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-09-17 | Expense-Recon Item 82 | client-dev | [→](docs/2026-09-17%20-%20Expense-Recon%20Item%2082/Checkpoint.md) |
 | 2026-09-17 | Brisken Recon Prompts Live | client-dev | [Mini-Checkpoint-1](docs/2026-09-17%20-%20Brisken%20Recon%20Prompts%20Live/Mini-Checkpoint-1.md) |
 | 2026-09-20 | Expense-Recon Item 162 Statement Colours | client-dev | [→](docs/2026-09-20%20-%20Expense-Recon%20Item%20162%20Statement%20Colours/Checkpoint.md) |
 | 2026-09-22 | Verve Beta Boundary Testing | client-dev | [Mini-Checkpoint-1](docs/2026-09-22%20-%20Verve%20Beta%20Boundary%20Testing/Mini-Checkpoint-1.md) |
