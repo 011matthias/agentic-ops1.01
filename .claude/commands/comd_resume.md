@@ -45,6 +45,7 @@ Use these when building the session header slug and title:
 | `bris` | brisken |
 | `peak` | peakora |
 | `uwi` | upwork-independence |
+| `me` | personal (KIT, BAföG, private admin): checkpoints are private, read from the primary clone's gitignored `docs/personal/` instead of `docs/`; no INDEX rows exist for them |
 | `{3-4 char initials}` | any new client/project |
 
 ## Step 0: MCP check, then YAML Fast-Path

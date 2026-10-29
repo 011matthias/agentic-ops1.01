@@ -117,6 +117,7 @@ STATIC_IGNORED_PREFIXES = (
     ".scratch/", ".tmp/", "api-docs/", ".playwright-mcp/", "scripts/.",
     "internal/", ".serena/", ".pytest_cache/", ".ruff_cache/",
     "platform/.next/", "platform/node_modules/", "node_modules/",
+    "docs/personal/",
 )
 
 # Scratch names. PREFIX members fire only on non-durable files (a committed

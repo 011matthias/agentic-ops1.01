@@ -337,6 +337,14 @@ def test_nogit_secret_in_context_portable_still_denies():
     assert _classify(_run("workspace/clients/brisken/context/portable/token.json", env=NO_GIT)) == "deny"
 
 
+def test_private_checkpoint_folder_is_ignored():
+    # W1-10: docs/personal/ holds private checkpoints; a scratch-shaped name
+    # there would deny if the folder were tracked.
+    rel = "docs/personal/2026-07-23 - T/state-1.json"
+    assert _classify(_run(rel)) == "pass"
+    assert _classify(_run(rel, env=NO_GIT)) == "pass"
+
+
 def test_nogit_next_build_artifact_passes():
     assert _classify(_run("platform/.next/cache/snapshot-1.json", env=NO_GIT)) == "pass"
 
