@@ -189,6 +189,7 @@ from .service import (
     regenerate_zoho,
     replace_intake_files,
     reset_memory,
+    dismiss_set_aside_file,
     restore_set_aside_file,
     run_mode,
     sync_claim_for_decision,
@@ -5817,6 +5818,39 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         store, run, file, _now_iso(),
                         learning_db_path=app.state.learning_db_path,
                     )
+                except RunInputError as exc:
+                    return _input_refused(exc)
+                run = store.get_run(run_id)
+                view = _expense_view(store, run)
+            return JSONResponse(jsonable_encoder({**result, "batch": view}))
+
+        return await run_in_threadpool(_work)
+
+    @app.post("/api/expense-batches/{run_id}/set-aside/dismiss")
+    async def post_dismiss_set_aside(run_id: str, request: Request):
+        """Item 262: take a set-aside file off the month's list (body
+        {"file": <stored name>}), or put it back ({"file", "undo": true}).
+        Flags the entry, never deletes it or its bytes; no re-match, since a
+        set-aside file was never in the matching pool. Threadpool for the
+        same reason as the restore route: the batch writer lock."""
+        if not _receipt_first_on():
+            return _flag_off()
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001 - malformed body is a plain 400
+            body = None
+        file = str(((body or {}).get("file")) or "").strip()
+        if not file:
+            return JSONResponse({"error": "file is required", "code": "file_name_required"}, status_code=400)
+        undo = (body or {}).get("undo") is True
+
+        def _work():
+            with open_store() as store:
+                run, err = _expense_run_or_error(store, run_id)
+                if err is not None:
+                    return err
+                try:
+                    result = dismiss_set_aside_file(store, run, file, _now_iso(), undo=undo)
                 except RunInputError as exc:
                     return _input_refused(exc)
                 run = store.get_run(run_id)

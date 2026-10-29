@@ -13665,7 +13665,7 @@ Proof: `tests/test_open_without_receipt_due_item_259.py` (the predicate through
 `completeness_counts`) plus the route-level assertion in the item 258 test file;
 the counter's wiring regressed green -> red -> green.
 
-### 261. Mail the intake does not understand: links, meaningless images, a credit-card statement read as not-an-expense (note #129; 2026-10-29; licence: defect, covered) (NOT STARTED)
+### 261. Mail the intake does not understand: links, meaningless images, a credit-card statement read as not-an-expense (note #129; 2026-10-29; licence: defect, covered) (PART SHIPPED 2026-10-29: links listed, unreadable bodies honest; statement recognition and logos OPEN)
 
 Operator, on a `rendered-body.pdf` flagged "Does not look like an expense
 document": links in a mail should be followed if they can be processed;
@@ -13677,6 +13677,13 @@ Three separate questions, none safe to guess at:
 (a) **Links**: following a link fetches an attacker-controllable URL
 (rule_untrusted_inbound: inbound text never decides a URL to fetch), so this
 needs an owner ruling on an allowlist of vendor domains before any design.
+SHIPPED instead, no ruling needed: `links[]` on the body view lists where a
+mail points (footer links dropped), and the prompt shows them with "the tool
+does not open links"; nothing is fetched. Also shipped: a body with no
+readable text holds as `held_no_valid_files` at arrival, and Retry moves an
+already-stored one there (the live "Nico - Receipts" mail on its next
+press). Proof: three tests in `test_intake_mail.py`, both wirings regressed
+green -> red -> green.
 (b) **Logos**: attachments under 4096 bytes are already dropped as signature
 art (item 155's trap); the live question is images above that size. Measure
 how many stored images are logos before building.
@@ -13705,6 +13712,16 @@ set-aside files first (no charges depend on them), statements second behind a
 dry-run that lists the decisions it would orphan. #126 is a display rule in the
 SPA (hide the file link when the overview row's status is "not a receipt") and
 rides the next prompt.
+
+**Set-aside half SHIPPED 2026-10-29** (owner: "fix those"):
+`POST /api/expense-batches/{id}/set-aside/dismiss` flags the entry
+`dismissed` (bytes and entry kept, `undo` reverses, a dismissed file refuses
+restore with `set_aside_dismissed`), `n_set_aside` stops counting it. #126
+rides `docs/lovable-setaside-links-prompt.md`. Proof:
+`test_document_type_quarantine.py::test_web_dismiss_set_aside_keeps_the_file_and_undoes`,
+regressed green -> red -> green. **Statement removal (#127's own anchor)
+stays OPEN**: it removes charges Criss has decided on, so it needs a dry run
+listing the decisions it would orphan before any write exists.
 
 ### 263. A mail of receipts from several months files each receipt in its own month (notes #138, #139; 2026-10-29; licence: defect, covered) (BACKEND SHIPPED 2026-10-29)
 

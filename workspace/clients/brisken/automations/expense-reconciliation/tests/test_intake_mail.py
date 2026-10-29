@@ -1546,6 +1546,69 @@ def test_retry_held_renders_at_most_the_cap(client, monkeypatch):
     assert client.get("/api/inbound/log").json()["n_held"] == 1
 
 
+def _image_only_mail() -> bytes:
+    """An HTML body that carries no readable text and a link to the receipt,
+    the shape of "Nico - Receipts" (2026-09-27): nothing to render."""
+    msg = EmailMessage()
+    msg["From"] = OUTSIDE
+    msg["To"] = f"receipts@{DOMAIN}"
+    msg["Subject"] = "Receipts"
+    msg["Message-ID"] = "<image-only@vendor.example>"
+    msg.set_content(
+        '<html><body><img src="cid:x"><a href="https://share.example.com/r/123">'
+        '</a><a href="https://vendor.example/unsubscribe"><img src="cid:y"></a></body></html>',
+        subtype="html",
+    )
+    return msg.as_bytes()
+
+
+def test_a_body_with_no_text_is_not_promised_a_click(client):
+    """Item 261: arrival holds a body with no readable text as no-valid-files,
+    not "Needs one click to read", which the render route would refuse."""
+    state = client.app.state
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _image_only_mail(), synchronous=True,
+    )
+    assert res["status"] == HELD_NO_VALID_FILES
+
+
+def test_retry_moves_an_unreadable_body_off_the_renderable_state(client, monkeypatch):
+    """Item 261: the live 'Nico - Receipts' shape, already stored as
+    held_body_only before the arrival fix. Retry stops counting it as a
+    failure and moves it to no-valid-files."""
+    state = client.app.state
+    process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _image_only_mail(), synchronous=True,
+    )
+    arch = next(p for p in (state.data_root / "inbound").iterdir() if p.is_dir())
+    meta_path = arch / "meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta["status"] = HELD_BODY_ONLY  # as stored before the arrival fix
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+
+    out = client.post("/api/inbound/replay-held").json()
+    assert out["failed"] == 0 and out["still_held"] == 1, out
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    assert meta["status"] == HELD_NO_VALID_FILES
+
+
+def test_body_view_lists_links_without_footer_links(client):
+    """Item 261 (note #129): the operator sees where a mail points; footer
+    links are dropped; nothing is fetched."""
+    state = client.app.state
+    process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _image_only_mail(), synchronous=True,
+    )
+    archive = client.get("/api/inbound/log").json()["entries"][-1]["archive"]
+    body = client.get(f"/api/inbound/{archive}/body").json()
+    assert body["links"] == [
+        {"url": "https://share.example.com/r/123", "host": "share.example.com", "text": ""}
+    ]
+
+
 def test_reconcile_flips_interrupted_render(client):
     from expense_recon.web.intake_mail import (
         STATUS_RENDERING,

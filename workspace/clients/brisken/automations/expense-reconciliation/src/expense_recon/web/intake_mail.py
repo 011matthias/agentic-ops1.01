@@ -3079,6 +3079,11 @@ def route_archived(
 
         if parsed.body_only or not parsed.attachments:
             held = HELD_BODY_ONLY if parsed.body_only else HELD_NO_VALID_FILES
+            if held == HELD_BODY_ONLY and not _has_readable_body(arch):
+                # Item 261: a body with no readable text (images only, an
+                # empty HTML shell) cannot be rendered, so "Needs one click
+                # to read" would promise a click that refuses it.
+                held = HELD_NO_VALID_FILES
             _update_meta(arch, {"status": held})
             if held == HELD_BODY_ONLY and is_known_sender(
                 parsed.from_addr, cfg
@@ -3831,7 +3836,16 @@ def replay_held(
             )
             rendered += 1
             status = str(result.get("status", ""))
-            if "error" in result or status.startswith("held_"):
+            if result.get("error_code") == "mail_no_readable_body":
+                # Item 261: nothing to read, so not a failure to retry. It
+                # leaves the renderable state and stops promising one click.
+                _transition_meta(
+                    arch,
+                    lambda m: str(m.get("status", "")) == HELD_BODY_ONLY,
+                    {"status": HELD_NO_VALID_FILES},
+                )
+                still_held += 1
+            elif "error" in result or status.startswith("held_"):
                 failed += 1
             elif status == STATUS_POOLED:
                 pooled += 1
@@ -4122,23 +4136,36 @@ def sweep_dismissed(db_path: Path, data_root: Path) -> int:
 # receipt), or dismiss it as junk.
 
 
+def _has_readable_body(arch: Path) -> bool:
+    from .body_render import extract_body_text
+
+    eml = arch / "message.eml"
+    return eml.is_file() and bool(extract_body_text(eml.read_bytes()).strip())
+
+
 def read_body_view(data_root: Path, archive: str) -> dict | None:
     """Sanitized body view of an archived mail: plain text (HTML stripped),
-    never the raw archive. None when the archive does not exist."""
-    from .body_render import extract_body_text
+    never the raw archive. None when the archive does not exist.
+
+    `links` (item 261, note #129): the http(s) links the body points at, so
+    the operator can see a mail that carries its receipt behind a link and
+    open it. Display only: the tool never fetches a URL a mail names
+    (rule_untrusted_inbound)."""
+    from .body_render import extract_body_links, extract_body_text
 
     arch = _archive_dir(data_root, archive)
     if arch is None or not (arch / "message.eml").exists():
         return None
     meta = _read_meta(arch)
-    text = extract_body_text((arch / "message.eml").read_bytes())
+    raw = (arch / "message.eml").read_bytes()
     return {
         "archive": arch.name,
         "from": meta.get("from", ""),
         "subject": meta.get("subject", ""),
         "at": meta.get("at", ""),
         "status": meta.get("status", ""),
-        "text": text,
+        "text": extract_body_text(raw),
+        "links": extract_body_links(raw),
     }
 
 

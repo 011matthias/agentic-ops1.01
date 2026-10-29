@@ -9189,7 +9189,9 @@ def build_expense_view(
                 copies_set_aside_totals(receipts, grid_copies).items()
             )
         },
-        "n_set_aside": sum(1 for e in set_aside if not e["restored"]),
+        "n_set_aside": sum(
+            1 for e in set_aside if not e["restored"] and not e.get("dismissed")
+        ),
         # Item 62, same name and same question as the run payload.
         "n_settled_outside": len(grid_settled_outside),
         "n_categorized": n_categorized,
@@ -14037,6 +14039,9 @@ def set_aside_view(snapshot: dict, work_dir: Path | None = None) -> list[dict]:
             "display": e.get("display") or _display_name(e["file"]),
             "reason": e.get("reason") or "other",
             "restored": bool(e.get("restored")),
+            # Item 262: taken off the month's list by a person, bytes kept;
+            # reversible through the same route with `undo`.
+            "dismissed": bool(e.get("dismissed")),
             "at": e.get("at"),
             # Note item T3/T1: the receipt this entry set aside, under
             # the name every other surface calls it. `file` has always
@@ -14104,6 +14109,52 @@ def restore_set_aside_file(
     return out
 
 
+def dismiss_set_aside_file(
+    store: RunStore, run: RunRow, file: str, now_iso: str, *, undo: bool = False,
+) -> dict:
+    """Item 262 (notes #127, #130): take one set-aside file off the month's
+    list, or put it back (`undo`). The entry is flagged `dismissed`, never
+    deleted, and the bytes stay where they are: the storage description
+    promises nothing this system accepted is destroyed, and a flag is the
+    removal that keeps that promise and can be reversed. A restored entry is
+    already an expense and refuses; delete the expense instead."""
+    with _BATCH_ADD_LOCK:
+        fresh = store.get_run(run.run_id)
+        if fresh is None:
+            raise RunInputError(
+                "This batch no longer exists (it was deleted).",
+                code="batch_deleted",
+            )
+        snapshot = dict(fresh.snapshot)
+        entries = set_aside_entries(snapshot)
+        entry = next((e for e in entries if e["file"] == file), None)
+        if entry is None:
+            raise RunInputError(
+                f"{file} is not in this batch's set-aside list.",
+                code="set_aside_file_not_found",
+                file=file,
+            )
+        if entry.get("restored"):
+            raise RunInputError(
+                f"{file} was restored as an expense; delete the expense instead.",
+                code="set_aside_already_restored",
+                file=file,
+            )
+        if undo:
+            entry.pop("dismissed", None)
+            entry.pop("dismissed_at", None)
+        else:
+            entry["dismissed"] = True
+            entry["dismissed_at"] = now_iso
+        snapshot["set_aside"] = entries
+        store.update_run_snapshot(fresh.run_id, snapshot)
+        n_set_aside = sum(
+            1 for e in entries if not e.get("restored") and not e.get("dismissed")
+        )
+        store.update_run_summary(fresh.run_id, {**fresh.summary, "n_set_aside": n_set_aside})
+    return {"ok": True, "file": file, "dismissed": not undo, "n_set_aside": n_set_aside}
+
+
 def _restore_set_aside_locked(
     store: RunStore,
     run: RunRow,
@@ -14129,6 +14180,12 @@ def _restore_set_aside_locked(
         raise RunInputError(
             f"{file} was already restored.",
             code="set_aside_already_restored",
+            file=file,
+        )
+    if entry.get("dismissed"):
+        raise RunInputError(
+            f"{file} was removed from this month; put it back first.",
+            code="set_aside_dismissed",
             file=file,
         )
 
@@ -14236,7 +14293,9 @@ def _restore_set_aside_locked(
     snapshot["outcome"] = outcome_to_dict(outcome)
     snapshot["set_aside"] = entries
     store.update_run_snapshot(run.run_id, snapshot)
-    n_set_aside = sum(1 for e in entries if not e.get("restored"))
+    n_set_aside = sum(
+        1 for e in entries if not e.get("restored") and not e.get("dismissed")
+    )
     store.update_run_summary(run.run_id, {
         **run.summary,
         "n_expenses": len(pool),
