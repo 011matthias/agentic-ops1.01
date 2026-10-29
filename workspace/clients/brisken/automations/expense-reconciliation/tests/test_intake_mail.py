@@ -1808,6 +1808,49 @@ def test_a_multi_month_mail_routes_by_its_earliest_date_and_says_so(
     assert row["mixed_months"] is True
 
 
+def test_a_mixed_month_mail_files_each_receipt_in_its_own_month(
+    client, monkeypatch,
+):
+    """Backlog item 267 (notes #138/#139): Dirk's one mail of GitHub receipts
+    for three months filed all three in the earliest month, so the later
+    ones sat there with no charge to match. The mail still ARRIVES in the
+    earliest open month; the later receipt then leaves it for its own."""
+    older = RECEIPT_DAY.replace(day=1) - timedelta(days=5)
+    older_label = _label_for(older)
+    older_batch = _create_batch(client, monkeypatch, older_label)
+    state = client.app.state
+    # Arrival read of both files, then the batch ingest of both.
+    _patch_ocr(
+        monkeypatch,
+        _extraction(vendor="GitHub", total="11.56", date=older.isoformat()),
+        _extraction(vendor="GitHub", total="12.34", date=RECEIPT_DAY.isoformat()),
+        _extraction(vendor="GitHub", total="11.56", date=older.isoformat()),
+        _extraction(vendor="GitHub", total="12.34", date=RECEIPT_DAY.isoformat()),
+    )
+    result = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com", attachments=[
+            ("old.jpg", JPG + b"gh-old"), ("new.jpg", JPG + b"gh-new"),
+        ]),
+        synchronous=True,
+    )
+    assert result["status"] == STATUS_INGESTED
+    assert result["batch_id"] == older_batch
+
+    batches = {b["label"]: b["run_id"] for b in
+               client.get("/api/expense-batches").json()["batches"]}
+    assert MONTH_LABEL in batches, "the later receipt's month was not opened"
+    later = client.get(f"/api/expense-batches/{batches[MONTH_LABEL]}").json()
+    assert [e["total"] for e in later["expenses"]] == ["12.34"]
+    stayed = client.get(f"/api/expense-batches/{older_batch}").json()
+    assert "12.34" not in [e["total"] for e in stayed["expenses"]]
+    assert "11.56" in [e["total"] for e in stayed["expenses"]]
+    row = [e for e in client.get("/api/inbound/log").json()["entries"]
+           if e["archive"] == result["archive"]][0]
+    assert row["mixed_months"] is True
+    assert row["split_to"][0]["month"] == RECEIPT_MONTH
+
+
 def test_resolve_receipt_month_boundaries():
     """The clamp's own edges, without the cost of a round trip: one day
     into the future is timezone skew and stays readable; two days is a
