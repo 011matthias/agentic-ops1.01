@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-29 | Recon Drop Asked-For Button | client-dev | [→](docs/2026-10-29%20-%20Recon%20Drop%20Asked-For%20Button/Checkpoint.md) |
 | 2026-10-29 | Recon duplicate same-number receipt | client-dev | [→](docs/2026-10-29%20-%20Recon%20duplicate%20same-number%20receipt/Checkpoint.md) |
 | 2026-09-17 | Expense-Recon Item 82 | client-dev | [→](docs/2026-09-17%20-%20Expense-Recon%20Item%2082/Checkpoint.md) |
 | 2026-09-17 | Brisken Recon Prompts Live | client-dev | [Mini-Checkpoint-1](docs/2026-09-17%20-%20Brisken%20Recon%20Prompts%20Live/Mini-Checkpoint-1.md) |
