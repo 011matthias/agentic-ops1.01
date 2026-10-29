@@ -13509,7 +13509,7 @@ the re-match and the grid, 13 rule tests), each of the three wirings
 regressed green -> red -> green with `tools/regress_check.py` (the re-match's
 `pinned=` argument, rung 7's skip, the grid's quiet copies).
 
-### 257. A shared number in any field makes one purchase; apply to every month waiting; statements for what is left (owner, 2026-10-29, after item 256: "look when duplicates enter they usually have important numbers in common so invoice number o reference number multiple didgits the same or that type of thing and in those cases we need you to recognize their relation and default to the receipt (or document with payment information). we need to make sure that the statements are used to help categorize and match any left over expenses") (RECOGNITION BUILT 2026-10-29; apply + statements: see below)
+### 257. A shared number in any field makes one purchase; apply to every month waiting; statements for what is left (owner, 2026-10-29, after item 256: "look when duplicates enter they usually have important numbers in common so invoice number o reference number multiple didgits the same or that type of thing and in those cases we need you to recognize their relation and default to the receipt (or document with payment information). we need to make sure that the statements are used to help categorize and match any left over expenses") (RECOGNITION LIVE 2026-10-29: PR #1670, Fly `416a5272`; apply DONE; statement-double merge DECIDED, not built)
 
 The owner's screenshot (Compare copies, October's Anthropic 66.00): the
 receipt's reference is its OWN receipt number (`2709 9940`), the invoice's
@@ -13533,16 +13533,37 @@ months; the rule covers the next arrivals. Proof:
 `tests/test_duplicate_any_number_item_257.py` (5), the broadened rung and the
 new key each regressed green -> red -> green.
 
-Still open from this note:
-- **Apply to every month waiting.** September (statement month) shows its
-  last re-match's choice until it re-matches; `POST
-  /api/runs/{id}/duplicates/reapply` with `dry_run: true` previews it.
-- **Statements on what is left.** September holds card 9693 twice for 15
-  charges: the interim xlsx (`Chase9693_2026-09_posted_0906-0915`, 15
-  charges) lies entirely inside the PDF statement (`20261004-statements-9693-`,
-  49), with different descriptors ("OPENAI" vs "OPENAI OPENAI.COM CA"), so
-  `transaction_content_id` (vendor in the identity) keeps both. Each double
-  leaves one side as a charge without a receipt.
+LIVE 2026-10-29: PR #1670, Fly `416a5272` (`/healthz` commit verified by
+deploy.py). After the deploy October and September read the same groups,
+totals and `n_review` as before it, as predicted; the October page reads back
+unchanged. Two existing intake-twin tests pinned the old rule (a hand-uploaded
+pair sharing an invoice number counted twice) and now assert one group.
+
+- **Apply to every month waiting: DONE, by no write of ours.** September
+  re-matched at 11:34 UTC (trigger `adjacent_receipts`: a receipt filed in
+  August pulled its neighbour) on item 256's code. ElevenLabs keeps its
+  receipt; both Anthropic pairs are copies (187.15 `reference`, 184.35
+  `printed_reference`: the receipt's text prints the invoice number while
+  its reference field read only `890D70BF`); USD total 7,594.48 -> 7,222.98
+  (the two invoices). The reapply dry run then reported 0 groups to change.
+  October applies as read; August holds no group; July's groups are Criss's
+  rulings plus one with two different numbers.
+- **Statements on what is left (owner DECIDED 2026-10-29: merge the doubles,
+  build in a fresh session).** Statements already categorize the leftovers:
+  115 of September's 125 receiptless charges carry a category read from the
+  statement (71 guesses awaiting a confirm, 46 from the list or a rule), and
+  21 of 27 unmatched receipts wait for a statement not yet loaded for their
+  date. The waste is card 9693 listed twice for 15 charges: the interim xlsx
+  (`Chase9693_2026-09_posted_0906-0915`, 15 charges) lies entirely inside the
+  PDF statement (`20261004-statements-9693-`, 49), with different descriptors
+  ("OPENAI" vs "OPENAI OPENAI.COM CA"), so `transaction_content_id` (vendor in
+  the identity) keeps both, and 21 receiptless rows are one side of a double.
+  Decided shape: same card + date + amount from two statement files of that
+  card is ONE charge (multiset: n lines in one file and m in the other merge
+  to max(n, m)); the side a person or the tool already decided is the one
+  kept; preview first, then a re-read of September (live write, owner yes on
+  the preview). Never fold two lines of ONE file: two identical coffees are
+  two charges.
 
 ### Feedback notes #128-#132 (2026-10-29): not yet itemized
 
@@ -13561,6 +13582,7 @@ notes). None is about duplicates. Listed verbatim so they do not sit unread.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 167 | Item 257: a number shared in ANY number field (reference, invoice number, receipt number) makes documents of one amount one purchase (`number_keys`, broadened rung 2, `find_duplicate_receipts_by_any_number` appended last); receipt kept per item 256 | Owner on October's Anthropic pair: the receipt's reference is its own receipt number while both carry the invoice number, so a hand-uploaded or re-mailed pair read as two purchases. Nothing moved on the live months (every same-amount number pair already grouped); covers the next arrivals | 2026-10-29, PR #1670, Fly `416a5272`; live October + September groups, totals and `n_review` identical before/after, October page read back, read-only |
 | 166 | Item 256: a receipt and its invoice found by one document number are settled by it. The re-match keeps the receipt even where the tool's own match held the invoice (`pinned_documents`: only a person's confirmed pick holds), the statement check never splits the pair, the set-aside invoice reads review `none` | Dirk: "default to receipt not invoice and dont ask user for verification". Live: October's 10 invoice copies stopped asking, `n_review` 27 -> 24, totals unchanged; September (ElevenLabs invoice kept by a tool hold, two Anthropic pairs split by card 9693's PDF/xlsx double line) changes at its next natural re-match | 2026-10-29, PR #1666, Fly on `3e37fe93`; `/healthz` commit verified by deploy.py, live payload diffed before/after, SPA October drive read back the copy row ("Ready · Duplicate, not in the total"), read-only |
 | 165 | Fix (no item), follow-up to 163: `DELETE /api/runs/{id}/expenses/{doc}?views=1` and `POST /api/runs/{id}/duplicates/resolve?views=1` reply with `views.batch` / `views.run`, equal to the two page GETs at that moment; no flag, no change. SPA half `docs/lovable-duplicate-click-reply-views-prompt.md` (cache the reply, no refetch), handed to the owner, not pasted | After a duplicate click the page refetched the month twice and showed the old row until both landed. Local, September, click until the grid holds the new month: Delete 3.96 / 4.41 -> 3.83 / 3.71 s, Not a copy 3.68 / 4.48 -> 3.13 / 3.70 s; one screen update instead of two, and Not a copy refreshes the reconciliation line it left stale | 2026-10-07, PR #1590, Fly v284 (commit `0541288a`); live GET /api/runs + /api/expense-batches for September and October hash-identical before/after (baseline stable across two reads), page driven cold (read-only); the `views` reply itself not exercised live (it needs a write on Criss's month) |
 | 164 | Item 248: `GET /api/receipts/overview`, every receipt the tool holds in one list (months, trips, set-aside files, and mail that never became or is no longer an expense), statuses read off each month's own verdicts, memoized under the card key plus the mail archive's; SPA prompt with the TanStack Table v8 page | Dirk 2026-10-07: users could not see or filter receipts; the Email intake page listed mails only, so uploads never appeared. Live after deploy (one read-only GET): 363 receipts, 184 email / 179 upload, every row with an arrival date, 2.5 s; published SPA unchanged until the paste, cold drive 0 writes | 2026-10-07, PR #1587, Fly on `501edf7d` |
