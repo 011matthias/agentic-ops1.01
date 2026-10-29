@@ -1,0 +1,30 @@
+# gitleaks config (layout plan W1-35). The default rules stay on; these add
+# the house shapes a differential probe on 2026-10-28 showed them missing.
+# Probe: default gitleaks caught the Graph secret, Hero, Instantly and Zoho
+# keys only through their KEY/TOKEN/SECRET variable names, a realistic n8n
+# key through the jwt rule, and missed the Make MCP URL and the bare tok.txt
+# committed on 2026-08-23 (57415748).
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "make-mcp-url"
+description = "Make MCP server URL: the UUID in the path is the credential"
+regex = '''[a-z0-9]+\.make\.com/mcp/(?:api/v\d+/)?u/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'''
+keywords = ["make.com/mcp"]
+
+[[rules]]
+id = "zoho-oauth-token"
+description = "Zoho refresh or access token by its value shape, named or not"
+regex = '''\b1000\.[0-9a-f]{32}\.[0-9a-f]{32}\b'''
+keywords = ["1000."]
+
+[[rules]]
+id = "token-named-file"
+description = "A file named like a bare token (tok.txt, secret, *.token)"
+path = '''(?i)(?:^|/)(?:tok|token|tokens|secret|secrets)(?:\.txt)?$|\.(?:tok|token)$'''
+
+[allowlist]
+description = "Synthetic fixtures"
+paths = ['''(?:^|/)tools/tests/''', '''(?:^|/)fixtures/''']

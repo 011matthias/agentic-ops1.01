@@ -177,6 +177,13 @@ CANONICAL_HOOKS = {
                     "timeout": 10000,
                 },
                 {
+                    # W1-14: count personal data in the lines a push adds;
+                    # ask with paths + counts, never values; fail-open.
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/pii-push-gate.py"),
+                    "timeout": 10000,
+                },
+                {
                     # Item 127: score the six real labelled months before a
                     # `flyctl deploy` of brisken-expense-recon; ask on a drop.
                     # 120 s because the check itself is budgeted at 100 s.
@@ -409,6 +416,7 @@ EXPECTED_HOOK_SCRIPTS = {
     "instantly-invasive-gate.py",
     "no-auto-commit-gate.py",
     "ruff-push-gate.py",
+    "pii-push-gate.py",
     "recon-accuracy-deploy-gate.py",
     "cd-guard.py",
     "heredoc-size-gate.py",

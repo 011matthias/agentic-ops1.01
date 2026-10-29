@@ -81,3 +81,16 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # W1-35: default rules plus the house shapes they miss (Make MCP
+          # URL, bare Zoho token, token-named files).
+          GITLEAKS_CONFIG: .gitleaks.toml
+      # W1-14: personal data in the lines this PR/push adds, counts only.
+      # Reports as warnings and never fails the job (client-ops guard,
+      # PLAN.md 2026-10-28): the local pii-push-gate asks before a push.
+      - name: Personal-data scan (added lines, counts only)
+        env:
+          RANGE: ${{ github.event_name == 'pull_request' && format('{0}...{1}', github.event.pull_request.base.sha, github.sha) || format('{0}..{1}', github.event.before, github.sha) }}
+        run: |
+          python3 tools/pii_scan.py --range "$RANGE" > pii.txt || true
+          while IFS= read -r line; do echo "::warning title=Personal data (counts only)::$line"; done < pii.txt
+          echo "$(wc -l < pii.txt) file(s) flagged"
