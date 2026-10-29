@@ -101,6 +101,10 @@ workspace/clients/*/context/
 # Session context YAMLs — contain inline API keys
 docs/sessions/*-context.yaml
 
+# Private checkpoints (personal sessions; checkpoint_scaffold finalize with
+# "private": true writes them in the primary clone). Layout plan W1-10.
+docs/personal/
+
 # Claude Code local settings (machine-specific permissions)
 .claude/settings.local.json
 

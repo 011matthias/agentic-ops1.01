@@ -119,6 +119,7 @@ STATIC_IGNORED_PREFIXES = (
     "internal/", ".serena/", ".pytest_cache/", ".ruff_cache/",
     "platform/.next/", "platform/node_modules/", "node_modules/",
     "output/", ".claude/worktrees/", "workspace/hours-tracker/",
+    "docs/personal/",
 )
 
 # Scratch names. PREFIX members fire only on non-durable files (a committed

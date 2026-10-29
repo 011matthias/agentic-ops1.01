@@ -15,8 +15,10 @@ The mechanical half (folder, session log, INDEX row, context YAML, register rows
 ## 2. Pre-flight (one call)
 
 ```
-uv run tools/checkpoint_scaffold.py pre --clients {clients touched} --topic "{TOPIC}" [--mini] [--register-types {comma-separated friction types you expect to log}]
+uv run tools/checkpoint_scaffold.py pre --clients {clients touched} --topic "{TOPIC}" [--mini] [--private] [--register-types {comma-separated friction types you expect to log}]
 ```
+
+**Personal sessions are private.** When the session is personal (scope `me`: KIT, BAföG, tax, private disputes, anything not client or system work), pass `--private` here and set `"private": true` with `"section": "personal"` in the payload. The prose then goes to the primary clone's gitignored `docs/personal/{date} - {topic}/`, and finalize writes no INDEX row, session-log entry or register rows; the context YAML is merged as usual. The repo is public, so a personal checkpoint in the ledger is published. A `personal*` section implies private even without the flag.
 
 This prints everything the closing sections need:
 - **Target path** for the checkpoint prose file (handles Mini-Checkpoint-{N} numbering)
@@ -199,7 +201,8 @@ Payload (write to `.scratch/` — gitignored):
 ```json
 {
   "topic": "{TOPIC}", "date": "{YYYY-MM-DD}", "work_type": "{client-dev|system-infra|comms|misc}",
-  "section": "{INDEX section: client name, or system/platform}",
+  "section": "{ONE of: the client or project folder name, system, platform, personal}",
+  "private": false,
   "mini": false,
   "projects": ["{client-id}"],
   "entry": {
