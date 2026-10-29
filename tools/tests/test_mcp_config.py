@@ -250,7 +250,7 @@ def test_adopt_excludes_the_local_file_when_gitignore_lacks_it(primary):
     probe = subprocess.run(["git", "-C", str(primary), "check-ignore", "-q", ".mcp.local.json"])
     assert probe.returncode == 0
     status = subprocess.run(["git", "-C", str(primary), "status", "--porcelain", "--", ".mcp.local.json"],
-                            capture_output=True, text=True).stdout
+                            capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
     assert status == ""
     # idempotent: a second adopt adds no duplicate line
     mc.ensure_excluded(primary)
