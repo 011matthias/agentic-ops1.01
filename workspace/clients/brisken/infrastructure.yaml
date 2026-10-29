@@ -1,4 +1,6 @@
 type: client
+orchestrator: fastapi  # FastAPI on Fly, never Railway: ship only through `deploy:` below
+deploy: workspace/clients/brisken/automations/expense-reconciliation/deploy.py
 
 # ACTIVE project: Expense Reconciliation Platform (p1)
 # Functional spec v2: workspace/clients/brisken/specs/1-spec/p1-expense-reconciliation-functional-spec.md

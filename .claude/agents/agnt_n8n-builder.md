@@ -68,7 +68,7 @@ Re-invoke with both. Cannot resolve spec without them.
 
 ### Step 2 — Resolve target n8n instance
 
-`Read` `workspace/clients/{client}/infrastructure.yaml`. Find the n8n instance(s). If multiple (dev + prod), pick based on spec frontmatter:
+Run `uv run tools/infra_yaml.py --client {client} --json`. It normalizes every infrastructure.yaml shape in use (an `instances:` list, an `n8n_instances:` map, or a top-level `n8n:` block with workflows nested under `workflows:` maps) into one `instances` list; never parse the file by hand. Take the instances with `type: n8n`. If multiple (dev + prod), pick based on spec frontmatter:
 - `ship: true` or `stage: live` → production instance
 - `ship: false` or `stage: build|test` → dev instance
 - Ambiguous → BLOCK with reason "Multiple n8n instances exist and target is ambiguous. Spec says ship={value}, stage={value}. Re-invoke with explicit instance."
@@ -215,8 +215,8 @@ After validation passes:
 
 ### Step 7 — Update infrastructure.yaml (modify-scenario gate)
 
-In the same turn as a successful build, `Edit` `workspace/clients/{client}/infrastructure.yaml`:
-- Find or create the entry under `n8n_instances.{instance}.workflows.{id}`
+In the same turn as a successful build, `Edit` `workspace/clients/{client}/infrastructure.yaml` (a targeted Edit, so comments survive):
+- Find the workflow where the file already keeps its workflows (the loader's `workflows` keys tell you which block they live in); for a new workflow, add it beside its siblings in that same block. Only when the instance has no workflows yet, create `workflows:` under the instance's own block.
 - Update fields:
   - `trigger:` (if changed)
   - `status:` (e.g., `inactive` — agent does NOT activate; that's deployer's job)
@@ -225,7 +225,9 @@ In the same turn as a successful build, `Edit` `workspace/clients/{client}/infra
   - `last_workflow_json_path:` set to `workspace/clients/{client}/automations/workflows/{automation_id}.json`
   - `last_built_at:` ISO timestamp
 
-If `infrastructure.yaml` has no `n8n_instances` block for the client, BLOCK with: "infrastructure.yaml does not have n8n_instances block for {client}. Run /comd_n8n-instances add {client} before building."
+Then run `uv run tools/infra_check.py --client {client}` and fix any ERROR it names before emitting the report.
+
+If the loader returns no `type: n8n` instance for the client, BLOCK with: "infrastructure.yaml has no n8n instance for {client}. Run /comd_n8n-instances add {client} before building."
 
 ### Step 8 — Emit build report
 
@@ -280,9 +282,9 @@ Compose per **Output Format** below. No preamble; the first line is the `##` hea
 (Or: "None — all credentials bound via API.")
 
 ### infrastructure.yaml updated
-- n8n_instances.{instance}.workflows.{id}.workflow_id: {id}
-- n8n_instances.{instance}.workflows.{id}.status: inactive
-- n8n_instances.{instance}.workflows.{id}.note: appended "{YYYY-MM-DD}: ..."
+- {workflow path in the file}.workflow_id: {id}
+- {workflow path in the file}.status: inactive
+- {workflow path in the file}.note: appended "{YYYY-MM-DD}: ..."
 
 ### Gotchas applied (sourced)
 - nodetype-format-discipline: skil_n8n-pack §"Critical Rules"

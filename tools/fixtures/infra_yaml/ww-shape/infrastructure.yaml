@@ -1,0 +1,58 @@
+# Synthetic fixture: the SHAPE of the warme-wimmer infrastructure.yaml
+# (top-level n8n: and make: blocks, workflows nested at several depths),
+# with placeholder values only. No real IDs, URLs or people.
+name: Fixture Client
+type: client
+slug: ww-shape
+orchestrator: n8n
+
+n8n:
+  instance: shared_client_account
+  url: https://fixture.example.invalid
+  api_key_env: N8N_API_KEY_WW_SHAPE
+  api_url_env: N8N_API_URL_WW_SHAPE
+  mcp_server: n8n-ww-shape
+  webhook_security:
+    rule: placeholder
+  absence_notice:
+    n8n_workflow_id: wfAbsence0001
+    name: "W2-12 absence notice"
+    status: active
+    trigger: schedule
+    export: automations/n8n/absence-notice.json
+    test: automations/tests/test_absence_notice.py
+  migration_workstream:
+    credentials:
+      hero_api_assistant:
+        n8n_credential_id: credHero0001
+        type: httpHeaderAuth
+    workflows:
+      w2_09_overdue_tasks:
+        make_scenario_id: 1000001
+        n8n_workflow_id: wfOverdue0001
+        n8n_name: "W2-09 overdue tasks"
+        status: active
+        trigger: schedule
+      w2_10_status_change:
+        n8n_workflow_id: wfStatus0001
+        status: inactive
+        trigger: webhook
+
+make:
+  instance: client_account
+  mcp_server: null
+  client_account:
+    org: 1
+    team: 2
+    zone: eu1.make.invalid
+    scenarios:
+      s1_alarms:
+        display_name: "S1 alarms"
+        client_id: 2000001
+        status: paused
+    hero_scenarios:
+      h2_task_status:
+        display_name: "H2 task status"
+        client_id: 2000002
+        trigger: webhook
+        status: active

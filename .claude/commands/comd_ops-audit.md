@@ -66,7 +66,7 @@ If no `platform` section exists:
 
 ## Step 2: Calculate Estimates
 
-Load [OPERATIONS-ANALYZER](../skills/make-mcp-tools-expert/modules/OPERATIONS-ANALYZER.md) Section A formulas.
+Load [OPERATIONS-ANALYZER](../skills/skil_make-mcp-tools-expert/modules/OPERATIONS-ANALYZER.md) Section A formulas.
 
 For each active scenario/workflow:
 

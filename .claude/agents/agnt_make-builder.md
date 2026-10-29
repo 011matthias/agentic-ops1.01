@@ -71,7 +71,7 @@ Re-invoke with both. Cannot resolve spec without them.
 
 ### Step 2 — Resolve target Make instance
 
-`Read` `workspace/clients/{client}/infrastructure.yaml`. Find the Make instance(s). If multiple (e.g., dev + prod), pick based on spec frontmatter:
+Run `uv run tools/infra_yaml.py --client {client} --json`. It normalizes every infrastructure.yaml shape in use (an `instances:` list, a `make_instances:` map, or a top-level `make:` block with scenarios under `scenarios:` / `*_scenarios:` maps) into one `instances` list; never parse the file by hand. Take the instances with `type: make`. If multiple (e.g., dev + prod), pick based on spec frontmatter:
 - `ship: true` or `stage: live` → production instance
 - `ship: false` or `stage: build|test` → dev instance
 - Ambiguous → emit BLOCKED with reason "Multiple Make instances exist and target is ambiguous. Spec says ship={value}, stage={value}. Re-invoke with explicit instance."
@@ -239,8 +239,8 @@ This is a state assertion, not a runtime check. The testing-agent will catch mis
 
 ### Step 8 — Update infrastructure.yaml (modify-scenario gate, see rule_behaviors.md)
 
-In the same turn as the successful deploy, `Edit` `workspace/clients/{client}/infrastructure.yaml`:
-- Find the scenario entry under `make_instances.{instance}.scenarios.{id}`
+In the same turn as the successful deploy, `Edit` `workspace/clients/{client}/infrastructure.yaml` (a targeted Edit, so comments survive):
+- Find the scenario entry where the file already keeps its scenarios (meji-media: the instance's `scenarios:` list, keyed by `id`); a new scenario goes beside its siblings in that same block
 - Update fields:
   - `trigger:` (if it changed)
   - `status:` (e.g., `active`, `inactive`, `ui_rebind_required`)
@@ -248,7 +248,7 @@ In the same turn as the successful deploy, `Edit` `workspace/clients/{client}/in
   - `last_blueprint_path:` set to `workspace/clients/{client}/automations/blueprints/{automation_id}.json`
   - `last_deployed_at:` ISO timestamp
 
-If the scenario entry does not exist (new scenario), create it. If `infrastructure.yaml` does not have a `make_instances` structure, BLOCK with: "infrastructure.yaml does not have make_instances block for {client}. Run /comd_make-instances init before building."
+If the scenario entry does not exist (new scenario), create it. Then run `uv run tools/infra_check.py --client {client}` and fix any ERROR it names. If the loader returns no `type: make` instance for the client, BLOCK with: "infrastructure.yaml has no Make instance for {client}. Run /comd_make-instances add {client} before building."
 
 ### Step 9 — Emit build report
 
@@ -311,9 +311,9 @@ Compose the final report per the **Output Format** below. No preamble; the first
 (Or: "None — all bindings persisted via API.")
 
 ### infrastructure.yaml updated
-- make_instances.{instance}.scenarios.{id}.trigger: {old} → {new}
-- make_instances.{instance}.scenarios.{id}.status: {value}
-- make_instances.{instance}.scenarios.{id}.note: appended "{YYYY-MM-DD}: ..."
+- {scenario path in the file}.trigger: {old} → {new}
+- {scenario path in the file}.status: {value}
+- {scenario path in the file}.note: appended "{YYYY-MM-DD}: ..."
 
 ### Gotchas applied (sourced)
 - ops-estimation: register #49, skil_make-pack §"Build Procedure" step 2.5

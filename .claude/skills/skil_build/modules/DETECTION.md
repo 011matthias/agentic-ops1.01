@@ -1,20 +1,20 @@
 # Orchestrator Detection
 
-Detect before building. Default for new clients: Trigger.dev.
-
-| Check | Orchestrator |
-|-------|-------------|
-| `trigger.config.ts` in automations/ | Trigger.dev |
-| `.mcp.json` entry `n8n-{client}` | n8n |
-| `infrastructure.yaml` with `type: make` | Make.com |
-| `railway.toml` in automations/ | FastAPI (legacy) |
+Detect before building. Default for new clients: n8n.
 
 ```bash
-if [ -f workspace/clients/{client}/automations/trigger.config.ts ]; then echo "trigger-dev"
-elif grep -q "n8n-{client}" .mcp.json 2>/dev/null; then echo "n8n"
-elif grep -q "type: make" workspace/clients/{client}/infrastructure.yaml 2>/dev/null; then echo "make"
-elif [ -f workspace/clients/{client}/automations/railway.toml ]; then echo "fastapi"
-fi
+uv run tools/infra_yaml.py --client {client}   # prints orchestrator=... (and deploy=... when set)
 ```
+
+The loader resolves in this order, first hit wins:
+
+| Order | Check | Orchestrator |
+|-------|-------|-------------|
+| 1 | top-level `orchestrator:` in infrastructure.yaml | as written |
+| 2 | an instance with `type: n8n` / `make` / `trigger-dev` / `fastapi` | that type |
+| 3 | `trigger.config.ts` in automations/ | Trigger.dev |
+| 4 | `railway.toml` in automations/ | FastAPI (legacy) |
+
+`.mcp.json` is not a detection source: it is gitignored, so a worktree has none, and it only says which credentials are wired on this machine. A top-level `deploy:` names the one sanctioned deploy entry point and outranks the orchestrator's default lane (Brisken: FastAPI on Fly through `deploy.py`, never `railway up`).
 
 **n8n:** Visual workflows via n8n MCP tools. No code deployment. **Make.com:** Visual scenarios via Make.com MCP tools or UI. **Trigger.dev:** Code-first TypeScript + Python. Deploy via `npx trigger.dev deploy`. **FastAPI:** Legacy only — do not use for new clients.

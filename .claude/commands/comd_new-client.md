@@ -27,7 +27,7 @@ If project name is empty, ask the user for it. Name should be lowercase, kebab-c
 - `type: internal` → `workspace/projects/{name}/`
 - `type: platform` → `workspace/projects/{name}/`
 
-For `type: internal` or `type: platform`, skip Step 2 (orchestrator selection) and Step 2.5 (feasibility assessment) — proceed directly to Step 3 with a lightweight structure (context/ and scripts/ only). Generate a minimal `infrastructure.yaml` with just `type:` and `notes:` fields. Skip Steps 4–8 that are client-specific (template copy, comms, symlink).
+For `type: internal` or `type: platform`, skip Step 2 (orchestrator selection) and Step 2.5 (feasibility assessment) — proceed directly to Step 3 with a lightweight structure (context/ and scripts/ only). Generate a minimal `infrastructure.yaml` with just `type:` and `notes:` fields. Skip Steps 4–7 that are client-specific (template copy, comms).
 
 ## Step 1: Verify Project Doesn't Exist
 
@@ -43,16 +43,16 @@ Ask the user which orchestrator to use:
 
 | Option | Description |
 |--------|-------------|
-| **Trigger.dev** (Recommended) | Trigger.dev handles scheduling, webhooks, retries, and monitoring. Python automations run via `pythonExtension`. |
-| **n8n** | Visual workflow builder. Workflows built in n8n UI or via n8n-mcp tools. For non-developer teams with an n8n instance. |
+| **n8n** (Recommended) | Visual workflow builder. Workflows built in the n8n UI or via the per-client n8n MCP server. The platform for new client builds. |
+| **Trigger.dev** | Trigger.dev handles scheduling, webhooks, retries, and monitoring. Python automations run via `pythonExtension`. |
 | **Make.com** | Visual scenario builder. Scenarios built in Make.com UI, specs guide the design. For non-developer teams or clients already using Make.com. |
 | **Plain FastAPI** (Legacy) | FastAPI service on Railway with custom dashboard, cron scripts, and webhook routes. NOT recommended for new clients. |
 
-Default to **Trigger.dev** unless the user chooses otherwise.
+Default to **n8n** unless the user chooses otherwise.
 
 ## Step 2.5: Platform Feasibility Assessment
 
-Before creating any files, investigate the client's platform subscription to catch mismatches early. Load [PLATFORM-FEASIBILITY](../skills/make-mcp-tools-expert/modules/PLATFORM-FEASIBILITY.md) and run Section A (Full Platform Capability Audit) for the chosen orchestrator.
+Before creating any files, investigate the client's platform subscription to catch mismatches early. Load [PLATFORM-FEASIBILITY](../skills/skil_make-mcp-tools-expert/modules/PLATFORM-FEASIBILITY.md) and run Section A (Full Platform Capability Audit) for the chosen orchestrator.
 
 **Minimum questions to ask:**
 
@@ -91,7 +91,7 @@ workspace/clients/{name}/
 │   └── README.md         # Client-specific notes
 ├── status/               # Per-workstream status-of-elements files (tracked)
 │   └── README.md         # What this folder is + the convention pointer
-├── reference/            # Will link to The Crucible
+├── deliverables/         # Client-facing deliverables (tracked)
 └── automations/          # Copy from template
 ```
 
@@ -152,30 +152,22 @@ Create `workspace/clients/{name}/infrastructure.yaml`:
 
 ```yaml
 type: client
+orchestrator: n8n
 
 instances:
   - type: n8n
     name: n8n-{name}
-    api_url: "https://<n8n-instance-url>"
-    api_key_env: "N8N_API_KEY_{name}"
+    url: "https://<n8n-instance-url>"
+    mcp_server: n8n-{name}
+    api_url_env: N8N_API_URL_{NAME}
+    api_key_env: N8N_API_KEY_{NAME}
+    credentials: {}
+    workflows: {}
 ```
 
-Ask the user for the n8n instance URL and API key.
+`{NAME}` is the slug upper-cased with `-` → `_`. List both env names in `automations/.env.example` (names only, no values); `uv run tools/infra_check.py --client {name}` fails until they are there.
 
-Add MCP server entry to `.mcp.json` (create file if it doesn't exist):
-
-```json
-{
-  "mcpServers": {
-    "n8n-{name}": {
-      "command": "npx",
-      "args": ["-y", "n8n-mcp", "--apiKey=<API_KEY>", "--baseUrl=<INSTANCE_URL>"]
-    }
-  }
-}
-```
-
-Tell the user to restart Claude Code for MCP tools to be available.
+Then run `/comd_n8n-instances add {name}`: it asks for the instance URL and key, writes the `n8n-{name}` entry into `.mcp.json` (gitignored), and verifies the connection. Never paste the key into infrastructure.yaml or a tracked file.
 
 **If Make.com:**
 
@@ -309,7 +301,7 @@ Use `/skil_spec-creator` to add new work items.
 ## Quick Links
 
 - [Context Notes](../context/README.md)
-- [Reference Materials](../reference/)
+- [Deliverables](../deliverables/)
 ```
 
 ## Step 6: Create Context README
@@ -338,8 +330,8 @@ Document API credentials, webhooks, and integration setup here.
 
 Create communication tracking files for the new client:
 
-1. Copy `.claude/skills/client-comms/templates/comms-log-template.md` → `workspace/clients/{name}/context/comms-log.md`
-2. Copy `.claude/skills/client-comms/templates/comms-profile-template.md` → `workspace/clients/{name}/context/comms-profile.md`
+1. Copy `.claude/skills/skil_client-comms/templates/comms-log-template.md` → `workspace/clients/{name}/context/comms-log.md`
+2. Copy `.claude/skills/skil_client-comms/templates/comms-profile-template.md` → `workspace/clients/{name}/context/comms-profile.md`
 3. Tell user: "Comms log and profile created. Fill in contact details in `context/comms-profile.md` when available."
 
 ## Step 7: Configure Environment
@@ -379,38 +371,9 @@ Generate secure values:
 - DASHBOARD_PASSWORD: `openssl rand -base64 16`
 - INTERNAL_API_KEY: `uuidgen` or `python -c "import uuid; print(uuid.uuid4())"`
 
-## Step 8: Create Reference Symlink
+## Step 8: Commit and Open the PR
 
-Check The Crucible's client_work folder for a matching client folder:
-
-```bash
-ls "/c/Users/neuma/Coding/1. General Work/The Crucible/workspace/client_work/"
-```
-
-Look for a folder name that matches `{name}` (case-insensitive, partial match OK — e.g., client name `herbox` should match `Herbox Sweden`).
-
-**If exactly one match is found**, create the symlink automatically:
-```bash
-ln -s "/c/Users/neuma/Coding/1. General Work/The Crucible/workspace/client_work/<matched-folder>" workspace/clients/{name}/reference
-```
-
-**If multiple matches are found**, show the options and ask the user to pick one.
-
-**If no match is found**, inform the user and create an empty placeholder:
-```markdown
-# workspace/clients/{name}/reference/README.md
-
-No matching folder found in The Crucible. Link manually when available:
-ln -s "/path/to/The Crucible/workspace/client_work/<folder>" workspace/clients/{name}/reference
-```
-
-## Step 9: Initialize Git Tracking
-
-The client folder is tracked in the main Agentic Ops repo.
-
-Run `git status` to show new untracked files.
-
-Do NOT commit yet - let the user decide when to commit.
+The client folder is tracked in the main Agentic Ops repo, so it ships through the B6 Band-1 chain ([[rule_no_auto_commit]]): cut `client/{name}/onboarding` BEFORE the first file is written ([[rule_branch_isolation_and_shared_ledger]] §2), run `uv run tools/infra_check.py --client {name}`, then commit the new folder with explicit pathspecs, push the branch, and `gh pr create`. Merge on CI green. Nothing under `context/` is committed: it is gitignored client data.
 
 ## Output Summary
 
@@ -430,10 +393,10 @@ Structure:
 ├── context/           # Client notes + comms
 │   ├── comms-log.md        # Conversation record
 │   └── comms-profile.md    # Contact details & tone
-├── reference/         # The Crucible link (if set)
-└── automations/       # {Trigger.dev project | Make.com scenarios | FastAPI service}
+├── deliverables/      # Client-facing deliverables
+└── automations/       # {n8n exports | Trigger.dev project | Make.com scenarios | FastAPI service}
 
-Orchestrator: {Trigger.dev | Make.com | Plain FastAPI}
+Orchestrator: {n8n | Trigger.dev | Make.com | Plain FastAPI}
 
 Next steps:
 1. Review and update .env file with real credentials (Trigger.dev/FastAPI) or set up Make.com connections

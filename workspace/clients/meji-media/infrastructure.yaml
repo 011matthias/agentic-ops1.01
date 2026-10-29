@@ -1,3 +1,4 @@
+orchestrator: make  # W1-16: read by tools/infra_yaml.py
 instances:
   - type: make
     name: make-meji-media

@@ -411,7 +411,7 @@ Next steps:
   2. Update cover letter with Loom link (replace {VIDEO_LINK} placeholder)
   3. Submit on Upwork with cover letter text
   4. Update proposal status: draft -> sent (in frontmatter)
-  5. Run /proposal-retro {slug} to log friction and improve pipeline
+  5. Run /comd_proposal-status to log the outcome and track the pipeline
 ```
 
 ## Notes
@@ -419,5 +419,5 @@ Next steps:
 - Track 2 sites are self-contained HTML -- no build step needed, deployed as static files via Vercel
 - Access codes are set per proposal, not globally
 - The validator (`tools/validate-proposal.py`) is the source of truth for quality checks -- treat its FAILs as the contract
-- Run `/proposal-retro {slug}` after submission to capture what went well and what to improve
+- Run `/comd_proposal-status` after submission to record the outcome
 - To check all proposals: `/proposal-status`

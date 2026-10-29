@@ -43,6 +43,10 @@ jobs:
         run: uv run tools/check-index.py
       - name: Pattern rules lint
         run: uv run tools/pattern_rules.py lint
+      # W1-16: every tracked infrastructure.yaml loads through the one loader
+      # and its mcp_server / export / test / env / deploy references resolve.
+      - name: infrastructure.yaml consistency
+        run: uv run tools/infra_check.py --all
       # Tests whose inputs any PR can change (the friction register, the
       # committed repo root) run on every PR; the full suite only when its
       # inputs change (layout plan W1-2).
