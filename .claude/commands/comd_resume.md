@@ -115,10 +115,11 @@ Read all files in `{resolved_path}/context/`:
 
 ## Step 4: Read Infrastructure
 
-Read `{resolved_path}/infrastructure.yaml` (if it exists) to identify:
+If `{resolved_path}/infrastructure.yaml` exists, run `uv run tools/infra_yaml.py --client {project} --json` rather than parsing the file by hand. The loader reads every shape in use (an `instances:` list, `n8n_instances:` / `make_instances:` maps, top-level `n8n:` / `make:` blocks) and returns:
 - Project `type` (client | internal | platform)
-- Orchestrator type (make, n8n, trigger-dev, fastapi, vercel, etc.)
-- Instance details (org IDs, URLs, team IDs)
+- `orchestrator`, resolved in order: top-level `orchestrator:`, then an instance `type:`, then files in `automations/`. `.mcp.json` only says which credentials are wired on this machine, never which orchestrator a client uses.
+- `deploy`, when the file names an explicit deploy entry point (Brisken: `deploy.py`, never Railway)
+- Instances with `mcp_server`, URL, credentials and workflows
 
 ## Step 4.5: Read Comms Context
 
@@ -152,8 +153,9 @@ If no comms-log exists, skip this step silently.
   ```
 
 **If n8n:**
-- Check `.mcp.json` for n8n MCP server entry
-- Note workflow IDs from checkpoint
+- Take workflow IDs and the instance's `mcp_server` (canonical `n8n-{client}`) from the loader output
+- Check `.mcp.json` for that MCP server entry only to learn whether this machine has the API credentials wired
+- Run `uv run tools/infra_check.py --client {client}` and surface any ERROR in the Step 6 summary
 
 **If Trigger.dev:**
 - Check `trigger.config.ts` for registered tasks

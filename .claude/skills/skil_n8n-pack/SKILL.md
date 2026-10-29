@@ -11,7 +11,7 @@ Unified reference for building n8n workflows. Consolidates: n8n-mcp-tools-expert
 
 ## Build Procedure
 
-1. **Detect** — Confirm n8n orchestrator (`.mcp.json` has `n8n-{client}`)
+1. **Detect** — `uv run tools/infra_yaml.py --client {client}` prints `orchestrator=n8n` (top-level `orchestrator:`, then an instance `type: n8n`). `.mcp.json` having `n8n-{client}` only means this machine has the API credentials wired
 2. **Read spec** — Extract flow, systems, edge cases, acceptance criteria
 3. **Choose pattern** → Load PATTERNS module for architecture
 4. **Search nodes** → Use `search_nodes` + `get_node` (detail="standard")
