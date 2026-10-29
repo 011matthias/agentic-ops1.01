@@ -151,7 +151,7 @@ def _git(*args: str, cwd: Path) -> tuple[bool, str]:
             ["git", *args],
             cwd=str(cwd),
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
             timeout=120,
         )
     except (OSError, subprocess.SubprocessError) as exc:

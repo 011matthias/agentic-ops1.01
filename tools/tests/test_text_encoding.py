@@ -15,7 +15,7 @@ from hooklib import HOOKS, TOOLS
 # Files a scheduled job runs straight from main (the notifier clone, RepoSweep,
 # AgenticOpsWeeklySynthesis). Left out of the first W1-31 PR under the client-ops guard; each
 # is converted in its own owner-approved change, then removed from this set.
-DEFERRED = {"brisken-recon-notify-run.py", "repo-sweep.py", "weekly_synthesis.py"}
+DEFERRED: set[str] = set()
 
 
 def _bare_text_calls(path):
