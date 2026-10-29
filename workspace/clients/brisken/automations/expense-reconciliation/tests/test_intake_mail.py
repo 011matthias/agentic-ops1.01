@@ -1486,6 +1486,66 @@ def test_replay_rescues_stranded_body_only(client, monkeypatch):
     assert resp.json()["status"] == STATUS_INGESTED
 
 
+def _body_receipt_mail(n: int) -> bytes:
+    """A vendor's own receipt mail, distinct content per `n` (so the
+    arrival dedupe keeps both) and no attachment."""
+    msg = EmailMessage()
+    msg["From"] = OUTSIDE
+    msg["To"] = f"receipts@{DOMAIN}"
+    msg["Subject"] = f"Receipt for order #{n}"
+    msg["Message-ID"] = f"<body-receipt-{n}@vendor.example>"
+    msg.set_content(f"Order #{n}\nTotal: {10 + n},00 EUR\nThank you for your business")
+    return msg.as_bytes()
+
+
+def test_retry_held_renders_body_only_mail(client, monkeypatch):
+    """Note #131 (2026-10-29): "Retry held" left body-only mail held, so the
+    operator pressed it five times and nothing moved. The press now runs the
+    per-mail render path for each held body-only mail."""
+    batch_id = _create_batch(client, monkeypatch, MONTH_LABEL)
+    state = client.app.state
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _body_receipt_mail(1), synchronous=True,
+    )
+    assert res["status"] == HELD_BODY_ONLY
+    _patch_ocr(
+        monkeypatch,
+        _extraction(vendor="Toast", total="11.00", currency="EUR"),
+        _extraction(vendor="Toast", total="11.00", currency="EUR"),
+    )
+    out = client.post("/api/inbound/replay-held").json()
+    assert out["rendered"] == 1, out
+    assert out["replayed"] == 1 and out["failed"] == 0, out
+    log = client.get("/api/inbound/log").json()
+    assert log["n_held"] == 0
+    assert log["entries"][-1]["status"] == STATUS_INGESTED
+    grid = client.get(f"/api/expense-batches/{batch_id}").json()
+    assert any(e.get("submitted_by") for e in grid["expenses"])
+
+
+def test_retry_held_renders_at_most_the_cap(client, monkeypatch):
+    import expense_recon.web.app as app_mod
+
+    _create_batch(client, monkeypatch, MONTH_LABEL)
+    state = client.app.state
+    for n in (1, 2):
+        process_message(
+            state.db_path, state.learning_db_path, state.data_root,
+            _body_receipt_mail(n), synchronous=True,
+        )
+    monkeypatch.setattr(app_mod, "REPLAY_RENDER_BODY_ONLY_CAP", 1)
+    _patch_ocr(
+        monkeypatch,
+        _extraction(vendor="Toast", total="11.00", currency="EUR"),
+        _extraction(vendor="Toast", total="11.00", currency="EUR"),
+    )
+    out = client.post("/api/inbound/replay-held").json()
+    assert out["rendered"] == 1, out
+    assert out["still_held"] == 1, out
+    assert client.get("/api/inbound/log").json()["n_held"] == 1
+
+
 def test_reconcile_flips_interrupted_render(client):
     from expense_recon.web.intake_mail import (
         STATUS_RENDERING,

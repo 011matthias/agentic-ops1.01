@@ -13565,18 +13565,114 @@ pair sharing an invoice number counted twice) and now assert one group.
   the preview). Never fold two lines of ONE file: two identical coffees are
   two charges.
 
-### Feedback notes #128-#132 (2026-10-29): not yet itemized
+### 258. Act on a charge from the "to chase" list: match a receipt, say none exists, say the holder was asked (notes #133, #134, #135, #128; 2026-10-29; licence: defect, covered) (BACKEND SHIPPED 2026-10-29; SPA prompt `docs/lovable-chase-actions-prompt.md` NOT pasted)
 
-Read off `GET /feedback.jsonl` on 2026-10-29 while shipping item 256 (132
-notes). None is about duplicates. Listed verbatim so they do not sit unread.
+The panel lists every charge with no receipt and gives its rows no actions.
+The three things a person does with such a charge already exist further down
+the page (the hand-match picker, "asked", "no receipt exists"), where the
+operator is not looking. #133 (GITHUB INC.): "an option to match a charge with
+the expense the system has not matched yet". #134: "a button to justify
+whether a receipt exists". #135 (September, 111 charges, "Criss wants a line
+item specific match receipt button here that works"). #128: the page's action
+buttons belong in the top bar.
 
-| # | When (UTC) | Who | Page | Comment (verbatim) |
-|---|---|---|---|---|
-| 128 | 10-29 10:48 | operator | October | these buttons should be all the way in the top bar |
-| 129 | 10-29 11:00 | operator | October | need to know if links to documents can be processed / recognize images (logos) that are of no meaning / recognize statement in this case 1176 statement is a credit card statement and you did not recognize that even though you could if you put in enough effort |
-| 130 | 10-29 11:02 | operator | October | need to improve room of action for user here, as there are also statement appearing here |
-| 131 | 10-29 11:03 | operator | October | why is retrying not working, you should be able to read receipts that are in the body of the email |
-| 132 | 10-29 11:08 | operator | August, workbench | Charges without receipt... 47 open... what does this "Open" mean specifically |
+Backend: `POST .../manual-match` already pairs any charge with any receipt in
+the month, so the missing half is the screen. One real backend gap: the
+hand-match picker reads `date` and `reference` off `assignable_receipts[]`,
+which carried neither, so every picker row showed "-" for its date and two
+same-vendor receipts could not be told apart. Both are now parallel fields.
+The prompt wires the three actions into the panel's rows (one component for
+both callers), ranks the picker by currency, amount gap and date distance, and
+moves the page-level buttons into the header bar (#128).
+
+Proof: `tests/test_chase_hand_match_item_257.py`; the date/reference
+assertion regressed green -> red -> green with `tools/regress_check.py`, and
+the hand-match test goes through the real route and out of `receipt_chase`.
+
+### 259. "Retry held" renders held body-only mail (note #131; 2026-10-29; licence: defect, covered) (SHIPPED 2026-10-29)
+
+Operator on October: "why is retrying not working, you should be able to read
+receipts that are in the body of the email". Five waiting mails, none moved.
+Cause: `replay_held` never visited `held_body_only` archives (`REPLAYABLE` is
+`{held_no_batch, held_failed}`) and its docstring said they "stay held (they
+need the round-2 body renderer)", which has existed since the per-mail render
+button. Live read the same day: the 7 held mails are direct vendor sends
+(Toast, Google payments, Nicolas's outlook address) that arrival correctly
+holds because the sender is not a known sender, and two of them are real
+receipts (Charm Taphouse order, "Thank you for your business").
+
+Fix: the press is an operator click, the same authorization as the per-mail
+render button, so `POST /api/inbound/replay-held` now passes
+`render_body_only=25` and each held body-only mail goes through
+`render_ingest` (document-type quarantine and extraction apply unchanged, so
+"Action required for your Google Account" lands set aside, not as an
+expense). The cap bounds one press's vision spend on Dirk's key; the rest stay
+held and read `still_held`. Arrival does not change: a stranger's mail is
+still never rendered unprompted. The existing toast reads `replayed`, which
+now includes rendered mail, so no SPA change is needed; `rendered` is a
+parallel field.
+
+Proof: `tests/test_intake_mail.py::test_retry_held_renders_body_only_mail`
+and `..._renders_at_most_the_cap`; the route's `render_body_only=` wiring
+regressed green -> red -> green. Not yet pressed live (the press spends the
+owner's key and moves real mail into October); the live check is one press
+and a read of the log.
+
+### 260. What "open" means on the charges tile (note #132; 2026-10-29; licence: defect, covered) (BACKEND SHIPPED 2026-10-29; the words ride the item 258 prompt)
+
+"Charges without receipt... 47 open... what does this 'Open' mean specifically".
+Reproduced on live August: the tile reads 43 open and the chase list 42; the
+one-row gap is ANNUAL MEMBERSHIP FEE (`reason_code` `not_a_purchase`), open for
+a person and never chased. Both counts were right; nothing said what
+separated them. `summary.n_charges_open_no_receipt_due` is the remainder
+(receiptless, not a purchase, not closed), so open = chase + this. The prompt
+adds the tooltip defining "open" and a sentence under the chase subtitle
+naming the fee lines.
+
+Proof: `tests/test_open_without_receipt_due_item_259.py` (the predicate through
+`completeness_counts`) plus the route-level assertion in the item 258 test file;
+the counter's wiring regressed green -> red -> green.
+
+### 261. Mail the intake does not understand: links, meaningless images, a credit-card statement read as not-an-expense (note #129; 2026-10-29; licence: defect, covered) (NOT STARTED)
+
+Operator, on a `rendered-body.pdf` flagged "Does not look like an expense
+document": links in a mail should be followed if they can be processed;
+images that are logos or signatures should be recognized and ignored; and the
+1176 statement "is a credit card statement and you did not recognize that even
+though you could if you put in enough effort".
+
+Three separate questions, none safe to guess at:
+(a) **Links**: following a link fetches an attacker-controllable URL
+(rule_untrusted_inbound: inbound text never decides a URL to fetch), so this
+needs an owner ruling on an allowlist of vendor domains before any design.
+(b) **Logos**: attachments under 4096 bytes are already dropped as signature
+art (item 155's trap); the live question is images above that size. Measure
+how many stored images are logos before building.
+(c) **Statement recognition**: the classifier path. A prompt edit moves stable
+readings (item 77: a one-word change moved 12 of 129), so the change goes in
+the response schema only and is A/B'd old x2 against new x2 over the stored
+documents first. Start by reading why 1176's file was typed as not-an-expense
+(the stored reading), not by editing the prompt.
+
+### 262. Set-aside files: room to act, delete a document, hide a file with no receipt (notes #126, #127, #130; 2026-10-09 to 2026-10-29; licence: defect, covered) (NOT STARTED, one owner call)
+
+#127 (Portuguese, on the Statements section of August): "I need the option to
+delete documents". #130 (October, "Set aside (not counted as expenses)", 6
+files, statements among them): more room to act on those rows. #126 (Receipt
+overview): "not a receipt" so do not show the receipt's file when there is no
+receipt.
+
+The owner call: the storage description
+(`docs/electronic-storage-system-description.md`) promises that nothing this
+system accepted is destroyed (item 66 archives a superseded file rather than
+deleting it). "Delete a document" must therefore mean "remove it from the
+month and archive the bytes", with a typed confirm, and for a STATEMENT it also
+removes its charges from the month's reconciliation, which can strand
+decisions made on them. Recommended: build delete as archive-and-remove for
+set-aside files first (no charges depend on them), statements second behind a
+dry-run that lists the decisions it would orphan. #126 is a display rule in the
+SPA (hide the file link when the overview row's status is "not a receipt") and
+rides the next prompt.
 
 ## Shipped (loop history)
 

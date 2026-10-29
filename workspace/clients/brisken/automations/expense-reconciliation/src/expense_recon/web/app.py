@@ -598,6 +598,11 @@ def _refusal_response(result: dict, default_status: int = 400) -> JSONResponse:
     return JSONResponse(body, status_code=status)
 
 
+# Most held body-only mails one "Retry held" press renders (note #131): each
+# is a vision read on Dirk's key, and the rest wait for the next press.
+REPLAY_RENDER_BODY_ONLY_CAP = 25
+
+
 def _operator() -> str | None:
     return (
         os.environ.get("EXPENSE_RECON_OPERATOR")
@@ -2819,6 +2824,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         result = replay_held(
             app.state.db_path, app.state.learning_db_path,
             app.state.data_root,
+            render_body_only=REPLAY_RENDER_BODY_ONLY_CAP,
+            operator=_operator(),
         )
         mat: dict = {}
         if materialize:
