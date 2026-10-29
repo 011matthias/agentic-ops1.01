@@ -65,6 +65,7 @@ from ..duplicates import (
     with_kept_first,
 )
 from ..duplicates import stamp_intake_twins, twin_links  # item 223 step 6
+from ..duplicates import number_settled_copies  # item 256
 from ..ingest._common import merge_transactions
 from ..matching.types import (
     DECIDED_ORIGINS,
@@ -8633,6 +8634,11 @@ def build_expense_view(
         run, receipts, resolutions,
         charge_decisions=decisions, receipt_decisions=grid_decisions,
     )
+    # Item 256: a set-aside invoice whose receipt prints its number asks
+    # nothing (review `none`), so it leaves `n_review` like every count.
+    grid_quiet_copies = (
+        number_settled_copies(grid_decisions, receipts) & set(grid_copies)
+    )
     for r in receipts:
         res = card_res.get(r.document_id) or {
             "hint": "", "card": None, "entity": r.legal_entity_id or "",
@@ -8948,6 +8954,8 @@ def build_expense_view(
             # every row that counts, which is every row an older backend
             # served, so absent keeps reading "counts".
             expenses[-1]["counts_in_total"] = False
+            if r.document_id in grid_quiet_copies:
+                expenses[-1]["review"] = _review("none")
         # Build 4 / item 218: which way the row was paid, and why. Both always
         # present (parallel fields). A bill stays on screen and leaves the
         # month's total, item 94's `counts_in_total: false`, so every surface
@@ -16101,6 +16109,7 @@ def rematch_month(
     pool, collapsed, dup_decisions = duplicate_pool(
         run, pool, dup_resolutions, held=held_documents(store, run),
         account_keys=dup_account_keys,
+        pinned=pinned_documents(store, run),  # item 256
     )
     receipt_digest_map = receipt_digests(run, receipts)
     # R4b (item 38 ruling 3): the pool spans trips. Receipts from trips
@@ -18409,6 +18418,25 @@ def held_documents(store: "RunStore", run: RunRow) -> set[str]:
     return {m.document_id for m in effective.matches}
 
 
+def pinned_documents(store: "RunStore", run: RunRow) -> set[str]:
+    """The receipts a PERSON's confirmed pick holds (item 256): the part of
+    `held_documents` that a re-match never moves off a number pair's
+    invoice. A tool self-confirmation pins nothing; `apply_self_confirmations`
+    re-judges it after the re-match. Read-only."""
+    try:
+        transactions, pool, outcome, _errors = snapshot_from_dict(run.snapshot)
+    except Exception:  # noqa: BLE001 - an unreadable snapshot pins nothing
+        return set()
+    if not transactions:
+        return set()
+    decisions = store.get_decisions(run.run_id)
+    people = reviewer_confirmed_tx_ids(decisions)
+    if not people:
+        return set()
+    effective = apply_decisions(outcome, transactions, pool, decisions)
+    return {m.document_id for m in effective.matches if m.transaction_id in people}
+
+
 def decided_copies(
     run: RunRow,
     receipts: list[Receipt],
@@ -18516,6 +18544,7 @@ def duplicate_pool(
     work_dir: "Path | None" = None,
     held: "set[str] | None" = None,
     account_keys: "frozenset[str] | None" = None,
+    pinned: "set[str] | None" = None,
 ):
     """`(pool without collapsed copies, collapsed ids, decisions)`: the
     candidate pool a re-match hands the matcher before the statement check.
@@ -18524,13 +18553,18 @@ def duplicate_pool(
 
     Item 217: each group's kept copy is chosen here (`choose_kept`): the one a
     charge already holds (`held`), else the payment receipt over its
-    invoice, else the first. The returned decisions carry it first."""
+    invoice, else the first. The returned decisions carry it first. Item 256:
+    a receipt and its invoice found by one number keep the receipt unless a
+    person's pick holds the invoice (`pinned`, see `pinned_documents`)."""
     decisions = duplicate_decisions(
         run, pool, resolutions, work_dir=work_dir, with_statement_check=False,
         account_keys=account_keys,  # item 223 step 5: a re-match's own keys
     )
     decisions = with_kept_first(
-        decisions, choose_kept(decisions, pool, frozenset(held or ()))
+        decisions, choose_kept(
+            decisions, pool, frozenset(held or ()),
+            pinned=frozenset(pinned) if pinned is not None else None,
+        )
     )
     collapsed = copies_to_collapse(decisions)
     kept = [r for r in pool if r.document_id not in collapsed] if collapsed else pool

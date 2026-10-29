@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-10-07
+updated: 2026-10-29
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -13459,6 +13459,52 @@ English connector survives in any Portuguese sentence across corrections,
 merchant-list entries, conflicts, an owner-held merchant and an already-saved
 month), regressed green -> red -> green at the route's language switch and at
 the per-language builder; the six existing memory suites (86 tests) unchanged.
+
+### 256. One document number: the receipt counts and nobody is asked (Dirk, 2026-10-29, relayed by the owner: "if duplicate set has same item ID number then default to receipt not invoice and dont ask user for verification") (BUILT 2026-10-29, backend only, no paste)
+
+Item 74 already decides every group and item 217 already prefers the receipt,
+yet a same-number pair still reached a person three ways on the live months
+(read-only reads 2026-10-29):
+
+- **A tool hold kept the invoice.** Item 217 moves the kept copy only in a
+  group no charge holds, and `held_documents` counts the tool's own matches
+  and self-confirmations, so an invoice paired once stayed kept at every
+  re-match. September: ElevenLabs 5.00 (`Invoice-214D91B6-0006` kept,
+  `Receipt-2459-0337-0793` set aside).
+- **The statement check split two pairs.** Card 9693's PDF
+  (`20261004-statements-9693-.pdf`) and its xlsx
+  (`Chase9693_2026-09_posted_0906-0915`) both list Anthropic 187.15 (09-04)
+  and 184.35 (09-11), so rung 7 called `Invoice-890D70BF-0033` /
+  `Receipt-2791-6434-9326` and `-0034` / `Receipt-2642-9215-3921` two
+  purchases and both documents went back to the charges.
+- **The set-aside invoice still asked.** Its row kept its own review prompt
+  and counted in `n_review`: October "Needs a look" 27 held 4 copies.
+
+Rule: a group the TOOL found by one number (`reference`, `printed_reference`,
+`reference_digits`, `intake_twin`) whose documents are one payment receipt and
+its invoice(s), one amount and currency, is settled by the number
+(`duplicates.is_number_pair`, `settled_by_number`; a mail body's group over
+the pair follows it). The re-match keeps the receipt unless a PERSON's
+confirmed pick names the invoice (`service.pinned_documents`; a tool
+confirmation pins nothing and `apply_self_confirmations` re-judges it), the
+statement check never restores it, and the set-aside copy reads review `none`
+and leaves `n_review` (`number_settled_copies`). "Not a copy" still outranks.
+Copies found without a number (vendor/date, misread digit, hash) are unchanged.
+
+When it reaches the months (no live writes): October (no statement) on the
+next read, its 4 asking copies leave `n_review` (27 -> 23). September at its
+next natural re-match: ElevenLabs keeps the receipt; both Anthropic pairs
+become copies, the receipt keeps one charge and the other statement line
+(the PDF/xlsx double) waits with no receipt, which is the statement's
+duplicate showing honestly. July's two `reference` groups Criss ruled "Not a
+copy" stay hers. Not fixed here: the PDF and xlsx of one card listing one
+charge twice (stable transaction identity across the two formats), and copies
+found without a number still count in `n_review`.
+
+Proof: `tests/test_duplicate_same_number_item_256.py` (6 route tests through
+the re-match and the grid, 13 rule tests), each of the three wirings
+regressed green -> red -> green with `tools/regress_check.py` (the re-match's
+`pinned=` argument, rung 7's skip, the grid's quiet copies).
 
 ## Shipped (loop history)
 

@@ -41,6 +41,11 @@ vendor + date + total + currency. After a match,
 set-aside copy whose own exact charge sits unmatched. A reviewer's ruling
 outranks every rung. Nobody is asked: a copy is set aside and reported, and
 "Not a copy" stays as an undo.
+
+Item 256 (Dirk, 2026-10-29): a receipt and its invoice found by one document
+number are settled by it. The receipt is the kept copy even where the tool's
+own match held the invoice, the statement check never splits the pair, and
+the set-aside invoice asks nothing (``number_settled_copies``).
 """
 from __future__ import annotations
 
@@ -1192,17 +1197,117 @@ def choose_kept(
     decisions: list[ReceiptGroupDecision],
     receipts: list[Receipt],
     held: set[str] | frozenset[str] = frozenset(),
+    pinned: "set[str] | frozenset[str] | None" = None,
 ) -> dict[str, str]:
     """group id -> kept document for every group whose verdict is ``copy``
-    (``kept_member`` over the group). Only a re-match calls this."""
+    (``kept_member`` over the group). Only a re-match calls this.
+
+    ``pinned`` (item 256) is the documents a PERSON's confirmed pick names, a
+    subset of ``held``. A group settled by one document number keeps its
+    receipt unless a person pinned the invoice, so only ``pinned`` holds it;
+    every other group is held by ``held`` as before. None: ``held`` for all."""
     by_id = {r.document_id: r for r in receipts}
+    pairs = number_pair_sets(decisions, by_id) if pinned is not None else set()
     out: dict[str, str] = {}
     for d in decisions:
         if not d.is_copy:
             continue
-        doc = kept_member(d.members, by_id, held)
+        holds = pinned if pairs and settled_by_number(d, by_id, pairs) else held
+        doc = kept_member(d.members, by_id, holds)
         if doc:
             out[d.group_id] = doc
+    return out
+
+
+# ── Item 256: one number, the receipt counts, nobody is asked ────────
+#
+# Dirk, 2026-10-29 (relayed by the owner): "if duplicate set has same item ID
+# number then default to receipt not invoice and dont ask user for
+# verification". Item 217 prefers the receipt only in a group no charge
+# holds, so an invoice the matcher paired once stayed kept at every later
+# re-match (September 2026: ElevenLabs 5.00). And the statement check (rung
+# 7) split both Anthropic pairs of September, each printing one invoice
+# number, into two purchases, because the card's PDF and its xlsx list the
+# same charge twice; both documents went back in front of a reviewer.
+#
+# A group whose documents are one payment receipt and its invoice(s), one
+# amount and currency, found by a rung that reads ONE document number, is
+# settled by that number: the receipt is kept even where the tool's own
+# match holds the invoice, the statement check never splits it, and the
+# set-aside copy asks nothing. Two things still outrank it: a reviewer's
+# "Not a copy", and a PERSON's confirmed pick of the invoice (moving that
+# would count both documents).
+
+NUMBER_BASES = frozenset({
+    BASIS_REFERENCE, BASIS_PRINTED_REFERENCE, BASIS_REFERENCE_DIGITS,
+    "intake_twin",  # BASIS_INTAKE_TWIN, defined with item 223 step 6 below
+})
+
+
+def _documents(members, by_id: dict[str, Receipt]) -> list[Receipt] | None:
+    """A group's documents: members minus rendered mail bodies and payment
+    reminders (``kept_member``'s own filter). None when a member is not in
+    ``by_id``."""
+    group = [by_id.get(m) for m in members if m]
+    if any(r is None for r in group):
+        return None
+    return [r for r in group if not is_rendered_body(r) and not is_reminder(r)]
+
+
+def is_number_pair(decision: ReceiptGroupDecision, by_id: dict[str, Receipt]) -> bool:
+    """The TOOL found ``decision`` by one document number (``NUMBER_BASES``)
+    and its documents are exactly one payment receipt and its invoice(s),
+    one amount and currency (``payment_document_kind``)."""
+    if decision.basis not in NUMBER_BASES or decision.tool_verdict != VERDICT_COPY:
+        return False
+    docs = _documents(decision.members, by_id)
+    if not docs or len(docs) < 2:
+        return False
+    money = {(str(r.detected_total), (r.detected_currency or "").upper()) for r in docs}
+    if len(money) != 1 or None in {r.detected_total for r in docs}:
+        return False
+    kinds = [payment_document_kind(r) for r in docs]
+    return kinds.count(KIND_RECEIPT) == 1 and all(
+        k in (KIND_RECEIPT, KIND_INVOICE) for k in kinds
+    )
+
+
+def number_pair_sets(
+    decisions: list[ReceiptGroupDecision], by_id: dict[str, Receipt]
+) -> set[frozenset[str]]:
+    """The document sets of every ``is_number_pair`` group."""
+    out: set[frozenset[str]] = set()
+    for d in decisions:
+        if is_number_pair(d, by_id):
+            out.add(frozenset(r.document_id for r in _documents(d.members, by_id)))
+    return out
+
+
+def settled_by_number(
+    decision: ReceiptGroupDecision,
+    by_id: dict[str, Receipt],
+    pairs: set[frozenset[str]],
+) -> bool:
+    """``decision``'s documents are one of ``pairs``: the number pair itself,
+    or a mail body's group over it (front 4 lists a body beside the pair it
+    repeats)."""
+    docs = _documents(decision.members, by_id)
+    return bool(docs) and frozenset(r.document_id for r in docs) in pairs
+
+
+def number_settled_copies(
+    decisions: list[ReceiptGroupDecision], receipts: list[Receipt]
+) -> set[str]:
+    """The set-aside members (every member after the first) of each copy
+    group settled by one number: the copies that ask a person nothing."""
+    by_id = {r.document_id: r for r in receipts}
+    pairs = number_pair_sets(decisions, by_id)
+    if not pairs:
+        return set()
+    out: set[str] = set()
+    for d in decisions:
+        if d.is_copy and settled_by_number(d, by_id, pairs):
+            out.update(d.members[1:])
     return out
 
 
@@ -1246,6 +1351,12 @@ def restore_copies_with_their_own_charge(
     condition keeps a lone document that merely resembles a stranger's
     charge from being called two purchases. The caller re-matches once with
     these groups restored; there is no second check.
+
+    Item 256: a group settled by one document number (``settled_by_number``)
+    is never restored. A receipt and the invoice it pays are one purchase
+    whatever the statement prints; a second line of the same amount is the
+    statement's to explain (September 2026: card 9693's PDF and xlsx list
+    the same Anthropic charge), not a second purchase.
     """
     from .matching.deterministic import (
         MatchingConfig,
@@ -1272,10 +1383,13 @@ def restore_copies_with_their_own_charge(
     for k in tx_keys.values():
         present |= k
     free = [t for t in charges if t.transaction_id not in held_tx]
+    pairs = number_pair_sets(decisions, by_id)
 
     restored: set[str] = set()
     for d in decisions:
         if d.decided_by != DECIDED_BY_TOOL or d.verdict != VERDICT_COPY:
+            continue
+        if pairs and settled_by_number(d, by_id, pairs):
             continue
         if d.members[0] not in settled_docs:
             continue
