@@ -106,6 +106,14 @@ def extract_body_text(raw: bytes) -> str:
 
 MAX_BODY_LINKS = 20
 _URL_IN_TEXT = re.compile(r"https?://[^\s<>\"')\]]+")
+_ZERO_WIDTH = re.compile("[​‌‍⁠﻿]")
+
+
+def has_visible_text(text: str) -> bool:
+    """Whether a body carries anything a person could read. Python's strip()
+    keeps zero-width characters, so a padded empty HTML shell would pass a
+    plain `text.strip()` test and render as a blank page."""
+    return bool(_ZERO_WIDTH.sub("", text or "").strip())
 # Footer links every vendor mail carries; none of them leads to a receipt.
 _FOOTER_LINK_WORDS = ("unsubscribe", "privacy", "preferences", "opt-out", "opt out")
 
@@ -178,7 +186,10 @@ def extract_body_links(raw: bytes) -> list[dict]:
             continue
         if parsed.scheme not in ("http", "https") or not parsed.hostname:
             continue
-        label = (text or "")[:120]
+        # Zero-width characters are how tracking mail pads empty anchors
+        # (live Toast mail, 2026-10-29); left in, the link text renders
+        # invisible and a JS trim() does not remove it.
+        label = _ZERO_WIDTH.sub("", text or "").strip()[:120]
         probe = (href + " " + label).lower()
         if href in seen or any(w in probe for w in _FOOTER_LINK_WORDS):
             continue
