@@ -45,6 +45,7 @@ from .service import (
     grid_card_chain,
     has_statement,
     held_documents,
+    pinned_documents,
     rematch_after_change,
     rematch_pending,
     run_mode,
@@ -133,7 +134,8 @@ def kept_after_rematch(
     }
     pool = [r for r in chain.receipts if r.document_id not in foreign]
     _kept_pool, _collapsed, decisions = duplicate_pool(
-        run, pool, resolutions, held=held_documents(store, run)
+        run, pool, resolutions, held=held_documents(store, run),
+        pinned=pinned_documents(store, run),  # item 256: as rematch_month does
     )
     # The value rematch_month's commit writes under DUPLICATE_KEPT_KEY.
     return {d.group_id: d.members[0] for d in decisions if d.is_copy and d.members}
