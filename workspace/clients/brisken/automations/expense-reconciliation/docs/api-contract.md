@@ -5003,6 +5003,12 @@ unless set.
 | `POST /api/runs/{id}/receipt-requested` | `{transaction_id, to?}` or `{transaction_id, clear: true}` | `receipt_requested_at` + `requested_to` | none: the charge still needs a receipt |
 | `POST /api/runs/{id}/no-receipt-expected` | `{transaction_id, reason}` or `{transaction_id, clear: true}` | `no_receipt_expected` (the reason) | closes it: the charge leaves the count |
 
+**No UI sets "requested" since 2026-10-29.** The owner had the SPA's "Mark the
+receipt as asked for" button removed (`docs/lovable-drop-asked-button-prompt.md`,
+Lovable `21082b4`). The route, the row fields and the summary counter still
+answer and still carry any mark stored before that date; nothing calls the
+route any more.
+
 Asking is not getting, so "requested" closes nothing and the month stays
 incomplete; `summary.n_charges_receipt_requested` is a SUBSET of
 `n_charges_need_receipt` saying how much of the chase is already out. "No
