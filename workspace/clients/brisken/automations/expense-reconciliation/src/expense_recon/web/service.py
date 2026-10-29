@@ -4195,6 +4195,10 @@ def build_view(
                 "vendor": r.detected_vendor or "(no vendor)",
                 "total": _fmt_amount(r.detected_total),
                 "currency": r.detected_currency or "",
+                # Note #133: the hand-match picker sorts and reads by date
+                # and reference; it printed "-" for every date without them.
+                "date": r.detected_date.isoformat() if r.detected_date else "",
+                "reference": r.detected_reference or "",
                 "legal_entity_id": r.legal_entity_id,
                 "held_by": holder_by_doc.get(r.document_id),
             }
