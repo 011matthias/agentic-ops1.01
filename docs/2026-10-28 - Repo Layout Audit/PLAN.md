@@ -271,7 +271,7 @@ Files: `tools/infra_yaml.py`, `tools/infra_check.py`, `.claude/agents/agnt_make-
 
 ### W1-17 [onboard-4] cost M
 
-Status: todo
+Status: done PR #1684 + follow-up #1686 (2026-10-29): tools/mcp_config.py renders .mcp.json from infra + the primary's context/.env + a gitignored `.mcp.local.json` (`_scope` tags); primary = union, worktree = branch client (+ vercel on platform/proposal); `--ensure` writes on change only, refuses until `--adopt`; SessionStart + worktree-add hooks; comd_n8n-instances/new-client/resume read through it. Owner yes (AskUserQuestion): adopt + ensure ran in the primary, `.mcp.json` sha256 unchanged, `claude mcp list` 7 connected 0 failed. #1686: `--adopt` also writes `.git/info/exclude`, because the primary (on an older main) showed the token-bearing local file as untracked for ~1 min. Verified: 15 tests, regress_check bites, `--check` on a fresh worktree renders brisken without make-meji-media and meji-media with it. Open: the "lists n8n-warme-wimmer" half waits for the WW import; the primary needs a fast-forward before its SessionStart runs the new hook.
 
 Depends on: item 16
 
@@ -285,7 +285,7 @@ Files: `tools/mcp_config.py`, `tools/wire-hooks.py`, `.claude/commands/comd_n8n-
 
 ### W1-18 [homes-8, onboard-7, onboard-9, onboard-5, fit-5, homes-1, homes-4] cost M
 
-Status: todo
+Status: done PR #1693 (2026-10-29): rule_file_placement client rows, check-index client scan (README.md per automations/tools/), tools/n8n_export.py (infra-derived map, scrubbed stable export, `--check`), builder + N8N-BUILD flat export path, comd_resume Step 4 READMEs, recon CI paths, workspace/templates/client-n8n/. Template manifest is tools/README.md (not INDEX.md) to match check-index. Verified: tests + regress_check on both wirings, preflight --full 2154 passed. Open: `n8n_export.py --client warme-wimmer --check` against live after the import.
 
 Depends on: item 16
 
@@ -299,7 +299,7 @@ Files: `.claude/rules/rule_file_placement.md`, `tools/check-index.py`, `tools/n8
 
 ### W1-19 [ci-12, onboard-8, onboard-10] cost S
 
-Status: todo
+Status: done PR #1695 (2026-10-29) except the harness template: warme-wimmer-tests.yml (path-filtered, no credential, fetch-live*/fixtures excluded, zero matches fails, a 'No WW tree yet' path until the import), agnt_testing-agent n8n mode, comd_test pointer, skil_build-test-fix n8n activation shape (builder hands it on, never runs it). Verified: synthetic tree run (decoys skipped, pass 1), the PR's own run took the no-tree path. Deferred to the WW import: the harness copy to workspace/templates/n8n-tests/ (the harness exists only in the WW tree).
 
 Depends on: item 18
 
@@ -1049,7 +1049,7 @@ Files: `.gitleaks.toml`, `.github/workflows/ci.yml`, `.claude/hooks/pii-push-gat
 
 ### W1-36 [G7] cost S, lands with W1-17
 
-Status: partly done 2026-10-29 (owner yes, AskUserQuestion: "Remove all three"). Removed via the `claude mcp remove` CLI: user-scope `n8n` (~/.claude.json) and project-scope `firebase` + `serena` (the primary's gitignored .mcp.json, which now holds context7, github, make-meji-media, playwright, vercel). Backups: the primary's `.scratch/claude.json.pre-w1-36-2026-10-29` and `.scratch/mcp.json.pre-w1-36-2026-10-29`. Still todo with W1-17: `vercel` only in a platform worktree, per-client rendering (owner chose "Union in primary": the primary gets every client's servers, worktrees get per-client sets), the doctor `claude mcp list` check. Verify (no failed MCP connection at start) is read at the next fresh session.
+Status: done except the fresh-session Verify (2026-10-29). The rest landed with W1-17 (#1684): vercel scoped to platform/proposal worktrees, per-client rendering, doctor check `mcp-health` (`mcp_config.py --mcp-health`, names only, "Needs authentication" is not a failure; read 2026-10-29: 7 connected, 0 failed). Still to read: a fresh session start in the primary reports no failed MCP connection (this session's start showed a transient context7 CONNECT_TIMEOUT that `claude mcp list` later read as connected). Earlier: partly done 2026-10-29 (owner yes, AskUserQuestion: "Remove all three"). Removed via the `claude mcp remove` CLI: user-scope `n8n` (~/.claude.json) and project-scope `firebase` + `serena` (the primary's gitignored .mcp.json, which now holds context7, github, make-meji-media, playwright, vercel). Backups: the primary's `.scratch/claude.json.pre-w1-36-2026-10-29` and `.scratch/mcp.json.pre-w1-36-2026-10-29`. Still todo with W1-17: `vercel` only in a platform worktree, per-client rendering (owner chose "Union in primary": the primary gets every client's servers, worktrees get per-client sets), the doctor `claude mcp list` check. Verify (no failed MCP connection at start) is read at the next fresh session.
 
 Depends on: W1-17
 
