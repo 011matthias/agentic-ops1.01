@@ -207,6 +207,27 @@ def write(root: Path, servers: dict[str, dict]) -> Path | None:
     return backup
 
 
+def ensure_excluded(primary: Path) -> bool:
+    """Make sure git ignores .mcp.local.json in this clone; True if it had to add it.
+
+    The tracked .gitignore entry protects only checkouts that already have it;
+    a primary still on an older main showed the token-bearing file as untracked
+    (2026-10-29), and repo-sweep commits untracked backlogs there. The shared
+    info/exclude covers the primary and every worktree at once.
+    """
+    probe = subprocess.run(["git", "-C", str(primary), "check-ignore", "-q", LOCAL_NAME],
+                           capture_output=True, timeout=15)
+    if probe.returncode != 1:  # 0 = already ignored, 128 = not a git repo
+        return False
+    common = _git(primary, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    exclude = Path(common) / "info" / "exclude"
+    exclude.parent.mkdir(parents=True, exist_ok=True)
+    text = exclude.read_text(encoding="utf-8") if exclude.is_file() else ""
+    exclude.write_text(text + ("" if text.endswith("\n") or not text else "\n") + LOCAL_NAME + "\n",
+                       encoding="utf-8")
+    return True
+
+
 def adopt(root: Path) -> int:
     """Seed .mcp.local.json from the existing .mcp.json (one time, primary only).
 
@@ -216,6 +237,8 @@ def adopt(root: Path) -> int:
     """
     primary = primary_root(root)
     target = primary / LOCAL_NAME
+    if ensure_excluded(primary):
+        print(f"mcp_config: added {LOCAL_NAME} to .git/info/exclude (this checkout's .gitignore lacks it)")
     if target.exists():
         print(f"mcp_config: {LOCAL_NAME} already exists, left alone")
         return 0
