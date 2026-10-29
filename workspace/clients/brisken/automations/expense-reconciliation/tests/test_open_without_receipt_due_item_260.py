@@ -1,4 +1,4 @@
-"""The "open" tile and the chase list agree in words (item 259, note #132).
+"""The "open" tile and the chase list agree in words (item 260, note #132).
 
 2026-10-29, August: the "Charges without a receipt" tile read 43 open and the
 chase list 42. The difference was ANNUAL MEMBERSHIP FEE (a fee line): open for

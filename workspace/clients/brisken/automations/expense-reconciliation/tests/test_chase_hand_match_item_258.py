@@ -1,4 +1,4 @@
-"""A charge in "Charges with no receipt, to chase" can be matched by hand (item 257).
+"""A charge in "Charges with no receipt, to chase" can be matched by hand (item 258).
 
 Notes #133 and #135 (2026-10-29): the chase list had no way to pair a charge
 with a receipt the matcher left alone, and the hand-match picker that exists
@@ -84,7 +84,7 @@ def _chase_ids(view: dict) -> set[str]:
 
 
 def test_the_run_summary_carries_the_open_remainder(client):
-    """Item 259: the counter reaches the payload the SPA reads (0 here: the
+    """Item 260: the counter reaches the payload the SPA reads (0 here: the
     one receiptless charge is a purchase, so it is chased, not remainder)."""
     view = _store_run(client, "chase-remainder")
     assert view["summary"]["n_charges_open_no_receipt_due"] == 0

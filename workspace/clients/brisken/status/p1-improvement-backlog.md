@@ -13509,7 +13509,42 @@ the re-match and the grid, 13 rule tests), each of the three wirings
 regressed green -> red -> green with `tools/regress_check.py` (the re-match's
 `pinned=` argument, rung 7's skip, the grid's quiet copies).
 
-### 257. Act on a charge from the "to chase" list: match a receipt, say none exists, say the holder was asked (notes #133, #134, #135, #128; 2026-10-29; licence: defect, covered) (BACKEND SHIPPED 2026-10-29; SPA prompt `docs/lovable-chase-actions-prompt.md` NOT pasted)
+### 257. A shared number in any field makes one purchase; apply to every month waiting; statements for what is left (owner, 2026-10-29, after item 256: "look when duplicates enter they usually have important numbers in common so invoice number o reference number multiple didgits the same or that type of thing and in those cases we need you to recognize their relation and default to the receipt (or document with payment information). we need to make sure that the statements are used to help categorize and match any left over expenses") (RECOGNITION BUILT 2026-10-29; apply + statements: see below)
+
+The owner's screenshot (Compare copies, October's Anthropic 66.00): the
+receipt's reference is its OWN receipt number (`2709 9940`), the invoice's
+is the invoice number, and both carry `EF742DD0 0062` as invoice number.
+October grouped it only because one mail delivered both (rung 0); uploaded
+apart or re-mailed, rung 4 compared references alone and called it two
+purchases. `number_keys` now reads reference, invoice number and receipt
+number (account ids excluded as before, and the alphanumeric invoice /
+receipt numbers join the cross-month account keys); rung 2 accepts members
+connected by a shared number (same amount, never two cards), and
+`find_duplicate_receipts_by_any_number` nominates the pairs no older key
+found, appended last so no saved ruling's group moves. Which copy counts is
+item 256's rule: the receipt, read from what the document calls itself and
+its receipt number. A card line is NOT used as the payment signal, because
+`inherit_card_from_copies` lends the receipt's card to its invoice before
+the choice is made.
+
+Measured before building (read-only, 2026-10-29): every live same-amount
+pair sharing a number is already one group, so nothing moves on today's
+months; the rule covers the next arrivals. Proof:
+`tests/test_duplicate_any_number_item_257.py` (5), the broadened rung and the
+new key each regressed green -> red -> green.
+
+Still open from this note:
+- **Apply to every month waiting.** September (statement month) shows its
+  last re-match's choice until it re-matches; `POST
+  /api/runs/{id}/duplicates/reapply` with `dry_run: true` previews it.
+- **Statements on what is left.** September holds card 9693 twice for 15
+  charges: the interim xlsx (`Chase9693_2026-09_posted_0906-0915`, 15
+  charges) lies entirely inside the PDF statement (`20261004-statements-9693-`,
+  49), with different descriptors ("OPENAI" vs "OPENAI OPENAI.COM CA"), so
+  `transaction_content_id` (vendor in the identity) keeps both. Each double
+  leaves one side as a charge without a receipt.
+
+### 258. Act on a charge from the "to chase" list: match a receipt, say none exists, say the holder was asked (notes #133, #134, #135, #128; 2026-10-29; licence: defect, covered) (BACKEND SHIPPED 2026-10-29; SPA prompt `docs/lovable-chase-actions-prompt.md` NOT pasted)
 
 The panel lists every charge with no receipt and gives its rows no actions.
 The three things a person does with such a charge already exist further down
@@ -13533,7 +13568,7 @@ Proof: `tests/test_chase_hand_match_item_257.py`; the date/reference
 assertion regressed green -> red -> green with `tools/regress_check.py`, and
 the hand-match test goes through the real route and out of `receipt_chase`.
 
-### 258. "Retry held" renders held body-only mail (note #131; 2026-10-29; licence: defect, covered) (SHIPPED 2026-10-29)
+### 259. "Retry held" renders held body-only mail (note #131; 2026-10-29; licence: defect, covered) (SHIPPED 2026-10-29)
 
 Operator on October: "why is retrying not working, you should be able to read
 receipts that are in the body of the email". Five waiting mails, none moved.
@@ -13562,7 +13597,7 @@ regressed green -> red -> green. Not yet pressed live (the press spends the
 owner's key and moves real mail into October); the live check is one press
 and a read of the log.
 
-### 259. What "open" means on the charges tile (note #132; 2026-10-29; licence: defect, covered) (BACKEND SHIPPED 2026-10-29; the words ride the item 257 prompt)
+### 260. What "open" means on the charges tile (note #132; 2026-10-29; licence: defect, covered) (BACKEND SHIPPED 2026-10-29; the words ride the item 258 prompt)
 
 "Charges without receipt... 47 open... what does this 'Open' mean specifically".
 Reproduced on live August: the tile reads 43 open and the chase list 42; the
@@ -13574,10 +13609,10 @@ adds the tooltip defining "open" and a sentence under the chase subtitle
 naming the fee lines.
 
 Proof: `tests/test_open_without_receipt_due_item_259.py` (the predicate through
-`completeness_counts`) plus the route-level assertion in the item 257 test file;
+`completeness_counts`) plus the route-level assertion in the item 258 test file;
 the counter's wiring regressed green -> red -> green.
 
-### 260. Mail the intake does not understand: links, meaningless images, a credit-card statement read as not-an-expense (note #129; 2026-10-29; licence: defect, covered) (NOT STARTED)
+### 261. Mail the intake does not understand: links, meaningless images, a credit-card statement read as not-an-expense (note #129; 2026-10-29; licence: defect, covered) (NOT STARTED)
 
 Operator, on a `rendered-body.pdf` flagged "Does not look like an expense
 document": links in a mail should be followed if they can be processed;
@@ -13598,7 +13633,7 @@ the response schema only and is A/B'd old x2 against new x2 over the stored
 documents first. Start by reading why 1176's file was typed as not-an-expense
 (the stored reading), not by editing the prompt.
 
-### 261. Set-aside files: room to act, delete a document, hide a file with no receipt (notes #126, #127, #130; 2026-10-09 to 2026-10-29; licence: defect, covered) (NOT STARTED, one owner call)
+### 262. Set-aside files: room to act, delete a document, hide a file with no receipt (notes #126, #127, #130; 2026-10-09 to 2026-10-29; licence: defect, covered) (NOT STARTED, one owner call)
 
 #127 (Portuguese, on the Statements section of August): "I need the option to
 delete documents". #130 (October, "Set aside (not counted as expenses)", 6

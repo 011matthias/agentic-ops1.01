@@ -1,4 +1,4 @@
-# Lovable prompt: act on a charge from the "to chase" list (items 257 and 259)
+# Lovable prompt: act on a charge from the "to chase" list (items 258 and 260)
 
 > **NOT PASTED.** Answers the operator's notes #132, #133, #134 and #135
 > (2026-10-29, August and September, "Charges with no receipt, to chase").

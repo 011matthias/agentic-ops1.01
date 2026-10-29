@@ -11,22 +11,11 @@ Orchestrates the full implementation of an automation by detecting the orchestra
 
 ## Step 1: Detect Orchestrator
 
-Check the client's automations folder to identify which orchestrator is in use:
-
-| Check | Orchestrator |
-|-------|-------------|
-| `trigger.config.ts` exists in automations folder | **Trigger.dev** |
-| `.mcp.json` has entry named `n8n-{client}` | **n8n** |
-| `infrastructure.yaml` has `type: make` entry | **Make.com** |
-| `railway.toml` exists (no trigger.config.ts) | **FastAPI (legacy)** |
-
 ```bash
-# Quick detection
-ls workspace/clients/{client}/automations/trigger.config.ts  # → Trigger.dev
-grep -l "n8n-{client}" .mcp.json                   # → n8n
-grep -l "type: make" workspace/clients/{client}/infrastructure.yaml  # → Make.com
-ls workspace/clients/{client}/automations/railway.toml        # → FastAPI
+uv run tools/infra_yaml.py --client {client}   # prints orchestrator=... (and deploy=... when set)
 ```
+
+Order, first hit wins: top-level `orchestrator:` in infrastructure.yaml, then an instance `type:` (n8n / make / trigger-dev / fastapi), then `trigger.config.ts` or `railway.toml` in automations/. `.mcp.json` is not a detection source (gitignored, absent in worktrees; it only says which credentials this machine has). A top-level `deploy:` outranks the orchestrator's default deploy lane. Full table: [DETECTION.md](modules/DETECTION.md).
 
 ---
 
