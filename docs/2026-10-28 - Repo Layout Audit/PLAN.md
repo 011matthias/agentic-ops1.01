@@ -979,7 +979,7 @@ Files: `.claude/settings.json`, `~/.claude/settings.json`, `.claude/hooks/no-aut
 
 ### W1-31 [G5] cost S
 
-Status: done PR #1669 (2026-10-29), except the three job scripts. 92 call sites now pass `encoding="utf-8", errors="replace"` inline (tools/ are standalone uv scripts, so no shared import from .claude/hooks); doctor.py marks an exit-0 check with a `Traceback` header not-ok; the CI leg is tools/tests/test_text_encoding.py (AST scan, multi-line calls included, plus a 0x8d round trip), proven with regress_check. The sweep completes from the worktree. Left out under the client-ops guard and listed in the test's DEFERRED set: tools/brisken-recon-notify-run.py:154 (BriskenReconNotify), tools/repo-sweep.py:354 (RepoSweep), tools/weekly_synthesis.py x4 (AgenticOpsWeeklySynthesis); the auto-mode classifier also refused the edit without an owner yes. After-check: notifier clone at 27348341, exit 0 at 11:47Z. No global PYTHONUTF8.
+Status: done PR #1669 + PR #1677 (2026-10-29). #1677 converted the three job scripts after the owner's yes naming BriskenReconNotify, RepoSweep and AgenticOpsWeeklySynthesis; DEFERRED is empty. weekly_synthesis.send() also passes PYTHONIOENCODING=utf-8 to send_email.py, whose stdin would otherwise decode the UTF-8 body as cp1252. Batch-3 notes on #1669 follow. 92 call sites now pass `encoding="utf-8", errors="replace"` inline (tools/ are standalone uv scripts, so no shared import from .claude/hooks); doctor.py marks an exit-0 check with a `Traceback` header not-ok; the CI leg is tools/tests/test_text_encoding.py (AST scan, multi-line calls included, plus a 0x8d round trip), proven with regress_check. The sweep completes from the worktree. Left out under the client-ops guard and listed in the test's DEFERRED set: tools/brisken-recon-notify-run.py:154 (BriskenReconNotify), tools/repo-sweep.py:354 (RepoSweep), tools/weekly_synthesis.py x4 (AgenticOpsWeeklySynthesis); the auto-mode classifier also refused the edit without an owner yes. After-check: notifier clone at 27348341, exit 0 at 11:47Z. No global PYTHONUTF8.
 
 Depends on: none
 
@@ -1049,7 +1049,7 @@ Files: `.gitleaks.toml`, `.github/workflows/ci.yml`, `.claude/hooks/pii-push-gat
 
 ### W1-36 [G7] cost S, lands with W1-17
 
-Status: todo
+Status: partly done 2026-10-29 (owner yes, AskUserQuestion: "Remove all three"). Removed via the `claude mcp remove` CLI: user-scope `n8n` (~/.claude.json) and project-scope `firebase` + `serena` (the primary's gitignored .mcp.json, which now holds context7, github, make-meji-media, playwright, vercel). Backups: the primary's `.scratch/claude.json.pre-w1-36-2026-10-29` and `.scratch/mcp.json.pre-w1-36-2026-10-29`. Still todo with W1-17: `vercel` only in a platform worktree, per-client rendering (owner chose "Union in primary": the primary gets every client's servers, worktrees get per-client sets), the doctor `claude mcp list` check. Verify (no failed MCP connection at start) is read at the next fresh session.
 
 Depends on: W1-17
 
