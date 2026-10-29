@@ -13509,7 +13509,7 @@ the re-match and the grid, 13 rule tests), each of the three wirings
 regressed green -> red -> green with `tools/regress_check.py` (the re-match's
 `pinned=` argument, rung 7's skip, the grid's quiet copies).
 
-### 257. A shared number in any field makes one purchase; apply to every month waiting; statements for what is left (owner, 2026-10-29, after item 256: "look when duplicates enter they usually have important numbers in common so invoice number o reference number multiple didgits the same or that type of thing and in those cases we need you to recognize their relation and default to the receipt (or document with payment information). we need to make sure that the statements are used to help categorize and match any left over expenses") (RECOGNITION LIVE 2026-10-29: PR #1670, Fly `416a5272`; apply DONE; statement-double merge DECIDED, not built)
+### 257. A shared number in any field makes one purchase; apply to every month waiting; statements for what is left (owner, 2026-10-29, after item 256: "look when duplicates enter they usually have important numbers in common so invoice number o reference number multiple didgits the same or that type of thing and in those cases we need you to recognize their relation and default to the receipt (or document with payment information). we need to make sure that the statements are used to help categorize and match any left over expenses") (RECOGNITION LIVE 2026-10-29: PR #1670, Fly `416a5272`; apply DONE; statement-double merge LIVE 2026-10-29: PR #1681, Fly `d37a3c96`, September re-read)
 
 The owner's screenshot (Compare copies, October's Anthropic 66.00): the
 receipt's reference is its OWN receipt number (`2709 9940`), the invoice's
@@ -13571,8 +13571,16 @@ pair sharing an invoice number counted twice) and now assert one group.
   `tests/test_statement_doubles_item_257.py` (18), each caller regressed
   green -> red -> green. Local preview on the 12:22 UTC backup, fold off vs
   on: 216 -> 201 charges, the 15 PDF-side lines go, no surviving row changes,
-  USD total 7,288.38 -> 5,345.57, receiptless 122 -> 107. September itself
-  is NOT re-read: waits for the owner's yes on the preview.
+  USD total 7,288.38 -> 5,345.57, receiptless 122 -> 107.
+  **LIVE 2026-10-29:** PR #1681, Fly on `d37a3c96` (`/healthz` commit
+  verified by deploy.py). September re-read live on the owner's yes to that
+  preview: 216 -> 201 charges, the 15 PDF-side lines gone (all unmatched, none
+  with a receipt or decision), USD 7,288.38 -> 5,345.57, receiptless
+  125 -> 110, reconciled 73 and review 14 unchanged, 0 cross-file doubles
+  left, the 3 same-file repeats kept. One row moved by the re-read itself
+  (Dollar General 24.25, 10-02: pending -> confirmed by the tool). Page read
+  back cold: "201 charges", "110 charges without a receipt", the 10-04 9693
+  PDF row reads 49 rows / 34 new; the drive sent no write.
 
 ### 258. Act on a charge from the "to chase" list: match a receipt, say none exists, say the holder was asked (notes #133, #134, #135, #128; 2026-10-29; licence: defect, covered) (BACKEND SHIPPED 2026-10-29; SPA prompt `docs/lovable-chase-actions-prompt.md` NOT pasted)
 
@@ -13691,6 +13699,7 @@ rides the next prompt.
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 168 | Item 257, statements on what is left: one card's charge printed in two statement files (same card + day + amount + currency) is ONE charge, n and m lines leave max(n, m), two lines of one file never fold, the decided side is kept (`merge_transactions(files=, incoming_file=, decided=)`, attach and re-read) | Card 9693's interim xlsx lay inside its closing PDF with different merchant text, so September listed 15 charges twice and 15 receiptless rows were phantom doubles. Live September after the owner-approved re-read: 216 -> 201 charges, USD 7,288.38 -> 5,345.57, receiptless 125 -> 110, no receipt or decision touched | 2026-10-29, PR #1681, Fly on `d37a3c96`; local preview (fold off vs on) shown to the owner first, live payload diffed before/after, September page read back cold (no writes) |
 | 167 | Item 257: a number shared in ANY number field (reference, invoice number, receipt number) makes documents of one amount one purchase (`number_keys`, broadened rung 2, `find_duplicate_receipts_by_any_number` appended last); receipt kept per item 256 | Owner on October's Anthropic pair: the receipt's reference is its own receipt number while both carry the invoice number, so a hand-uploaded or re-mailed pair read as two purchases. Nothing moved on the live months (every same-amount number pair already grouped); covers the next arrivals | 2026-10-29, PR #1670, Fly `416a5272`; live October + September groups, totals and `n_review` identical before/after, October page read back, read-only |
 | 166 | Item 256: a receipt and its invoice found by one document number are settled by it. The re-match keeps the receipt even where the tool's own match held the invoice (`pinned_documents`: only a person's confirmed pick holds), the statement check never splits the pair, the set-aside invoice reads review `none` | Dirk: "default to receipt not invoice and dont ask user for verification". Live: October's 10 invoice copies stopped asking, `n_review` 27 -> 24, totals unchanged; September (ElevenLabs invoice kept by a tool hold, two Anthropic pairs split by card 9693's PDF/xlsx double line) changes at its next natural re-match | 2026-10-29, PR #1666, Fly on `3e37fe93`; `/healthz` commit verified by deploy.py, live payload diffed before/after, SPA October drive read back the copy row ("Ready · Duplicate, not in the total"), read-only |
 | 165 | Fix (no item), follow-up to 163: `DELETE /api/runs/{id}/expenses/{doc}?views=1` and `POST /api/runs/{id}/duplicates/resolve?views=1` reply with `views.batch` / `views.run`, equal to the two page GETs at that moment; no flag, no change. SPA half `docs/lovable-duplicate-click-reply-views-prompt.md` (cache the reply, no refetch), handed to the owner, not pasted | After a duplicate click the page refetched the month twice and showed the old row until both landed. Local, September, click until the grid holds the new month: Delete 3.96 / 4.41 -> 3.83 / 3.71 s, Not a copy 3.68 / 4.48 -> 3.13 / 3.70 s; one screen update instead of two, and Not a copy refreshes the reconciliation line it left stale | 2026-10-07, PR #1590, Fly v284 (commit `0541288a`); live GET /api/runs + /api/expense-batches for September and October hash-identical before/after (baseline stable across two reads), page driven cold (read-only); the `views` reply itself not exercised live (it needs a write on Criss's month) |
