@@ -13564,6 +13564,15 @@ pair sharing an invoice number counted twice) and now assert one group.
   kept; preview first, then a re-read of September (live write, owner yes on
   the preview). Never fold two lines of ONE file: two identical coffees are
   two charges.
+  **BUILT 2026-10-29** (`merge_transactions(files=, incoming_file=, decided=)`,
+  both callers: the attach and the re-read; held lines of unknown file or card
+  are never folded; with no decision the held line stays, so the re-read keeps
+  the interim xlsx side, which carries all 9 receipts). Tests
+  `tests/test_statement_doubles_item_257.py` (18), each caller regressed
+  green -> red -> green. Local preview on the 12:22 UTC backup, fold off vs
+  on: 216 -> 201 charges, the 15 PDF-side lines go, no surviving row changes,
+  USD total 7,288.38 -> 5,345.57, receiptless 122 -> 107. September itself
+  is NOT re-read: waits for the owner's yes on the preview.
 
 ### 258. Act on a charge from the "to chase" list: match a receipt, say none exists, say the holder was asked (notes #133, #134, #135, #128; 2026-10-29; licence: defect, covered) (BACKEND SHIPPED 2026-10-29; SPA prompt `docs/lovable-chase-actions-prompt.md` NOT pasted)
 
