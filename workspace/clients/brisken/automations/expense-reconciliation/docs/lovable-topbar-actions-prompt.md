@@ -1,6 +1,6 @@
 # Lovable prompt: page buttons into the month's top bar, and the held-mail note (note #128, item 259)
 
-> **NOT PASTED.** Follow-up to `lovable-chase-actions-prompt.md` section 4,
+> **PASTED and published 2026-10-29, verified live (see PROMPT-STATUS).** Follow-up to `lovable-chase-actions-prompt.md` section 4,
 > which did not land: audited 2026-10-29 on October `/expenses/4ac14cb8b9e8`,
 > the buttons still sit in the page body beside the "Review by exception" line
 > (no `<header>`; the prompt said "page header row", and the page's real top
