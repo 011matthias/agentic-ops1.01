@@ -39,7 +39,7 @@ gitignored.
 | `context/.env` · `automations/.env.example` | client secrets, names carrying the client token (`N8N_API_KEY_{CLIENT}`) · the same names with no values | **gi** · yes |
 | `{dir}/` + `README.md` | a client web surface's deploy source, the README naming its deploy target | yes |
 | `specs/{1-spec…4-live}/` | specs, by stage | yes |
-| `context/` | IDs / keys / comms / raw client data | **gi** (except `context/portable/`) |
+| `context/` | IDs / keys / comms / raw client data | **gi** (the whole tree; no committable subfolder) |
 | `deliverables/` | client-facing deliverables | yes |
 
 **Platform — `platform/`**
@@ -142,7 +142,9 @@ already gitignored):
 
 - env: `.env`, `.env.<anything>` (e.g. `.env.local`, `.env.production`) —
   EXCEPT the secret-free templates `.env.example` / `.env.sample` /
-  `.env.template` / `.env.dist`, which are committable and pass.
+  `.env.template` / `.env.dist`, which are committable and pass. Since
+  2026-10-29 `.gitignore` covers `.env.*` with those four re-included, so in
+  practice the env arm only fires on names like `config.env`.
 - keys/certs: `*.pem`, `*.key`, `*.key.json`, `*.p12`, `*.pfx`, `*.jks`,
   `*.keystore`, the SSH private-key names `id_rsa` / `id_dsa` / `id_ecdsa` /
   `id_ed25519`, and extension-less `*_key` (`id_rsa.pub` and `*_key.py`

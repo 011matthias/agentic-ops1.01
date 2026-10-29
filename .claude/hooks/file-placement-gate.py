@@ -111,12 +111,14 @@ KNOWN_TOP_DIRS = {
 # Gitignored prefixes — static fallback when `git check-ignore` is
 # unavailable. Must stay a subset-mirror of .gitignore directory prefixes
 # (it cannot mirror extension globs like *.db without pulling in
-# regex-matched names). Two high-value AREA rules are handled separately in
-# is_gitignored(): workspace/clients/*/context/ and docs/sessions/*-context.yaml.
+# regex-matched names). The high-value AREA and NAME rules are handled
+# separately in is_gitignored(): workspace/clients/*/context/,
+# docs/sessions/*-context.yaml, .env / .env.*, and root webhook-dump*.json.
 STATIC_IGNORED_PREFIXES = (
     ".scratch/", ".tmp/", "api-docs/", ".playwright-mcp/", "scripts/.",
     "internal/", ".serena/", ".pytest_cache/", ".ruff_cache/",
     "platform/.next/", "platform/node_modules/", "node_modules/",
+    "output/", ".claude/worktrees/", "workspace/hours-tracker/",
 )
 
 # Scratch names. PREFIX members fire only on non-durable files (a committed
@@ -205,12 +207,17 @@ def is_gitignored(abspath_posix: str, rel: str) -> bool:
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
             pass
     rl = rel.lower()
-    # client-secret home is gitignored EXCEPT the committable context/portable/
-    # opt-in (mirror .gitignore: workspace/clients/*/context/ + !.../portable/).
-    if re.match(r"workspace/clients/[^/]+/context/(?!portable/)", rl):
+    # client-secret home, the whole tree (mirror .gitignore).
+    if re.match(r"workspace/clients/[^/]+/context/", rl):
         return True
     # session-context YAMLs carry inline API keys (.gitignore).
     if re.match(r"docs/sessions/.*-context\.yaml$", rl):
+        return True
+    # .env and every .env.* except the committable templates (.gitignore).
+    fname = rl.rsplit("/", 1)[-1]
+    if (fname == ".env" or fname.startswith(".env.")) and not fname.endswith(SAFE_ENV_SUFFIXES):
+        return True
+    if re.match(r"webhook-dump[^/]*\.json$", rl):
         return True
     return any(rl.startswith(p) for p in STATIC_IGNORED_PREFIXES)
 
