@@ -350,7 +350,7 @@ For BLOCKED:
 
 - You do not edit the spec file. If the spec is wrong, BLOCK upstream.
 - You do not run scenario executions. The testing-agent does that.
-- You do not push the blueprint to GitHub. The deployer agent / `/publish` handles delivery.
+- You do not push the blueprint to GitHub. The deployer agent / `/comd_publish` handles delivery.
 - You do not handle n8n or Trigger.dev. Wrong orchestrator → BLOCK.
 - You do not generalize: each invocation is for one client, one scenario.
 - You do not pad the report. Empty sections (e.g., "no SQL modules") are explicitly marked N-A, not removed.

@@ -106,11 +106,11 @@ If `infrastructure.yaml` has a `platform` section, show an ops summary before th
 │   {scenario}: ~{est_ops}/mo ({trigger_type})                             │
 │   Total: ~{total_est}/mo ({%} of limit)                                  │
 │                                                                          │
-│ Run /ops-audit for full analysis with live MCP data                      │
+│ Run /comd_ops-audit for full analysis with live MCP data                      │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-Estimates use OPERATIONS-ANALYZER formulas against `infrastructure.yaml` data (intervals, trigger types). For live data, suggest `/ops-audit`.
+Estimates use OPERATIONS-ANALYZER formulas against `infrastructure.yaml` data (intervals, trigger types). For live data, suggest `/comd_ops-audit`.
 
 If no `platform` section exists, skip this step.
 
@@ -277,10 +277,10 @@ Based on status, suggest next commands:
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ SUGGESTED COMMANDS                                                       │
 ├──────────────────────────────────────────────────────────────────────────┤
-│ /test a6.1           Run tests and mark as tested_locally                │
-│ /verify-live a6.2    Verify production and mark as tested_live           │
+│ /comd_test a6.1           Run tests and mark as tested_locally                │
+│ /comd_test verify a6.2    Verify production and mark as tested_live           │
 │ /comd_deploy herbox       Deploy to Railway                                    │
-│ /build-automation    Create new automation from spec                     │
+│ /comd_build-automation    Create new automation from spec                     │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -296,16 +296,16 @@ Based on status, suggest next commands:
 
 ```bash
 # Show all status for current client (auto-detect)
-/status-check
+/comd_status-check
 
 # Show all status for specific client
-/status-check herbox
+/comd_status-check herbox
 
 # Show specific automation with verification
-/status-check herbox a6.1 --verify
+/comd_status-check herbox a6.1 --verify
 
 # Quick status check
-/status-check outbound-consulting
+/comd_status-check outbound-consulting
 ```
 
 ## Notes
@@ -313,4 +313,4 @@ Based on status, suggest next commands:
 - This command provides visibility into automation status without making changes
 - Use `--verify` to detect drift between YAML and actual state
 - The status file should be the single source of truth
-- Update status using `/test` and `/verify-live` commands
+- Update status using `/comd_test` and `/comd_test verify` commands

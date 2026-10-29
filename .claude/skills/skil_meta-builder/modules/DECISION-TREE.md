@@ -20,7 +20,7 @@ Last updated: 2026-02-26
 
 ## Agentic Ops Decision Criteria
 
-Workspace-specific guidance that supplements the generic flowchart below. **This is the canonical source** — the operationalization-loop rule and `/system-dev` command both defer here.
+Workspace-specific guidance that supplements the generic flowchart below. **This is the canonical source** — the operationalization-loop rule and `/comd_system-dev` command both defer here.
 
 ### Rule vs. Skill Module
 
@@ -86,10 +86,10 @@ START: What do you want to add?
 │   │   └─► NO (explicit trigger): "Simple or complex?"
 │   │       │
 │   │       ├─► Simple prompt → COMMAND
-│   │       │   Examples: /checkpoint, /new-client, /status-check
+│   │       │   Examples: /comd_checkpoint, /comd_new-client, /comd_status-check
 │   │       │
 │   │       └─► Complex workflow → SKILL (+ optional /command wrapper)
-│   │           Examples: build skill + /build-automation command
+│   │           Examples: build skill + /comd_build-automation command
 │
 ├─► "Configuration / Instructions"
 │   │
@@ -182,11 +182,11 @@ START: What do you want to add?
 - `n8n-workflow-patterns` - Proven architectural patterns for n8n workflows
 
 ### Commands (explicit `/trigger`)
-- `/build-automation` - End-to-end build via build-orchestrator agent
-- `/checkpoint` - Save conversation state for session continuity
-- `/system-dev` - Friction audit and system improvement loop
-- `/new-client` - Initialize client folder structure
-- `/resume` - Reload context from latest checkpoint
+- `/comd_build-automation` - End-to-end build via build-orchestrator agent
+- `/comd_checkpoint` - Save conversation state for session continuity
+- `/comd_system-dev` - Friction audit and system improvement loop
+- `/comd_new-client` - Initialize client folder structure
+- `/comd_resume` - Reload context from latest checkpoint
 
 ### Agents (isolated context, parallel work)
 - `build-orchestrator` - Coordinates Plan > Implement > Test > Deploy lifecycle
@@ -207,12 +207,12 @@ START: What do you want to add?
 For complex workflows that user wants to trigger explicitly:
 ```
 .claude/skills/build/            → The orchestrator-aware implementation guide
-.claude/commands/build-automation.md → Explicit trigger (/build-automation)
+.claude/commands/comd_build-automation.md → Explicit trigger (/comd_build-automation)
 ```
 
 **When to use:**
 - Skill auto-triggers when building automations
-- But user also wants explicit `/build-automation` entry point
+- But user also wants explicit `/comd_build-automation` entry point
 - Command invokes the skill + orchestrates the build-orchestrator agent
 
 ### Agent + Skill
@@ -333,7 +333,7 @@ For distributing a complete solution:
 | "User wants `/spec-cleanup` command" | **Command** (wraps existing `spec-cleanup` skill) |
 | "Agent needs to run blueprint validation in isolation" | **Agent** (if context isolation needed) or **Skill** (if same context) |
 | "n8n nodes need specific config patterns" | **Skill module** (`n8n-node-configuration`) |
-| "Same manual steps done every deploy" | **Command** (`/deploy`) |
+| "Same manual steps done every deploy" | **Command** (`/comd_deploy`) |
 | "Agent checked execution status but not output correctness" | **Skill module** (`build-test-fix/OUTCOME-VERIFICATION.md`) |
 | "Integrate Make.com MCP tools" | **MCP Server** (`.mcp.json` entry) |
 | "Agent keeps forgetting to update frontmatter" | **Rule** (if every session) or **Skill** (if only during spec work) |

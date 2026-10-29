@@ -322,7 +322,7 @@ For BLOCKED:
 - You do not edit the spec file. If the spec is wrong, BLOCK upstream.
 - You do not run workflow executions. The testing-agent does that.
 - You do not activate workflows in production. The deployer agent does that.
-- You do not push the workflow JSON to GitHub. The deployer agent / `/publish` handles delivery.
+- You do not push the workflow JSON to GitHub. The deployer agent / `/comd_publish` handles delivery.
 - You do not handle Make.com or Trigger.dev. Wrong orchestrator → BLOCK.
 - You do not generalize: each invocation is for one client, one workflow.
 - You do not pad the report. Empty sections (e.g., "no Code nodes") are explicitly marked N-A, not removed.

@@ -10,7 +10,7 @@ The mechanical half (folder, session log, INDEX row, context YAML, register rows
 ## 1. Determine Topic and Mode
 
 1. If `$ARGUMENTS` is provided, use it as the topic name (title case, e.g. "Fortnox API Integration"). Otherwise infer from the session.
-2. If `$ARGUMENTS` contains `--mini`: strip it; use **MINI mode** — skip the Friction Self-Audit, Gate Compliance Audit, Comms Staleness ask, and Strategic Feedback; use the Mini-Checkpoint Template. Mini still runs both scaffold calls (the YAML is critical for /resume).
+2. If `$ARGUMENTS` contains `--mini`: strip it; use **MINI mode** — skip the Friction Self-Audit, Gate Compliance Audit, Comms Staleness ask, and Strategic Feedback; use the Mini-Checkpoint Template. Mini still runs both scaffold calls (the YAML is critical for /comd_resume).
 
 ## 2. Pre-flight (one call)
 
@@ -23,7 +23,7 @@ uv run tools/checkpoint_scaffold.py pre --clients {clients touched} --topic "{TO
 This prints everything the closing sections need:
 - **Target path** for the checkpoint prose file (handles Mini-Checkpoint-{N} numbering)
 - **Friction candidates** (the `session_state.py --list-candidates` drain)
-- **Per-client ops status** from `infrastructure.yaml` (include the line in Current Status; if ORANGE/RED add "Run `/ops-audit {client}`" to Next Steps; if no `platform` section but the client uses an orchestrator, add a feasibility-assessment next step)
+- **Per-client ops status** from `infrastructure.yaml` (include the line in Current Status; if ORANGE/RED add "Run `/comd_ops-audit {client}`" to Next Steps; if no `platform` section but the client uses an orchestrator, add a feasibility-assessment next step)
 - **Comms staleness** per client (used in step 7)
 - **Project-status check** results (used in step 6)
 - **Register size advisory + regression rows** for the types you passed
@@ -56,7 +56,7 @@ For each event record: **Type** (`agent-deferred`, `missed-tool`, `redundant-esc
 ## 4. Gate Compliance Audit (full mode only)
 
 1. Count instances where B1/B2/B3 fired, and any instance where a gate SHOULD have fired but didn't → `**Gates:** B1:{N} B2:{N} B3:{N} skipped:{N}`. Each skip is friction type `skipped-gate`, fix `structural`.
-2. **Autonomy Score** = total human interventions this session. 0 → "fully autonomous session". >3 → "(elevated — run /system-dev to close gaps)". Goes in the checkpoint's System Health section and the payload's `autonomy` field.
+2. **Autonomy Score** = total human interventions this session. 0 → "fully autonomous session". >3 → "(elevated — run /comd_system-dev to close gaps)". Goes in the checkpoint's System Health section and the payload's `autonomy` field.
 
 ## 5. Write the Checkpoint File (the ONE prose artifact)
 

@@ -60,7 +60,7 @@ Pre-suggest based on proposal `tags`:
 - Tags include "n8n" → suggest n8n
 - Otherwise → default to Trigger.dev
 
-Show the suggestion and let user confirm or change. Use the same orchestrator options as `/new-client`:
+Show the suggestion and let user confirm or change. Use the same orchestrator options as `/comd_new-client`:
 
 | Option | Description |
 |--------|-------------|
@@ -73,7 +73,7 @@ Show the suggestion and let user confirm or change. Use the same orchestrator op
 
 Before creating any files, investigate the client's platform subscription. Load [PLATFORM-FEASIBILITY](../skills/skil_make-mcp-tools-expert/modules/PLATFORM-FEASIBILITY.md) and run Section A for the chosen orchestrator.
 
-Follow the same procedure as `/new-client` Step 2.5:
+Follow the same procedure as `/comd_new-client` Step 2.5:
 - Ask minimum questions for the orchestrator (plan tier, API access, key limits)
 - Record answers for `infrastructure.yaml` platform section
 - If unknown: record `feasibility: "unassessed"` with a note that it must be completed before building
@@ -83,7 +83,7 @@ The proposal's `value_estimate` and `tags` may hint at scope — use them to est
 
 ## Step 6: Create Folder Structure
 
-Create the same structure as `/new-client` Step 3:
+Create the same structure as `/comd_new-client` Step 3:
 
 ```
 workspace/clients/{client-name}/
@@ -109,13 +109,13 @@ workspace/clients/{client-name}/
 
 ## Step 7: Copy Automation Template
 
-Follow the same logic as `/new-client` Step 4 based on the chosen orchestrator (Trigger.dev template copy, n8n/Make.com minimal setup, etc.).
+Follow the same logic as `/comd_new-client` Step 4 based on the chosen orchestrator (Trigger.dev template copy, n8n/Make.com minimal setup, etc.).
 
 ## Step 8: Create Pre-filled Files
 
 ### Specs README
 
-Same as `/new-client` Step 5.
+Same as `/comd_new-client` Step 5.
 
 ### Context README
 
@@ -182,7 +182,7 @@ Edit `platform/src/content/proposals/{slug}.md` frontmatter:
 
 ## Step 10: Create Reference Symlink
 
-Same logic as `/new-client` Step 8 — check The Crucible for matching folder.
+Same logic as `/comd_new-client` Step 8 — check The Crucible for matching folder.
 
 ## Step 11: Offer First Spec Stub
 
@@ -227,12 +227,12 @@ Proposal {slug} converted to client: {client-name}
 Next steps:
   1. Fill in comms-profile.md (contact details, tone, style)
   2. Refine first spec: /skil_spec-creator {client-name}
-  3. Run /resume {client-name} to start the build session
+  3. Run /comd_resume {client-name} to start the build session
   4. When ready for GitHub: /comd_client-handoff {client-name}
 ```
 
 ## Notes
 
-- This command replicates `/new-client` logic with pre-filled values from the proposal
+- This command replicates `/comd_new-client` logic with pre-filled values from the proposal
 - The `acquisition.md` file preserves the full proposal context for future reference
-- Run `/proposal-status` after conversion to verify the pipeline updated
+- Run `/comd_proposal-status` after conversion to verify the pipeline updated

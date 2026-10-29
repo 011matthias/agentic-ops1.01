@@ -375,14 +375,18 @@ gh pr create --title "Add proposal: {prospect name} ({id})" --body "Track {N} pr
 
 # 6. Merge
 gh pr merge --squash --delete-branch
-
-# 7. Force deploy (avoid CDN caching)
-bash tools/vercel-force-deploy.sh
 ```
+
+The merge above lands the source here; it does not publish. unpauseai.com is
+served from `akkton/unpauseai-web` (since 2026-07-25): copy the proposal files
+into a `content/{slug}` branch of that repo, PR with `-R akkton/unpauseai-web`,
+merge on green, and let its `publish.yml` promote the merge. Memory
+`reference_vercel_platform_team_scope` holds the proven path and the
+break-glass for when its Actions do not fire. Never `tools/vercel-force-deploy.sh`.
 
 ### Deploy Verification
 After deploy:
-1. WebFetch `https://unpauseai.com/clients/{slug}/` -- verify 200 response
+1. `https://unpauseai.com/api/version` equals the promoted SHA, then WebFetch `https://unpauseai.com/clients/{slug}/` -- verify 200 response
 2. Check access gate works (if configured)
 3. Check key content present (prospect name, pricing, nav links)
 4. State: "Verified: {URL} -- {checks passed}."
@@ -420,4 +424,4 @@ Next steps:
 - Access codes are set per proposal, not globally
 - The validator (`tools/validate-proposal.py`) is the source of truth for quality checks -- treat its FAILs as the contract
 - Run `/comd_proposal-status` after submission to record the outcome
-- To check all proposals: `/proposal-status`
+- To check all proposals: `/comd_proposal-status`

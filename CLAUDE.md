@@ -4,61 +4,36 @@ Automation infrastructure for client projects. Four orchestrators: **n8n**, **Ma
 
 ## Structure
 
-```
+```text
 workspace/
-├── clients/{client}/specs/          # 1-spec → 2-build → 3-test → 4-live
-├── clients/{client}/context/        # Client IDs, notes, test fixtures
-├── clients/{client}/automations/    # Deployed code → git subtree
-├── templates/                       # Boilerplate (Trigger.dev, FastAPI, specs, API clients)
-platform/                            # Website — proposals + automation modules + client portal
-├── src/content/proposals/           # Proposal markdown files (frontmatter + MDX)
-├── src/app/proposals/               # Public proposal landing pages
-├── src/app/api/modules/             # Automation module webhook endpoints
-├── src/modules/                     # Module registry and type definitions
-docs/                                # Session logs, checkpoints, friction register
-├── sessions/                        # Daily logs + YAML context for /resume fast-path
-tools/                               # Utility scripts (see tools/INDEX.md for manifest)
-scripts/                             # One-off automation scripts
-.claude/skills/                      # On-demand domain knowledge (via packs)
-.claude/agents/                      # Multi-step orchestrators
-.claude/commands/                    # User-facing entry points
-.claude/rules/                       # Universal constraints (always loaded)
+  clients/{client}/
+    specs/            1-spec -> 2-build -> 3-test -> 4-live
+    automations/      the code that runs for the client
+    deliverables/     what the client sees
+    status/           one file per workstream, kept current
+    context/          IDs, comms log, client data (gitignored)
+  projects/{project}/ internal work, same shape where it applies
+.claude/
+  rules/              constraints loaded into every session
+  hooks/              enforcement that fires on tool calls
+  patterns/           regex-shaped rules read by one generic hook
+  skills/ agents/ commands/ workflows/
+tools/                scripts and their tests, indexed in tools/INDEX.md
+docs/                 checkpoints, daily session logs, friction register
+platform/             legacy website source, kept for local proposal builds
 ```
 
 ## Workflow
 
-### Session Flow
-```bash
-/resume {client}             # Start: reload context from checkpoint
-/build-automation {client}   # Build: plan → code → test → deploy
-/test {client} {id}          # Test: local → /test-dev → /test-production
-/deploy {client}             # Ship: deploy with test gates
-/draft {client}              # Comms: draft client message
-/checkpoint                  # End: save state + feedback
+```text
+/comd_resume {client}              reload the last checkpoint and status files
+/comd_build-automation {client}    plan, build, test and deploy against a spec
+/comd_test {client} {id}           local, then dev, then production
+/comd_deploy {client}              ship behind the test gates
+/comd_checkpoint                   save state, log friction, update status files
 ```
 
-### System
-```bash
-/status-check [client]       # Overview of all automations
-/review                      # Surface patterns from logs
-/system-dev                  # Self-improvement cycle
-/new-client {name}           # Onboard new client
-/help-system                 # Full command reference card
-```
-
-### Proposals
-```bash
-/new-proposal {prospect}     # Generate proposal landing page
-/proposal-status             # Track all proposals (pipeline view)
-/publish-proposal {slug}     # Deploy proposal to production
-```
-
-### Delivery
-```bash
-/client-handoff {client}     # Create GitHub repo for client
-/publish {client}            # Push to GitHub (auto-deploy)
-/export-client-docs {client} # Consolidated docs
-```
+Spec-driven n8n/Make builds use `/comd_build-automation`, `/comd_test [mode]`, `/comd_deploy`. `/comd_help-system` lists every command.
 
 ## Spec Frontmatter
 
@@ -68,54 +43,30 @@ Required: `id`, `name`, `type`, `stage` (spec|build|test|live), `orchestrator`, 
 
 - No shared services between clients — each hands off independently
 - Specs drive implementation — verify against code, not docs
-- Client knowledge (IDs, mappings) → `context/` only, never in MEMORY.md or rules
-- Skills load on demand via packs (make-pack, n8n-pack, trigger-pack). Run `/status-check` for full command list.
+- Credentials and bulk client data live in `context/`; a rule or tool may name the stable identifiers it enforces
+- Skills load on demand via packs (make-pack, n8n-pack, trigger-pack)
 
 ## Primitives
 
-- **Commands** (32) — Your interface. Type `/command` to invoke.
+- **Commands** (32) — Your interface. Type `/comd_<name>` to invoke.
 - **Skills** (37) — Domain expertise (first-party `skil_` dirs; ~11 are pack-consolidation stubs hosting modules for make-pack/n8n-pack), plus vendored plugin skills. Auto-load by context (e.g., Make.com work loads make-pack).
 - **Agents** (12) — Specialists in `.claude/agents/`, spawned internally by commands (build-orchestrator, implementation-agent, testing-agent, bug-fixer, deployer, api-fetcher, and others).
-- **Rules** (20) — Always-on constraints in `.claude/rules/` (behaviors, session start, session pressure, plus the hard-constraint standards). Orchestrator detection deferred to build-time.
-
-## Parallel Sessions
-
-For parallel work across clients, open separate terminal sessions and `/resume {client}` in each. Each session is scoped to one client — no cross-contamination. Handoff directories are client-namespaced: `.claude/handoffs/{client}/`.
-
-## Git Subtree
-
-```bash
-git subtree push --prefix="workspace/clients/{client}/automations" git@github.com:akkton/agentic-ops--{client}.git main
-```
+- **Rules** (20) — Always-on constraints in `.claude/rules/` (behaviors, session start, session pressure, plus the hard-constraint standards).
+- **Hooks** (30) — Enforcement scripts in `.claude/hooks/`, wired by `tools/wire-hooks.py` and self-healed at SessionStart.
+- **Patterns** (37) — Declarative regex rules in `.claude/patterns/`, read by `pattern-rules-gate.py`.
 
 ## Platform / unpauseai.com
 
-**The live unpauseai.com is served from the separate repo `akkton/unpauseai-web`, NOT from `platform/` here** (the site left this monorepo on 2026-07-25). To PUBLISH a website change, follow memory `reference_vercel_platform_team_scope` (the proven path): edit `akkton/unpauseai-web` on a `content/<slug>` branch, PR, merge. Vercel Hobby only builds commits authored by the owner (akkton), so the merge is promoted by an akkton-authored commit, automatic via that repo's `publish.yml` when GitHub Actions is healthy and a manual owner-run promote when it is not. Verify live: `unpauseai.com/api/version` must equal the deployed SHA AND the changed page must actually serve the new content. Do NOT publish unpauseai.com via `tools/vercel-force-deploy.sh` or the `platform/` Vercel project.
+The live site publishes from `akkton/unpauseai-web`, never from `platform/` or `tools/vercel-force-deploy.sh`; the path and the legacy `platform/` notes are in `workspace/projects/platform/context/README.md`.
 
-`platform/` (Next.js 15 + Tailwind + TypeScript) is the LEGACY monorepo source, retained for local proposal generation; it no longer deploys the live domain.
+## Git Workflow
 
-- **Proposals:** Markdown files in `platform/src/content/proposals/` with YAML frontmatter. Statically generated at build time.
-- **Modules:** Automation modules push data via `/api/modules/{name}`. Registry in `src/modules/registry.ts`.
-- **Dev:** `cd platform && npm run dev`
-- **Build:** `cd platform && npm run build`
-
-## Git Workflow (Multi-Developer)
-
-Both developers use feature branches. Direct push to `main` is prohibited.
-
-```
-Branch naming:
-  proposal/{slug}              # One proposal per branch
-  platform/{feature}           # Platform code changes
-  client/{client}/{description} # Client automation work
-```
-
-Merge via PR. Vercel creates preview deployments per PR automatically.
+One author. Every change goes on a branch and reaches `main` by PR; direct push to `main` is prohibited. Branch families: `client/{client}/...`, `docs/...`, `sys/...`, `local-web/...`, `uwi/...`, `leadgen/...`. One worktree per concurrent session; `/comd_resume {client}` scopes each session to one client; handoffs are client-namespaced under `.claude/handoffs/{client}/`.
 
 ## End-of-Session
 
-Update spec frontmatter → Run tests → `/checkpoint` → Note next steps
+Update spec frontmatter → Run tests → `/comd_checkpoint` → Note next steps
 
 ## Python
 
-All scripts use [UV](https://github.com/astral-sh/uv): `uv run pytest tests/`, `uv run python -m app.automations.{name} --dry-run`. Scripts declare inline dependencies (PEP 723).
+uv everywhere. Scripts declare inline dependencies (PEP 723) and run as `uv run tools/x.py`; each service under `workspace/clients/{client}/automations/{service}/` is its own uv project.

@@ -87,7 +87,7 @@ Phase 2: Implement (agnt_implementation-agent)
   ↓ Code review
 Phase 3: Test (agnt_testing-agent)
   ↓ If fail → Bug fixer → retry
-Phase 3.5: Dev Test (agnt_testing-agent with /test-dev)
+Phase 3.5: Dev Test (agnt_testing-agent with /comd_test dev)
   ↓ Live dev test with real APIs
   ↓ If fail → Bug fixer → retry
 Phase 4: Document (DOC-GENERATION skill module)

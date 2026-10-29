@@ -138,10 +138,10 @@ If the verdict has changed since last assessment (e.g., was GREEN, now ORANGE):
 
 ```bash
 # Audit a specific client
-/ops-audit meji-media
+/comd_ops-audit meji-media
 
 # Audit current client (auto-detect)
-/ops-audit
+/comd_ops-audit
 ```
 
 ## Notes
@@ -149,4 +149,4 @@ If the verdict has changed since last assessment (e.g., was GREEN, now ORANGE):
 - This command is read-heavy (MCP queries) but writes only to infrastructure.yaml
 - For Make.com: uses the production MCP server (not dev instance)
 - Suggested at `/comd_checkpoint` time as a one-liner in the checkpoint output
-- Suggested in `/status-check` as an ops column per scenario
+- Suggested in `/comd_status-check` as an ops column per scenario

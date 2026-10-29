@@ -26,7 +26,7 @@ If any prerequisite fails, provide instructions and abort.
 
 Check if `workspace/clients/$ARGUMENTS/automations/` exists.
 
-If not, suggest running `/new-client $ARGUMENTS` first.
+If not, suggest running `/comd_new-client $ARGUMENTS` first.
 
 ## Step 2: Check Current Git State
 

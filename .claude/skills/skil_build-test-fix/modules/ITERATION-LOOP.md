@@ -57,7 +57,7 @@ Exceeding 3 iterations is a friction event (`iteration-limit-breach`).
 
 ## Session-Level Backpressure
 
-The per-build cap is `max_iterations = 3`, but multiple build cycles in one session accumulate context pressure. After completing a build-test-fix cycle (success or escalation), evaluate session pressure per the session-pressure rule before starting another cycle. If 6+ total iterations across all builds in this session, suggest `/checkpoint --mini` before proceeding.
+The per-build cap is `max_iterations = 3`, but multiple build cycles in one session accumulate context pressure. After completing a build-test-fix cycle (success or escalation), evaluate session pressure per the session-pressure rule before starting another cycle. If 6+ total iterations across all builds in this session, suggest `/comd_checkpoint --mini` before proceeding.
 
 ## Step 1: Execute
 
