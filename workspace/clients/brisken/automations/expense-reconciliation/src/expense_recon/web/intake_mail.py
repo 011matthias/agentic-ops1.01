@@ -1064,6 +1064,9 @@ def read_log(data_root: Path, limit: int = 100, overlay: bool = True) -> list[di
                 row["receipt_month_source"] = meta["receipt_month_source"]
             if meta.get("mixed_months"):
                 row["mixed_months"] = True
+            # Item 267: receipts of a mixed mail that moved to their own month.
+            if meta.get("split_to"):
+                row["split_to"] = meta["split_to"]
             # Travel stamp (item 38): parallel field, absent on month
             # mail. The trip suggestion is computed at read time in
             # `annotate_travel_pool` (trips open and close; a suggestion
@@ -2524,6 +2527,48 @@ def body_text_by_digest(arch: "Path | None", staging: Path) -> dict[str, str]:
         return {}
 
 
+def _file_mixed_months(
+    db_path: Path, learning_db_path: Path | None, arch: Path | None,
+    run_id: str, documents: list[str],
+) -> list[dict]:
+    """Backlog item 263 (feedback notes #138/#139, 2026-10-29): a mail whose
+    receipts print dates in more than one month files each receipt in the
+    month its own date names. `resolve_receipt_month` still routes the MAIL
+    by its earliest date (that decides which open month the files arrive
+    in); this step then walks the expense rows the mail created and hands
+    each to `route_expense_by_date`, the mover a date change already uses
+    (item 251), so a September receipt that arrived inside an August mail
+    leaves August instead of sitting there with no charge to match.
+
+    Only mixed mail is touched, and only rows that sit outside their month;
+    a published month or a date the drop would not file holds in place, the
+    same as an edit does. Returns [{document_id, month, batch_id} ...] for
+    the rows that moved. Never raises: the ingest has already succeeded."""
+    if arch is None or not documents:
+        return []
+    moved: list[dict] = []
+    try:
+        if not _read_meta(arch).get("mixed_months"):
+            return []
+        from .service import route_expense_by_date
+
+        data_root = arch.parent.parent
+        for doc in documents:
+            with RunStore(db_path) as store:
+                out = route_expense_by_date(
+                    store, run_id, doc, _now_iso(), data_root=data_root,
+                    learning_db_path=learning_db_path,
+                )
+            if out and not out.get("held"):
+                moved.append({
+                    "document_id": doc, "month": out.get("month"),
+                    "batch_id": out.get("batch_id"),
+                })
+    except Exception as exc:  # noqa: BLE001 - the receipts are already in
+        log.warning("mixed-month split failed for %s: %s", arch.name, exc)
+    return moved
+
+
 def _ingest_job(
     db_path: Path, job_id: str, run_id: str, staging: Path,
     learning_db_path: Path | None, provenance: dict[str, dict],
@@ -2583,6 +2628,10 @@ def _ingest_job(
                     # Item 106: why each other file created no expense.
                     "not_added": not_added,
                 })
+                split = _file_mixed_months(
+                    db_path, learning_db_path, arch, run_id, documents)
+                if split:
+                    _update_meta(arch, {"split_to": split})
                 _maybe_ack(db_path, arch)
     except Exception as exc:  # noqa: BLE001 - job errors surface via meta+log
         with RunStore(db_path) as store:

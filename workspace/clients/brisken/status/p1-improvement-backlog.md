@@ -13687,6 +13687,42 @@ dry-run that lists the decisions it would orphan. #126 is a display rule in the
 SPA (hide the file link when the overview row's status is "not a receipt") and
 rides the next prompt.
 
+### 263. A mail of receipts from several months files each receipt in its own month (notes #138, #139; 2026-10-29; licence: defect, covered) (BACKEND SHIPPED 2026-10-29)
+
+#138 (August, "GitHub, Inc. registry, From: Dirk Neumann"): "is not being
+matched to statement line item from github even though amount, date and vendor
+are the same". #139, same row: "belongs in september not in august".
+
+Read live (GET only): Dirk's one mail "Github Receipts 8-10/2026" carried three
+receipts printed 2026-08-05, 2026-09-05 and 2026-10-05. The inbound log reads
+`mixed_months: true`, `pool_month: 2026-08`, all three documents (0062, 0063,
+0064) filed in August. The 09-05 receipt matched nothing there because its
+charge is in September, where the same receipt was already held as 0007 and
+matched (11.56 USD, card 2838); the September charge listed 0063 as a second
+candidate. Nothing was wrong with matching.
+
+Cause: `resolve_receipt_month` (the 2026-08-24 ruling) routes a multi-receipt
+mail whole by its EARLIEST plausible date. Item 251 moved a receipt when its
+date CHANGED; a mixed mail never changes a date, and a read date inside the
+three-month window is not even offered the move.
+
+Built: `intake_mail._file_mixed_months`, called from `_ingest_job` after the
+mail's rows exist. For a mail stamped `mixed_months` it hands each created row
+to `route_expense_by_date` (item 251's mover), so a receipt outside the month
+it arrived in is filed in its own, creating the month when absent; a published
+month or an unroutable date holds in place, as on an edit. The archive records
+`split_to`, which the inbound log rows carry. Test:
+`test_a_mixed_month_mail_files_each_receipt_in_its_own_month` (regress_check:
+green, red with the call unwired, green). Suite `tests/test_intake_mail.py`
+125 passed.
+
+Not covered: the materialize-on-arrival path (`_ensure_month_for_arrival`)
+creates its month from the mail's files without `_ingest_job`, so a mixed mail
+that opens a month still files whole there. The two other recent mixed mails
+(Receipt Batch 01 and 02, filed whole into September on 10-28) were not
+audited. Live clean-up of 0062 and 0063 is an owner-approved per-receipt move,
+tracked in the session, not here.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
