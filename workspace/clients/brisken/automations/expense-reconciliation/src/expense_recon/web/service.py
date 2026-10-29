@@ -4401,6 +4401,13 @@ def build_view(
             no_receipt_expected=charge_no_receipt_expected(row),
         )
         row["reason_label"] = CHARGE_REASON_TEXT[row["reason_code"]]
+        # Note #132 / item 260: `reason_code` names ONE cause, so a gray-filled
+        # fee line reads `not_a_purchase` while the month gate already counts
+        # it closed (live August: tile 43 open, chase list 42). The screen
+        # reads this flag instead of guessing closure from the code.
+        row["closed_without_receipt"] = bool(
+            charge_booked_recurring(row) or charge_no_receipt_expected(row)
+        )
     for tx_entry in unmatched_transactions:
         tx_entry["reason_code"] = charge_reasons[tx_entry["transaction_id"]]
         tx_entry["reason_label"] = CHARGE_REASON_TEXT[tx_entry["reason_code"]]

@@ -52,8 +52,9 @@ Show `receipt.reference` under the vendor in small muted text when it is not emp
 
 ## 2. Say what "open" means
 
-The "Charges without a receipt" view tile shows a count and a line "{n} open". The chase panel's title shows a different count when a fee line is open. Today nothing explains it.
+The "Charges without a receipt" view tile shows a count and a line "{n} open". The chase panel's title shows a different count. Cause, measured on live August: a gray-filled fee line (ANNUAL MEMBERSHIP FEE) is closed on the backend, but its `reason_code` is `not_a_purchase`, and `isRowDecided` in `RunWorkbench.tsx` only treats the codes `closed_recurring` and `no_receipt_expected` as closed, so the tile counts it as open.
 
+- In `isRowDecided`, add one line before the final return: `if (row.closed_without_receipt === true) return true;`. The backend sets this flag on every unmatched row that the gray fill or a "no receipt exists" mark closed, whatever its `reason_code` says. Guard for `undefined` (older payloads).
 - Give the tile's "{n} open" line a tooltip (`wb.view.open.tip`): "Open = still needs a person. Charges booked already, closed by a recurring booking, or marked 'no receipt exists' are not open."
 - In the chase panel subtitle (`chase.subtitle`), when `summary.n_charges_open_no_receipt_due` is greater than 0 append a second sentence (`chase.subtitle.fees`): "{n} more open charge(s) here are fees or interest: they need a decision, not a receipt." Render nothing extra at 0. Read the count from the run `summary`; guard for `undefined` (older payloads).
 
