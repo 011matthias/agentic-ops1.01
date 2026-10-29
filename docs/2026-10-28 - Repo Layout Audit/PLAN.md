@@ -229,7 +229,7 @@ Files: `tools/repo-sweep.py`, `.claude/hooks/file-placement-gate.py`, `.claude/h
 
 ### W1-14 [exposure-4, exposure-6, exposure-8] cost M
 
-Status: todo
+Status: done PR #1664 (2026-10-29, owner yes under the client-ops guard). Range mode scans only ADDED lines (old ledgers and removals stay silent); the token check fires on whole new files only (a one-line recon regex edit had tripped it). CI step warns, never fails. Calibration `--all`: 18 files, not the predicted 5: the predicted ones plus the 10-09 WW and 05-20 Morning Briefing checkpoints, the Rome roster + build-master-v2.py, the WW m-mail-abgleich page, two meji Instantly audits (named mailboxes), and personal addresses (likely the owner's) in two brisken status files and test_intake_mail.py. Replay of 200 merges: asks on 2, both WW checkpoints. confidential-names.txt does not exist for any client yet, so that detector is inert until seeded. After-check: primary fast-forwarded to d6a4b063, gate wired (30 hooks), sweep dry run clean.
 
 Depends on: item 13
 
@@ -993,7 +993,7 @@ Files: `.claude/settings.json`, `tools/project_status.py`, `tools/doctor.py`, `.
 
 ### W1-32 [G4] cost S
 
-Status: todo. Found 2026-10-28: BriskenReconNotify had exited nonzero on ~3 of 4 runs every day since at least 10-16 (SSLEOFError on /api/login): this machine's IPv6 route to Fly drops the TLS handshake (IPv4 4/4, IPv6 2/4 and 0/4). Notifications were delayed, never lost (state advances only after a send). Fixed on branch client/brisken/recon-notify-ipv4 (owner yes): IPv4 pin in main(); dry runs 0/3 before, 3/3 after.
+Status: todo. Found 2026-10-28: BriskenReconNotify had exited nonzero on ~3 of 4 runs every day since at least 10-16 (SSLEOFError on /api/login): this machine's IPv6 route to Fly drops the TLS handshake (IPv4 4/4, IPv6 2/4 and 0/4). Notifications were delayed, never lost (state advances only after a send). Fixed PR #1663 (owner yes): IPv4 pin in main(); dry runs 0/3 before, 3/3 after; 13 of 13 scheduled runs exit 0 through 2026-10-29 10:32Z. The rest of W1-32 (the other jobs' outcomes) is still todo.
 
 Depends on: W1-24
 
@@ -1035,7 +1035,7 @@ Files: `tools/wire-hooks.py`, `tools/repo-sweep.py`, `.claude/rules/rule_brisken
 
 ### W1-35 [G12] cost S, lands with W1-14
 
-Status: todo
+Status: done PR #1664 (2026-10-29). Probe, gitleaks 8.30.1 defaults: caught Graph, Hero, Instantly, Zoho only through KEY/TOKEN/SECRET names and a realistic n8n key via the jwt rule; missed the Make MCP URL (`<zone>.make.com/mcp/u/<UUID>/stateless`) and tok.txt (57415748). New rules make-mcp-url, zoho-oauth-token, token-named-file catch both; CI log shows "using gitleaks config from GITLEAKS_CONFIG". Verify deviation: main's history is NOT 0, it holds 57 findings under the default and the new config alike (40 airtable-api-key on herbox-sweden Airtable IDs, 17 generic), so the config adds none and CI only scans new commits. Not done: the push gate running gitleaks locally (no gitleaks on the machine; probe used a scratch download). tok.txt's shape (8 + 73 lowercase alnum, one dot) matches no common token format; identifying the service stays with D3(g).
 
 Depends on: none
 
