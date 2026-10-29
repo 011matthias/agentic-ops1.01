@@ -118,3 +118,18 @@ def test_sweep_heartbeat_alert_thresholds():
     assert alert is not None and "stale" in alert
     missing = ws.sweep_heartbeat_alert(None, now)
     assert missing is not None and "missing" in missing
+
+
+def test_send_pipes_utf8_and_tells_the_child(monkeypatch):
+    # W1-31: the body goes out as UTF-8, so send_email.py must read stdin as
+    # UTF-8 too, or umlauts arrive as cp1252 mojibake under the scheduled task.
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen.update(kw)
+        return subprocess.CompletedProcess(cmd, 0, stdout="sent\n", stderr="")
+
+    monkeypatch.setattr(ws.subprocess, "run", fake_run)
+    assert ws.send("subject", "Grüße")
+    assert seen["encoding"] == "utf-8"
+    assert seen["env"]["PYTHONIOENCODING"] == "utf-8"
