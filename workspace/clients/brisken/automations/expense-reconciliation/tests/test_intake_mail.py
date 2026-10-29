@@ -1556,7 +1556,7 @@ def _image_only_mail() -> bytes:
     msg["Message-ID"] = "<image-only@vendor.example>"
     msg.set_content(
         '<html><body><img src="cid:x"><a href="https://share.example.com/r/123">'
-        '</a><a href="https://vendor.example/unsubscribe"><img src="cid:y"></a></body></html>',
+        '&#8203;</a><a href="https://vendor.example/unsubscribe"><img src="cid:y"></a></body></html>',
         subtype="html",
     )
     return msg.as_bytes()

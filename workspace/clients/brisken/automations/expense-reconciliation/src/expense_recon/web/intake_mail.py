@@ -4137,10 +4137,10 @@ def sweep_dismissed(db_path: Path, data_root: Path) -> int:
 
 
 def _has_readable_body(arch: Path) -> bool:
-    from .body_render import extract_body_text
+    from .body_render import extract_body_text, has_visible_text
 
     eml = arch / "message.eml"
-    return eml.is_file() and bool(extract_body_text(eml.read_bytes()).strip())
+    return eml.is_file() and has_visible_text(extract_body_text(eml.read_bytes()))
 
 
 def read_body_view(data_root: Path, archive: str) -> dict | None:
@@ -4184,13 +4184,13 @@ def render_ingest(
     the result always lands somewhere — a month or the pool — because
     telling an operator "try again later" about work already done is how
     body-only mail used to strand."""
-    from .body_render import extract_body_text, render_body_pdf
+    from .body_render import extract_body_text, has_visible_text, render_body_pdf
 
     arch = _archive_dir(data_root, archive)
     if arch is None or not (arch / "message.eml").exists():
         return {"error": "not found", "code": 404, "error_code": "mail_not_found"}
     text = extract_body_text((arch / "message.eml").read_bytes())
-    if not text.strip():
+    if not has_visible_text(text):
         return {"error": "no readable body in this mail", "code": 409,
                 "error_code": "mail_no_readable_body"}
 
