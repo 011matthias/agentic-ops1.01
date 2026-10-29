@@ -231,7 +231,7 @@ If the loader returns no `type: n8n` instance for the client, BLOCK with: "infra
 
 ### Step 8 — Emit build report
 
-Compose per **Output Format** below. No preamble; the first line is the `##` header.
+Compose per **Output Format** below. No preamble; the first line is the `##` header. Under "Next step for orchestrator", name the activation shape in skil_build-test-fix ("n8n activation shape": idle, PUT by id, read back, activate, acceptance run, rollback) with this workflow's `n8n_workflow_id` and export path filled in. You do not run it.
 
 ## Hard rules
 

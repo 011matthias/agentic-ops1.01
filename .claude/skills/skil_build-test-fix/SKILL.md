@@ -41,6 +41,19 @@ Wraps the iterative cycle that happens after every initial build: execute → ch
 | **n8n** | MCP workflow execution | n8n execution history via MCP | Update workflow JSON via MCP |
 | **Trigger.dev** | `npx trigger.dev@latest dev` + trigger | Task run logs | Edit TypeScript source |
 
+## n8n activation shape
+
+An n8n workflow goes live in one fixed order, through the client's n8n MCP server (`mcp__n8n-{client}__*`) or the client's own release script. The reference is WW's `ww-vertrieb-release-72627.mjs`:
+
+1. **Idle**: confirm no execution of the workflow is running (`n8n_executions` with `action: "list"`, `workflowId`).
+2. **PUT by id**: update the existing workflow by its `n8n_workflow_id` from infrastructure.yaml; never create a second copy.
+3. **Read back**: fetch it again and compare against the repo export (`uv run tools/n8n_export.py --client {client} --only {id} --check` exits 0).
+4. **Activate**: `activateWorkflow`, then read back `active: true`.
+5. **Acceptance run**: one run on the client's sanctioned test path, then `n8n_executions` `action: "get"` with `mode: "filtered"` and the field-by-field checks in OUTCOME-VERIFICATION.md.
+6. **Rollback**: if 3 or 5 fails, PUT the previous export back and restore the previous `active` state before reporting.
+
+Activation and the acceptance run write to a client tenant, so each needs the owner's per-action yes; the builder never runs this (it hands the shape on in its report), the deployer or the session does.
+
 ## Modules
 
 | Module | Purpose |

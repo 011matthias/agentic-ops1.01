@@ -41,4 +41,4 @@ Invoke the `agnt_testing-agent` with:
 - **Client:** parsed from arguments
 - **Automation ID:** parsed from arguments
 
-The agnt_testing-agent handles all test execution, result interpretation, and status updates.
+The agnt_testing-agent handles all test execution, result interpretation, and status updates. For an n8n client it uses its n8n mode: the infrastructure.yaml `test:` commands offline, then an `n8n_executions` readback for `dev` and `verify`.
