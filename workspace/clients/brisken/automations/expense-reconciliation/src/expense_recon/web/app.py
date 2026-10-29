@@ -237,6 +237,7 @@ from .month_readiness import (  # items 99 + 100
 )
 from ..category_vocabulary import (
     card_account_check,
+    card_account_options,
     chart_coverage,
     gl_account_options,
     gl_companies,
@@ -3047,6 +3048,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             edits=store.get_expense_edits(run.run_id),
             resolutions=store.get_duplicate_resolutions(run.run_id),
             decisions=store.get_decisions(run.run_id),
+            month_batch=lambda month: _month_batch_id(store, month),
         )
 
     def _month_batch_id(store: RunStore, month: str) -> str | None:
@@ -3546,6 +3548,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     }
                     for c in effective_cards(settings, load_cards()).values()
                 ],
+                # Item 265 (note #124): the card form's Zoho-account
+                # picker. Derived and read-only; PUT ignores it.
+                "card_account_options": card_account_options(settings),
                 "merchants_inert": sorted(
                     name
                     for name, entry in (settings.get("merchants") or {}).items()

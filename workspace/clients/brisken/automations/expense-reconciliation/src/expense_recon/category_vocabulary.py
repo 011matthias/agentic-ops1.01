@@ -430,6 +430,37 @@ def _closest_card_account(text: str, hints: set[str], coas: list) -> str:
     return max(pool, key=lambda n: (fuzz.token_set_ratio(text.lower(), n.lower()), n))
 
 
+def card_account_options(settings: dict | None) -> list[dict]:
+    """The accounts a card may pay through (item 265, note #124: "this should
+    be a drop down list of available zoho accounts for credit cards"):
+    `[{company, org_id, name, account_id}]`, every active `credit_card`
+    account not marked DO NOT USE, from each company's chart. The same
+    filter `_closest_card_account` and `card_account_check` hold a stored
+    name to, so a pick from this list always checks ok. `company` is the
+    entity the settings map to that org, "" for an org no entity names.
+    Sorted by company, then name. Empty when no chart is provisioned."""
+    from .zoho.accounts import PAID_THROUGH_TYPES
+
+    loaded = _org_charts()
+    if loaded is None:
+        return []
+    charts, _meta = loaded
+    company_of = {org: entity for entity, org in _current_entity_orgs(settings).items()}
+    out = [
+        {
+            "company": company_of.get(org, ""),
+            "org_id": org,
+            "name": a.name,
+            "account_id": a.account_id or "",
+        }
+        for org, coa in charts.items()
+        for a in coa.accounts
+        if a.account_type.strip().lower() in PAID_THROUGH_TYPES
+        and a.is_active and not a.is_do_not_use
+    ]
+    return sorted(out, key=lambda o: (o["company"], o["name"].lower()))
+
+
 def card_account_check(
     name: str | None, entity: str | None, settings: dict | None,
     *, digits=(), chart_verified: bool | None = None,
