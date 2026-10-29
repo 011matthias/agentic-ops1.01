@@ -386,6 +386,7 @@ promoted to the prompt below. Nothing in the Applied table is waiting on a drive
 
 | Prompt | Decisive field names | Gate |
 |---|---|---|
+| `lovable-setaside-links-prompt.md` (items 261 + 262, notes #126, #127, #129, #130) | `dismissSetAside`, `set-aside/dismiss`, `expx.setaside.dismiss`, `inbound.body.links`, `rov.notAReceipt` | Written 2026-10-29, not pasted. Backend ships with it (new route + parallel fields), safe against a stale SPA. |
 
 
 
