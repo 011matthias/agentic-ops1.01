@@ -47,7 +47,9 @@ Use these when building the session header slug and title:
 | `uwi` | upwork-independence |
 | `{3-4 char initials}` | any new client/project |
 
-## Step 0: Try YAML Fast-Path
+## Step 0: MCP check, then YAML Fast-Path
+
+Run `uv run tools/mcp_config.py --ensure` first. In a worktree it renders the servers this session's client needs (and says to restart Claude Code when it wrote anything); in the primary clone it is a no-op unless a client's infrastructure.yaml or `.env` changed. It refuses, naming what it would drop, if `--adopt` has not been run on this machine.
 
 Check for a session context YAML:
 
