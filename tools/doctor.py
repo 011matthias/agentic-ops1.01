@@ -75,6 +75,7 @@ CHECKS: tuple[Check, ...] = (
           home_clone_only=True),
     Check("repo-freshness", ("tools/repo_freshness.py",), 60, "state"),
     Check("scorer-pins", ("tools/pin_scorer.py", "check"), 60, "state"),
+    Check("mcp-health", ("tools/mcp_config.py", "--mcp-health"), 150, "state"),
     # integrity — registries + staleness
     Check("check-index", ("tools/check-index.py",), 60, "integrity"),
     Check("skill-map", ("tools/check-skill-map.py",), 120, "integrity"),

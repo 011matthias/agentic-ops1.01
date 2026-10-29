@@ -167,7 +167,7 @@ instances:
 
 `{NAME}` is the slug upper-cased with `-` → `_`. List both env names in `automations/.env.example` (names only, no values); `uv run tools/infra_check.py --client {name}` fails until they are there.
 
-Then run `/comd_n8n-instances add {name}`: it asks for the instance URL and key, writes the `n8n-{name}` entry into `.mcp.json` (gitignored), and verifies the connection. Never paste the key into infrastructure.yaml or a tracked file.
+Then put the two values in `workspace/clients/{name}/context/.env` under those names and run `uv run tools/mcp_config.py --ensure` (see `/comd_n8n-instances`): it renders the `n8n-{name}` entry into `.mcp.json` (gitignored) and says to restart Claude Code. Never paste the key into infrastructure.yaml or a tracked file.
 
 **If Make.com:**
 
@@ -237,12 +237,13 @@ See `.claude/rules/rule_behaviors.md` for outcome verification and test fixture 
 
 Ask the user for the Make.com organization URL and team name to fill in real values.
 
-If the client has a Make.com paid plan with API/MCP access, also add MCP server entry to `.mcp.json` (create file if it doesn't exist):
+If the client has a Make.com paid plan with API/MCP access, add the MCP server to `.mcp.local.json` at the primary clone root (gitignored; the URL carries the token) scoped to the client, set the instance's `mcp_server: make-{name}` in infrastructure.yaml, then run `uv run tools/mcp_config.py --ensure`:
 
 ```json
 {
   "mcpServers": {
     "make-{name}": {
+      "_scope": ["{name}"],
       "command": "npx",
       "args": ["-y", "mcp-remote", "https://<MAKE_ZONE>/mcp/u/<MCP_TOKEN>/sse"]
     }
