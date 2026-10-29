@@ -13724,12 +13724,62 @@ month or an unroutable date holds in place, as on an edit. The archive records
 green, red with the call unwired, green). Suite `tests/test_intake_mail.py`
 125 passed.
 
-Not covered: the materialize-on-arrival path (`_ensure_month_for_arrival`)
-creates its month from the mail's files without `_ingest_job`, so a mixed mail
-that opens a month still files whole there. The two other recent mixed mails
-(Receipt Batch 01 and 02, filed whole into September on 10-28) were not
-audited. Live clean-up of 0062 and 0063 is an owner-approved per-receipt move,
-tracked in the session, not here.
+Deployed 2026-10-29 (Fly, commit `6d4c00d6`). Live clean-up on the owner's
+yes: 0063 moved August -> September by the per-receipt move route; the bytes
+matched September's 0007, so only August's row went (`already_in_batch`), and
+September's 11.56 charge now has one candidate, chosen, `turn: decide`. 0062
+had already left August before the move (October holds its own copy, 0011,
+from a 10-05 mail), so nothing was done to it.
+
+Materialize path, closed the same day: `_ensure_month_for_arrival` now hands
+the mail's rows to the same split once the materialize hold is RELEASED (the
+mover takes `_MATERIALIZE_LOCK` itself and it is not reentrant, so calling it
+inside `_create_month_from_mail` would deadlock). Test:
+`test_a_mixed_mail_that_opens_its_month_sends_the_rest_on` (regress_check
+bites).
+
+Receipt Batch 01 and 02 (2026-10-28, filed whole into September): audited
+read-only, 17 receipts printed in October sit in September. 14 hold no charge
+and are item 264's offers; 3 (0122, 0136, 0137, dated 10-02/10-03) are held by
+September charges and stay. No live write: Criss moves them (memory: no live
+writes on her months).
+
+### 264. A receipt no charge holds, dated in another month, is offered its own month (note #137; 2026-10-29; licence: defect, covered) (BACKEND SHIPPED 2026-10-29)
+
+#137 (August, "Receipts without a charge 8"): "dont show data from different
+months". At 11:39 the list held 8: today's 6 plus 0062 (10-05) and 0063
+(09-05), both item 263's strays. Of the 6 left, 5 are late-August receipts for
+charges in September's statement (they belong where they are); the sixth is
+`folder:1a2c5654a31c70fa`, SAP SE 183.00 EUR dated 2026-07-05, which nothing
+offered to move: item 251 offers a READ date only outside the batch's window,
+and July 5 is inside August's.
+
+Built: `attach_expense_card_tabs` (the Expenses page payload) offers
+`expenses[].month_move` on a row that no charge holds (`without_charge`), whose
+date's CALENDAR month differs from the batch's, on a month with a statement
+loaded (without one, "no charge holds it" only means "no statement yet").
+`summary.n_month_moves` is recounted so the banner agrees. Offer only, never a
+move on read; the SPA already renders the offer (item 77). Test:
+`test_a_receipt_no_charge_holds_is_offered_its_own_month` (no offer before the
+statement, offer after; regress_check bites).
+
+Predicted from the live payloads before shipping: 14 new offers, 13 in
+September (Receipt Batch 01/02's unheld October receipts) and 1 in August (the
+July SAP SE receipt). No other month gains one; the 3 held October receipts and
+the late-August receipts get none.
+
+### 265. The card's Zoho account is picked from a list (note #124; 2026-10-07; licence: defect, covered) (BACKEND SHIPPED 2026-10-29; SPA prompt `docs/lovable-card-account-picker-prompt.md` NOT pasted)
+
+#124 (Settings > Cards, the Zoho account field): "this should be a drop down
+list of available zoho accounts for credit cards". Built:
+`category_vocabulary.card_account_options` on `GET /api/settings` as
+`card_account_options[]` (`company`, `org_id`, `name`, `account_id`): every
+active `credit_card` account not marked DO NOT USE, from each company's chart,
+the filter `card_account_check` already holds a stored name to, so a pick from
+the list checks ok. Listed in `SETTINGS_DERIVED_KEYS`, so the SPA's
+whole-object PUT accepts it back and ignores it (without that it would be
+refused as an unknown key; regress_check bites). Tests in
+`tests/test_card_account_check_item_172.py`.
 
 ## Shipped (loop history)
 

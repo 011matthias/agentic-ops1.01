@@ -2569,6 +2569,16 @@ def _file_mixed_months(
     return moved
 
 
+def _split_and_stamp(
+    db_path: Path, learning_db_path: Path | None, arch: Path | None,
+    run_id: str, documents: list[str],
+) -> None:
+    """`_file_mixed_months`, then record what moved on the archive."""
+    split = _file_mixed_months(db_path, learning_db_path, arch, run_id, documents)
+    if split and arch is not None:
+        _update_meta(arch, {"split_to": split})
+
+
 def _ingest_job(
     db_path: Path, job_id: str, run_id: str, staging: Path,
     learning_db_path: Path | None, provenance: dict[str, dict],
@@ -2628,10 +2638,8 @@ def _ingest_job(
                     # Item 106: why each other file created no expense.
                     "not_added": not_added,
                 })
-                split = _file_mixed_months(
+                _split_and_stamp(
                     db_path, learning_db_path, arch, run_id, documents)
-                if split:
-                    _update_meta(arch, {"split_to": split})
                 _maybe_ack(db_path, arch)
     except Exception as exc:  # noqa: BLE001 - job errors surface via meta+log
         with RunStore(db_path) as store:
@@ -2920,6 +2928,18 @@ def _ensure_month_for_arrival(
     # queue another month's creation behind it.
     if stamped:
         _maybe_ack(db_path, arch)
+        # Item 263: a mixed mail that opened its earliest month sends its
+        # later receipts on to their own. Outside the hold, because the
+        # mover takes `_MATERIALIZE_LOCK` itself (not reentrant).
+        documents = list(_read_meta(arch).get("documents") or [])
+        if synchronous:
+            _split_and_stamp(db_path, learning_db_path, arch, run.run_id, documents)
+        else:
+            threading.Thread(
+                target=_split_and_stamp,
+                args=(db_path, learning_db_path, arch, run.run_id, documents),
+                daemon=True,
+            ).start()
     # The month exists now, so its OTHER waiting mail joins the normal
     # way — the drain, not a backfill leak (item 39 protocol). Threaded on
     # a live arrival so the SMTP route slot frees; inline for replay/tests.

@@ -11222,6 +11222,8 @@ def attach_expense_card_tabs(
     edits: list[dict],
     resolutions: dict[str, str] | None,
     decisions: dict | None,
+    month_batch=None,
+    today: date | None = None,
 ) -> dict:
     """Item 138 on `GET /api/expense-batches/{id}` (the Expenses page):
     `card_sections` and `expenses[].card_section`. Mutates and returns
@@ -11280,6 +11282,19 @@ def attach_expense_card_tabs(
         str(rec.get("document_id") or "")
         for rec in card_view.get("unmatched_receipts") or []
     }
+    # Item 264 (note #137, 2026-10-29): a receipt no charge holds and whose
+    # date lies in another calendar month has nothing keeping it here, so it
+    # is offered the move even inside the batch's window. Inside the window
+    # a READ date is otherwise never offered (item 251), because a receipt
+    # printed on the 30th is usually held by the next month's charge; once no
+    # charge holds it that reason is gone. Offer only, never a move on read.
+    # Only where a statement is loaded: without one, "no charge holds it" is
+    # only "no statement yet", and a receipt from the 30th still waits for
+    # its charge on the 1st.
+    batch_month = month_from_label(run.label) if view.get("has_statement") else None
+    trip = is_trip_batch(run)
+    added = {e["document_id"] for e in edits if e["op"] == "add"}
+    move_today = today or datetime.now(timezone.utc).date()
     counted: dict[str, int] = {}
     sums: dict[str, dict[str, Decimal]] = {}
     for expense in view.get("expenses") or []:
@@ -11287,6 +11302,28 @@ def attach_expense_card_tabs(
         key = by_doc.get(doc, "")
         expense["card_section"] = key
         expense["without_charge"] = doc in unmatched
+        if (
+            expense["without_charge"]
+            and not trip
+            and not expense.get("month_move")
+            and expense.get("counts_in_total") is not False
+            and (not doc.startswith("manual:") or doc in added)
+        ):
+            try:
+                row_date = date.fromisoformat(str(expense.get("date") or "")[:10])
+            except ValueError:
+                row_date = None
+            move_to = date_month_target(
+                row_date, batch_month=batch_month, today=move_today,
+            )
+            if move_to is not None:
+                from .intake_mail import _month_human
+
+                offer = {"month": move_to, "label": _month_human(move_to)}
+                joins = month_batch(move_to) if month_batch is not None else None
+                if joins:
+                    offer["batch_id"] = joins
+                expense["month_move"] = offer
         if expense.get("counts_in_total") is False:
             continue
         counted[key] = counted.get(key, 0) + 1
@@ -11329,6 +11366,11 @@ def attach_expense_card_tabs(
     for entry in view.get("set_aside") or []:
         doc = str(entry.get("document_id") or "")
         entry["card_section"] = (set_aside_cards.get(doc) or ("", ""))[0]
+    # Item 264: the offers added above count in the banner too.
+    if isinstance(view.get("summary"), dict):
+        view["summary"]["n_month_moves"] = sum(
+            1 for e in view.get("expenses") or [] if e.get("month_move")
+        )
     return view
 
 

@@ -3165,6 +3165,41 @@ def test_flag_off_receipt_mail_pools_and_creates_nothing(client, monkeypatch):
     assert _runs(client) == []  # nothing materialized
 
 
+def test_a_mixed_mail_that_opens_its_month_sends_the_rest_on(client, monkeypatch):
+    """Item 263, the materialize path: with no month open, a mixed mail opens
+    its EARLIEST month from its own files (that month's batch is created
+    under the materialize hold); the later receipt then moves to its own
+    month, which the move opens. The mover takes the same hold, so it runs
+    after the hold is released or the arrival would deadlock."""
+    _patch_notify(monkeypatch)
+    _flag_on(monkeypatch)
+    state = client.app.state
+    older = RECEIPT_DAY.replace(day=1) - timedelta(days=5)
+    # Arrival read of both files, then the create-execute read of both.
+    _patch_ocr(
+        monkeypatch,
+        _extraction(vendor="GitHub", total="11.56", date=older.isoformat()),
+        _extraction(vendor="GitHub", total="12.34", date=RECEIPT_DAY.isoformat()),
+        _extraction(vendor="GitHub", total="11.56", date=older.isoformat()),
+        _extraction(vendor="GitHub", total="12.34", date=RECEIPT_DAY.isoformat()),
+    )
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com", attachments=[
+            ("old.jpg", JPG + b"mat-old"), ("new.jpg", JPG + b"mat-new"),
+        ]),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_INGESTED
+    assert res["materialized"] is True
+    labels = {b["label"]: b["batch_id"] for b in _runs(client)}
+    assert set(labels) == {_label_for(older), MONTH_LABEL}
+    first = client.get(f"/api/expense-batches/{labels[_label_for(older)]}").json()
+    assert [e["total"] for e in first["expenses"]] == ["11.56"]
+    later = client.get(f"/api/expense-batches/{labels[MONTH_LABEL]}").json()
+    assert [e["total"] for e in later["expenses"]] == ["12.34"]
+
+
 def test_flag_on_receipt_mail_materializes_its_month(client, monkeypatch):
     """T2: the whole arrival half. A pooled-bound mail creates its month,
     the label round-trips month_from_label (which is what makes the batch
