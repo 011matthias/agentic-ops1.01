@@ -13622,10 +13622,14 @@ and a read of the log.
 
 "Charges without receipt... 47 open... what does this 'Open' mean specifically".
 Reproduced on live August: the tile reads 43 open and the chase list 42; the
-one-row gap is ANNUAL MEMBERSHIP FEE (`reason_code` `not_a_purchase`), open for
-a person and never chased. Both counts were right; nothing said what
-separated them. `summary.n_charges_open_no_receipt_due` is the remainder
-(receiptless, not a purchase, not closed), so open = chase + this. The prompt
+one-row gap is ANNUAL MEMBERSHIP FEE, gray-filled, so the backend counts it
+closed (`n_charges_closed_recurring` 40), but its `reason_code` is
+`not_a_purchase` and the SPA's `isRowDecided` only reads the codes
+`closed_recurring` / `no_receipt_expected`. First fix (deployed 4cc99a7e) was
+wrong: `summary.n_charges_open_no_receipt_due` counts non-purchase lines that
+nothing closed, which is 0 on August; a synthetic fee row had hidden that.
+Fix: `rows[].closed_without_receipt`, the month gate's own verdict, and the
+prompt makes `isRowDecided` read it. The counter stays for ungrayed fee lines. The prompt
 adds the tooltip defining "open" and a sentence under the chase subtitle
 naming the fee lines.
 

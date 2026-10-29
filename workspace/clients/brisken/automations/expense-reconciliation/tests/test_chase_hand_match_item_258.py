@@ -42,12 +42,13 @@ def client(tmp_path, monkeypatch):
         yield c
 
 
-def _store_run(client, run_id: str) -> dict:
+def _store_run(client, run_id: str, entry_status: str | None = None) -> dict:
     tx = Transaction(
         transaction_id="gh1", legal_entity_id="le1", account_id="card-2838",
         transaction_date=date(2026, 8, 5), posting_date=None,
         amount=Decimal("21.00"), transaction_currency="USD",
         account_card_currency="USD", vendor_from_statement="GITHUB INC.",
+        entry_status=entry_status,
     )
     rec = Receipt(
         document_id="0001__github.pdf", legal_entity_id="le1",
@@ -115,3 +116,23 @@ def test_a_hand_match_takes_the_charge_off_the_chase_list(client):
     after = client.get("/api/runs/chase-match").json()
     assert "gh1" not in _chase_ids(after)
     assert after["summary"]["n_charges_need_receipt"] == 0
+
+
+def _gh_row(view):
+    return next(r for r in view["rows"] if r["transaction_id"] == "gh1")
+
+
+def test_closed_without_receipt_follows_the_gray_fill(client):
+    """Item 260: live August gray-filled ANNUAL MEMBERSHIP FEE reads reason
+    not_a_purchase, which the screen did not treat as closed, so the tile
+    counted one open charge more than the chase list. The row now carries the
+    month gate verdict itself."""
+    from expense_recon.unmatched_reasons import charge_reason_code
+
+    assert charge_reason_code(
+        row_type="fee", entry_status="subscription", candidates=[],
+        booked=False, closed_recurring=True, no_receipt_expected=False,
+    ) == "not_a_purchase"  # why the code alone cannot say closed
+    assert _gh_row(_store_run(client, "flag-open"))["closed_without_receipt"] is False
+    gray = _store_run(client, "flag-gray", entry_status="subscription")
+    assert _gh_row(gray)["closed_without_receipt"] is True
