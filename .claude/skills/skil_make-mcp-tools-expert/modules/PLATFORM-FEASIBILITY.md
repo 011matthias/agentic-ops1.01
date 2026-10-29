@@ -1,6 +1,6 @@
 # Platform Feasibility Assessment
 
-> When to use: At client onboarding (`/new-client`, `/convert-proposal`) — before creating the folder structure. Also at first spec creation and whenever the client's platform subscription changes. The goal is to catch subscription mismatches, capability blockers, and cost risks before any building begins.
+> When to use: At client onboarding (`/comd_new-client`, `/comd_convert-proposal`) — before creating the folder structure. Also at first spec creation and whenever the client's platform subscription changes. The goal is to catch subscription mismatches, capability blockers, and cost risks before any building begins.
 
 ---
 
@@ -137,14 +137,14 @@ platform:
 Update the `assessed` date and re-run the audit whenever:
 - A new automation is added to the client
 - The client changes their subscription
-- `/ops-audit` shows the verdict has shifted
+- `/comd_ops-audit` shows the verdict has shifted
 
 ---
 
 ## Integration
 
-- **`/new-client` Step 2.5:** Run Section A + B after orchestrator selection. Record in infrastructure.yaml during folder creation.
-- **`/convert-proposal` Step 5.5:** Same as above.
+- **`/comd_new-client` Step 2.5:** Run Section A + B after orchestrator selection. Record in infrastructure.yaml during folder creation.
+- **`/comd_convert-proposal` Step 5.5:** Same as above.
 - **`spec-creator`:** When creating a new spec, check `infrastructure.yaml` platform section. If adding this automation would shift the verdict (e.g., YELLOW → ORANGE), flag in spec implementation notes.
-- **`/ops-audit`:** Uses the recorded `platform.ops_limit` and `platform.tier` as the baseline for live comparison.
+- **`/comd_ops-audit`:** Uses the recorded `platform.ops_limit` and `platform.tier` as the baseline for live comparison.
 - **OPERATIONS-ANALYZER:** This module provides the investigation framework; OPERATIONS-ANALYZER provides the ops estimation formulas. Do not duplicate formulas — reference OPERATIONS-ANALYZER Section A.

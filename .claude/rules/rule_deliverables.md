@@ -17,7 +17,7 @@
 
 **Client-facing content accuracy.** Every number, field name, and config value must trace to a queried source. Unverified = "TBD". See B4 gate in rule_behaviors.md.
 
-**Brand accuracy.** For platform work, read `workspace/projects/platform/context/brand.md` at session start. Never assume brand name spelling or contact info.
+**Brand accuracy.** For platform work, take brand spelling and contact info from [[rule_platform_standards]] §1. Never assume them.
 
 ## Video script humanness (proposal Loom walkthroughs)
 

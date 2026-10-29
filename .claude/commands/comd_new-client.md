@@ -67,7 +67,7 @@ Before creating any files, investigate the client's platform subscription to cat
 **If the client doesn't know their plan details yet:**
 - Record `platform.tier: "unknown"` and `platform.feasibility: "unassessed"`
 - Add a note: "Feasibility assessment pending — must complete before first spec build"
-- This is acceptable at onboarding; the assessment MUST be completed before `/build-automation`
+- This is acceptable at onboarding; the assessment MUST be completed before `/comd_build-automation`
 
 **If answers reveal a RED verdict** (plan clearly insufficient for discussed scope):
 - Warn: "The {plan} plan may not support the planned workload. Recommend upgrading to {tier} or reducing scope."

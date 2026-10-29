@@ -106,6 +106,24 @@ def test_drift_detection(tmp_path):
     assert not any("budget" in d for d in drift)
 
 
+def test_hooks_and_patterns_counted_and_drift(tmp_path):
+    # Shared `_helper.py` modules are not hooks; the patterns README is not a rule.
+    _make_repo(tmp_path, claude_md="- **Hooks** (2) right\n- **Patterns** (9) wrong\n")
+    hooks = tmp_path / ".claude" / "hooks"
+    hooks.mkdir(parents=True)
+    for name in ("a-gate.py", "b-gate.py", "_shell.py"):
+        (hooks / name).write_text("x", encoding="utf-8")
+    pats = tmp_path / ".claude" / "patterns"
+    pats.mkdir(parents=True)
+    for name in ("warn-x.md", "README.md"):
+        (pats / name).write_text("x", encoding="utf-8")
+    a = AM.count_assets(tmp_path)
+    assert a["hooks"] == 2 and a["patterns"] == 1
+    blob = " ".join(AM.compute_drift(tmp_path, a))
+    assert "Patterns: CLAUDE.md advertises 9, actual 1" in blob
+    assert "Hooks" not in blob
+
+
 def test_oversized_rule_is_advisory_not_drift(tmp_path):
     # A rule file over the per-file ceiling is surfaced as an advisory in the
     # assets census, NOT as documented-vs-actual drift (the repo-wide LOC budget

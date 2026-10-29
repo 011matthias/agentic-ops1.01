@@ -1,6 +1,6 @@
 # Inbound Processing
 
-Processes client responses to extract decisions, resolve open items, flag implications, and maintain conversation continuity. Invoked via `/comms {client} inbound`.
+Processes client responses to extract decisions, resolve open items, flag implications, and maintain conversation continuity. Invoked via `/comd_comms {client} inbound`.
 
 ---
 
@@ -70,7 +70,7 @@ Things someone committed to doing.
 New questions the client asked that need answering.
 
 ### Tone/Sentiment (note, don't log)
-How are they feeling? Frustrated? Enthusiastic? Confused? This informs the next `/draft` but doesn't go in the log explicitly.
+How are they feeling? Frustrated? Enthusiastic? Confused? This informs the next `/comd_draft` but doesn't go in the log explicitly.
 
 ---
 
@@ -149,7 +149,7 @@ If yes, follow COMMS-LOG.md write procedures:
 
 ## Temporal Context for Reply Drafting
 
-If the user wants to reply after processing inbound messages, pass temporal context to `/draft`:
+If the user wants to reply after processing inbound messages, pass temporal context to `/comd_draft`:
 
 - **When was the client's message sent?** (extracted from paste if timestamps visible)
 - **What time is it now?** (current date/time)

@@ -4,7 +4,7 @@ Structured playbook for creating Upwork proposals — cover letters and video wa
 
 ## When to Load
 
-- Creating a new proposal (`/new-proposal`)
+- Creating a new proposal (`/comd_new-proposal`)
 - Drafting an Upwork application
 - Writing a proposal video script
 - Reviewing/improving an existing proposal
@@ -22,9 +22,9 @@ Load only what you need per task. For a full proposal (letter + video), load all
 
 ## Related System Components
 
-- **`/new-proposal {prospect}`** — Creates the proposal page (platform landing page with pricing, timeline, phases)
+- **`/comd_new-proposal {prospect}`** — Creates the proposal page (platform landing page with pricing, timeline, phases)
 - **`feedback_upwork_formatting.md`** — Upwork-specific text formatting (plain text, numbered sections, line breaks)
-- **`/draft`** — For follow-up messages after proposal is sent
+- **`/comd_draft`** — For follow-up messages after proposal is sent
 - **Live example** — `workspace/proposals/volabyg-lead-automation/video-script.md` (live reference)
 
 ## Workflow
@@ -36,7 +36,7 @@ Load only what you need per task. For a full proposal (letter + video), load all
 4. Load VIDEO-SCRIPT → record Loom walkthrough
 5. Load PROPOSAL-TEMPLATES → write the cover letter
 6. Submit application (video link + letter)
-7. If progressed: /new-proposal → full proposal page with pricing
+7. If progressed: /comd_new-proposal → full proposal page with pricing
 ```
 
 ## Key Principle

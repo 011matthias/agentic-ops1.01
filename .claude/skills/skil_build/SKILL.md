@@ -102,7 +102,7 @@ updated: {today}
 
 ### Testing
 
-After code is written, use the testing-agent (`/test {client} {id}`) to verify the automation works end-to-end.
+After code is written, use the testing-agent (`/comd_test {client} {id}`) to verify the automation works end-to-end.
 
 ---
 

@@ -22,8 +22,8 @@ The state of each workstream lives in its status file, not in this README.
 | **Upwork independence** | Finding clients outside Upwork | | [`projects/upwork-independence/status/`](workspace/projects/upwork-independence/status/) |
 
 Smaller internal projects (local-business demo sites, an AI-visibility probe,
-service ideas) sit in [`workspace/projects/`](workspace/projects/), each with its
-own README.
+service ideas) sit in [`workspace/projects/`](workspace/projects/), most with
+their own README.
 
 ## Layout
 
@@ -40,7 +40,7 @@ workspace/
   rules/              constraints loaded into every session
   hooks/              enforcement that fires on tool calls
   patterns/           regex-shaped rules read by one generic hook
-  skills/ agents/ commands/
+  skills/ agents/ commands/ workflows/
 tools/                scripts and their tests, indexed in tools/INDEX.md
 docs/                 checkpoints, daily session logs, friction register
 platform/             legacy website source, kept for local proposal builds
@@ -64,9 +64,11 @@ frontmatter `stage` says where it stands. `/comd_help-system` lists every comman
 1. Every change starts on a branch (`client/{client}/...`, `docs/...`, `sys/...`).
    Nothing is committed to `main` directly.
 2. Once the change is verified, commit, push and pull request run without asking.
-3. CI decides the merge: type check, lint and build, the enforcement-hook test
-   suite, a gitleaks secret scan, spell check and Playwright smoke tests. A green
-   PR merges automatically; a red one waits.
+3. CI decides the merge. Every PR runs the enforcement-hook test suite, a
+   gitleaks secret scan and a personal-data scan; path-filtered suites add the
+   platform's type check, lint, build, spell check and Playwright smoke tests,
+   the expense-recon, Lead Desk, deckgen and Wärme Wimmer tests when their paths
+   change. A green PR merges automatically; a red one waits.
 4. Anything irreversible or outward-facing needs an explicit yes from the owner:
    deploys, force pushes, and any write to a client's live systems (sending mail,
    starting a campaign, changing records).

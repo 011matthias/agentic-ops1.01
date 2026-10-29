@@ -50,11 +50,12 @@ jobs:
       # Tests whose inputs any PR can change (the friction register, the
       # committed repo root, WW test data) run on every PR; the full suite
       # only when its inputs change (layout plan W1-2, W1-20).
-      - name: Ledger, root-layout and WW test-data tests (every PR)
+      - name: Ledger, root-layout, WW test-data and doc command-ref tests (every PR)
         run: >-
           uv run --no-project --with pytest --with python-pptx --with requests --with httpx --with pyyaml --with openpyxl
           pytest -q tools/tests/test_root_layout.py tools/tests/test_scrub_test_data.py
-          tools/tests/test_validate_output_slop.py -k "friction_register or root or scrub"
+          tools/tests/test_validate_output_slop.py tools/tests/test_doc_command_refs.py
+          -k "friction_register or root or scrub or doc_ref"
       - name: Did the suite's inputs change?
         id: filter
         if: github.event_name == 'pull_request'
