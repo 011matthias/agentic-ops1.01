@@ -3723,26 +3723,52 @@ def _is_replayable(meta: dict, now: datetime) -> bool:
 
 def replay_held(
     db_path: Path, learning_db_path: Path | None, data_root: Path,
+    *, render_body_only: int = 0, operator: str | None = None,
 ) -> dict:
     """Re-route archived mail that is held (legacy no-batch holds, failed
     or interrupted jobs, stale never-routed receipts) BY MONTH: into the
     open batch whose label names the mail's month, else into the pool.
 
-    Body-only holds stay held (they need the round-2 body renderer). An
-    archive counts as replayed ONLY when its ingest job reported done.
-    Held mail that predates the month stamps is extracted lazily here —
-    in the sweep an operator asked for, never at boot."""
+    Body-only holds stay held unless the caller passes `render_body_only`
+    (note #131, 2026-10-29): an operator's "Retry" click is the same
+    authorization as the per-mail render button, so up to that many held
+    body-only mails are rendered and ingested through `render_ingest`, the
+    path that button runs. The cap bounds the vision spend of one press;
+    the rest stay held and are counted in `still_held`. Arrival never does
+    this for a stranger, and neither does a caller that leaves the budget
+    at 0. An archive counts as replayed ONLY when its ingest job reported
+    done. Held mail that predates the month stamps is extracted lazily here
+    — in the sweep an operator asked for, never at boot."""
     root = inbound_root(data_root)
     if not root.exists():
         return {"replayed": 0, "pooled": 0, "still_held": 0, "failed": 0}
     now = datetime.now(timezone.utc)
-    replayed = pooled = still_held = failed = 0
+    replayed = pooled = still_held = failed = rendered = 0
+    render_budget = max(0, int(render_body_only))
     settings: dict | None = None
     client = _UNSET
     for arch in sorted(root.iterdir()):
         if not (arch / "meta.json").is_file():
             continue
         meta = _read_meta(arch)
+        if render_body_only and str(meta.get("status", "")) == HELD_BODY_ONLY:
+            if render_budget <= 0:
+                still_held += 1
+                continue
+            render_budget -= 1
+            result = render_ingest(
+                db_path, learning_db_path, data_root, arch.name,
+                operator=operator,
+            )
+            rendered += 1
+            status = str(result.get("status", ""))
+            if "error" in result or status.startswith("held_"):
+                failed += 1
+            elif status == STATUS_POOLED:
+                pooled += 1
+            else:
+                replayed += 1
+            continue
         if not _is_replayable(meta, now):
             continue
         # parts/ ONLY here, deliberately: a partless archive must keep
@@ -3866,10 +3892,13 @@ def replay_held(
         else:
             # _ingest_job already stamped held_failed + the error.
             failed += 1
-    return {
+    out = {
         "replayed": replayed, "pooled": pooled,
         "still_held": still_held, "failed": failed,
     }
+    if render_body_only:
+        out["rendered"] = rendered
+    return out
 
 
 def reconcile_interrupted(db_path: Path, data_root: Path) -> int:

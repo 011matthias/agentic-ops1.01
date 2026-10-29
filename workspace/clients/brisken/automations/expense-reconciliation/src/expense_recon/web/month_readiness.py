@@ -108,6 +108,20 @@ def charge_needs_receipt(row: dict) -> bool:
     )
 
 
+def charge_open_without_receipt_due(row: dict) -> bool:
+    """A receiptless charge that is not a purchase (a card fee, interest) and
+    that nothing has closed: still open for a person, but nobody chases a
+    receipt for it. Note #132 (2026-10-29): the "Charges without a receipt"
+    tile counted it as open while the chase list correctly left it out, so
+    the screen showed 47 and 46 with no word on the difference."""
+    return (
+        _charge_without_receipt(row)
+        and (row.get("row_type") or "purchase") != "purchase"
+        and not charge_booked_recurring(row)
+        and not charge_no_receipt_expected(row)
+    )
+
+
 def charge_receipt_requested(row: dict) -> bool:
     """Item 107: a charge whose holder has been ASKED for the receipt and
     that still needs one. Asking closes nothing, so this is a subset of
@@ -192,6 +206,11 @@ def completeness_counts(
         # the same reason `n_charges_closed_recurring` is.
         "n_charges_receipt_requested": sum(
             1 for r in rows if charge_receipt_requested(r)
+        ),
+        # Note #132: open charges that are not purchases, so the tile's
+        # "open" equals n_charges_need_receipt plus this, in plain words.
+        "n_charges_open_no_receipt_due": sum(
+            1 for r in rows if charge_open_without_receipt_due(r)
         ),
         "n_charges_no_receipt_expected": sum(
             1 for r in rows
@@ -301,6 +320,7 @@ READINESS_KEYS = (
     "n_charges_closed_recurring",
     "n_charges_receipt_requested",
     "n_charges_no_receipt_expected",
+    "n_charges_open_no_receipt_due",
     "n_receipts_waiting_statement",
     "n_cards_uncovered",
 )
