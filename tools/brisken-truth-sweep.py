@@ -920,7 +920,7 @@ def fetch_leaddesk_db(dest: Path) -> tuple[Path | None, str | None]:
         r = subprocess.run(
             [flyctl, "ssh", "sftp", "get", "/data/lead-desk.sqlite",
              str(dest), "-a", "brisken-lead-desk"],
-            capture_output=True, text=True, timeout=300, env=env)
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300, env=env)
         if r.returncode == 0 and dest.is_file() and dest.stat().st_size > 0:
             return dest, None
         err = (r.stderr or r.stdout or "").strip()[-300:]

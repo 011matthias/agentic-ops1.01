@@ -39,7 +39,7 @@ def test_report_sections_local_mode():
 def test_json_contract():
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), "--local", "--no-email", "--format", "json"],
-        capture_output=True, text=True, timeout=120,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
     )
     assert proc.returncode == 0, proc.stderr
     r = json.loads(proc.stdout)
@@ -83,7 +83,7 @@ def test_send_failure_returns_false(monkeypatch):
 def test_print_registration_golden_substrings():
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), "--print-registration"],
-        capture_output=True, text=True, timeout=60,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
     )
     assert proc.returncode == 0
     for token in ("Register-ScheduledTask", "uv.exe", "-StartWhenAvailable",

@@ -249,7 +249,7 @@ def dirty_paths(paths: list[str], kind: str, cwd: str) -> list[str] | None:
         argv.extend(paths)
     try:
         proc = subprocess.run(
-            argv, capture_output=True, text=True, timeout=GIT_TIMEOUT_SEC, cwd=cwd
+            argv, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=GIT_TIMEOUT_SEC, cwd=cwd
         )
     except Exception:
         return None

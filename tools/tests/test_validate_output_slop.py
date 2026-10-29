@@ -266,7 +266,7 @@ def test_json_mode_reports_slop(tmp_path):
     r = subprocess.run(
         [sys.executable, str(TOOLS / "validate-output.py"), str(p),
          "--format", "json"],
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     assert r.returncode == 0  # JSON mode always exits 0 for the hook
     payload = json.loads(r.stdout)

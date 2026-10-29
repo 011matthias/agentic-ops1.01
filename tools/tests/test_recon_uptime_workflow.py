@@ -72,7 +72,7 @@ def _run_step(tmp_path: Path, script: str, uv_exit: int,
     # GitHub's default shell for a `run:` block on Linux.
     return subprocess.run(
         [BASH, "-e", str(script_file)],
-        cwd=tmp_path, env=env, capture_output=True, text=True,
+        cwd=tmp_path, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
 
 

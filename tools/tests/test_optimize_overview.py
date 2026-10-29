@@ -15,13 +15,13 @@ TOOL = REPO / "tools" / "optimize_overview.py"
 
 def _git(repo: Path, *args: str) -> None:
     proc = subprocess.run(["git", "-C", str(repo), *args],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert proc.returncode == 0, f"git {args}: {proc.stderr}"
 
 
 def _run(repo: Path, *args: str) -> str:
     proc = subprocess.run(["uv", "run", str(TOOL), *args], cwd=str(repo),
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert proc.returncode == 0, proc.stderr
     return proc.stdout
 
@@ -149,7 +149,7 @@ def test_stale_checkout_names_the_runs_it_cannot_see(tmp_path):
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "checkout state")
     head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
-                          capture_output=True, text=True).stdout.strip()
+                          capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
 
     # a run that landed on origin/main but is not in this checkout
     _write(repo, "docs/optimize/newer-run/RUN.md",
@@ -160,7 +160,7 @@ def test_stale_checkout_names_the_runs_it_cannot_see(tmp_path):
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "landed on origin/main")
     ahead = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
-                           capture_output=True, text=True).stdout.strip()
+                           capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
     _git(repo, "update-ref", "refs/remotes/origin/main", ahead)
     _git(repo, "reset", "-q", "--hard", head)
 

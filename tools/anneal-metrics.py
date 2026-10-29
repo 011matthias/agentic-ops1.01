@@ -137,7 +137,7 @@ def changeset_since(repo: Path, since_date: str | None) -> int | None:
             ["git", "log", f"--since={since_date}", "--name-only",
              "--pretty=format:", "--", ".claude/", "tools/",
              "docs/friction-register.md"],
-            cwd=str(repo), capture_output=True, text=True, timeout=15,
+            cwd=str(repo), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15,
         )
         if proc.returncode != 0:
             return None

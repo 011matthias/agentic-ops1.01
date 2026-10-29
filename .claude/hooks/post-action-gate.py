@@ -201,7 +201,7 @@ def pr_touches_platform(pr: str | None) -> bool | None:
     argv += ["--json", "files", "-q", ".files[].path"]
     try:
         proc = subprocess.run(
-            argv, capture_output=True, text=True, timeout=GH_TIMEOUT_SEC,
+            argv, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=GH_TIMEOUT_SEC,
         )
     except Exception:
         return None

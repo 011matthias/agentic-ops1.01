@@ -1671,7 +1671,7 @@ def render(html_path: Path, pdf_path: Path):
         cmd = [str(CHROME), "--headless=new", "--disable-gpu", "--no-pdf-header-footer",
                "--no-first-run", "--no-default-browser-check", "--virtual-time-budget=8000",
                f"--user-data-dir={prof}", f"--print-to-pdf={tmp_out}", html_path.as_uri()]
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
         if r.returncode != 0:
             sys.stderr.write(r.stdout + r.stderr)
             raise SystemExit(f"chrome exit {r.returncode} on {html_path.name}")
@@ -1683,7 +1683,7 @@ def render(html_path: Path, pdf_path: Path):
 def run_gate(pdfs: list[Path]) -> bool:
     r = subprocess.run(
         ["uv", "run", str(GATE), "--client", "brisken", "--quiet", *map(str, pdfs)],
-        capture_output=True, text=True, timeout=120,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
     )
     if r.returncode != 0:
         sys.stderr.write(r.stdout + r.stderr)

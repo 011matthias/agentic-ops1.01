@@ -168,7 +168,7 @@ def find_cadence(repo: Path | None = None, cadence_days: int = 21,
     try:
         out = subprocess.run(
             ["git", "-C", str(repo), "show", "origin/main:docs/anneal-ledger.md"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
         )
         if out.returncode == 0:
             ledger_text = out.stdout
@@ -194,7 +194,7 @@ def find_cadence(repo: Path | None = None, cadence_days: int = 21,
     try:
         out = subprocess.run(
             ["git", "-C", str(repo), "ls-tree", "origin/main", "docs/reviews/"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
         )
         reviews_exist = bool(out.stdout.strip())
     except Exception:

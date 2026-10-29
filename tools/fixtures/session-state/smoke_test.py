@@ -63,7 +63,7 @@ def run_hook(path: Path, payload: dict) -> tuple[str, str]:
     proc = subprocess.run(
         [sys.executable, str(path)],
         input=json.dumps(payload),
-        capture_output=True, text=True, timeout=30, env=env, cwd=str(REPO),
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30, env=env, cwd=str(REPO),
     )
     return proc.stdout.strip(), proc.stderr.strip()
 

@@ -139,7 +139,7 @@ def git_mtime(path: Path) -> str | None:
     try:
         out = subprocess.run(
             ["git", "log", "-1", "--format=%cs", "--", str(path)],
-            cwd=REPO, capture_output=True, text=True, timeout=10,
+            cwd=REPO, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
         )
         s = out.stdout.strip()
         if re.match(r"^\d{4}-\d{2}-\d{2}$", s):
