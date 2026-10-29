@@ -1994,8 +1994,16 @@ def test_renaming_a_batch_into_a_month_claims_its_pool(client, monkeypatch):
     assert _wait_for(
         lambda: client.get("/api/inbound/log").json()["n_pooled"] == 0
     ), client.get("/api/inbound/log").json()
-    grid = client.get(f"/api/expense-batches/{batch_id}").json()
-    assert [e for e in grid["expenses"] if e.get("submitted_by")]
+    # The mail leaves the pool when the claim STARTS; its ingest adds the
+    # expense a moment later on the same daemon thread. Wait for the
+    # expense itself, or a slow runner reads the grid in between (CI,
+    # 2026-10-29, PR #1699).
+    assert _wait_for(
+        lambda: [
+            e for e in client.get(f"/api/expense-batches/{batch_id}").json()["expenses"]
+            if e.get("submitted_by")
+        ]
+    ), client.get(f"/api/expense-batches/{batch_id}").json()["expenses"]
 
 
 def test_startup_sweep_claims_mail_pooled_while_the_machine_slept(
