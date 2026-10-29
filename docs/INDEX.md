@@ -15,11 +15,6 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-10-29 | Recon Statement Doubles Merge | client-dev | [→](docs/2026-10-29%20-%20Recon%20Statement%20Doubles%20Merge/Checkpoint.md) |
 | 2026-10-29 | Recon Drop Asked-For Button | client-dev | [→](docs/2026-10-29%20-%20Recon%20Drop%20Asked-For%20Button/Checkpoint.md) |
 | 2026-10-29 | Recon duplicate same-number receipt | client-dev | [→](docs/2026-10-29%20-%20Recon%20duplicate%20same-number%20receipt/Checkpoint.md) |
-| 2026-09-17 | Expense-Recon Item 82 | client-dev | [→](docs/2026-09-17%20-%20Expense-Recon%20Item%2082/Checkpoint.md) |
-| 2026-09-17 | Brisken Recon Prompts Live | client-dev | [Mini-Checkpoint-1](docs/2026-09-17%20-%20Brisken%20Recon%20Prompts%20Live/Mini-Checkpoint-1.md) |
-| 2026-09-20 | Expense-Recon Item 162 Statement Colours | client-dev | [→](docs/2026-09-20%20-%20Expense-Recon%20Item%20162%20Statement%20Colours/Checkpoint.md) |
-| 2026-09-22 | Verve Beta Boundary Testing | client-dev | [Mini-Checkpoint-1](docs/2026-09-22%20-%20Verve%20Beta%20Boundary%20Testing/Mini-Checkpoint-1.md) |
-| 2026-09-23 | Zoho GL Account Relevance And Categorization Architecture | client-dev | [→](docs/2026-09-23%20-%20Zoho%20GL%20Account%20Relevance%20And%20Categorization%20Architecture/Checkpoint.md) |
 | 2026-10-21 | Recon Memory Window Portuguese And Outage Check | client-dev | [Mini-Checkpoint-1](docs/2026-10-21%20-%20Recon%20Memory%20Window%20Portuguese%20And%20Outage%20Check/Mini-Checkpoint-1.md) |
 | 2026-10-09 | Recon Card Filter Perf Fix | client-dev | [→](docs/2026-10-09%20-%20Recon%20Card%20Filter%20Perf%20Fix/Checkpoint.md) |
 | 2026-10-07 | Recon Sender Notes Classify And Backfill | client-dev | [→](docs/2026-10-07%20-%20Recon%20Sender%20Notes%20Classify%20And%20Backfill/Checkpoint.md) |
@@ -33,10 +28,12 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-10-07 | Brisken Recon Subcard Filter Restored | client-dev | [→](docs/2026-10-07%20-%20Brisken%20Recon%20Subcard%20Filter%20Restored/Checkpoint.md) |
 | 2026-10-07 | Brisken Recon Confirm Button Under Account | client-dev | [→](docs/2026-10-07%20-%20Brisken%20Recon%20Confirm%20Button%20Under%20Account/Checkpoint.md) |
 | 2026-10-05 | Lead Desk Sign-In Safe Links Fix | client-dev | [→](docs/2026-10-05%20-%20Lead%20Desk%20Sign-In%20Safe%20Links%20Fix/Checkpoint.md) |
+| 2026-10-05 | Brisken Lovable Rebuild + Access Model | client-dev | [→](docs/2026-10-05%20-%20Brisken%20Lovable%20Rebuild%20%2B%20Access%20Model/Checkpoint.md) |
 | 2026-10-02 | Brisken September Month End And Invoice | client-dev | [→](docs/2026-10-02%20-%20Brisken%20September%20Month%20End%20And%20Invoice/Checkpoint.md) |
 | 2026-10-02 | Brisken Recon Dirk Account Questions Sent | client-dev | [→](docs/2026-10-02%20-%20Brisken%20Recon%20Dirk%20Account%20Questions%20Sent/Checkpoint.md) |
 | 2026-10-02 | Expense-Recon Notes 109-110 | client-dev | [→](docs/2026-10-02%20-%20Expense-Recon%20Notes%20109-110/Checkpoint.md) |
 | 2026-10-02 | Brisken Recon Categorization Rescore | client-dev | [→](docs/2026-10-02%20-%20Brisken%20Recon%20Categorization%20Rescore/Checkpoint.md) |
+| 2026-10-02 | Recon Months Per-Card Figures | client-dev | [→](docs/2026-10-02%20-%20Recon%20Months%20Per-Card%20Figures/Checkpoint.md) |
 | 2026-09-29 | Expense-Recon Notes 109-110 | client-dev | [Mini-Checkpoint-1](docs/2026-09-29%20-%20Expense-Recon%20Notes%20109-110/Mini-Checkpoint-1.md) |
 | 2026-09-29 | Expense-Recon Item 243 Card Register | client-dev | [Mini-Checkpoint-1](docs/2026-09-29%20-%20Expense-Recon%20Item%20243%20Card%20Register/Mini-Checkpoint-1.md) |
 | 2026-09-28 | Expense-Recon Item 239 Gemini Reader | client-dev | [→](docs/2026-09-28%20-%20Expense-Recon%20Item%20239%20Gemini%20Reader/Checkpoint.md) |
@@ -119,6 +116,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-09-25 | Brisken Recon Card Type Not Private | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20Recon%20Card%20Type%20Not%20Private/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken P1 Private Needs Evidence | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20P1%20Private%20Needs%20Evidence/Mini-Checkpoint-1.md) |
 | 2026-09-25 | Brisken P1 GL Prompt Applied And Items 201 196 Picked | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20P1%20GL%20Prompt%20Applied%20And%20Items%20201%20196%20Picked/Mini-Checkpoint-1.md) |
+| 2026-09-25 | Brisken P1 Continuation Prompts For Items 206 207 And 180 181 183 172 | client-dev | [→](docs/2026-09-25%20-%20Brisken%20P1%20Continuation%20Prompts%20For%20Items%20206%20207%20And%20180%20181%20183%20172/Checkpoint.md) |
+| 2026-09-25 | Brisken P1 July To September On Zoho Accounts | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20P1%20July%20To%20September%20On%20Zoho%20Accounts/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Recon Vendor Card History Gate | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Recon%20Vendor%20Card%20History%20Gate/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Brisken Recon Card Attribution Case Map | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Brisken%20Recon%20Card%20Attribution%20Case%20Map/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Brisken P1 9693 Load And Item 197 FX Rung | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Brisken%20P1%209693%20Load%20And%20Item%20197%20FX%20Rung/Mini-Checkpoint-1.md) |
@@ -152,6 +151,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-09-24 | Recon Feedback Triage And Receipt Viewer | client-dev | [→](docs/2026-09-24%20-%20Recon%20Feedback%20Triage%20And%20Receipt%20Viewer/Checkpoint.md) |
 | 2026-09-24 | Zoho GL Chart Pull And Registry Reads | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Zoho%20GL%20Chart%20Pull%20And%20Registry%20Reads/Mini-Checkpoint-1.md) |
 | 2026-09-24 | Single Card Gate And The Zoho Account Answer | client-dev | [Mini-Checkpoint-1](docs/2026-09-24%20-%20Single%20Card%20Gate%20And%20The%20Zoho%20Account%20Answer/Mini-Checkpoint-1.md) |
+| 2026-09-23 | Zoho GL Account Relevance And Categorization Architecture | client-dev | [→](docs/2026-09-23%20-%20Zoho%20GL%20Account%20Relevance%20And%20Categorization%20Architecture/Checkpoint.md) |
 | 2026-09-23 | Zoho GL Vocabulary And Precedence Chain | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20Zoho%20GL%20Vocabulary%20And%20Precedence%20Chain/Mini-Checkpoint-1.md) |
 | 2026-09-23 | Zoho GL Categorization Phase 1 | client-dev | [→](docs/2026-09-23%20-%20Zoho%20GL%20Categorization%20Phase%201/Checkpoint.md) |
 | 2026-09-23 | Recon Zoho Refuses Conflicting Reference Dates | client-dev | [→](docs/2026-09-23%20-%20Recon%20Zoho%20Refuses%20Conflicting%20Reference%20Dates/Checkpoint.md) |
@@ -165,6 +165,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-09-23 | FX Rates Polled Daily From OpenTickers | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20FX%20Rates%20Polled%20Daily%20From%20OpenTickers/Mini-Checkpoint-1.md) |
 | 2026-09-23 | Recon Learning Loop Save Previews And Undoes | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20Recon%20Learning%20Loop%20Save%20Previews%20And%20Undoes/Mini-Checkpoint-1.md) |
 | 2026-09-23 | Zoho July Rehearsal Posted | client-dev | [Mini-Checkpoint-1](docs/2026-09-23%20-%20Zoho%20July%20Rehearsal%20Posted/Mini-Checkpoint-1.md) |
+| 2026-09-22 | Verve Beta Boundary Testing | client-dev | [Mini-Checkpoint-1](docs/2026-09-22%20-%20Verve%20Beta%20Boundary%20Testing/Mini-Checkpoint-1.md) |
 | 2026-09-22 | Zoho Sandbox Posting Guards | client-dev | [Mini-Checkpoint-1](docs/2026-09-22%20-%20Zoho%20Sandbox%20Posting%20Guards/Mini-Checkpoint-1.md) |
 | 2026-09-22 | Zoho Month-End Injection | client-dev | [Mini-Checkpoint-1](docs/2026-09-22%20-%20Zoho%20Month-End%20Injection/Mini-Checkpoint-1.md) |
 | 2026-09-21 | Brisken Weekly Sheets Sent | client-dev | [→](docs/2026-09-21%20-%20Brisken%20Weekly%20Sheets%20Sent/Checkpoint.md) |
@@ -175,6 +176,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-09-21 | Recon No-Card Logic Status And July Re-Match | client-dev | [Mini-Checkpoint-1](docs/2026-09-21%20-%20Recon%20No-Card%20Logic%20Status%20And%20July%20Re-Match/Mini-Checkpoint-1.md) |
 | 2026-09-21 | Brisken Recon Item 120 Docs And Observability | client-dev | [→](docs/2026-09-21%20-%20Brisken%20Recon%20Item%20120%20Docs%20And%20Observability/Checkpoint.md) |
 | 2026-09-21 | Brisken Item 38 R4 Re-Plan | client-dev | [Mini-Checkpoint-1](docs/2026-09-21%20-%20Brisken%20Item%2038%20R4%20Re-Plan/Mini-Checkpoint-1.md) |
+| 2026-09-20 | Expense-Recon Item 162 Statement Colours | client-dev | [→](docs/2026-09-20%20-%20Expense-Recon%20Item%20162%20Statement%20Colours/Checkpoint.md) |
 | 2026-09-20 | Expense-Recon Item 162 Statement Colours | client-dev | [Mini-Checkpoint-1](docs/2026-09-20%20-%20Expense-Recon%20Item%20162%20Statement%20Colours/Mini-Checkpoint-1.md) |
 | 2026-09-20 | Brisken Recon Backlog Truth Pass | client-dev | [Mini-Checkpoint-2](docs/2026-09-20%20-%20Brisken%20Recon%20Backlog%20Truth%20Pass/Mini-Checkpoint-2.md) |
 | 2026-09-20 | Recon Prompt Re-Audit And Down-Runbook | client-dev | [Mini-Checkpoint-1](docs/2026-09-20%20-%20Recon%20Prompt%20Re-Audit%20And%20Down-Runbook/Mini-Checkpoint-1.md) |
@@ -202,6 +204,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-09-18 | Brisken Recon Item 104 Decision History | client-dev | [→](docs/2026-09-18%20-%20Brisken%20Recon%20Item%20104%20Decision%20History/Checkpoint.md) |
 | 2026-09-18 | Brisken Recon Five Prompts Were Already Live | client-dev | [Mini-Checkpoint-2](docs/2026-09-18%20-%20Brisken%20Recon%20Five%20Prompts%20Were%20Already%20Live/Mini-Checkpoint-2.md) |
 | 2026-09-18 | Brisken Recon Item 98 One Currency | client-dev | [→](docs/2026-09-18%20-%20Brisken%20Recon%20Item%2098%20One%20Currency/Checkpoint.md) |
+| 2026-09-17 | Expense-Recon Item 82 | client-dev | [→](docs/2026-09-17%20-%20Expense-Recon%20Item%2082/Checkpoint.md) |
+| 2026-09-17 | Brisken Recon Prompts Live | client-dev | [Mini-Checkpoint-1](docs/2026-09-17%20-%20Brisken%20Recon%20Prompts%20Live/Mini-Checkpoint-1.md) |
 | 2026-09-17 | Brisken Recon Prompts Applied And The Bank Transfer Exit | client-dev | [Mini-Checkpoint-2](docs/2026-09-17%20-%20Brisken%20Recon%20Prompts%20Applied%20And%20The%20Bank%20Transfer%20Exit/Mini-Checkpoint-2.md) |
 | 2026-09-17 | Brisken Recon Item 90 Declined And The Eligibility Lesson | client-dev | [→](docs/2026-09-17%20-%20Brisken%20Recon%20Item%2090%20Declined%20And%20The%20Eligibility%20Lesson/Checkpoint.md) |
 | 2026-09-17 | Brisken Recon Owner Rulings Executed | client-dev | [→](docs/2026-09-17%20-%20Brisken%20Recon%20Owner%20Rulings%20Executed/Checkpoint.md) |
@@ -247,6 +251,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-09-16 | Expense-Recon Feedback Notes 43-46 | client-dev | [→](docs/2026-09-16%20-%20Expense-Recon%20Feedback%20Notes%2043-46/Checkpoint.md) |
 | 2026-09-16 | Expense-Recon Prompts Verified, Item 76 Measured, Month Page Plan Prompt | client-dev | [→](docs/2026-09-16%20-%20Expense-Recon%20Prompts%20Verified%2C%20Item%2076%20Measured%2C%20Month%20Page%20Plan%20Prompt/Checkpoint.md) |
 | 2026-09-16 | Brisken Expense-Recon Feedback Wave + Zoho Decoupling | client-dev | [→](docs/2026-09-16%20-%20Brisken%20Expense-Recon%20Feedback%20Wave%20%2B%20Zoho%20Decoupling/Checkpoint.md) |
+| 2026-09-16 | Expense-Recon Item 74 | client-dev | [Mini-Checkpoint-2](docs/2026-09-16%20-%20Expense-Recon%20Item%2074/Mini-Checkpoint-2.md) |
 | 2026-09-15 | Expense-Recon Matching Round B | client-dev | [→](docs/2026-09-15%20-%20Expense-Recon%20Matching%20Round%20B/Checkpoint.md) |
 | 2026-09-15 | Expense-Recon Matching Round B | client-dev | [Mini-Checkpoint-2](docs/2026-09-15%20-%20Expense-Recon%20Matching%20Round%20B/Mini-Checkpoint-2.md) |
 | 2026-09-15 | Brisken P1 Edits Stick, Card List, Scorer Repin, Matching Round A | client-dev | [→](docs/2026-09-15%20-%20Brisken%20P1%20Edits%20Stick%2C%20Card%20List%2C%20Scorer%20Repin%2C%20Matching%20Round%20A/Checkpoint.md) |
@@ -312,6 +317,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-08-21 | Brisken Recon Intake Quick-Wins | client-dev | [Mini-Checkpoint-2](docs/2026-08-21%20-%20Brisken%20Recon%20Intake%20Quick-Wins/Mini-Checkpoint-2.md) |
 | 2026-08-21 | Brisken Cards R3 Entity-Less Batches | client-dev | [→](docs/2026-08-21%20-%20Brisken%20Cards%20R3%20Entity-Less%20Batches/Checkpoint.md) |
 | 2026-08-21 | Brisken Recon Feedback Wave Cards R1-R2 | client-dev | [→](docs/2026-08-21%20-%20Brisken%20Recon%20Feedback%20Wave%20Cards%20R1-R2/Checkpoint.md) |
+| 2026-08-21 | Brisken Intake Round 2 + Overview | client-dev | [→](docs/2026-08-21%20-%20Brisken%20Intake%20Round%202%20%2B%20Overview/Checkpoint.md) |
+| 2026-08-21 | Brisken Mail Intake Live | client-dev | [Mini-Checkpoint-2](docs/2026-08-21%20-%20Brisken%20Mail%20Intake%20Live/Mini-Checkpoint-2.md) |
 | 2026-08-19 | Brisken Recon Feedback Everywhere + Criss July Run | client-dev | [Mini-Checkpoint-2](docs/2026-08-19%20-%20Brisken%20Recon%20Feedback%20Everywhere%20%2B%20Criss%20July%20Run/Mini-Checkpoint-2.md) |
 | 2026-08-19 | Brisken Lead Desk Arming Drill Solo Complete | client-dev | [→](docs/2026-08-19%20-%20Brisken%20Lead%20Desk%20Arming%20Drill%20Solo%20Complete/Checkpoint.md) |
 | 2026-08-18 | Brisken Recon Loop R4 Set-Aside + R5 Discovery | client-dev | [→](docs/2026-08-18%20-%20Brisken%20Recon%20Loop%20R4%20Set-Aside%20%2B%20R5%20Discovery/Checkpoint.md) |
@@ -530,19 +537,25 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-29 | Repo Layout Execution Batch 5 | system-infra | [Mini-Checkpoint-1](docs/2026-10-29%20-%20Repo%20Layout%20Execution%20Batch%205/Mini-Checkpoint-1.md) |
 | 2026-10-29 | Repo Layout Execution Batch 4 | system-infra | [Mini-Checkpoint-1](docs/2026-10-29%20-%20Repo%20Layout%20Execution%20Batch%204/Mini-Checkpoint-1.md) |
 | 2026-10-29 | Repo Layout Execution Batch 3 | system-infra | [→](docs/2026-10-29%20-%20Repo%20Layout%20Execution%20Batch%203/Checkpoint.md) |
 | 2026-10-29 | Repo Layout Execution Batch 3 | system-infra | [Mini-Checkpoint-1](docs/2026-10-29%20-%20Repo%20Layout%20Execution%20Batch%203/Mini-Checkpoint-1.md) |
 | 2026-10-29 | Repo Layout Execution Batch 2 | system-infra | [Mini-Checkpoint-1](docs/2026-10-29%20-%20Repo%20Layout%20Execution%20Batch%202/Mini-Checkpoint-1.md) |
 | 2026-10-28 | Repo Layout Execution Batch 1 | system-infra | [Mini-Checkpoint-1](docs/2026-10-28%20-%20Repo%20Layout%20Execution%20Batch%201/Mini-Checkpoint-1.md) |
-| 2026-09-17 | ECC Port Batch 1 | system-infra | [Mini-Checkpoint-2](docs/2026-09-17%20-%20ECC%20Port%20Batch%201/Mini-Checkpoint-2.md) |
 | 2026-10-28 | Repo Layout Audit | system-infra | [→](docs/2026-10-28%20-%20Repo%20Layout%20Audit/Checkpoint.md) |
+| 2026-10-27 | KIT CDS Tutorien und Anmeldungen | misc | [Mini-Checkpoint-1](docs/2026-10-27%20-%20KIT%20CDS%20Tutorien%20und%20Anmeldungen/Mini-Checkpoint-1.md) |
+| 2026-10-22 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-1](docs/2026-10-22%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-1.md) |
+| 2026-10-20 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-3](docs/2026-10-20%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-3.md) |
+| 2026-10-20 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-2](docs/2026-10-20%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-2.md) |
+| 2026-10-20 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-1](docs/2026-10-20%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-1.md) |
 | 2026-10-07 | Jotform Warme Wimmer Vault Entry | misc | [Mini-Checkpoint-1](docs/2026-10-07%20-%20Jotform%20Warme%20Wimmer%20Vault%20Entry/Mini-Checkpoint-1.md) |
 | 2026-10-07 | Zapier MCP Connector Setup | system-infra | [→](docs/2026-10-07%20-%20Zapier%20MCP%20Connector%20Setup/Checkpoint.md) |
 | 2026-10-05 | Handyvertrag HIGH Verlaengerung | misc | [→](docs/2026-10-05%20-%20Handyvertrag%20HIGH%20Verlaengerung/Checkpoint.md) |
 | 2026-09-24 | BAfoeG Antrag und Nachzahlung | misc | [→](docs/2026-09-24%20-%20BAfoeG%20Antrag%20und%20Nachzahlung/Checkpoint.md) |
 | 2026-09-24 | KIT Radar und tmbstud-l Austragung | misc | [→](docs/2026-09-24%20-%20KIT%20Radar%20und%20tmbstud-l%20Austragung/Checkpoint.md) |
 | 2026-09-21 | Friction Register Voids Closed | system-infra | [→](docs/2026-09-21%20-%20Friction%20Register%20Voids%20Closed/Checkpoint.md) |
+| 2026-09-17 | ECC Port Batch 1 | system-infra | [Mini-Checkpoint-2](docs/2026-09-17%20-%20ECC%20Port%20Batch%201/Mini-Checkpoint-2.md) |
 | 2026-09-17 | Friction Fix Program Complete | system-infra | [→](docs/2026-09-17%20-%20Friction%20Fix%20Program%20Complete/Checkpoint.md) |
 | 2026-09-17 | Friction Fix Program Close-Out | system-infra | [→](docs/2026-09-17%20-%20Friction%20Fix%20Program%20Close-Out/Checkpoint.md) |
 | 2026-09-17 | Friction Check And Gate Fixes | system-infra | [→](docs/2026-09-17%20-%20Friction%20Check%20And%20Gate%20Fixes/Checkpoint.md) |
@@ -788,17 +801,6 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-07-28 | UnpauseAI Cold-Email u1 Provisioning | misc | [→](docs/2026-07-28%20-%20UnpauseAI%20Cold-Email%20u1%20Provisioning/Checkpoint.md) |
 | 2026-07-25 | Upwork Independence Repo Move + u5 Delivery Kit | misc | [→](docs/2026-07-25%20-%20Upwork%20Independence%20Repo%20Move%20%2B%20u5%20Delivery%20Kit/Checkpoint.md) |
 
-## Brisken
-| Date | Topic | Type | Link |
-|------|-------|------|------|
-| 2026-10-05 | Brisken Lovable Rebuild + Access Model | client-dev | [→](docs/2026-10-05%20-%20Brisken%20Lovable%20Rebuild%20%2B%20Access%20Model/Checkpoint.md) |
-| 2026-10-02 | Recon Months Per-Card Figures | client-dev | [→](docs/2026-10-02%20-%20Recon%20Months%20Per-Card%20Figures/Checkpoint.md) |
-| 2026-09-25 | Brisken P1 Continuation Prompts For Items 206 207 And 180 181 183 172 | client-dev | [→](docs/2026-09-25%20-%20Brisken%20P1%20Continuation%20Prompts%20For%20Items%20206%20207%20And%20180%20181%20183%20172/Checkpoint.md) |
-| 2026-09-25 | Brisken P1 July To September On Zoho Accounts | client-dev | [Mini-Checkpoint-1](docs/2026-09-25%20-%20Brisken%20P1%20July%20To%20September%20On%20Zoho%20Accounts/Mini-Checkpoint-1.md) |
-| 2026-09-16 | Expense-Recon Item 74 | client-dev | [Mini-Checkpoint-2](docs/2026-09-16%20-%20Expense-Recon%20Item%2074/Mini-Checkpoint-2.md) |
-| 2026-08-21 | Brisken Intake Round 2 + Overview | client-dev | [→](docs/2026-08-21%20-%20Brisken%20Intake%20Round%202%20%2B%20Overview/Checkpoint.md) |
-| 2026-08-21 | Brisken Mail Intake Live | client-dev | [Mini-Checkpoint-2](docs/2026-08-21%20-%20Brisken%20Mail%20Intake%20Live/Mini-Checkpoint-2.md) |
-
 ## vinted-reselling
 | Date | Topic | Type | Link |
 |------|-------|------|------|
@@ -829,15 +831,6 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-10-09 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-1](docs/2026-10-09%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-1.md) |
 | 2026-10-07 | WW W1-06 Messeformular Zapier to n8n | client-dev | [→](docs/2026-10-07%20-%20WW%20W1-06%20Messeformular%20Zapier%20to%20n8n/Checkpoint.md) |
 | 2026-10-07 | Waerme Wimmer Takeover | client-dev | [→](docs/2026-10-07%20-%20Waerme%20Wimmer%20Takeover/Checkpoint.md) |
-
-## system/platform
-| Date | Topic | Type | Link |
-|------|-------|------|------|
-| 2026-10-27 | KIT CDS Tutorien und Anmeldungen | misc | [Mini-Checkpoint-1](docs/2026-10-27%20-%20KIT%20CDS%20Tutorien%20und%20Anmeldungen/Mini-Checkpoint-1.md) |
-| 2026-10-22 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-1](docs/2026-10-22%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-1.md) |
-| 2026-10-20 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-3](docs/2026-10-20%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-3.md) |
-| 2026-10-20 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-2](docs/2026-10-20%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-2.md) |
-| 2026-10-20 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-1](docs/2026-10-20%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-1.md) |
 
 ## personal-kit
 | Date | Topic | Type | Link |

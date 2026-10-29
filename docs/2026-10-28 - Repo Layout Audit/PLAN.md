@@ -173,7 +173,7 @@ Files: `tools/memory_audit.py`, `tools/tests/test_memory_audit.py`, `tools/wire-
 
 ### W1-10 [ledger-1, ledger-7, exposure-7] cost S
 
-Status: todo
+Status: (a) and (b) done PR #1702 (2026-10-29), the one-time heading merge in the batch-5 checkpoint docs PR. finalize slugs and validates the section (known = system/platform/personal, client/project folders in the checkout or the primary, existing slug-shaped headings, since WW checkpoints land before its folder); `private: true` or a personal* section writes the prose to the primary's gitignored docs/personal/ with no INDEX row, session-log entry or register rows, after proving the folder ignored (adds it to the shared info/exclude when the primary's .gitignore predates the line); private minis number from a `.finalized` marker. Verified: 53 scaffold tests, regress_check on four wirings, preflight --full 2177 passed; INDEX 770 rows before and after the merge, 0 case-duplicate headings; the 59 dead rows are listed in #1702's body. Open: (c) the `index --rebuild|--check` generator.
 
 Depends on: item 4
 
@@ -313,7 +313,7 @@ Files: `.github/workflows/warme-wimmer-tests.yml`, `.claude/agents/agnt_testing-
 
 ### W1-20 [exposure-8, onboard-6, onboard-11, onboard-12, homes-2, exposure-10] cost M
 
-Status: todo
+Status: repo half done PR #1700 (2026-10-29): .gitignore `.env.*` (four templates re-included), `/output/`, `/webhook-dump*.json`, `.claude/worktrees/`, `/workspace/hours-tracker.xlsx`; context/portable/ exemption gone (before-check: no portable folder in the primary, none tracked); the gate's static fallback mirrors all of it; tools/scrub-test-data.py (consumer domains -> person-N@example.com, `--all-domains`, `--keep-domain`; numbers, not hashes) with the WW-automations guard in test_scrub_test_data.py run on every PR. Verified: check-ignore per pattern, 0 tracked files newly ignored, guard bites on a seeded address, regress_check on three wirings, dry run on the akkton WW tests 7 files / 33 occurrences (11 / 111 with --all-domains). The migration-day checklist is item 5 of the 2026-10-21 WW checkpoint's Next Steps. Open: the WW-tree half, with the import.
 
 Depends on: item 14, item 18
 
