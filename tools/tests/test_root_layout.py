@@ -10,10 +10,6 @@ from hooklib import REPO, load_hook
 
 GATE = load_hook("file-placement-gate.py")
 
-# Two screenshots the sweep committed at the root; layout plan D3(f) removes
-# them. Delete this exemption in the same change.
-TEMPORARY = {"--full-page", "--fullpage"}
-
 
 def _root_entries():
     out = subprocess.run(
@@ -25,7 +21,7 @@ def _root_entries():
 
 def test_root_files_are_in_the_allowlist():
     stray = [p for kind, p in _root_entries()
-             if kind == "blob" and p.lower() not in GATE.ROOT_ALLOWLIST and p not in TEMPORARY]
+             if kind == "blob" and p.lower() not in GATE.ROOT_ALLOWLIST]
     assert stray == [], f"root files outside ROOT_ALLOWLIST: {stray}"
 
 
