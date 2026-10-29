@@ -18,7 +18,7 @@ def test_session_state_smoke_passes():
     p = subprocess.run(
         [sys.executable, str(SMOKE)],
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8", errors="replace",
         timeout=120,
         cwd=str(REPO),
     )

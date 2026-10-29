@@ -23,7 +23,7 @@ def run_wrapper(*argv, timeout=120):
     return subprocess.run(
         [sys.executable, str(WRAPPER), *argv],
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8", errors="replace",
         timeout=timeout,
     )
 

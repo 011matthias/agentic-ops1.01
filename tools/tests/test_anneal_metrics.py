@@ -134,7 +134,7 @@ def test_json_contract(tmp_path):
     _make_repo(tmp_path, claude_md="x", register_rows="")
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), "--format", "json", "--repo", str(tmp_path)],
-        capture_output=True, text=True, timeout=60,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
     )
     assert proc.returncode == 0, proc.stderr
     m = json.loads(proc.stdout)

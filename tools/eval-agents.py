@@ -278,9 +278,9 @@ def cmd_run(args) -> int:
     ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     try:
         rev = subprocess.run(["git", "-C", str(repo), "rev-parse", "--short", "HEAD"],
-                             capture_output=True, text=True, timeout=10).stdout.strip()
+                             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10).stdout.strip()
         dirty = bool(subprocess.run(["git", "-C", str(repo), "status", "--porcelain"],
-                                    capture_output=True, text=True, timeout=10).stdout.strip())
+                                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10).stdout.strip())
     except Exception:
         rev, dirty = "unknown", False
     run_id = f"{ts}-{rev}" + (f"-{args.label}" if args.label else "")

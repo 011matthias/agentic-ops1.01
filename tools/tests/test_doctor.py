@@ -42,7 +42,7 @@ def test_heals_are_the_sanctioned_correctives_only():
 def _cli(*args: str, timeout: int = 120) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(TOOLS / "doctor.py"), *args],
-        capture_output=True, text=True, timeout=timeout,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
     )
 
 
@@ -122,3 +122,15 @@ def test_run_check_classifies_red(monkeypatch):
     # the mocked subprocess is ever reached.
     r = d._run_check(next(c for c in d.CHECKS if not c.home_clone_only))
     assert r["ok"] is False and r["exit"] == 1 and r["tail"] == ["boom"]
+
+
+def test_run_check_marks_exit0_traceback_not_ok(monkeypatch):
+    d = _load()
+
+    def fake_run(*a, **k):
+        err = "Traceback (most recent call last):\n  File x\nUnicodeDecodeError: bad\n"
+        return subprocess.CompletedProcess(a[0], 0, stdout="", stderr=err)
+
+    monkeypatch.setattr(d.subprocess, "run", fake_run)
+    r = d._run_check(next(c for c in d.CHECKS if not c.home_clone_only))
+    assert r["exit"] == 0 and r["ok"] is False

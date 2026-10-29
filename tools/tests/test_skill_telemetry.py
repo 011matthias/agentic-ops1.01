@@ -131,7 +131,7 @@ def _tree(root):
 
 def _stocktake(root, env, fmt="json"):
     p = subprocess.run([sys.executable, str(TOOLS / "skill_stocktake.py"), "--repo", str(root),
-                        "--format", fmt], capture_output=True, text=True, timeout=60,
+                        "--format", fmt], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
                        env={**__import__("os").environ, **env["env"]})
     assert p.returncode == 0, p.stderr
     return json.loads(p.stdout) if fmt == "json" else p.stdout

@@ -54,7 +54,7 @@ def git_commits(repo: Path, author: str, since_hash: str | None, since_date: str
         cmd.append(f"{since_hash}..HEAD")
     elif since_date:
         cmd.append(f"--since={since_date}")
-    out = subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
+    out = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
     if not out.strip():
         return []
     commits = []
@@ -243,7 +243,7 @@ def main():
             import subprocess as _sp
             r = _sp.run(
                 ["uv", "run", "tools/validate-output.py", str(XLSX), "--format", "json"],
-                capture_output=True, text=True, timeout=60,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
             )
             payload = _json.loads(r.stdout or "{}")
             if payload.get("total", 0):

@@ -157,7 +157,7 @@ def test_non_html_cli_arg_warns_loudly(tmp_path):
     ok = tmp_path / "page.html"
     ok.write_text(HEAD + FOOT, encoding="utf-8")
     r = subprocess.run([sys.executable, str(TOOL), str(md), str(ok)],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert "WARNING" in r.stderr and "notes.md" in r.stderr
     assert r.returncode == 0, r.stdout + r.stderr
 
@@ -166,5 +166,5 @@ def test_missing_file_cli_arg_warns_loudly(tmp_path):
     ok = tmp_path / "page.html"
     ok.write_text(HEAD + FOOT, encoding="utf-8")
     r = subprocess.run([sys.executable, str(TOOL), str(tmp_path / "gone.html"), str(ok)],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert "WARNING" in r.stderr and "gone.html" in r.stderr

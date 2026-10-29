@@ -486,7 +486,7 @@ class TestContextRootWorktree:
 
     def _git(self, *args: str, cwd: Path) -> None:
         subprocess.run(["git", *args], cwd=str(cwd), check=True,
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
 
     def test_context_yaml_lands_in_primary_not_worktree(self, tmp_path: Path):
         primary = tmp_path / "primary"

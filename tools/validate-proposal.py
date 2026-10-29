@@ -946,7 +946,7 @@ def check_html_site(report: ValidationReport, client_dir: Path, fm: dict) -> dic
         try:
             result = subprocess.run(
                 ["uv", "run", str(validate_html)] + [str(f) for f in html_files],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
                 cwd=str(ROOT)
             )
             error_count = 0

@@ -130,7 +130,7 @@ def classify(tag: str, summary: dict | None, active: dict | None) -> str:
 
 def repo_root() -> str:
     proc = subprocess.run(["git", "rev-parse", "--show-toplevel"],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         print("not inside a git repository", file=sys.stderr)
         sys.exit(2)
@@ -150,7 +150,7 @@ def origin_run_tags(repo: str) -> set[str] | None:
     proc = subprocess.run(
         ["git", "-C", repo, "ls-tree", "-d", "--name-only",
          "origin/main:docs/optimize"],
-        capture_output=True, text=True)
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         return None
     return {ln.strip().rstrip("/") for ln in proc.stdout.splitlines()
@@ -159,7 +159,7 @@ def origin_run_tags(repo: str) -> set[str] | None:
 
 def worktree_paths(repo: str) -> list[str]:
     proc = subprocess.run(["git", "-C", repo, "worktree", "list", "--porcelain"],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
     paths = []
     for line in proc.stdout.splitlines():
         if line.startswith("worktree "):

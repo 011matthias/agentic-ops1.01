@@ -294,7 +294,7 @@ def main_worktree(root: Path) -> Path:
     try:
         common = subprocess.run(
             ["git", "-C", str(root), "rev-parse", "--path-format=absolute", "--git-common-dir"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15,
         )
         if common.returncode != 0 or not common.stdout.strip():
             return root
@@ -493,7 +493,7 @@ def archive_register(root: Path, days: int, dry_run: bool = False) -> int:
 
 def _run(cmd: list[str], cwd: Path) -> str:
     try:
-        p = subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True, timeout=60)
+        p = subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
         return (p.stdout or "").strip() or (p.stderr or "").strip() or "(no output)"
     except Exception as e:
         return f"unavailable: {e}"

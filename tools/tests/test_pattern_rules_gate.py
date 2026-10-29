@@ -261,7 +261,7 @@ def test_malformed_rule_is_skipped_logged_and_others_still_fire(env):
 def test_garbage_payload_exits_zero(env):
     import subprocess
     p = subprocess.run([sys.executable, str(HOOKS / HOOK)], input="not json",
-                       capture_output=True, text=True, timeout=30)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
     assert p.returncode == 0 and p.stdout.strip() == ""
 
 
@@ -411,9 +411,9 @@ def test_cli_lint_exit_codes(tmp_path):
     bad.mkdir()
     _rule(bad, "nope", "bash", pattern="x")  # not verb-first
     cli = str(TOOLS / "pattern_rules.py")
-    ok = subprocess.run([sys.executable, cli, "lint"], capture_output=True, text=True,
+    ok = subprocess.run([sys.executable, cli, "lint"], capture_output=True, text=True, encoding="utf-8", errors="replace",
                         env={**__import__("os").environ, "PATTERN_RULES_DIR": str(good)})
-    ko = subprocess.run([sys.executable, cli, "lint"], capture_output=True, text=True,
+    ko = subprocess.run([sys.executable, cli, "lint"], capture_output=True, text=True, encoding="utf-8", errors="replace",
                         env={**__import__("os").environ, "PATTERN_RULES_DIR": str(bad)})
     assert ok.returncode == 0, ok.stdout
     assert ko.returncode == 1 and "verb-first" in ko.stdout
@@ -434,11 +434,11 @@ def test_digest_extracts_user_turns_for_the_miner(tmp_path):
     t.write_text("\n".join(json.dumps(e) for e in entries) + "\n", encoding="utf-8")
     cli = str(TOOLS / "pattern_rules.py")
     out = subprocess.run([sys.executable, cli, "digest", "--transcript", str(t)],
-                         capture_output=True, text=True, timeout=30).stdout
+                         capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30).stdout
     assert out.count("user:") == 2
     assert "secret ctx" not in out and "tool_result" not in out and "task-id" not in out
     assert "* user: No, don't use git add -A" in out
     assert "agent: ...I ran git add -A and pushed." in out
     missing = subprocess.run([sys.executable, cli, "digest", "--session", "no-such-session"],
-                             capture_output=True, text=True, timeout=30)
+                             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
     assert missing.returncode == 0 and missing.stdout.strip() == "transcript unavailable"

@@ -199,7 +199,7 @@ def is_prototype_scoped(cmd: str, tag: str) -> bool:
         try:
             out = subprocess.run(
                 ["git", "diff", "--cached", "--name-only"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
             )
             files = [f for f in out.stdout.strip().splitlines() if f.strip()]
             if files and all(_has_prototype_prefix(f) for f in files):
@@ -213,7 +213,7 @@ def is_prototype_scoped(cmd: str, tag: str) -> bool:
             # Range: upstream..HEAD (commits being pushed)
             upstream = subprocess.run(
                 ["git", "rev-parse", "--abbrev-ref", "@{u}"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
             )
             up = upstream.stdout.strip()
             if not up or upstream.returncode != 0:
@@ -221,7 +221,7 @@ def is_prototype_scoped(cmd: str, tag: str) -> bool:
                 up = "origin/HEAD"
             out = subprocess.run(
                 ["git", "diff", "--name-only", f"{up}...HEAD"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
             )
             files = [f for f in out.stdout.strip().splitlines() if f.strip()]
             if files and all(_has_prototype_prefix(f) for f in files):
@@ -235,7 +235,7 @@ def is_prototype_scoped(cmd: str, tag: str) -> bool:
             # feature branches off main, so this is the correct compare.
             out = subprocess.run(
                 ["git", "diff", "--name-only", "main...HEAD"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
             )
             files = [f for f in out.stdout.strip().splitlines() if f.strip()]
             if files and all(_has_prototype_prefix(f) for f in files):
@@ -258,7 +258,7 @@ def current_branch() -> str | None:
     try:
         out = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
         )
         if out.returncode == 0:
             return out.stdout.strip()

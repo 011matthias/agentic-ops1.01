@@ -119,7 +119,7 @@ def test_malformed_stdin_is_silent_exit_0(env):
 
     from hooklib import HOOKS
     r = subprocess.run([sys.executable, str(HOOKS / HOOK)], input="{not json",
-                       capture_output=True, text=True, timeout=30)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
     assert r.returncode == 0 and r.stdout.strip() == ""
 
 

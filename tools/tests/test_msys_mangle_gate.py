@@ -28,7 +28,7 @@ def run_hook(command: str, tool_name: str = "Bash") -> str:
             "tool_name": tool_name,
             "tool_input": {"command": command},
         }),
-        capture_output=True, text=True, timeout=30,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
     )
     assert proc.returncode == 0, proc.stderr
     return proc.stdout.strip()
@@ -129,7 +129,7 @@ def test_powershell_tool_silent():
 def test_malformed_stdin_silent():
     proc = subprocess.run(
         [sys.executable, str(HOOK)],
-        input="not json", capture_output=True, text=True, timeout=30,
+        input="not json", capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
     )
     assert proc.returncode == 0
     assert proc.stdout.strip() == ""

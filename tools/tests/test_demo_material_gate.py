@@ -74,7 +74,7 @@ def test_demo_client_outside_clients_returns_none():
 def _run_json(path):
     proc = subprocess.run(
         ["uv", "run", str(VALIDATOR), "--client", "brisken", "--format", "json", str(path)],
-        capture_output=True, text=True, timeout=120, cwd=str(REPO),
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120, cwd=str(REPO),
     )
     return proc.returncode, json.loads(proc.stdout)
 

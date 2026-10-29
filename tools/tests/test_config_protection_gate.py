@@ -102,7 +102,7 @@ def test_gate_fire_records_friction_candidate(env, tmp_path):
 
 def test_malformed_or_pathless_payload_is_silent():
     r = subprocess.run([sys.executable, str(HOOKS / HOOK)], input="{nope",
-                       capture_output=True, text=True, timeout=30)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
     assert r.returncode == 0 and r.stdout.strip() == ""
     r = run_hook(HOOK, {"tool_name": "Edit", "tool_input": {}})
     assert r.returncode == 0 and r.stdout.strip() == ""
