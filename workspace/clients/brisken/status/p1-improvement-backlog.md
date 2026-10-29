@@ -13509,6 +13509,41 @@ the re-match and the grid, 13 rule tests), each of the three wirings
 regressed green -> red -> green with `tools/regress_check.py` (the re-match's
 `pinned=` argument, rung 7's skip, the grid's quiet copies).
 
+### 257. A shared number in any field makes one purchase; apply to every month waiting; statements for what is left (owner, 2026-10-29, after item 256: "look when duplicates enter they usually have important numbers in common so invoice number o reference number multiple didgits the same or that type of thing and in those cases we need you to recognize their relation and default to the receipt (or document with payment information). we need to make sure that the statements are used to help categorize and match any left over expenses") (RECOGNITION BUILT 2026-10-29; apply + statements: see below)
+
+The owner's screenshot (Compare copies, October's Anthropic 66.00): the
+receipt's reference is its OWN receipt number (`2709 9940`), the invoice's
+is the invoice number, and both carry `EF742DD0 0062` as invoice number.
+October grouped it only because one mail delivered both (rung 0); uploaded
+apart or re-mailed, rung 4 compared references alone and called it two
+purchases. `number_keys` now reads reference, invoice number and receipt
+number (account ids excluded as before, and the alphanumeric invoice /
+receipt numbers join the cross-month account keys); rung 2 accepts members
+connected by a shared number (same amount, never two cards), and
+`find_duplicate_receipts_by_any_number` nominates the pairs no older key
+found, appended last so no saved ruling's group moves. Which copy counts is
+item 256's rule: the receipt, read from what the document calls itself and
+its receipt number. A card line is NOT used as the payment signal, because
+`inherit_card_from_copies` lends the receipt's card to its invoice before
+the choice is made.
+
+Measured before building (read-only, 2026-10-29): every live same-amount
+pair sharing a number is already one group, so nothing moves on today's
+months; the rule covers the next arrivals. Proof:
+`tests/test_duplicate_any_number_item_257.py` (5), the broadened rung and the
+new key each regressed green -> red -> green.
+
+Still open from this note:
+- **Apply to every month waiting.** September (statement month) shows its
+  last re-match's choice until it re-matches; `POST
+  /api/runs/{id}/duplicates/reapply` with `dry_run: true` previews it.
+- **Statements on what is left.** September holds card 9693 twice for 15
+  charges: the interim xlsx (`Chase9693_2026-09_posted_0906-0915`, 15
+  charges) lies entirely inside the PDF statement (`20261004-statements-9693-`,
+  49), with different descriptors ("OPENAI" vs "OPENAI OPENAI.COM CA"), so
+  `transaction_content_id` (vendor in the identity) keeps both. Each double
+  leaves one side as a charge without a receipt.
+
 ### Feedback notes #128-#132 (2026-10-29): not yet itemized
 
 Read off `GET /feedback.jsonl` on 2026-10-29 while shipping item 256 (132

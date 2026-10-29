@@ -132,7 +132,10 @@ def test_the_record_is_stamped_on_copies_and_read_back_only_when_mutual():
 def test_the_ladder_starts_from_the_record_and_a_reviewer_still_outranks_it():
     pair = _pair()
     twins = twin_links(stamp_intake_twins(_prov("0000__Invoice.pdf", "0001__Receipt.pdf"), pair))
-    assert decide_receipt_groups(pair) == []  # no older key sees this pair
+    # Item 257: without the record the shared invoice number still joins the
+    # pair (rung 2); the record, when there is one, is what the group says.
+    (plain,) = decide_receipt_groups(pair)
+    assert (plain.basis, plain.verdict) == ("reference", "copy")
     (d,) = decide_receipt_groups(pair, twins=twins)
     assert (d.basis, d.verdict, d.decided_by) == (BASIS_INTAKE_TWIN, "copy", "tool")
     (ruled,) = decide_receipt_groups(pair, twins=twins, resolutions={d.group_id: "ignore"})
@@ -254,8 +257,9 @@ def test_the_mail_records_the_pair_and_the_month_counts_it_once(client, monkeypa
 
 
 def test_the_same_two_files_uploaded_by_hand_record_nothing(client, monkeypatch):
-    """The differential: identical readings, no mail. Nothing is recorded and
-    nothing older joins them, so both count, as before this step."""
+    """The differential: identical readings, no mail. Nothing is recorded.
+    Since item 257 the invoice number both documents carry joins them anyway
+    (rung 2), so the month counts the purchase once, receipt kept."""
     batch_id = _create_batch(client, monkeypatch)
     _patch_ocr(monkeypatch, INV_X, REC_X)
     resp = client.post(
@@ -267,8 +271,10 @@ def test_the_same_two_files_uploaded_by_hand_record_nothing(client, monkeypatch)
     assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
     assert all(TWIN_OF_KEY not in e for e in _provenance(client, batch_id).values())
     grid = _grid(client, batch_id)
-    assert grid["duplicate_groups"] == []
-    assert grid["summary"]["totals_by_ccy"] == {"USD": "200.00"}
+    (group,) = grid["duplicate_groups"]
+    assert (group["basis"], group["verdict"]) == ("reference", "copy")
+    assert _row(grid, "Invoice-")["counts_in_total"] is False
+    assert grid["summary"]["totals_by_ccy"] == {"USD": "100.00"}
 
 
 def test_a_reviewer_who_splits_the_amounts_takes_the_pair_back(client, monkeypatch):
