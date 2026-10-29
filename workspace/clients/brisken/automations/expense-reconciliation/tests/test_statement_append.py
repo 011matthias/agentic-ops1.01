@@ -529,10 +529,10 @@ def test_a_workbook_the_month_never_loaded_is_not_addressable(
 
 def test_one_card_typed_against_two_accounts_says_so(client, monkeypatch):
     """`account_id` is part of transaction identity, so the two uploads
-    dedupe against nothing and the month doubles. Honest at the fold layer,
-    since the rows really do claim to be different accounts, and not
-    something the route may silently correct: the operator typed it. So it
-    is said out loud, and nothing is dropped."""
+    dedupe against nothing BY ID. Since item 257 the statement-double fold
+    sees one card + day + amount across two files and keeps one charge, but
+    the operator still typed two accounts, so the advisory and the warning
+    stage say so out loud."""
     _wire(monkeypatch)
     batch_id = _batch(client)
     body = _csv(("2026-04-03", "42.50", "STAPLES"))
@@ -543,7 +543,7 @@ def test_one_card_typed_against_two_accounts_says_so(client, monkeypatch):
         account_legal_entities='{"amex-9001-v2": "Corporate Services"}',
     )
 
-    assert len(_charges(client, batch_id)) == 2
+    assert len(_charges(client, batch_id)) == 1
     advisory = _statements(client, batch_id)[1]["advisory"]
     assert advisory and "two account ids" in advisory
     assert stage and stage.startswith("warning:")

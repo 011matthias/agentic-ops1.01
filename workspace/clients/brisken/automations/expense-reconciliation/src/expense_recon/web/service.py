@@ -15084,7 +15084,19 @@ def execute_statement_attach(
         )
         if not transactions:
             raise statement_outside_month(month_filter, upload_name or stmt_name)
-    merged = merge_transactions(existing, transactions)
+    # Item 257: a line the month already holds from ANOTHER file of this card
+    # is the same charge (the interim workbook inside the closing PDF).
+    held_files = {
+        tid: str(o.get("statement_file") or "")
+        for tid, o in origins_from_snapshot(run.snapshot).items()
+    }
+    merged = merge_transactions(
+        existing,
+        transactions,
+        files=held_files,
+        incoming_file=stmt_name,
+        decided=frozenset(store.get_decisions(run.run_id)),
+    )
 
     result = rematch_month(
         store,
@@ -15297,6 +15309,11 @@ def reread_statements(
     transactions: list = []
     issues: list = []
     rebuilt: list[dict] = []
+    # Item 257: which file each held charge came from, built as the files
+    # are folded in upload order, and the ids a person or the tool decided.
+    held_files: dict[str, str] = {}
+    folded_doubles: list[str] = []
+    decided_ids = frozenset(store.get_decisions(run.run_id))
     new_cfg: dict = cfg
     entity = ""
     # Item 215: an entry attached under the month filter is re-read under it,
@@ -15394,8 +15411,16 @@ def reread_statements(
                 file=stored,
                 n_rows=entry["n_rows"],
             )
-        merged = merge_transactions(transactions, txs)
+        merged = merge_transactions(
+            transactions,
+            txs,
+            files=held_files,
+            incoming_file=stored,
+            decided=decided_ids,
+        )
         transactions = merged.transactions
+        held_files = merged.files
+        folded_doubles.extend(merged.folded)
         issues.extend(stmt_issues)
         rebuilt.append(
             build_statement_entry(
@@ -15474,6 +15499,7 @@ def reread_statements(
     result["n_transactions_before"] = len(old_ids)
     result["n_transactions"] = len(transactions)
     result["n_decisions_rekeyed"] = len(rekey)
+    result["n_doubles_folded"] = len(folded_doubles)
     return result
 
 

@@ -29,7 +29,7 @@ import hashlib
 import json
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
@@ -496,14 +496,52 @@ class TransactionMerge:
     this upload put there, `duplicates` the ids it supplied that the set
     already held. The two id lists are what an append route reports back
     ("14 rows, 11 already here") and what it records per statement.
+
+    The statement-double fold (item 257) adds three more, all empty when the
+    caller names no files: `folded` the ids this upload printed that are the
+    SAME charge as one another file already put there (merchant text differs,
+    so the content id does not see it), `swapped` the `(old, new)` pairs where
+    the incoming line replaced the held one because only it carried a
+    decision, and `held` the incoming ids kept beside a double because BOTH
+    sides carry a decision. `files` is the id -> statement file map after the
+    fold, for the next upload to fold against.
     """
 
     transactions: list
     added: list[str]
     duplicates: list[str]
+    folded: list[str] = field(default_factory=list)
+    swapped: list[tuple[str, str]] = field(default_factory=list)
+    held: list[str] = field(default_factory=list)
+    files: dict[str, str] = field(default_factory=dict)
 
 
-def merge_transactions(existing: "list", incoming: "list") -> TransactionMerge:
+def _double_key(t: "object") -> "tuple | None":
+    """What makes two lines on two statements of one card the same charge:
+    the card, the day, the signed amount and its currency. None when the
+    line names no card, because an unknown card is not evidence of the same
+    one (deny by default: the fold then leaves both lines)."""
+    from ..matching.deterministic import _tx_card_keys
+
+    card = frozenset(_tx_card_keys(t))
+    if not card:
+        return None
+    return (
+        card,
+        t.transaction_date,
+        canonical_amount(t.amount),
+        (t.transaction_currency or "").strip().upper(),
+    )
+
+
+def merge_transactions(
+    existing: "list",
+    incoming: "list",
+    *,
+    files: "dict[str, str] | None" = None,
+    incoming_file: str | None = None,
+    decided: "frozenset[str] | set[str]" = frozenset(),
+) -> TransactionMerge:
     """Fold a freshly parsed statement into the charges a month already holds.
 
     The living month (PR 2b-2b) lets a statement arrive in pieces: one card
@@ -512,10 +550,10 @@ def merge_transactions(existing: "list", incoming: "list") -> TransactionMerge:
     fold has to be by IDENTITY rather than by position or by file.
 
     `transaction_id` is that identity — content-derived since PR 2a, which
-    is precisely what makes it survive an append. Nothing else here is a
-    second definition of sameness: two rows are the same charge exactly when
-    `transaction_content_id` says so, and the occurrence suffix already keeps
-    two identical coffees on one day apart, in both the old set and the new.
+    is precisely what makes it survive an append. Two rows are the same
+    charge when `transaction_content_id` says so, and the occurrence suffix
+    already keeps two identical coffees on one day apart, in both the old set
+    and the new.
 
     Three properties the callers depend on:
 
@@ -528,6 +566,7 @@ def merge_transactions(existing: "list", incoming: "list") -> TransactionMerge:
       filters what an upload CONTRIBUTES; it never edits the month. An
       `existing` list that somehow repeats an id keeps both rows, because
       silently changing a month's charge count is not a merge's business.
+      The one exception is the decided-side swap below.
     * **A contradiction surfaces as two rows, not one.** A file whose sign
       inference differs between a partial and a full upload gives the same
       printed row two different ids (see `assign_content_ids`), so both
@@ -536,25 +575,91 @@ def merge_transactions(existing: "list", incoming: "list") -> TransactionMerge:
       winner arbitrarily.
 
     Note what identity includes: `account_id`. Two uploads of one card's
-    statement typed against different account ids dedupe against nothing and
-    the month doubles. That is honest at this layer — the rows really do
-    claim to be different accounts — and it is the append route's job to
-    keep the account stable across a card's uploads.
+    statement typed against different account ids dedupe against nothing by
+    id, which is the gap the double fold below closes for the one case that
+    was measured (item 257).
+
+    **Statement doubles (item 257, owner 2026-10-29).** One card's interim
+    workbook and its closing PDF print the same charge with different
+    merchant text ("OPENAI" against "OPENAI OPENAI.COM CA"), and vendor is
+    part of the content id, so the id keeps both. When the caller names which
+    file each held charge came from (`files`) and which file this is
+    (`incoming_file`), a line with the same card + day + amount + currency as
+    a held line FROM ANOTHER FILE is that charge: n lines in one file and m
+    in the other leave max(n, m). Two lines of ONE file are never folded
+    (two identical coffees are two charges), and a held line whose file is
+    unknown is never folded against. The side a person or the tool already
+    decided (`decided`, ids with a stored decision) is the side kept: if only
+    the incoming line has one it replaces the held line in place; if both do,
+    both stay and the id is reported in `held`. With neither, the held line
+    stays (first-write-wins). Without `files` the function is the id-only
+    fold it was.
     """
     seen = {t.transaction_id for t in existing}
     merged = list(existing)
     added: list[str] = []
     duplicates: list[str] = []
+    leftover: list = []
+    claimed: set[str] = set()
     for t in incoming:
         tid = t.transaction_id
         if tid in seen:
             duplicates.append(tid)
+            claimed.add(tid)
             continue
         seen.add(tid)
-        merged.append(t)
-        added.append(tid)
+        leftover.append(t)
+
+    folded: list[str] = []
+    swapped: list[tuple[str, str]] = []
+    held: list[str] = []
+    out_files = dict(files or {})
+    pool: dict = {}
+    if files is not None and incoming_file:
+        for t in existing:
+            tid = t.transaction_id
+            if tid in claimed or files.get(tid) in (None, "", incoming_file):
+                continue
+            key = _double_key(t)
+            if key is not None:
+                pool.setdefault(key, []).append(t)
+
+    for t in leftover:
+        tid = t.transaction_id
+        key = _double_key(t) if pool else None
+        mates = pool.get(key) if key is not None else None
+        if not mates:
+            merged.append(t)
+            added.append(tid)
+            if incoming_file:
+                out_files[tid] = incoming_file
+            continue
+        mate = mates.pop(0)
+        mate_id = mate.transaction_id
+        if mate_id in decided and tid in decided:
+            merged.append(t)
+            added.append(tid)
+            held.append(tid)
+            out_files[tid] = incoming_file
+        elif tid in decided:
+            at = next(
+                i for i, m in enumerate(merged) if m.transaction_id == mate_id
+            )
+            merged[at] = t
+            added.append(tid)
+            swapped.append((mate_id, tid))
+            out_files.pop(mate_id, None)
+            out_files[tid] = incoming_file
+        else:
+            folded.append(tid)
     return TransactionMerge(
-        transactions=merged, added=added, duplicates=duplicates
+        transactions=merged,
+        added=added,
+        duplicates=duplicates,
+        folded=folded,
+        swapped=swapped,
+        held=held,
+        files=out_files,
     )
 
 
