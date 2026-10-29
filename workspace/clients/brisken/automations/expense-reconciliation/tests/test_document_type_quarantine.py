@@ -18,6 +18,8 @@ reads the field.
 """
 from __future__ import annotations
 
+import pathlib
+
 import pytest
 
 from expense_recon.cli import generate_expenses
@@ -374,6 +376,36 @@ def test_web_restore_set_aside_makes_expense(web_client, monkeypatch):
         json={"file": "nope.jpg"},
     )
     assert unknown.status_code == 400
+
+
+def test_web_dismiss_set_aside_keeps_the_file_and_undoes(web_client, monkeypatch):
+    """Item 262 (notes #127, #130): a person takes a set-aside file off the
+    month. The entry is flagged, the count drops, the bytes stay on disk, and
+    the same route with `undo` puts it back; a removed file cannot be
+    restored until it is put back."""
+    batch_id, file = _make_batch_with_set_aside(web_client, monkeypatch)
+    route = f"/api/expense-batches/{batch_id}/set-aside/dismiss"
+
+    resp = web_client.post(route, json={"file": file})
+    assert resp.status_code == 200, resp.text
+    grid = resp.json()["batch"]
+    assert grid["set_aside"][0]["dismissed"] is True
+    assert grid["summary"]["n_set_aside"] == 0
+    assert grid["summary"]["n_expenses"] == 1, "removing a set-aside file adds no expense"
+    kept = [p for p in pathlib.Path(web_client.app.state.data_root).rglob(file) if p.is_file()]
+    assert kept, "the bytes are kept"
+
+    refused = web_client.post(
+        f"/api/expense-batches/{batch_id}/set-aside/restore", json={"file": file}
+    )
+    assert refused.status_code == 400
+    assert refused.json()["code"] == "set_aside_dismissed"
+
+    back = web_client.post(route, json={"file": file, "undo": True}).json()["batch"]
+    assert back["set_aside"][0]["dismissed"] is False
+    assert back["summary"]["n_set_aside"] == 1
+
+    assert web_client.post(route, json={"file": "nope.pdf"}).status_code == 400
 
 
 def test_web_add_set_aside_survives_next_add(web_client, monkeypatch):

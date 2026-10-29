@@ -174,11 +174,30 @@ def test_pass_env_example_at_root():
     assert _classify(_run(".env.example")) == "pass"
 
 
-def test_deny_real_env_production_still():
-    # .env.production is NOT gitignored (.gitignore only has `.env` + `*.env.local`),
-    # so it lands tracked -> deny. (.env.local itself is globally gitignored, so the
-    # gate correctly PASSES it — already protected, can't be committed.)
-    assert _classify(_run("tools/.env.production")) == "deny"
+def test_pass_env_production_is_gitignored():
+    # Since W1-20 .gitignore covers every `.env.*` except the four templates, so
+    # .env.production can no longer be committed and the gate lets it through.
+    assert _classify(_run("tools/.env.production")) == "pass"
+    assert _classify(_run("workspace/clients/x/automations/.env.prod")) == "pass"
+
+
+def test_nogit_env_production_is_gitignored():
+    # The static fallback mirrors the `.env.*` line, or a git outage would deny it.
+    assert _classify(_run("tools/.env.production", env=NO_GIT)) == "pass"
+    assert _classify(_run("tools/.env.example", env=NO_GIT)) == "pass"
+
+
+def test_w120_new_ignore_lines():
+    # Root run output and webhook captures: gitignored, so tolerated with a nudge
+    # (root) or silently (inside output/), never denied and never unknown-dir advice.
+    assert _classify(_run("webhook-dump-1.json")) == "advise"
+    assert _classify(_run("output/bundle/snapshot-1.json")) == "pass"
+    assert _classify(_run(".claude/worktrees/x/debug-dump.json")) == "pass"
+
+
+def test_nogit_w120_new_ignore_lines():
+    assert _classify(_run("output/bundle/snapshot-1.json", env=NO_GIT)) == "pass"
+    assert _classify(_run(".claude/worktrees/x/debug-dump.json", env=NO_GIT)) == "pass"
 
 
 def test_pass_env_local_is_gitignored():
@@ -332,9 +351,12 @@ def test_nogit_secret_in_client_context_passes():
     assert _classify(_run("workspace/clients/brisken/context/token.json", env=NO_GIT)) == "pass"
 
 
-def test_nogit_secret_in_context_portable_still_denies():
-    # context/portable/ is the committable opt-in — a secret there is still denied.
-    assert _classify(_run("workspace/clients/brisken/context/portable/token.json", env=NO_GIT)) == "deny"
+def test_context_has_no_committable_subfolder():
+    # The context/portable/ opt-in is gone (W1-20): the whole context/ tree is
+    # ignored, in git mode and in the static fallback alike.
+    rel = "workspace/clients/brisken/context/portable/token.json"
+    assert _classify(_run(rel)) == "pass"
+    assert _classify(_run(rel, env=NO_GIT)) == "pass"
 
 
 def test_private_checkpoint_folder_is_ignored():

@@ -1,6 +1,13 @@
-# Environment
+# Environment. Every `.env.<anything>` (.env.local, .env.production, a WW
+# n8n .env.prod) can hold a live key; the four template names stay
+# committable (layout plan W1-20). file-placement-gate.py mirrors this.
 .env
 *.env.local
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+!.env.dist
 
 # Python
 __pycache__/
@@ -85,18 +92,11 @@ workspace/playgrounds/spec-data.js
 # Client context — API keys, auth tokens, infrastructure IDs, comms logs
 # Per CLAUDE.md: "Client knowledge (IDs, mappings) → context/ only"
 #
-# Default: gitignore the WHOLE context/ tree because comms-log entries,
-# Instantly/Make API keys, raw lead exports, and PII frequently land here.
-# Cross-device sync via git is unsafe for the default tree.
-#
-# Cross-device opt-in: a `context/portable/` subdirectory is EXEMPTED below.
-# Move human-reviewed, secret-free files there to make them travel across
-# devices via git. The reviewer is responsible for verifying no API keys,
-# no client PII, and no GDPR-sensitive data lives in any file under
-# context/portable/. Treat that folder as publicly committable.
+# The WHOLE context/ tree, no exceptions: comms-log entries, Instantly/Make
+# API keys, raw lead exports, and PII land here, and the repo is public.
+# (A `context/portable/` opt-in existed until 2026-10-29; no client ever used
+# it, and a committable hole inside the secret home is the wrong default.)
 workspace/clients/*/context/
-!workspace/clients/*/context/portable/
-!workspace/clients/*/context/portable/**
 
 # Session context YAMLs — contain inline API keys
 docs/sessions/*-context.yaml
@@ -143,6 +143,15 @@ platform/public/docs/*/.build-report.txt
 
 # Local hours-tracking workbooks (personal working data, not repo content)
 /workspace/hours-tracker/
+/workspace/hours-tracker.xlsx
+
+# WW build output (the ww-build-* scripts write meeting bundles and demos
+# under /output/) and webhook captures (carried over from the WW repo's
+# .gitignore), plus harness-created worktrees, which until now were hidden
+# only by the primary's .git/info/exclude. Layout plan W1-20.
+/output/
+/webhook-dump*.json
+.claude/worktrees/
 
 # Scheduled-tasks runtime lock
 .claude/scheduled_tasks.lock
