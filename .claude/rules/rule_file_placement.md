@@ -33,6 +33,11 @@ gitignored.
 | Sub-home | What | Committed |
 |---|---|---|
 | `automations/` | automation code | yes (git subtree) |
+| `automations/{id}-{slug}.n8n.json` | scrubbed n8n workflow exports, flat, named by the workflow's `export:` in infrastructure.yaml; written and diffed by `tools/n8n_export.py` | yes |
+| `automations/tools/` + `README.md` | the client's own scripts, one `README.md` row each in the tools/INDEX.md format (`check-index.py` enforces it) | yes |
+| `automations/tests/` | the client's tests | yes |
+| `context/.env` · `automations/.env.example` | client secrets, names carrying the client token (`N8N_API_KEY_{CLIENT}`) · the same names with no values | **gi** · yes |
+| `{dir}/` + `README.md` | a client web surface's deploy source, the README naming its deploy target | yes |
 | `specs/{1-spec…4-live}/` | specs, by stage | yes |
 | `context/` | IDs / keys / comms / raw client data | **gi** (except `context/portable/`) |
 | `deliverables/` | client-facing deliverables | yes |

@@ -182,10 +182,10 @@ n8n best practice is iterative builds: create with a minimal skeleton, then appl
 
 Working file (so the JSON survives across iterations and is reviewable):
 ```
-workspace/clients/{client}/automations/workflows/{automation_id}.json
+workspace/clients/{client}/automations/{automation_id}-{slug}.n8n.json
 ```
 
-Create the `workflows/` directory if missing. Write the workflow body locally first, then deploy.
+Flat in `automations/`, no subfolder; `{slug}` is the workflow name in kebab case. Set the same path as the workflow's `export:` in infrastructure.yaml, so `tools/n8n_export.py` maps it. Write the workflow body locally first, then deploy; after the deploy, `uv run tools/n8n_export.py --client {client} --only {n8n_workflow_id}` rewrites the file from live, scrubbed, and `--check` proves repo and live match.
 
 Pattern (call the n8n MCP tools, not synthesized HTTP):
 
@@ -209,7 +209,7 @@ False-positive validation errors (per skill-pack reference module FALSE-POSITIVE
 ### Step 6 — Post-build artifact write + credential check
 
 After validation passes:
-- `Write` the canonical workflow JSON to `workspace/clients/{client}/automations/workflows/{automation_id}.json` for git tracking and review
+- `Write` the canonical workflow JSON to `workspace/clients/{client}/automations/{automation_id}-{slug}.n8n.json` for git tracking and review
 - Verify credentials are bound by inspecting the deployed workflow JSON for `credentials: {<service>: {id: <num>}}` on each authenticated node
 - If any credential is bound to `null` or missing, surface as a `### Credential rebind requirements` section in the report (USER ACTION)
 
@@ -222,7 +222,7 @@ In the same turn as a successful build, `Edit` `workspace/clients/{client}/infra
   - `status:` (e.g., `inactive` — agent does NOT activate; that's deployer's job)
   - `workflow_id:` (set to the deployed n8n workflow ID)
   - `note:` (append: `{YYYY-MM-DD}: built via agnt_n8n-builder — {summary}`)
-  - `last_workflow_json_path:` set to `workspace/clients/{client}/automations/workflows/{automation_id}.json`
+  - `last_workflow_json_path:` set to `workspace/clients/{client}/automations/{automation_id}-{slug}.n8n.json`
   - `last_built_at:` ISO timestamp
 
 Then run `uv run tools/infra_check.py --client {client}` and fix any ERROR it names before emitting the report.
@@ -231,7 +231,7 @@ If the loader returns no `type: n8n` instance for the client, BLOCK with: "infra
 
 ### Step 8 — Emit build report
 
-Compose per **Output Format** below. No preamble; the first line is the `##` header.
+Compose per **Output Format** below. No preamble; the first line is the `##` header. Under "Next step for orchestrator", name the activation shape in skil_build-test-fix ("n8n activation shape": idle, PUT by id, read back, activate, acceptance run, rollback) with this workflow's `n8n_workflow_id` and export path filled in. You do not run it.
 
 ## Hard rules
 
@@ -268,7 +268,7 @@ Compose per **Output Format** below. No preamble; the first line is the `##` hea
 - N7 execution-budget: {PASS / N-A — self-hosted} — projected {N}/month vs plan {M} ({pct}%) {WARN if >50%}
 
 ### Files created/modified
-- workspace/clients/{client}/automations/workflows/{automation_id}.json: {created | modified} ({N nodes})
+- workspace/clients/{client}/automations/{automation_id}-{slug}.n8n.json: {created | modified} ({N nodes})
 - workspace/clients/{client}/infrastructure.yaml: updated ({fields})
 
 ### Workflow build

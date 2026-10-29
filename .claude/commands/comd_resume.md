@@ -123,6 +123,8 @@ If `{resolved_path}/infrastructure.yaml` exists, run `uv run tools/infra_yaml.py
 - `deploy`, when the file names an explicit deploy entry point (Brisken: `deploy.py`, never Railway)
 - Instances with `mcp_server`, URL, credentials and workflows
 
+Then read `{resolved_path}/automations/README.md` and `{resolved_path}/automations/tools/README.md` when they exist: the first says what the client's automations are, the second lists its scripts one row each.
+
 ## Step 4.5: Read Comms Context
 
 If `{resolved_path}/context/comms-log.md` exists:

@@ -13631,9 +13631,20 @@ parallel field.
 
 Proof: `tests/test_intake_mail.py::test_retry_held_renders_body_only_mail`
 and `..._renders_at_most_the_cap`; the route's `render_body_only=` wiring
-regressed green -> red -> green. Not yet pressed live (the press spends the
-owner's key and moves real mail into October); the live check is one press
-and a read of the log.
+regressed green -> red -> green. **Pressed live once on owner yes, 2026-10-29** (readiness first: nothing in
+flight, 8 held body-only mails, cap 25). Reply `rendered 8, replayed 7,
+failed 1`. Read back per mail: the Charm Taphouse order became an October
+expense (Charm Tap House and Kitchen, USD 107.19); three Google "Action
+required" mails, Toast's "Welcome", Toast's "Thank you for your business"
+(a marketing note with no order or amount, so set aside correctly) and a
+GitHub verify-email mail were read as not receipts and set aside (October
+set-aside 6 -> 11, September 4 -> 5, no other expense count moved).
+"Nico - Receipts" (neumann.nicolas@outlook.com, 09-27) failed: its body has
+no readable text at all, so `render_ingest` refuses it and it stays
+`held_body_only`. Open defect, small: that status reads "Needs one click to
+read", which the per-mail button cannot honour either; a partless mail with
+no readable text belongs under `held_no_valid_files`. Its receipts are
+probably images or links (item 261).
 
 ### 260. What "open" means on the charges tile (note #132; 2026-10-29; licence: defect, covered) (BACKEND SHIPPED 2026-10-29; the words ride the item 258 prompt)
 
