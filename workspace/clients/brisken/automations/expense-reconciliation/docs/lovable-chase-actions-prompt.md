@@ -1,6 +1,7 @@
 # Lovable prompt: act on a charge from the "to chase" list (items 258 and 260)
 
-> **NOT PASTED.** Answers the operator's notes #132, #133, #134 and #135
+> **PASTED and published 2026-10-29. Sections 1-3 verified live; section 4
+> (top bar, note #128) did NOT land, see PROMPT-STATUS.** Answers the operator's notes #132, #133, #134 and #135
 > (2026-10-29, August and September, "Charges with no receipt, to chase").
 >
 > **Backend half is in the same PR and needs no SPA change to stay safe:**
@@ -77,4 +78,5 @@ Operator note #128, on the October Expenses tab: *"these buttons should be all t
 3. Marking "No receipt exists" with a reason removes the charge from the panel too.
 4. The table row further down still shows its two marks and still works.
 5. With `n_charges_open_no_receipt_due` = 1 the panel subtitle gains the fees sentence; at 0 it reads as before.
+6. On August 2026 the "Charges without a receipt" tile's open count equals the chase panel's title count (the gray-filled ANNUAL MEMBERSHIP FEE row no longer counts as open).
 ````
