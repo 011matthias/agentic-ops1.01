@@ -13460,7 +13460,7 @@ merchant-list entries, conflicts, an owner-held merchant and an already-saved
 month), regressed green -> red -> green at the route's language switch and at
 the per-language builder; the six existing memory suites (86 tests) unchanged.
 
-### 256. One document number: the receipt counts and nobody is asked (Dirk, 2026-10-29, relayed by the owner: "if duplicate set has same item ID number then default to receipt not invoice and dont ask user for verification") (BUILT 2026-10-29, backend only, no paste)
+### 256. One document number: the receipt counts and nobody is asked (Dirk, 2026-10-29, relayed by the owner: "if duplicate set has same item ID number then default to receipt not invoice and dont ask user for verification") (LIVE 2026-10-29: PR #1666, Fly on `3e37fe93`; backend only, no paste; see Shipped row 166)
 
 Item 74 already decides every group and item 217 already prefers the receipt,
 yet a same-number pair still reached a person three ways on the live months
@@ -13492,7 +13492,10 @@ and leaves `n_review` (`number_settled_copies`). "Not a copy" still outranks.
 Copies found without a number (vendor/date, misread digit, hash) are unchanged.
 
 When it reaches the months (no live writes): October (no statement) on the
-next read, its 4 asking copies leave `n_review` (27 -> 23). September at its
+next read; measured after the deploy, its 10 invoice copies read `none` and
+`n_review` went 27 -> 24 (predicted 23: the fourth asking copy is the
+CamScanner pair, two scans that read as neither receipt nor invoice, so it
+asks as before by design). September at its
 next natural re-match: ElevenLabs keeps the receipt; both Anthropic pairs
 become copies, the receipt keeps one charge and the other statement line
 (the PDF/xlsx double) waits with no receipt, which is the statement's
@@ -13506,10 +13509,24 @@ the re-match and the grid, 13 rule tests), each of the three wirings
 regressed green -> red -> green with `tools/regress_check.py` (the re-match's
 `pinned=` argument, rung 7's skip, the grid's quiet copies).
 
+### Feedback notes #128-#132 (2026-10-29): not yet itemized
+
+Read off `GET /feedback.jsonl` on 2026-10-29 while shipping item 256 (132
+notes). None is about duplicates. Listed verbatim so they do not sit unread.
+
+| # | When (UTC) | Who | Page | Comment (verbatim) |
+|---|---|---|---|---|
+| 128 | 10-29 10:48 | operator | October | these buttons should be all the way in the top bar |
+| 129 | 10-29 11:00 | operator | October | need to know if links to documents can be processed / recognize images (logos) that are of no meaning / recognize statement in this case 1176 statement is a credit card statement and you did not recognize that even though you could if you put in enough effort |
+| 130 | 10-29 11:02 | operator | October | need to improve room of action for user here, as there are also statement appearing here |
+| 131 | 10-29 11:03 | operator | October | why is retrying not working, you should be able to read receipts that are in the body of the email |
+| 132 | 10-29 11:08 | operator | August, workbench | Charges without receipt... 47 open... what does this "Open" mean specifically |
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 166 | Item 256: a receipt and its invoice found by one document number are settled by it. The re-match keeps the receipt even where the tool's own match held the invoice (`pinned_documents`: only a person's confirmed pick holds), the statement check never splits the pair, the set-aside invoice reads review `none` | Dirk: "default to receipt not invoice and dont ask user for verification". Live: October's 10 invoice copies stopped asking, `n_review` 27 -> 24, totals unchanged; September (ElevenLabs invoice kept by a tool hold, two Anthropic pairs split by card 9693's PDF/xlsx double line) changes at its next natural re-match | 2026-10-29, PR #1666, Fly on `3e37fe93`; `/healthz` commit verified by deploy.py, live payload diffed before/after, SPA October drive read back the copy row ("Ready · Duplicate, not in the total"), read-only |
 | 165 | Fix (no item), follow-up to 163: `DELETE /api/runs/{id}/expenses/{doc}?views=1` and `POST /api/runs/{id}/duplicates/resolve?views=1` reply with `views.batch` / `views.run`, equal to the two page GETs at that moment; no flag, no change. SPA half `docs/lovable-duplicate-click-reply-views-prompt.md` (cache the reply, no refetch), handed to the owner, not pasted | After a duplicate click the page refetched the month twice and showed the old row until both landed. Local, September, click until the grid holds the new month: Delete 3.96 / 4.41 -> 3.83 / 3.71 s, Not a copy 3.68 / 4.48 -> 3.13 / 3.70 s; one screen update instead of two, and Not a copy refreshes the reconciliation line it left stale | 2026-10-07, PR #1590, Fly v284 (commit `0541288a`); live GET /api/runs + /api/expense-batches for September and October hash-identical before/after (baseline stable across two reads), page driven cold (read-only); the `views` reply itself not exercised live (it needs a write on Criss's month) |
 | 164 | Item 248: `GET /api/receipts/overview`, every receipt the tool holds in one list (months, trips, set-aside files, and mail that never became or is no longer an expense), statuses read off each month's own verdicts, memoized under the card key plus the mail archive's; SPA prompt with the TanStack Table v8 page | Dirk 2026-10-07: users could not see or filter receipts; the Email intake page listed mails only, so uploads never appeared. Live after deploy (one read-only GET): 363 receipts, 184 email / 179 upload, every row with an arrival date, 2.5 s; published SPA unchanged until the paste, cold drive 0 writes | 2026-10-07, PR #1587, Fly on `501edf7d` |
 | 163 | Fix (no item): a duplicate click's re-match memoizes its vendor work. `vendor_similarity`, its word-pair ratio and `strip_reference_tokens` are `lru_cache`d (pure, bounded ~25 MB); `MerchantRegistry.resolve` memoizes per instance; `_distinctive` cached on its tokens. No output moves | Owner 2026-10-07: "removing duplicates takes way too long to load". "Delete this copy" and "Not a copy" re-match the month inside the request; on September (216 charges x 112 receipts since the 10-05 statement) the matcher scored 26,163 vendor pairs for 3,710 distinct ones, twice per re-match, and the registry resolved 700 times for 274 names. Local A/B on the 10-07 backup: Delete this copy 3.88 -> 1.75 s, Not a copy 5.28 -> 2.73 s, payloads byte-identical | 2026-10-07, PR #1583, Fly v281 (commit `5ae5905d`); live September duplicate layer, totals and vendors identical before/after, page driven cold (read-only); the click itself not timed live (it is a write on Criss's month) |
