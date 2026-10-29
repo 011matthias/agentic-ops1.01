@@ -238,3 +238,21 @@ def test_parse_mcp_list_names_only_and_auth_is_not_a_failure():
     ok, bad = mc.parse_mcp_list(text)
     assert ok == ["make-x", "playwright"]
     assert bad == ["firebase"]
+
+
+def test_adopt_excludes_the_local_file_when_gitignore_lacks_it(primary):
+    mc = _load()
+    _git(primary, "init", "-b", "main")
+    (primary / ".gitignore").write_text(".mcp.json\n", encoding="utf-8")  # an older main: no .mcp.local.json line
+    (primary / ".mcp.local.json").unlink()
+    (primary / ".mcp.json").write_text(json.dumps({"mcpServers": {"context7": {"command": "npx"}}}), encoding="utf-8")
+    assert mc.main(["--adopt", "--root", str(primary)]) == 0
+    probe = subprocess.run(["git", "-C", str(primary), "check-ignore", "-q", ".mcp.local.json"])
+    assert probe.returncode == 0
+    status = subprocess.run(["git", "-C", str(primary), "status", "--porcelain", "--", ".mcp.local.json"],
+                            capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
+    assert status == ""
+    # idempotent: a second adopt adds no duplicate line
+    mc.ensure_excluded(primary)
+    exclude = (primary / ".git" / "info" / "exclude").read_text(encoding="utf-8")
+    assert exclude.count(".mcp.local.json") == 1
