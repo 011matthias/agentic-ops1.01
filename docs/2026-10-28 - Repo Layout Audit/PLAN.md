@@ -257,7 +257,7 @@ Files: `.claude/hooks/file-placement-gate.py`, `tools/tests/test_file_placement_
 
 ### W1-16 [harness-2, onboard-2, onboard-3, onboard-1, onboard-12, fit-5, harness-5] cost M
 
-Status: todo
+Status: done PR #1671 (2026-10-29). tools/infra_yaml.py + infra_check.py (CI hooks job, `--all`); builder agents, comd_resume, skil_build and n8n-pack read through the loader. The WW shape is a synthetic fixture (tools/fixtures/infra_yaml/ww-shape). Deviation: brisken got `deploy: .../expense-reconciliation/deploy.py` beside `orchestrator: fastapi`, because agnt_deployer maps FastAPI to `railway up`; D1 must keep honoring `deploy:`. Against the real WW file infra_check names N8N_API_KEY/URL_WARME_WIMMER missing from its .env.example: the migration adds them. PLATFORM-FEASIBILITY lives in skil_make-mcp-tools-expert/modules (the only copy), not skil_make-pack.
 
 Depends on: none
 
@@ -979,7 +979,7 @@ Files: `.claude/settings.json`, `~/.claude/settings.json`, `.claude/hooks/no-aut
 
 ### W1-31 [G5] cost S
 
-Status: todo. Scope measured 2026-10-28: 50 non-test and 50 test `text=True` calls lack `encoding=`; .claude/settings.json has PYTHONIOENCODING only. Larger than its S label. Rescoped 2026-10-28 under the client-ops guard: drop the `PYTHONUTF8=1` part of the Action; the helper, doctor.py and the CI leg stay.
+Status: done PR #1669 (2026-10-29), except the three job scripts. 92 call sites now pass `encoding="utf-8", errors="replace"` inline (tools/ are standalone uv scripts, so no shared import from .claude/hooks); doctor.py marks an exit-0 check with a `Traceback` header not-ok; the CI leg is tools/tests/test_text_encoding.py (AST scan, multi-line calls included, plus a 0x8d round trip), proven with regress_check. The sweep completes from the worktree. Left out under the client-ops guard and listed in the test's DEFERRED set: tools/brisken-recon-notify-run.py:154 (BriskenReconNotify), tools/repo-sweep.py:354 (RepoSweep), tools/weekly_synthesis.py x4 (AgenticOpsWeeklySynthesis); the auto-mode classifier also refused the edit without an owner yes. After-check: notifier clone at 27348341, exit 0 at 11:47Z. No global PYTHONUTF8.
 
 Depends on: none
 
