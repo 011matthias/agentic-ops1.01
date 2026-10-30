@@ -37,6 +37,7 @@ gitignored `context/`.
 
 ## Open decisions / gates
 
+- **Engagement stopping (2026-10-30).** Gurmej, 30 Oct 10:28: "please stop all the work after this week". Nothing in his systems after this week without his say-so. Open at the stop: the paused November campaign in his Instantly account (172 waiting for touch 2, he has not been told of it), weekly summary edition 4 held for owner approval (page 2 still promises next-week work), and the A0-A3 enquiry pipeline keeps running on his Make org untouched.
 - Live edits to A0-A3 are invasive (real enquirers, peak season): owner per-action go + readiness check, every time.
 - The family rows written to the tracking sheet before 2026-09-10 stay as history; the A3 condition makes them inert. Removal is Jess's call, and her stated reason for the exclusion was to keep the sheet clean, so it is worth putting to her.
 - Excluding by enquiry type does not fully cover the 13 December date Jess originally named: enquiry 15592 is for that event but typed as office and was automated in August. Closing it needs either a hardcoded event id (the rot the deferred rebuild exists to remove) or the live events read.
