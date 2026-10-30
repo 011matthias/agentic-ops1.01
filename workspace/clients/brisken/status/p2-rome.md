@@ -4,7 +4,7 @@ workstream: p2-rome
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-09-15
+updated: 2026-10-30
 general_ref: status/p2-lead-gen-general.md
 ---
 
@@ -24,7 +24,7 @@ is in `status/p2-lead-gen-general.md`.
 |---|---|---|---|---|---|
 | Rome 2026 landing page | done | Built (HTML + OG image + icon) | Host on a Brisken property | Dirk publish go-ahead | `deliverables/lead-generation/rome-2026/brisken-rome-2026-landing.html` |
 | Rome 2026 one-pager | done | Built (md + pdf) | Use as the forwardable invite asset | none | `deliverables/lead-generation/rome-2026/brisken-rome-2026-onepager.pdf` |
-| Invite company list | in-progress | Wave list assembled (xlsx) | Tier + verify against the radar | none | `deliverables/lead-generation/rome-2026/brisken-rome-2026-invite-companies.xlsx` |
+| Invite company list | in-progress | Wave list assembled (xlsx) | Tier + verify against the radar | none | `context/lead-generation/rome-2026/brisken-rome-2026-invite-companies.xlsx` (gitignored, primary clone; out of the public tree 2026-10-30) |
 | Event CTA in outreach | in-progress | CTA defined for the triggered cohort | Wire into LinkedIn copy on go-live | Dirk sending identity | `specs/1-spec/p2-bant-lead-generation.md` next_steps |
 | Post-event follow-up | in-progress | T3 touch-1 SENT 2026-07-21 (24 emails from Dirk via Graph, TreasuryCentral pptx + skim-link, Zoho-filed, 24/24 in Sent Items); GA wave SENT 2026-07-27: 19 drafts matched by id and sent, verified 0 left in Drafts and 19/19 in Sent Items, with 21 unrelated drafts in the same folder deliberately untouched | Per-tier non-responder follow-up; T3 touch-2 status NOT re-verified in this pass | none | wave: context/lead-generation/rome-t3-wave-rebuilt.md |
 | GA cohort in Lead Desk | active | 40 GA contacts moved from "Held" to the active pipeline (owner 2026-07-17); they receive their own GA outreach wave | GA wave sent 2026-07-27 (see the follow-up row); cohort state since then NOT re-verified | none | `automations/lead-desk` migrate.py `is_held` change |
@@ -42,3 +42,4 @@ is in `status/p2-lead-gen-general.md`.
 
 - Deliverables: `deliverables/lead-generation/rome-2026/`
 - Context: `context/lead-generation/Rome-Event/`, `context/lead-generation/TA Cook 2026/`
+- July 2026 parallel lead-gen output (task-2..7 decks, rosters, runbooks; provenance README) and the invite xlsx: `context/lead-generation/rome-2026/` (gitignored, primary clone only; moved out of `deliverables/rome-2026-leadgen/` 2026-10-30, history keeps the old copy)
