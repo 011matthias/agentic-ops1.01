@@ -43,7 +43,7 @@ Resumed Wärme Wimmer from live reads and found the migration left two automatio
 
 ## What Did NOT Work (and why)
 - **Reading "Testmail" literally, twice:** first as "Tobias wants to trigger a test mail" (mail with three steps for him), then as "a sample mail to forward" (rendered R1 mail). Tobias' logged 27.10. mail, already in the 10-28 checkpoint, used "Testmail" for a test-mail recipient; the owner wanted the existing reply draft in Aptos. Two rounds lost.
-- **iCloud IMAP as the WW mail path:** neumath4@icloud.com holds no WW mail at all; whether the 10-15 and 10-27 mails went out cannot be verified from here.
+- **iCloud IMAP as the WW mail path:** the owner's personal iCloud mailbox holds no WW mail at all; whether the 10-15 and 10-27 mails went out cannot be verified from here.
 - **IMAP `OR` search syntax** (`SINCE .. OR OR TO .. TO ..`): server answered NO, `data[0]` None; a plain `SINCE` plus header filtering in Python worked.
 - **`gh pr update-branch 1650`:** "Cannot update PR branch due to conflicts" (INDEX.md, sessions log); a local `git merge origin/main` in the branch's worktree merged clean (union drivers) and CI went green.
 - **Jotform MCP `list_submissions`:** returns a UI widget, no data to the agent; `analyze_submissions` returns text (newest-first chunks, chunk 2 already reached Feb 2025, so later chunks were unnecessary despite the tool's embedded "mandatory" chunk loop).
