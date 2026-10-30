@@ -788,6 +788,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## warme-wimmer
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-30 | WW W1 Gap and Jessica Testseite Draft | client-dev | [→](docs/2026-10-30%20-%20WW%20W1%20Gap%20and%20Jessica%20Testseite%20Draft/Checkpoint.md) |
 | 2026-10-28 | WW W2-14 Jessica als Testempfaenger | client-dev | [→](docs/2026-10-28%20-%20WW%20W2-14%20Jessica%20als%20Testempfaenger/Checkpoint.md) |
 | 2026-10-21 | WW Hero Key And Zapier Migration Prep | client-dev | [→](docs/2026-10-21%20-%20WW%20Hero%20Key%20And%20Zapier%20Migration%20Prep/Checkpoint.md) |
 | 2026-10-21 | WW W2-14 Testseite Jetzt pruefen | client-dev | [→](docs/2026-10-21%20-%20WW%20W2-14%20Testseite%20Jetzt%20pruefen/Checkpoint.md) |
