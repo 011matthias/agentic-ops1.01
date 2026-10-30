@@ -28,7 +28,13 @@ Payload shape for finalize (--payload FILE, or '-' for stdin):
   "topic": "Topic Name",                  // required
   "date": "YYYY-MM-DD",                   // optional, default today
   "work_type": "client-dev",              // required
-  "section": "brisken",                   // INDEX section; default from work_type
+  "section": "brisken",                   // INDEX section; default from work_type.
+                                          // Slugged and validated: a client or project
+                                          // folder, system, platform, or an existing
+                                          // INDEX heading. personal* implies private.
+  "private": false,                       // personal sessions: prose goes to the PRIMARY's
+                                          // gitignored docs/personal/; no INDEX row,
+                                          // session-log entry or register rows
   "mini": false,
   "projects": ["brisken"],
   "entry": {"focus": "...", "built": "...", "friction": "None",
@@ -127,10 +133,15 @@ def folder_for(root: Path, date: str, topic: str) -> Path:
     return root / "docs" / f"{date} - {topic}"
 
 
+def private_folder(primary: Path, date: str, topic: str) -> Path:
+    return primary / "docs" / "personal" / f"{date} - {topic}"
+
+
 MINI_NAME = re.compile(r"^Mini-Checkpoint-(\d+)\.md$")
+FINALIZED_MARKER = ".finalized"  # private folders: names finalize has applied (no INDEX to ask)
 
 
-def checkpoint_filename(folder: Path, mini: bool) -> str:
+def checkpoint_filename(folder: Path, mini: bool, private: bool = False) -> str:
     """The one naming rule `pre` and `finalize` share, so they cannot disagree.
 
     The skill has the prose written at `pre`'s target BEFORE `finalize` runs, so
@@ -146,9 +157,14 @@ def checkpoint_filename(folder: Path, mini: bool) -> str:
     if not found:
         return "Mini-Checkpoint-1.md"
     top = max(found)
-    index = folder.parent / "INDEX.md"
-    link = f"]({encode_link(f'docs/{folder.name}/Mini-Checkpoint-{top}.md')})"
-    linked = index.is_file() and link in index.read_text(encoding="utf-8")
+    if private:
+        marker = folder / FINALIZED_MARKER
+        linked = (marker.is_file()
+                  and f"Mini-Checkpoint-{top}.md" in marker.read_text(encoding="utf-8").split())
+    else:
+        index = folder.parent / "INDEX.md"
+        link = f"]({encode_link(f'docs/{folder.name}/Mini-Checkpoint-{top}.md')})"
+        linked = index.is_file() and link in index.read_text(encoding="utf-8")
     return f"Mini-Checkpoint-{top + 1 if linked else top}.md"
 
 
@@ -217,12 +233,60 @@ def update_session_log(root: Path, payload: dict) -> tuple[int, Path]:
 
 # ------------------------------------------------------------------ INDEX row
 
+SECTION_FIXED = ("system", "platform", "personal")
+SECTION_SLUG = re.compile(r"[a-z0-9][a-z0-9-]*")
+
+
+def slugify(name: str) -> str:
+    return re.sub(r"[\s_]+", "-", str(name).strip().lower())
+
+
+def known_sections(root: Path) -> set[str]:
+    """The slugs a section may take: the fixed three, every client and project
+    folder in this checkout or the primary clone (gitignored client folders
+    exist only there), and every slug-shaped heading INDEX already has (WW
+    checkpoints land here before its folder does)."""
+    names = set(SECTION_FIXED)
+    for base in {root, main_worktree(root)}:
+        for kind in ("clients", "projects"):
+            d = base / "workspace" / kind
+            if d.is_dir():
+                names.update(slugify(p.name) for p in d.iterdir() if p.is_dir())
+    index = root / "docs" / "INDEX.md"
+    if index.is_file():
+        for m in re.finditer(r"^## (.+?)\s*$", index.read_text(encoding="utf-8"), re.M):
+            if SECTION_SLUG.fullmatch(m.group(1)):
+                names.add(m.group(1))
+    return names
+
+
+def is_private(payload: dict, section: str) -> bool:
+    return bool(payload.get("private")) or section == "personal" or section.startswith("personal-")
+
+
+def resolve_section(root: Path, payload: dict) -> tuple[str | None, str | None]:
+    """(section, error). Free text gave INDEX a `## Brisken` beside `## brisken`
+    and a literal `## system/platform` heading copied from the payload template
+    (layout plan W1-10), so the section is slugged and must be a known one."""
+    raw = payload.get("section") or (
+        "system" if payload["work_type"] == "system-infra" else (payload.get("projects") or ["system"])[0]
+    )
+    section = slugify(raw)
+    if not SECTION_SLUG.fullmatch(section):
+        return None, (f"section {raw!r} is not a single name. Pick ONE: the client or project "
+                      "folder name, system, or platform (`system/platform` is a choice, not a value).")
+    if is_private(payload, section):
+        return section, None
+    known = known_sections(root)
+    if section not in known:
+        return None, (f"unknown section {raw!r}. Known: {', '.join(sorted(known))}. "
+                      "Use the client or project folder name, or system / platform.")
+    return section, None
+
 
 def insert_index_row(root: Path, payload: dict, link_text: str, link_target: str) -> Path:
     path = root / "docs" / "INDEX.md"
-    section = payload.get("section") or (
-        "system" if payload["work_type"] == "system-infra" else (payload.get("projects") or ["system"])[0]
-    )
+    section = payload["section"]
     row = f"| {payload['date']} | {payload['topic']} | {payload['work_type']} | [{link_text}]({link_target}) |"
 
     if path.exists():
@@ -235,7 +299,7 @@ def insert_index_row(root: Path, payload: dict, link_text: str, link_target: str
     out, inserted, i = [], False, 0
     while i < len(lines):
         out.append(lines[i])
-        if not inserted and lines[i].strip() == heading:
+        if not inserted and lines[i].strip().lower() == heading:
             # copy through the table header + separator, then insert
             j = i + 1
             while j < len(lines) and (lines[j].startswith("| Date") or lines[j].startswith("|--") or not lines[j].strip()):
@@ -294,7 +358,7 @@ def main_worktree(root: Path) -> Path:
     try:
         common = subprocess.run(
             ["git", "-C", str(root), "rev-parse", "--path-format=absolute", "--git-common-dir"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15,
         )
         if common.returncode != 0 or not common.stdout.strip():
             return root
@@ -304,6 +368,37 @@ def main_worktree(root: Path) -> Path:
         return primary if (primary / "docs" / "sessions").is_dir() else root
     except Exception:
         return root
+
+
+def ensure_private_ignored(primary: Path) -> str | None:
+    """None when docs/personal/ cannot be committed from `primary`, else why.
+
+    The primary may sit on an older main whose .gitignore lacks the line, and
+    RepoSweep commits untracked files there, so a missing ignore is closed in
+    the shared .git/info/exclude (every worktree reads it) before any write,
+    the same move mcp_config --adopt makes for .mcp.local.json."""
+    def ignored() -> int:
+        return subprocess.run(
+            ["git", "-C", str(primary), "check-ignore", "-q", "docs/personal/x.md"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15,
+        ).returncode
+    try:
+        rc = ignored()
+        if rc != 1:
+            return None  # 0 = ignored; 128 = not a git repo, nothing can commit it
+        common = subprocess.run(
+            ["git", "-C", str(primary), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15,
+        ).stdout.strip()
+        exclude = Path(common) / "info" / "exclude"
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        with open(exclude, "a", encoding="utf-8") as fh:
+            fh.write("\n# private checkpoints (checkpoint_scaffold, layout plan W1-10)\ndocs/personal/\n")
+        if ignored() == 0:
+            return None
+    except Exception as exc:  # noqa: BLE001 - any failure means "not proven ignored"
+        return f"could not prove docs/personal/ is gitignored in {primary}: {exc}"
+    return f"docs/personal/ is still not gitignored in {primary}; refusing to write a private checkpoint"
 
 
 def context_path(root: Path, payload: dict, context_root: Path | None = None) -> Path:
@@ -493,7 +588,7 @@ def archive_register(root: Path, days: int, dry_run: bool = False) -> int:
 
 def _run(cmd: list[str], cwd: Path) -> str:
     try:
-        p = subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True, timeout=60)
+        p = subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
         return (p.stdout or "").strip() or (p.stderr or "").strip() or "(no output)"
     except Exception as e:
         return f"unavailable: {e}"
@@ -525,8 +620,11 @@ def payload_path(root: Path) -> Path:
 def cmd_pre(root: Path, args: argparse.Namespace) -> int:
     date = args.date or today()
     if args.topic:
-        folder = folder_for(root, date, args.topic)
-        fname = checkpoint_filename(folder, args.mini)
+        if args.private:
+            folder = private_folder(main_worktree(root), date, args.topic)
+        else:
+            folder = folder_for(root, date, args.topic)
+        fname = checkpoint_filename(folder, args.mini, private=args.private)
         print("== target ==")
         print(f"write checkpoint prose to: {folder / fname}"
               + ("  (exists, not yet in INDEX: finalize will link this file)"
@@ -722,31 +820,53 @@ def cmd_finalize(root: Path, args: argparse.Namespace) -> int:
     for line in pattern_advisories:
         print(line)
     payload.setdefault("date", today())
+    section, err = resolve_section(root, payload)
+    if err:
+        print(err)
+        return 2
+    payload["section"] = section
+    private = is_private(payload, section)
 
     ctx_root = Path(args.context_root).resolve() if args.context_root else main_worktree(root)
-    # Before any write: an unreadable shared context file stops everything.
+    # Before any write: an unreadable shared context file stops everything,
+    # and so does a private folder that git could still see.
     err = context_read_error(context_path(root, payload, ctx_root))
+    if not err and private:
+        err = ensure_private_ignored(ctx_root)
     if err:
         print(err)
         return 2
 
-    folder = folder_for(root, payload["date"], payload["topic"])
-    folder.mkdir(parents=True, exist_ok=True)
-    fname = checkpoint_filename(folder, payload.get("mini", False))
-    rel = f"docs/{payload['date']} - {payload['topic']}/{fname}"
+    mini = payload.get("mini", False)
+    if private:
+        folder = private_folder(ctx_root, payload["date"], payload["topic"])
+        folder.mkdir(parents=True, exist_ok=True)
+        fname = checkpoint_filename(folder, mini, private=True)
+        rel = f"docs/personal/{payload['date']} - {payload['topic']}/{fname}"
+        yaml_path = merge_context_yaml(root, payload, rel, context_root=ctx_root)
+        with open(folder / FINALIZED_MARKER, "a", encoding="utf-8") as fh:
+            fh.write(fname + "\n")
+        print("private checkpoint: no INDEX row, session-log entry or register rows")
+        if payload.get("friction_rows"):
+            print(f"  {len(payload['friction_rows'])} friction row(s) NOT written to the public register")
+    else:
+        folder = folder_for(root, payload["date"], payload["topic"])
+        folder.mkdir(parents=True, exist_ok=True)
+        fname = checkpoint_filename(folder, mini)
+        rel = f"docs/{payload['date']} - {payload['topic']}/{fname}"
 
-    n, log_path = update_session_log(root, payload)
-    link_text = fname.removesuffix(".md") if payload.get("mini") else "→"
-    index_path = insert_index_row(root, payload, link_text, encode_link(rel))
-    yaml_path = merge_context_yaml(root, payload, rel, context_root=ctx_root)
-    reg_path = append_register_rows(root, payload)
+        n, log_path = update_session_log(root, payload)
+        link_text = fname.removesuffix(".md") if mini else "→"
+        index_path = insert_index_row(root, payload, link_text, encode_link(rel))
+        yaml_path = merge_context_yaml(root, payload, rel, context_root=ctx_root)
+        reg_path = append_register_rows(root, payload)
 
-    print(f"session entry #{n} appended: {log_path}")
-    print(f"INDEX row inserted: {index_path}")
+        print(f"session entry #{n} appended: {log_path}")
+        print(f"INDEX row inserted: {index_path}")
+        if reg_path:
+            print(f"friction rows appended: {reg_path} ({len(payload['friction_rows'])})")
     note = "" if ctx_root == root else f"  (primary clone, not the worktree {root.name})"
     print(f"context YAML merged: {yaml_path}{note}")
-    if reg_path:
-        print(f"friction rows appended: {reg_path} ({len(payload['friction_rows'])})")
     prose = folder / fname
     print(f"checkpoint prose file: {prose}" + ("" if prose.exists() else "  (NOT WRITTEN YET — write it now)"))
     kind = "Mini-checkpoint" if payload.get("mini") else "Checkpoint"
@@ -765,6 +885,8 @@ def main(argv: list[str] | None = None) -> int:
     p_pre.add_argument("--topic")
     p_pre.add_argument("--date")
     p_pre.add_argument("--mini", action="store_true")
+    p_pre.add_argument("--private", action="store_true",
+                       help="personal session: target the primary's gitignored docs/personal/")
     p_pre.add_argument("--register-types", help="comma-separated friction types for the regression grep")
 
     p_fin = sub.add_parser("finalize", help="apply the checkpoint payload to the ledgers")

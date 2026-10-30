@@ -69,7 +69,7 @@ Present as table:
 | # | Pattern | Source | Freq | Est. Effort/Occurrence | Est. Fix Hours | ROI | Suggested Fix |
 |---|---------|--------|------|----------------------|----------------|-----|---------------|
 
-Sort by ROI descending. Top 5 are candidates for `/system-dev` implementation.
+Sort by ROI descending. Top 5 are candidates for `/comd_system-dev` implementation.
 
 ## Step 4: Generate Summary
 
@@ -99,7 +99,7 @@ Sort by ROI descending. Top 5 are candidates for `/system-dev` implementation.
 _Note: Sessions before work type tracking show as "unclassified."_
 
 ### Recommendations
-1. {Highest-ROI pattern} — suggest /system-dev to implement
+1. {Highest-ROI pattern} — suggest /comd_system-dev to implement
 2. {Second pattern}
 3. {Third pattern}
 
@@ -115,5 +115,5 @@ _Note: Sessions before work type tracking show as "unclassified."_
 ## Notes
 
 - This command is READ-ONLY by default — it analyzes but makes no changes
-- Use `/system-dev` to act on the patterns identified here
+- Use `/comd_system-dev` to act on the patterns identified here
 - Run periodically (weekly recommended) or after high-friction sessions

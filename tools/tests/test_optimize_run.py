@@ -34,7 +34,7 @@ _spec.loader.exec_module(_pin)
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
     proc = subprocess.run(["git", "-C", str(repo), *args],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert proc.returncode == 0, f"git {args}: {proc.stderr}"
     return proc
 
@@ -115,7 +115,7 @@ def engine(repo: Path, *args: str, env: dict | None = None,
     full_env = dict(os.environ)
     full_env.update(env or {})
     proc = subprocess.run(["uv", "run", str(ENGINE), *args],
-                          capture_output=True, text=True, cwd=str(repo),
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=str(repo),
                           env=full_env, timeout=300)
     if expect is not None:
         assert proc.returncode == expect, (

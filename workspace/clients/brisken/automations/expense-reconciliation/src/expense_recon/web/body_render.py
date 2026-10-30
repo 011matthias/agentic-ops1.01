@@ -104,6 +104,102 @@ def extract_body_text(raw: bytes) -> str:
     return content.strip()[:MAX_BODY_CHARS]
 
 
+MAX_BODY_LINKS = 20
+_URL_IN_TEXT = re.compile(r"https?://[^\s<>\"')\]]+")
+_ZERO_WIDTH = re.compile("[​‌‍⁠﻿]")
+
+
+def has_visible_text(text: str) -> bool:
+    """Whether a body carries anything a person could read. Python's strip()
+    keeps zero-width characters, so a padded empty HTML shell would pass a
+    plain `text.strip()` test and render as a blank page."""
+    return bool(_ZERO_WIDTH.sub("", text or "").strip())
+# Footer links every vendor mail carries; none of them leads to a receipt.
+_FOOTER_LINK_WORDS = ("unsubscribe", "privacy", "preferences", "opt-out", "opt out")
+
+
+class _LinkCollector(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.links: list[tuple[str, str]] = []
+        self._href: str | None = None
+        self._text: list[str] = []
+
+    def handle_starttag(self, tag, attrs):  # noqa: D102
+        if tag == "a":
+            self._href = dict(attrs).get("href") or None
+            self._text = []
+
+    def handle_data(self, data):  # noqa: D102
+        if self._href is not None:
+            self._text.append(data)
+
+    def handle_endtag(self, tag):  # noqa: D102
+        if tag == "a" and self._href is not None:
+            self.links.append((self._href, " ".join("".join(self._text).split())))
+            self._href = None
+
+
+def extract_body_links(raw: bytes) -> list[dict]:
+    """The http(s) links a message body points at, as
+    `{"url", "host", "text"}`, de-duplicated, footer links (unsubscribe,
+    privacy) dropped, at most `MAX_BODY_LINKS`. Item 261 (note #129): a mail
+    whose receipt sits behind a link has nothing to render, and the operator
+    could not see that it pointed anywhere. Display only: nothing here or
+    anywhere else fetches these URLs, because a mail never decides what the
+    tool fetches (rule_untrusted_inbound)."""
+    from urllib.parse import urlparse
+
+    try:
+        msg = BytesParser(policy=policy.default).parsebytes(raw)
+    except Exception:  # noqa: BLE001 - unparseable custody file
+        return []
+    found: list[tuple[str, str]] = []
+    for part in msg.walk():
+        ctype = part.get_content_type()
+        if ctype not in ("text/html", "text/plain"):
+            continue
+        if part.get_content_disposition() == "attachment":
+            continue
+        try:
+            content = part.get_content()
+        except Exception:  # noqa: BLE001 - undecodable payload
+            continue
+        if not isinstance(content, str):
+            continue
+        if ctype == "text/html":
+            collector = _LinkCollector()
+            try:
+                collector.feed(content)
+            except Exception:  # noqa: BLE001 - malformed markup
+                continue
+            found.extend(collector.links)
+        else:
+            found.extend((u, "") for u in _URL_IN_TEXT.findall(content))
+    out: list[dict] = []
+    seen: set[str] = set()
+    for href, text in found:
+        href = (href or "").strip()
+        try:
+            parsed = urlparse(href)
+        except ValueError:
+            continue
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            continue
+        # Zero-width characters are how tracking mail pads empty anchors
+        # (live Toast mail, 2026-10-29); left in, the link text renders
+        # invisible and a JS trim() does not remove it.
+        label = _ZERO_WIDTH.sub("", text or "").strip()[:120]
+        probe = (href + " " + label).lower()
+        if href in seen or any(w in probe for w in _FOOTER_LINK_WORDS):
+            continue
+        seen.add(href)
+        out.append({"url": href[:2000], "host": parsed.hostname.lower(), "text": label})
+        if len(out) >= MAX_BODY_LINKS:
+            break
+    return out
+
+
 # Full-Latin font resolution. Pillow's embedded default (Aileron) has no
 # glyphs for umlauts or the euro sign — on a German client's mail that
 # turns "27,90 €" and "Gebühr" into tofu boxes and mangles what vision

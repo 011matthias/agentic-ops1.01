@@ -32,22 +32,22 @@ Generate a structured digest of the Agentic Ops system and deliver it.
 
 ```bash
 # Full system overview (internal, terminal)
-/system-digest --overview
+/comd_system-digest --overview
 
 # What changed this week (internal, terminal)
-/system-digest --changes
+/comd_system-digest --changes
 
 # What changed since a specific date
-/system-digest --changes --since 2026-02-25
+/comd_system-digest --changes --since 2026-02-25
 
 # Client report for Meji Media (client-facing, emailed)
-/system-digest --client meji-media --client-facing --email client@example.com
+/comd_system-digest --client meji-media --client-facing --email client@example.com
 
 # System overview saved as HTML file
-/system-digest --overview --html
+/comd_system-digest --overview --html
 
 # Client report saved to file
-/system-digest --client herbox-sweden --file
+/comd_system-digest --client herbox-sweden --file
 ```
 
 ## Output

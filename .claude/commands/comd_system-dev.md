@@ -222,6 +222,6 @@ At the end of the session, summarize:
 {the appended docs/anneal-ledger.md row} — verdict: {converging | oscillating | accreting}.
 {one line on the trend, e.g. "net asset -2 (merged 2 skills), drift 3->1, change-set smaller than last: yes"}
 
-### Next /system-dev session should focus on:
+### Next /comd_system-dev session should focus on:
 - [Priority items for next round — Phase 0 will surface these automatically]
 ```

@@ -32,18 +32,14 @@ import requests
 BASE = "https://expenses.brisken.com"
 
 # The round under audit. Field names the applied renderer must contain.
-# Case 9 build 5 (item 204). `month_suggestion` is left out on purpose: it is
-# a TypeScript type (src/lib/api.ts), erased at build, so it can never appear
-# in a bundle; the renderer reads advisory_detail.code instead.
+# Chase-list actions (items 258 + 260, notes #128, #132-#135). Field and i18n
+# key names the applied renderer must contain.
 NEW = {
-    "waits_for_statements": "case 9: the API list of cards a receipt waits for",
-    "waits_for_statement": "case 9: the waiting-line i18n key",
-    "card_suggestion": "case 9: the suggested card on a row",
-    "cardSuggest": "case 9: the suggestion chip namespace",
-    "cards/by-vendor": "case 9: the apply-to-vendor endpoint",
-    "cardVendor": "case 9: the by-vendor offer namespace",
-    "dry_run": "case 9: the by-vendor preview flag",
-    "statement_month_differs": "case 9: the statement-month advisory",
+    "closed_without_receipt": "item 260: isRowDecided reads the backend's closure flag",
+    "n_charges_open_no_receipt_due": "item 260: the fee-lines remainder in the chase subtitle",
+    "chase.row.match": "item 258: the Match a receipt button key",
+    "wb.view.open.tip": "item 260: the tooltip defining open",
+    "chase.subtitle.fees": "item 260: the fee-lines sentence",
 }
 
 # Fields known to be rendered today. If any is absent the crawl is blind and

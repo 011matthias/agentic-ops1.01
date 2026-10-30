@@ -51,7 +51,7 @@ def run(identity_and_args: list[str], tmp_path, env_extra: dict | None = None):
 
     proc = subprocess.run(
         ["bash", str(SCRIPT), *identity_and_args],
-        capture_output=True, text=True, env=env, timeout=60,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, timeout=60,
     )
     argv = (argdump.read_text(encoding="utf-8").splitlines()
             if argdump.is_file() else [])

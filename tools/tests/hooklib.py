@@ -63,7 +63,7 @@ def run_hook(
         [sys.executable, str(HOOKS / script)],
         input=json.dumps(payload),
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8", errors="replace",
         timeout=timeout,
         cwd=str(cwd or REPO),
         env=full_env,

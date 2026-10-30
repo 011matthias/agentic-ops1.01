@@ -109,7 +109,7 @@ def main_clone_root() -> Path | None:
     try:
         out = subprocess.run(
             ["git", "-C", str(REPO), "rev-parse", "--path-format=absolute", "--git-common-dir"],
-            capture_output=True, text=True, timeout=10, check=True,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10, check=True,
         ).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return None

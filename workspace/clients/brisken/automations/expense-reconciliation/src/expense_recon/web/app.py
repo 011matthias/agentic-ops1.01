@@ -189,6 +189,7 @@ from .service import (
     regenerate_zoho,
     replace_intake_files,
     reset_memory,
+    dismiss_set_aside_file,
     restore_set_aside_file,
     run_mode,
     sync_claim_for_decision,
@@ -237,6 +238,7 @@ from .month_readiness import (  # items 99 + 100
 )
 from ..category_vocabulary import (
     card_account_check,
+    card_account_options,
     chart_coverage,
     gl_account_options,
     gl_companies,
@@ -596,6 +598,11 @@ def _refusal_response(result: dict, default_status: int = 400) -> JSONResponse:
     status = body.pop("code", default_status)
     body["code"] = body.pop("error_code", None) or "request_refused"
     return JSONResponse(body, status_code=status)
+
+
+# Most held body-only mails one "Retry held" press renders (note #131): each
+# is a vision read on Dirk's key, and the rest wait for the next press.
+REPLAY_RENDER_BODY_ONLY_CAP = 25
 
 
 def _operator() -> str | None:
@@ -2819,6 +2826,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         result = replay_held(
             app.state.db_path, app.state.learning_db_path,
             app.state.data_root,
+            render_body_only=REPLAY_RENDER_BODY_ONLY_CAP,
+            operator=_operator(),
         )
         mat: dict = {}
         if materialize:
@@ -3040,6 +3049,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             edits=store.get_expense_edits(run.run_id),
             resolutions=store.get_duplicate_resolutions(run.run_id),
             decisions=store.get_decisions(run.run_id),
+            month_batch=lambda month: _month_batch_id(store, month),
         )
 
     def _month_batch_id(store: RunStore, month: str) -> str | None:
@@ -3539,6 +3549,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     }
                     for c in effective_cards(settings, load_cards()).values()
                 ],
+                # Item 265 (note #124): the card form's Zoho-account
+                # picker. Derived and read-only; PUT ignores it.
+                "card_account_options": card_account_options(settings),
                 "merchants_inert": sorted(
                     name
                     for name, entry in (settings.get("merchants") or {}).items()
@@ -5805,6 +5818,39 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         store, run, file, _now_iso(),
                         learning_db_path=app.state.learning_db_path,
                     )
+                except RunInputError as exc:
+                    return _input_refused(exc)
+                run = store.get_run(run_id)
+                view = _expense_view(store, run)
+            return JSONResponse(jsonable_encoder({**result, "batch": view}))
+
+        return await run_in_threadpool(_work)
+
+    @app.post("/api/expense-batches/{run_id}/set-aside/dismiss")
+    async def post_dismiss_set_aside(run_id: str, request: Request):
+        """Item 262: take a set-aside file off the month's list (body
+        {"file": <stored name>}), or put it back ({"file", "undo": true}).
+        Flags the entry, never deletes it or its bytes; no re-match, since a
+        set-aside file was never in the matching pool. Threadpool for the
+        same reason as the restore route: the batch writer lock."""
+        if not _receipt_first_on():
+            return _flag_off()
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001 - malformed body is a plain 400
+            body = None
+        file = str(((body or {}).get("file")) or "").strip()
+        if not file:
+            return JSONResponse({"error": "file is required", "code": "file_name_required"}, status_code=400)
+        undo = (body or {}).get("undo") is True
+
+        def _work():
+            with open_store() as store:
+                run, err = _expense_run_or_error(store, run_id)
+                if err is not None:
+                    return err
+                try:
+                    result = dismiss_set_aside_file(store, run, file, _now_iso(), undo=undo)
                 except RunInputError as exc:
                     return _input_refused(exc)
                 run = store.get_run(run_id)

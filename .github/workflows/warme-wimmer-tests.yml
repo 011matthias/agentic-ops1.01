@@ -1,0 +1,58 @@
+name: warme-wimmer tests
+
+# Layout plan W1-19: the offline WW assertions run on every PR that touches
+# the WW tree, instead of only when someone remembers the command. Fixtures
+# only: no tenant credential is configured here, nothing calls n8n or Hero,
+# and the live-fetch script (fetch-live.js) is never run. Tests that need a
+# live snapshot skip when it is absent.
+on:
+  pull_request:
+    paths:
+      - "workspace/clients/warme-wimmer/**"
+      - ".github/workflows/warme-wimmer-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "workspace/clients/warme-wimmer/**"
+      - ".github/workflows/warme-wimmer-tests.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workspace/clients/warme-wimmer/automations
+    steps:
+      - uses: actions/checkout@v4
+      - name: No WW tree yet
+        if: hashFiles('workspace/clients/warme-wimmer/automations/tests/**') == ''
+        working-directory: .
+        run: echo "workspace/clients/warme-wimmer/automations/tests/ is not in the repo yet; nothing to run."
+      - uses: actions/setup-node@v4
+        if: hashFiles('workspace/clients/warme-wimmer/automations/tests/**') != ''
+        with:
+          node-version: "22"
+      - name: Install
+        if: hashFiles('workspace/clients/warme-wimmer/automations/package-lock.json') != ''
+        run: npm ci
+      - name: Offline tests (fixtures only)
+        if: hashFiles('workspace/clients/warme-wimmer/automations/tests/**') != ''
+        env:
+          N8N_API_KEY_WARME_WIMMER: ""
+          N8N_API_URL_WARME_WIMMER: ""
+        # Test files by name; fetch-live* and fixtures/ are excluded. Zero
+        # matches fails the job, so a renamed suite cannot pass by running
+        # nothing.
+        run: |
+          files=$(find tests -type f \( -name '*.test.mjs' -o -name '*.test.js' -o -name '*.test.cjs' \
+                    -o -name 'test-*.mjs' -o -name 'test-*.js' -o -name 'test_*.mjs' -o -name 'test_*.js' \) \
+                    ! -name 'fetch-live*' ! -path '*/fixtures/*' | sort)
+          if [ -z "$files" ]; then echo "no test files matched under tests/"; exit 1; fi
+          node --test $files

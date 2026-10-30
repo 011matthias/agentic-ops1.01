@@ -41,7 +41,7 @@ def page(pad: int) -> str:
 
 def _git(repo: Path, *args: str) -> None:
     proc = subprocess.run(["git", "-C", str(repo), *args],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert proc.returncode == 0, f"git {args}: {proc.stderr}"
 
 
@@ -118,7 +118,7 @@ def test_file_outside_any_repo_skips(tmp_path):
 
 def _run_tool(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(TOOL), *args],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def test_warning_alone_does_not_fail_exit_code(tmp_path):

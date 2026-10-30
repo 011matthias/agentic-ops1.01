@@ -1,6 +1,6 @@
 # N8N-BUILD — n8n Implementation Workflow
 
-Workflows are built and deployed directly in the n8n instance via MCP tools. No code files are created in the client's repo.
+Workflows are built and deployed directly in the n8n instance via MCP tools. The repo keeps a scrubbed export of each one at `workspace/clients/{client}/automations/{id}-{slug}.n8n.json` (named by the workflow's `export:` in infrastructure.yaml), written and diffed by `uv run tools/n8n_export.py --client {client} [--check]`. Client scripts go in `automations/tools/` with a `README.md` row each, tests in `automations/tests/`.
 
 ---
 

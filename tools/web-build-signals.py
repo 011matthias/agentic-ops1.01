@@ -47,11 +47,11 @@ def git_signals() -> dict:
     try:
         out["branch"] = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            capture_output=True, text=True, cwd=str(REPO), timeout=10,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=str(REPO), timeout=10,
         ).stdout.strip() or None
         status = subprocess.run(
             ["git", "status", "--porcelain"],
-            capture_output=True, text=True, cwd=str(REPO), timeout=10,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=str(REPO), timeout=10,
         ).stdout
         out["changedLocalWeb"] = sorted({
             line[3:].strip().strip('"')

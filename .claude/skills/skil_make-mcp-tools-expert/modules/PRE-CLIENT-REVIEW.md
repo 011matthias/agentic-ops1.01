@@ -24,7 +24,7 @@ Run through this checklist before showing a Make.com project to a client for the
 - [ ] infrastructure.yaml has full resource inventory with ship flags
 - [ ] Doc freshness: client doc `Last updated` date is >= spec `updated` frontmatter date
 - [ ] Doc version matches spec version (e.g., both say v2.0.0)
-- [ ] Consolidated export generated (`/export-client-docs {client}`) and visually reviewed
+- [ ] Consolidated export generated (`/comd_export-client-docs {client}`) and visually reviewed
 
 ## Blueprint Import Testing
 - [ ] Run HANDOVER-FORMAT-CHECKER reconciler module on every handover blueprint

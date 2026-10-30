@@ -327,6 +327,10 @@ name answers the same one:
 | `n_needs_company_or_person` | expense payload: how many rows miss their company or their person (item 84, owner ruling 2026-09-16: the Expenses view shows MISSING ENTITY and NEEDS PERSON as one box, because the fix is one action, pick the card or mark the receipt private). `n_needs_entity` and `n_needs_person` keep their questions |
 | `n_copies_set_aside` | how many decided duplicate copies are set aside. Run payload: instead of listed as unmatched (items 83 + 75); `n_unmatched_rec` keeps its question (receipts waiting for a charge), and a set-aside copy was never one. Expense payload and months list (item 94): the rows left out of `n_expenses` and `totals_by_ccy`, the same set. `n_duplicate_copies` keeps counting every redundant copy, matched or not |
 | `n_charges_need_receipt` | run payload only: how many purchase charges hold no receipt and no verdict that closes them (item 99). Not `n_unmatched_tx`, which also counts booked charges and fee lines. A gray-filled charge is booked through recurring and does not count (owner ruling 2026-09-17) |
+| `set_aside[].dismissed` | expense payload: true when a person took the file off the month (`POST /api/expense-batches/{id}/set-aside/dismiss` `{file}`, reversed by `{file, undo: true}`). The entry and its bytes are kept; `summary.n_set_aside` stops counting it (item 262) |
+| `links[]` on `GET /api/inbound/{archive}/body` | `{url, host, text}`: the http(s) links the body points at, footer links dropped, at most 20. Display only, never fetched (item 261) |
+| `rows[].closed_without_receipt` | run payload, unmatched rows only: true when the gray fill or a "no receipt exists" mark closed the charge, whatever its `reason_code` says (a gray-filled fee line reads `not_a_purchase`). The same verdict the month gate uses; the tile's "open" count excludes these rows (note #132, item 260) |
+| `n_charges_open_no_receipt_due` | run payload only: how many receiptless charges that are NOT purchases (a card fee, interest) nothing has closed. Open for a person, never chased: the "Charges without a receipt" tile's open count equals `n_charges_need_receipt` plus this (note #132, item 260) |
 | `n_charges_closed_recurring` | run payload only: how many charges holding no receipt the gray fill closed (owner ruling 2026-09-17): purchases it took out of `n_charges_need_receipt` and fee lines whose guessed category it took out of `n_charges_category_guessed`. Never blocks the month; it keeps the closure visible. A subscription mark the tool derived from history closes nothing and is not counted |
 | `n_receipts_need_charge` | run payload only: how many receipts no charge holds anywhere and nothing set aside (item 99): `n_unmatched_rec` minus the receipts another month's charge settled (`settled_by`) and the confirmed private expenses (flag AND `reimburse_to`) |
 | `n_charges_category_guessed` | run payload only: how many charges that need no receipt still carry the tool's guessed category (item 99). A charge that needs a receipt is counted under `n_charges_need_receipt` alone; a gray-filled charge is not counted, its category lives in the Zoho recurring entry. It counts the guesses that BLOCK the month, not every guess: `categories_by_origin` counts who answered |
@@ -5000,6 +5004,12 @@ unless set.
 |---|---|---|---|
 | `POST /api/runs/{id}/receipt-requested` | `{transaction_id, to?}` or `{transaction_id, clear: true}` | `receipt_requested_at` + `requested_to` | none: the charge still needs a receipt |
 | `POST /api/runs/{id}/no-receipt-expected` | `{transaction_id, reason}` or `{transaction_id, clear: true}` | `no_receipt_expected` (the reason) | closes it: the charge leaves the count |
+
+**No UI sets "requested" since 2026-10-29.** The owner had the SPA's "Mark the
+receipt as asked for" button removed (`docs/lovable-drop-asked-button-prompt.md`,
+Lovable `21082b4`). The route, the row fields and the summary counter still
+answer and still carry any mark stored before that date; nothing calls the
+route any more.
 
 Asking is not getting, so "requested" closes nothing and the month stays
 incomplete; `summary.n_charges_receipt_requested` is a SUBSET of

@@ -79,7 +79,7 @@ def _git(args: list[str], cwd: str) -> str | None:
     try:
         proc = subprocess.run(
             ["git", *args], cwd=cwd, timeout=5,
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
         )
         if proc.returncode == 0:
             return proc.stdout.strip()

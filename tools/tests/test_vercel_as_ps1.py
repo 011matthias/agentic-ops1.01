@@ -65,7 +65,7 @@ def run(identity_and_args: list[str], tmp_path, env_extra: dict | None = None):
     proc = subprocess.run(
         [PWSH, "-NoProfile", "-NonInteractive", "-File", str(SCRIPT),
          *identity_and_args],
-        capture_output=True, text=True, env=env, timeout=120,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, timeout=120,
     )
     argv = (json.loads(argdump.read_text(encoding="utf-8"))
             if argdump.is_file() else [])

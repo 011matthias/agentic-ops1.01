@@ -87,6 +87,11 @@ def count_assets(repo: Path) -> dict:
     )
     rules_loc = sum(loc for _, loc in per_file)
     rules_oversized = [(n, loc) for n, loc in per_file if loc > PER_FILE_RULE_CEILING]
+    # Hook scripts exclude the `_name.py` shared helpers; patterns exclude README.
+    hooks = len([p for p in (repo / ".claude" / "hooks").glob("*.py")
+                 if not p.name.startswith("_")])
+    patterns = len([p for p in (repo / ".claude" / "patterns").glob("*.md")
+                    if p.name != "README.md"])
     return {
         "cmds": cmds,
         "skills_skil": skill_skil,
@@ -96,6 +101,8 @@ def count_assets(repo: Path) -> dict:
         "rules": rules,
         "rules_loc": rules_loc,
         "rules_oversized": rules_oversized,
+        "hooks": hooks,
+        "patterns": patterns,
     }
 
 
@@ -119,6 +126,8 @@ def compute_drift(repo: Path, assets: dict) -> list[str]:
              f"{assets['skills_skil']} skil_ dirs / {assets['skills_total']} total"),
             ("Agents", assets["agents"], str(assets["agents"])),
             ("Rules", assets["rules"], str(assets["rules"])),
+            ("Hooks", assets["hooks"], str(assets["hooks"])),
+            ("Patterns", assets["patterns"], str(assets["patterns"])),
         ]
         for label, actual, actual_str in checks:
             adv = _advertised(text, label)
@@ -137,7 +146,7 @@ def changeset_since(repo: Path, since_date: str | None) -> int | None:
             ["git", "log", f"--since={since_date}", "--name-only",
              "--pretty=format:", "--", ".claude/", "tools/",
              "docs/friction-register.md"],
-            cwd=str(repo), capture_output=True, text=True, timeout=15,
+            cwd=str(repo), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15,
         )
         if proc.returncode != 0:
             return None
@@ -291,7 +300,7 @@ def render_text(m: dict) -> str:
         f"  assets: {a['cmds']} cmds, {a['skills_skil']} skills "
         f"({a['skills_total']} dirs total), {a['agents']} agents, "
         f"{a['tools']} tools, {a['rules']} rules ({a['rules_loc']} LOC) "
-        f"-> total {m['asset_total']}",
+        f"-> total {m['asset_total']}; {a['hooks']} hooks, {a['patterns']} patterns",
         f"  friction register: {m['register']['total_rows']} rows, "
         f"{m['register']['unresolved']} unresolved "
         f"({m['register']['actionable']} actionable, "

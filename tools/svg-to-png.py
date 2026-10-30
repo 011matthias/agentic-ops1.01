@@ -114,7 +114,7 @@ def render_svg_to_png(edge: Path, svg_path: Path, out_path: Path, size: tuple[in
             html_path.as_uri(),
         ]
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
         except subprocess.TimeoutExpired:
             raise SystemExit(f"ERROR: Edge headless timed out rendering {svg_path}")
 

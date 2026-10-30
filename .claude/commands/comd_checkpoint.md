@@ -10,18 +10,20 @@ The mechanical half (folder, session log, INDEX row, context YAML, register rows
 ## 1. Determine Topic and Mode
 
 1. If `$ARGUMENTS` is provided, use it as the topic name (title case, e.g. "Fortnox API Integration"). Otherwise infer from the session.
-2. If `$ARGUMENTS` contains `--mini`: strip it; use **MINI mode** — skip the Friction Self-Audit, Gate Compliance Audit, Comms Staleness ask, and Strategic Feedback; use the Mini-Checkpoint Template. Mini still runs both scaffold calls (the YAML is critical for /resume).
+2. If `$ARGUMENTS` contains `--mini`: strip it; use **MINI mode** — skip the Friction Self-Audit, Gate Compliance Audit, Comms Staleness ask, and Strategic Feedback; use the Mini-Checkpoint Template. Mini still runs both scaffold calls (the YAML is critical for /comd_resume).
 
 ## 2. Pre-flight (one call)
 
 ```
-uv run tools/checkpoint_scaffold.py pre --clients {clients touched} --topic "{TOPIC}" [--mini] [--register-types {comma-separated friction types you expect to log}]
+uv run tools/checkpoint_scaffold.py pre --clients {clients touched} --topic "{TOPIC}" [--mini] [--private] [--register-types {comma-separated friction types you expect to log}]
 ```
+
+**Personal sessions are private.** When the session is personal (scope `me`: KIT, BAföG, tax, private disputes, anything not client or system work), pass `--private` here and set `"private": true` with `"section": "personal"` in the payload. The prose then goes to the primary clone's gitignored `docs/personal/{date} - {topic}/`, and finalize writes no INDEX row, session-log entry or register rows; the context YAML is merged as usual. The repo is public, so a personal checkpoint in the ledger is published. A `personal*` section implies private even without the flag.
 
 This prints everything the closing sections need:
 - **Target path** for the checkpoint prose file (handles Mini-Checkpoint-{N} numbering)
 - **Friction candidates** (the `session_state.py --list-candidates` drain)
-- **Per-client ops status** from `infrastructure.yaml` (include the line in Current Status; if ORANGE/RED add "Run `/ops-audit {client}`" to Next Steps; if no `platform` section but the client uses an orchestrator, add a feasibility-assessment next step)
+- **Per-client ops status** from `infrastructure.yaml` (include the line in Current Status; if ORANGE/RED add "Run `/comd_ops-audit {client}`" to Next Steps; if no `platform` section but the client uses an orchestrator, add a feasibility-assessment next step)
 - **Comms staleness** per client (used in step 7)
 - **Project-status check** results (used in step 6)
 - **Register size advisory + regression rows** for the types you passed
@@ -54,7 +56,7 @@ For each event record: **Type** (`agent-deferred`, `missed-tool`, `redundant-esc
 ## 4. Gate Compliance Audit (full mode only)
 
 1. Count instances where B1/B2/B3 fired, and any instance where a gate SHOULD have fired but didn't → `**Gates:** B1:{N} B2:{N} B3:{N} skipped:{N}`. Each skip is friction type `skipped-gate`, fix `structural`.
-2. **Autonomy Score** = total human interventions this session. 0 → "fully autonomous session". >3 → "(elevated — run /system-dev to close gaps)". Goes in the checkpoint's System Health section and the payload's `autonomy` field.
+2. **Autonomy Score** = total human interventions this session. 0 → "fully autonomous session". >3 → "(elevated — run /comd_system-dev to close gaps)". Goes in the checkpoint's System Health section and the payload's `autonomy` field.
 
 ## 5. Write the Checkpoint File (the ONE prose artifact)
 
@@ -199,7 +201,8 @@ Payload (write to `.scratch/` — gitignored):
 ```json
 {
   "topic": "{TOPIC}", "date": "{YYYY-MM-DD}", "work_type": "{client-dev|system-infra|comms|misc}",
-  "section": "{INDEX section: client name, or system/platform}",
+  "section": "{ONE of: the client or project folder name, system, platform, personal}",
+  "private": false,
   "mini": false,
   "projects": ["{client-id}"],
   "entry": {

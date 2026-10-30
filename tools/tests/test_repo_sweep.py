@@ -5,6 +5,7 @@ binaries, and misrouting client work into the wrong thematic commit; these
 tests pin the pure gate/grouping logic that prevents each.
 """
 import importlib.util
+import string
 from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parents[1]
@@ -242,3 +243,127 @@ def test_fold_session_shards_fail_open(tmp_path, monkeypatch):
     rs.fold_session_shards(str(tmp_path), True, lines)  # must not raise
     assert any("session-fold: skipped" in ln and "shards left as-is" in ln
                for ln in lines)
+
+
+# --- 2026-10-28 (layout plan W1-13): the sweep obeys placement -------------
+# The one unattended committer bypassed every placement rule: two client
+# screenshots, a personal sketch and tok.txt reached public refs this way, and
+# on 2026-10-28 it committed onto the parked primary's feature branch (#1649).
+
+# 31 distinct characters, built at runtime so no secret-shaped literal sits in
+# the tree for gitleaks to flag.
+TOKEN = (string.ascii_letters + string.digits)[::2]
+
+
+def _committed(groups):
+    return [p for paths in groups.values() for p in paths]
+
+
+def test_plan_skips_token_shaped_files(tmp_path):
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "tok.txt").write_text(TOKEN)
+    (tmp_path / "docs" / "handover.txt").write_text(TOKEN + "\n")
+    (tmp_path / "docs" / "hero.live.json").write_text("{}")
+    (tmp_path / "docs" / "notes.md").write_text("A plain sentence about the plan.\n")
+    (tmp_path / "docs" / "id-list.md").write_text("short\n")
+    groups, skipped = rs.plan(str(tmp_path), [
+        ("??", "tok.txt"), ("??", "docs/handover.txt"), ("??", "docs/hero.live.json"),
+        ("??", "docs/notes.md"), ("??", "docs/id-list.md")])
+    assert _committed(groups) == ["docs/notes.md", "docs/id-list.md"]
+    assert any("tok.txt" in s and "token/snapshot-shaped" in s for s in skipped)
+    assert any("handover.txt" in s and "high-entropy" in s for s in skipped)
+    assert any("hero.live.json" in s for s in skipped)
+
+
+def test_secret_shape_ignores_tracked_modifications(tmp_path):
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "tok-budget.md").write_text("x")
+    groups, _ = rs.plan(str(tmp_path), [(" M", "docs/tok-budget.md")])
+    assert _committed(groups) == ["docs/tok-budget.md"]
+
+
+def test_plan_applies_injected_placement_to_untracked_only(tmp_path):
+    (tmp_path / "docs").mkdir()
+    for name in ("a.md", "b.md"):
+        (tmp_path / "docs" / name).write_text("fine\n")
+    seen = []
+
+    def placement(repo, rel):
+        seen.append(rel)
+        return "placement deny: test" if rel.endswith("a.md") else None
+
+    groups, skipped = rs.plan(str(tmp_path), [("??", "docs/a.md"), (" M", "docs/b.md")],
+                              placement)
+    assert _committed(groups) == ["docs/b.md"]
+    assert seen == ["docs/a.md"]
+    assert skipped == ["docs/a.md (placement deny: test)"]
+
+
+def test_placement_verdict_runs_the_real_gate(tmp_path):
+    """Through the hook itself: deny, advisory and silent all come back right."""
+    for rel in ("shot.png", "docs/leads-export.csv", "misc-top/x.md", "docs/notes.md"):
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("content\n")
+    root = str(tmp_path)
+    assert rs.placement_verdict(root, "shot.png").startswith("placement deny:")
+    assert rs.placement_verdict(root, "docs/leads-export.csv").startswith("placement advisory:")
+    assert rs.placement_verdict(root, "misc-top/x.md").startswith("placement advisory:")
+    assert rs.placement_verdict(root, "docs/notes.md") is None
+
+
+def test_pr_body_lists_what_was_left_behind():
+    body = rs.pr_body([f"f{i}.png (placement deny: x)" for i in range(3)], cap=2)
+    assert "Left uncommitted (3):" in body
+    assert "- f0.png (placement deny: x)" in body and "f2.png" not in body
+    assert "and 1 more" in body
+    assert "Left uncommitted" not in rs.pr_body([])
+
+
+def _git(repo, *args):
+    import subprocess
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+
+def _parked_repo(tmp_path, branch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", branch)
+    _git(repo, "config", "user.email", "t@example.invalid")
+    _git(repo, "config", "user.name", "t")
+    (repo / "README.md").write_text("x\n")
+    _git(repo, "add", "README.md")
+    _git(repo, "commit", "-q", "-m", "init")
+    (repo / "docs").mkdir()
+    (repo / "docs" / "new.md").write_text("new work\n")
+    return repo
+
+
+def test_sweep_skips_a_parked_primary(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(rs, "LOG_FILE", str(tmp_path / "sweep.log"))
+    repo = _parked_repo(tmp_path, "client/meji-media/status")
+    rs.sweep_repo({"path": str(repo), "policy": "pr"}, execute=True, quiesce_minutes=0)
+    out = capsys.readouterr().out
+    assert "skip: primary parked on client/meji-media/status" in out
+    assert _git(repo, "rev-list", "--count", "HEAD").stdout.strip() == "1"
+    assert "?? docs/" in _git(repo, "status", "--porcelain").stdout
+
+
+def test_sweep_on_main_still_plans(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(rs, "LOG_FILE", str(tmp_path / "sweep.log"))
+    repo = _parked_repo(tmp_path, "main")
+    rs.sweep_repo({"path": str(repo), "policy": "pr"}, execute=False, quiesce_minutes=0)
+    out = capsys.readouterr().out
+    assert "parked" not in out and "DRY-RUN" in out
+
+
+def test_sweep_runs_the_placement_gate_when_flagged(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(rs, "LOG_FILE", str(tmp_path / "sweep.log"))
+    repo = _parked_repo(tmp_path, "main")
+    (repo / "shot.png").write_bytes(b"\x89PNG")
+    rs.sweep_repo({"path": str(repo), "policy": "pr", "placement": True},
+                  execute=False, quiesce_minutes=0)
+    out = capsys.readouterr().out
+    assert "excluded: shot.png (placement deny:" in out
+    assert "docs: 1 paths" in out

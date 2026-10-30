@@ -71,6 +71,12 @@ def _cmd(rel_script: str, extra: str = "") -> str:
     return f'uv run --directory "{_RD}" python {rel_script}{suffix}'
 
 
+def _script_cmd(rel_script: str, extra: str = "") -> str:
+    """Like `_cmd` but runs the script itself, so `uv` reads its PEP 723 deps."""
+    suffix = f" {extra}" if extra else ""
+    return f'uv run --directory "{_RD}" {rel_script}{suffix}'
+
+
 # Single source of truth for the enforcement wiring. Built from `_cmd` so the
 # cwd-pinning is uniform and a new hook can't accidentally be wired with a
 # bare relative path. This is the shape F1 wired by hand, hardened against
@@ -177,6 +183,13 @@ CANONICAL_HOOKS = {
                     "timeout": 10000,
                 },
                 {
+                    # W1-14: count personal data in the lines a push adds;
+                    # ask with paths + counts, never values; fail-open.
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/pii-push-gate.py"),
+                    "timeout": 10000,
+                },
+                {
                     # Item 127: score the six real labelled months before a
                     # `flyctl deploy` of brisken-expense-recon; ask on a drop.
                     # 120 s because the check itself is budgeted at 100 s.
@@ -265,6 +278,15 @@ CANONICAL_HOOKS = {
                 {
                     "type": "command",
                     "command": _cmd(".claude/hooks/gate-skip-detector.py"),
+                    "timeout": 10000,
+                },
+                {
+                    # A `git worktree add` leaves the new checkout with no
+                    # .mcp.json; render the one it needs (W1-17). Reads the
+                    # payload on stdin, touches only a worktree the command
+                    # names, fail-open.
+                    "type": "command",
+                    "command": _script_cmd("tools/mcp_config.py", "--after-worktree-add"),
                     "timeout": 10000,
                 },
             ],
@@ -394,6 +416,15 @@ CANONICAL_HOOKS = {
                     "command": _cmd("tools/optimize_overview.py", "--sweep --once-per-day"),
                     "timeout": 10000,
                 },
+                {
+                    # Render .mcp.json for this checkout from infra + .env +
+                    # .mcp.local.json (W1-17); prints "restart Claude Code to
+                    # load" only when the file changed. Script form, not _cmd:
+                    # it needs pyyaml from its inline deps. Fail-open, exit 0.
+                    "type": "command",
+                    "command": _script_cmd("tools/mcp_config.py", "--ensure --hook"),
+                    "timeout": 10000,
+                },
             ],
         }
     ],
@@ -409,6 +440,7 @@ EXPECTED_HOOK_SCRIPTS = {
     "instantly-invasive-gate.py",
     "no-auto-commit-gate.py",
     "ruff-push-gate.py",
+    "pii-push-gate.py",
     "recon-accuracy-deploy-gate.py",
     "cd-guard.py",
     "heredoc-size-gate.py",

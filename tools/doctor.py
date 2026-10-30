@@ -36,6 +36,7 @@ import argparse
 import concurrent.futures as cf
 import datetime as _dt
 import json
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -43,6 +44,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 SCRATCH = REPO / ".scratch"
+_TRACEBACK_RE = re.compile(r"^Traceback \(most recent call last\):", re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -73,6 +75,7 @@ CHECKS: tuple[Check, ...] = (
           home_clone_only=True),
     Check("repo-freshness", ("tools/repo_freshness.py",), 60, "state"),
     Check("scorer-pins", ("tools/pin_scorer.py", "check"), 60, "state"),
+    Check("mcp-health", ("tools/mcp_config.py", "--mcp-health"), 150, "state"),
     # integrity — registries + staleness
     Check("check-index", ("tools/check-index.py",), 60, "integrity"),
     Check("skill-map", ("tools/check-skill-map.py",), 120, "integrity"),
@@ -124,7 +127,9 @@ def _run_check(check: Check) -> dict:
     return {
         "name": check.name,
         "group": check.group,
-        "ok": exit_code == 0,
+        # A tool that swallows its own crash (project_status died on a decode
+        # error and exited 0 for weeks) still prints the traceback header.
+        "ok": exit_code == 0 and _TRACEBACK_RE.search(out) is None,
         "skipped": False,
         "exit": exit_code,
         "timed_out": timed_out,

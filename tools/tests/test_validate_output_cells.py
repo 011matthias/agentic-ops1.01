@@ -98,7 +98,7 @@ def test_xlsx_json_subprocess(tmp_path):
     wb.save(p)
     r = subprocess.run(
         [sys.executable, str(TOOLS / "validate-output.py"), str(p), "--format", "json"],
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     payload = json.loads(r.stdout)
     assert payload["total"] >= 3

@@ -12,6 +12,11 @@ on:
       - "tools/scorers/**"
       - "tools/recon_accuracy_check.py"
       - "tools/recon-accuracy-baseline.json"
+      - "tools/recon*"
+      - "tools/brisken-recon-notify*"
+      - "tools/lovable-bundle-audit.py"
+      - "tools/tests/test_recon*"
+      - "tools/tests/test_brisken_recon_notify*"
   push:
     branches: [main]
     paths:
@@ -20,6 +25,16 @@ on:
       - "tools/scorers/**"
       - "tools/recon_accuracy_check.py"
       - "tools/recon-accuracy-baseline.json"
+      - "tools/recon*"
+      - "tools/brisken-recon-notify*"
+      - "tools/lovable-bundle-audit.py"
+      - "tools/tests/test_recon*"
+      - "tools/tests/test_brisken_recon_notify*"
+
+# A re-push to a PR cancels its superseded run; main runs always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:

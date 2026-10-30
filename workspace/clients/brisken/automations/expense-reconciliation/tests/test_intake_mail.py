@@ -1486,6 +1486,129 @@ def test_replay_rescues_stranded_body_only(client, monkeypatch):
     assert resp.json()["status"] == STATUS_INGESTED
 
 
+def _body_receipt_mail(n: int) -> bytes:
+    """A vendor's own receipt mail, distinct content per `n` (so the
+    arrival dedupe keeps both) and no attachment."""
+    msg = EmailMessage()
+    msg["From"] = OUTSIDE
+    msg["To"] = f"receipts@{DOMAIN}"
+    msg["Subject"] = f"Receipt for order #{n}"
+    msg["Message-ID"] = f"<body-receipt-{n}@vendor.example>"
+    msg.set_content(f"Order #{n}\nTotal: {10 + n},00 EUR\nThank you for your business")
+    return msg.as_bytes()
+
+
+def test_retry_held_renders_body_only_mail(client, monkeypatch):
+    """Note #131 (2026-10-29): "Retry held" left body-only mail held, so the
+    operator pressed it five times and nothing moved. The press now runs the
+    per-mail render path for each held body-only mail."""
+    batch_id = _create_batch(client, monkeypatch, MONTH_LABEL)
+    state = client.app.state
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _body_receipt_mail(1), synchronous=True,
+    )
+    assert res["status"] == HELD_BODY_ONLY
+    _patch_ocr(
+        monkeypatch,
+        _extraction(vendor="Toast", total="11.00", currency="EUR"),
+        _extraction(vendor="Toast", total="11.00", currency="EUR"),
+    )
+    out = client.post("/api/inbound/replay-held").json()
+    assert out["rendered"] == 1, out
+    assert out["replayed"] == 1 and out["failed"] == 0, out
+    log = client.get("/api/inbound/log").json()
+    assert log["n_held"] == 0
+    assert log["entries"][-1]["status"] == STATUS_INGESTED
+    grid = client.get(f"/api/expense-batches/{batch_id}").json()
+    assert any(e.get("submitted_by") for e in grid["expenses"])
+
+
+def test_retry_held_renders_at_most_the_cap(client, monkeypatch):
+    import expense_recon.web.app as app_mod
+
+    _create_batch(client, monkeypatch, MONTH_LABEL)
+    state = client.app.state
+    for n in (1, 2):
+        process_message(
+            state.db_path, state.learning_db_path, state.data_root,
+            _body_receipt_mail(n), synchronous=True,
+        )
+    monkeypatch.setattr(app_mod, "REPLAY_RENDER_BODY_ONLY_CAP", 1)
+    _patch_ocr(
+        monkeypatch,
+        _extraction(vendor="Toast", total="11.00", currency="EUR"),
+        _extraction(vendor="Toast", total="11.00", currency="EUR"),
+    )
+    out = client.post("/api/inbound/replay-held").json()
+    assert out["rendered"] == 1, out
+    assert out["still_held"] == 1, out
+    assert client.get("/api/inbound/log").json()["n_held"] == 1
+
+
+def _image_only_mail() -> bytes:
+    """An HTML body that carries no readable text and a link to the receipt,
+    the shape of "Nico - Receipts" (2026-09-27): nothing to render."""
+    msg = EmailMessage()
+    msg["From"] = OUTSIDE
+    msg["To"] = f"receipts@{DOMAIN}"
+    msg["Subject"] = "Receipts"
+    msg["Message-ID"] = "<image-only@vendor.example>"
+    msg.set_content(
+        '<html><body><img src="cid:x"><a href="https://share.example.com/r/123">'
+        '&#8203;</a><a href="https://vendor.example/unsubscribe"><img src="cid:y"></a></body></html>',
+        subtype="html",
+    )
+    return msg.as_bytes()
+
+
+def test_a_body_with_no_text_is_not_promised_a_click(client):
+    """Item 261: arrival holds a body with no readable text as no-valid-files,
+    not "Needs one click to read", which the render route would refuse."""
+    state = client.app.state
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _image_only_mail(), synchronous=True,
+    )
+    assert res["status"] == HELD_NO_VALID_FILES
+
+
+def test_retry_moves_an_unreadable_body_off_the_renderable_state(client, monkeypatch):
+    """Item 261: the live 'Nico - Receipts' shape, already stored as
+    held_body_only before the arrival fix. Retry stops counting it as a
+    failure and moves it to no-valid-files."""
+    state = client.app.state
+    process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _image_only_mail(), synchronous=True,
+    )
+    arch = next(p for p in (state.data_root / "inbound").iterdir() if p.is_dir())
+    meta_path = arch / "meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta["status"] = HELD_BODY_ONLY  # as stored before the arrival fix
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+
+    out = client.post("/api/inbound/replay-held").json()
+    assert out["failed"] == 0 and out["still_held"] == 1, out
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    assert meta["status"] == HELD_NO_VALID_FILES
+
+
+def test_body_view_lists_links_without_footer_links(client):
+    """Item 261 (note #129): the operator sees where a mail points; footer
+    links are dropped; nothing is fetched."""
+    state = client.app.state
+    process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _image_only_mail(), synchronous=True,
+    )
+    archive = client.get("/api/inbound/log").json()["entries"][-1]["archive"]
+    body = client.get(f"/api/inbound/{archive}/body").json()
+    assert body["links"] == [
+        {"url": "https://share.example.com/r/123", "host": "share.example.com", "text": ""}
+    ]
+
+
 def test_reconcile_flips_interrupted_render(client):
     from expense_recon.web.intake_mail import (
         STATUS_RENDERING,
@@ -1748,6 +1871,49 @@ def test_a_multi_month_mail_routes_by_its_earliest_date_and_says_so(
     assert row["mixed_months"] is True
 
 
+def test_a_mixed_month_mail_files_each_receipt_in_its_own_month(
+    client, monkeypatch,
+):
+    """Backlog item 267 (notes #138/#139): Dirk's one mail of GitHub receipts
+    for three months filed all three in the earliest month, so the later
+    ones sat there with no charge to match. The mail still ARRIVES in the
+    earliest open month; the later receipt then leaves it for its own."""
+    older = RECEIPT_DAY.replace(day=1) - timedelta(days=5)
+    older_label = _label_for(older)
+    older_batch = _create_batch(client, monkeypatch, older_label)
+    state = client.app.state
+    # Arrival read of both files, then the batch ingest of both.
+    _patch_ocr(
+        monkeypatch,
+        _extraction(vendor="GitHub", total="11.56", date=older.isoformat()),
+        _extraction(vendor="GitHub", total="12.34", date=RECEIPT_DAY.isoformat()),
+        _extraction(vendor="GitHub", total="11.56", date=older.isoformat()),
+        _extraction(vendor="GitHub", total="12.34", date=RECEIPT_DAY.isoformat()),
+    )
+    result = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com", attachments=[
+            ("old.jpg", JPG + b"gh-old"), ("new.jpg", JPG + b"gh-new"),
+        ]),
+        synchronous=True,
+    )
+    assert result["status"] == STATUS_INGESTED
+    assert result["batch_id"] == older_batch
+
+    batches = {b["label"]: b["run_id"] for b in
+               client.get("/api/expense-batches").json()["batches"]}
+    assert MONTH_LABEL in batches, "the later receipt's month was not opened"
+    later = client.get(f"/api/expense-batches/{batches[MONTH_LABEL]}").json()
+    assert [e["total"] for e in later["expenses"]] == ["12.34"]
+    stayed = client.get(f"/api/expense-batches/{older_batch}").json()
+    assert "12.34" not in [e["total"] for e in stayed["expenses"]]
+    assert "11.56" in [e["total"] for e in stayed["expenses"]]
+    row = [e for e in client.get("/api/inbound/log").json()["entries"]
+           if e["archive"] == result["archive"]][0]
+    assert row["mixed_months"] is True
+    assert row["split_to"][0]["month"] == RECEIPT_MONTH
+
+
 def test_resolve_receipt_month_boundaries():
     """The clamp's own edges, without the cost of a round trip: one day
     into the future is timezone skew and stays readable; two days is a
@@ -1828,8 +1994,16 @@ def test_renaming_a_batch_into_a_month_claims_its_pool(client, monkeypatch):
     assert _wait_for(
         lambda: client.get("/api/inbound/log").json()["n_pooled"] == 0
     ), client.get("/api/inbound/log").json()
-    grid = client.get(f"/api/expense-batches/{batch_id}").json()
-    assert [e for e in grid["expenses"] if e.get("submitted_by")]
+    # The mail leaves the pool when the claim STARTS; its ingest adds the
+    # expense a moment later on the same daemon thread. Wait for the
+    # expense itself, or a slow runner reads the grid in between (CI,
+    # 2026-10-29, PR #1699).
+    assert _wait_for(
+        lambda: [
+            e for e in client.get(f"/api/expense-batches/{batch_id}").json()["expenses"]
+            if e.get("submitted_by")
+        ]
+    ), client.get(f"/api/expense-batches/{batch_id}").json()["expenses"]
 
 
 def test_startup_sweep_claims_mail_pooled_while_the_machine_slept(
@@ -3060,6 +3234,41 @@ def test_flag_off_receipt_mail_pools_and_creates_nothing(client, monkeypatch):
     assert res["pool_month"] == RECEIPT_MONTH
     assert res["receipt_month_source"] == "receipt"
     assert _runs(client) == []  # nothing materialized
+
+
+def test_a_mixed_mail_that_opens_its_month_sends_the_rest_on(client, monkeypatch):
+    """Item 263, the materialize path: with no month open, a mixed mail opens
+    its EARLIEST month from its own files (that month's batch is created
+    under the materialize hold); the later receipt then moves to its own
+    month, which the move opens. The mover takes the same hold, so it runs
+    after the hold is released or the arrival would deadlock."""
+    _patch_notify(monkeypatch)
+    _flag_on(monkeypatch)
+    state = client.app.state
+    older = RECEIPT_DAY.replace(day=1) - timedelta(days=5)
+    # Arrival read of both files, then the create-execute read of both.
+    _patch_ocr(
+        monkeypatch,
+        _extraction(vendor="GitHub", total="11.56", date=older.isoformat()),
+        _extraction(vendor="GitHub", total="12.34", date=RECEIPT_DAY.isoformat()),
+        _extraction(vendor="GitHub", total="11.56", date=older.isoformat()),
+        _extraction(vendor="GitHub", total="12.34", date=RECEIPT_DAY.isoformat()),
+    )
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _mail("dirk.neumann@brisken.com", attachments=[
+            ("old.jpg", JPG + b"mat-old"), ("new.jpg", JPG + b"mat-new"),
+        ]),
+        synchronous=True,
+    )
+    assert res["status"] == STATUS_INGESTED
+    assert res["materialized"] is True
+    labels = {b["label"]: b["batch_id"] for b in _runs(client)}
+    assert set(labels) == {_label_for(older), MONTH_LABEL}
+    first = client.get(f"/api/expense-batches/{labels[_label_for(older)]}").json()
+    assert [e["total"] for e in first["expenses"]] == ["11.56"]
+    later = client.get(f"/api/expense-batches/{labels[MONTH_LABEL]}").json()
+    assert [e["total"] for e in later["expenses"]] == ["12.34"]
 
 
 def test_flag_on_receipt_mail_materializes_its_month(client, monkeypatch):

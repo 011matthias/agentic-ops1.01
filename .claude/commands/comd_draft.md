@@ -17,7 +17,7 @@ argument-hint: <client-name> [message-type] [recipient]
    - `$3` = recipient name (optional).
 
 2. **Verify client exists:** Check that `workspace/clients/$1/` exists. If not, list available clients and ask.
-   - Note: `/draft` only applies to `type: client` projects. If the project is found in `workspace/projects/` with `type: internal` or `type: platform`, stop with: "Client comms don't apply to `type: {type}` projects."
+   - Note: `/comd_draft` only applies to `type: client` projects. If the project is found in `workspace/projects/` with `type: internal` or `type: platform`, stop with: "Client comms don't apply to `type: {type}` projects."
 
 3. **Pre-flight context load (mandatory, before drafting).** Closes the 2026-05-25 over-iteration class (register #120, #124) and the cost-anchor-drift class (#121). Don't draft until these are loaded:
    - Read the LAST 25 entries of `workspace/clients/$1/context/comms-log.md`. Quote the most recent 3 client messages verbatim in your own response so the agent's draft anchors on the client's actual words (per `feedback_anchor_on_clients_words`).
@@ -61,7 +61,7 @@ argument-hint: <client-name> [message-type] [recipient]
 ## Examples
 
 ```
-/draft meji-media                           # Infer type from context
-/draft meji-media status-update             # Explicit type
-/draft meji-media technical-to-dev Anuj     # Explicit type + recipient
+/comd_draft meji-media                           # Infer type from context
+/comd_draft meji-media status-update             # Explicit type
+/comd_draft meji-media technical-to-dev Anuj     # Explicit type + recipient
 ```

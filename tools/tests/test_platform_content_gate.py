@@ -97,7 +97,7 @@ def test_plan_out_of_scope_stays_empty():
 def _run_json(path) -> tuple[int, dict]:
     proc = subprocess.run(
         ["uv", "run", str(VALIDATOR), str(path), "--format", "json"],
-        capture_output=True, text=True, timeout=120, cwd=str(REPO),
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120, cwd=str(REPO),
     )
     return proc.returncode, json.loads(proc.stdout)
 

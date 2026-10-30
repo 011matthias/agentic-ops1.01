@@ -195,7 +195,7 @@ def test_status_exposes_context_tokens(iso, tmp_path):
     meter(env, "S9", write_transcript(tmp_path / "t.jsonl", assistant(512_000)))
     r = subprocess.run(
         [sys.executable, str(TOOLS / "session_state.py"), "--status", "--json"],
-        capture_output=True, text=True, timeout=30, cwd=str(REPO),
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30, cwd=str(REPO),
         env={**os.environ, **env},
     )
     st = json.loads(r.stdout)

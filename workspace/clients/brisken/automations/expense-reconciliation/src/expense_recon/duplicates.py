@@ -41,6 +41,17 @@ vendor + date + total + currency. After a match,
 set-aside copy whose own exact charge sits unmatched. A reviewer's ruling
 outranks every rung. Nobody is asked: a copy is set aside and reported, and
 "Not a copy" stays as an undo.
+
+Item 256 (Dirk, 2026-10-29): a receipt and its invoice found by one document
+number are settled by it. The receipt is the kept copy even where the tool's
+own match held the invoice, the statement check never splits the pair, and
+the set-aside invoice asks nothing (``number_settled_copies``).
+
+Item 257 (owner, 2026-10-29): the shared number may sit in any number field.
+``number_keys`` reads the reference, the invoice number and the receipt
+number; a group whose members share one (same amount, no two cards) is one
+document at rung 2, and ``find_duplicate_receipts_by_any_number`` nominates
+the pairs no older key found.
 """
 from __future__ import annotations
 
@@ -198,7 +209,12 @@ def reference_key(receipt: Receipt) -> str | None:
     receipt's date in any of ``_DATE_LAYOUTS``, or to the digits of its
     total (with or without the cents), is no reference.
     """
-    ref = _NON_ALNUM_UPPER.sub("", (receipt.detected_reference or "").upper())
+    return _number_key(receipt.detected_reference, receipt)
+
+
+def _number_key(text: str | None, receipt: Receipt) -> str | None:
+    """``reference_key``'s rule over any number field's text."""
+    ref = _NON_ALNUM_UPPER.sub("", (text or "").upper())
     if not ref.isdigit():
         return ref if len(ref) >= _MIN_REFERENCE_LEN else None
     # A digit-only reference is measured without its leading zeros: a till
@@ -219,6 +235,75 @@ def reference_key(receipt: Receipt) -> str | None:
         if ref in as_printed:
             return None
     return ref
+
+
+def number_keys(
+    receipts: list[Receipt], account_keys: "frozenset[str] | set[str]" = frozenset()
+) -> dict[str, frozenset[str]]:
+    """``document_id -> every number it can be twinned on``: the
+    ``reference_key`` rule applied to the reference, the invoice number and
+    the receipt number, with account ids taken out as ``reference_keys``
+    does (a key carried at DIFFERENT totals in the list, or named by
+    ``account_keys``). Receipts with no key are absent.
+
+    Item 257 (owner, 2026-10-29): copies of one purchase share an important
+    number, but not always in the same field. A Stripe receipt's reference is
+    its OWN receipt number (``2709 9940``) while it carries the invoice's
+    number (``EF742DD0 0062``) as its invoice number, so comparing references
+    alone calls the pair two purchases unless one mail delivered both."""
+    per_doc: dict[str, set[str]] = {}
+    totals_by_key: dict[str, set[str]] = defaultdict(set)
+    for r in receipts:
+        found = {
+            k for k in (
+                _number_key(r.detected_reference, r),
+                _number_key(getattr(r, "invoice_number", None), r),
+                _number_key(getattr(r, "receipt_number", None), r),
+            ) if k
+        }
+        if not found:
+            continue
+        per_doc[r.document_id] = found
+        if r.detected_total is not None:
+            for k in found:
+                totals_by_key[k].add(str(r.detected_total))
+    account = {k for k, totals in totals_by_key.items() if len(totals) > 1}
+    account |= set(account_keys or ())
+    out: dict[str, frozenset[str]] = {}
+    for doc, found in per_doc.items():
+        kept = frozenset(found - account)
+        if kept:
+            out[doc] = kept
+    return out
+
+
+def _shares_a_number(ids: list[str], nums: dict[str, frozenset[str]]) -> bool:
+    """Every member has a number and the shared numbers connect them all."""
+    if not all(nums.get(d) for d in ids):
+        return False
+    groups = _union_groups(ids, lambda a, b: bool(nums[a] & nums[b]))
+    return len(groups) == 1 and len(groups[0]) == len(ids)
+
+
+def find_duplicate_receipts_by_any_number(
+    receipts: list[Receipt], account_keys: "frozenset[str] | set[str]" = frozenset()
+) -> list[list[str]]:
+    """Groups of receipts of one total + currency joined by a shared number
+    in any number field (``number_keys``), whatever the vendor spelling or
+    the date. Sorted, deterministic. Item 257."""
+    nums = number_keys(receipts, account_keys)
+    buckets: dict[tuple, list[str]] = defaultdict(list)
+    for r in receipts:
+        if r.document_id in nums and r.detected_total is not None:
+            buckets[(str(r.detected_total), (r.detected_currency or "").upper())].append(r.document_id)
+    out: list[list[str]] = []
+    for ids in buckets.values():
+        if len(ids) >= 2:
+            out.extend(_union_groups(
+                sorted(set(ids)), lambda a, b: bool(nums[a] & nums[b])
+            ))
+    out.sort()
+    return out
 
 
 def find_duplicate_receipts_by_reference(
@@ -567,6 +652,14 @@ def find_duplicate_receipt_groups(
             continue
         known.add(pair)
         out.append((list(pair), BASIS_INTAKE_TWIN))
+    # Item 257: a number shared in ANY number field (a receipt carrying its
+    # invoice's number as its invoice number). Last, and only for documents
+    # no earlier group already holds together, so no saved ruling moves.
+    for g in find_duplicate_receipts_by_any_number(receipts, account_keys):
+        if tuple(g) in known or any(set(g) <= set(m) for m, _k in out):
+            continue
+        known.add(tuple(g))
+        out.append((g, REFERENCE_BASIS))
     return out
 
 
@@ -888,6 +981,7 @@ def _ladder(
     text_of,
     cores: dict[str, frozenset[str]] | None = None,
     twins: "dict[str, str] | None" = None,
+    nums: dict[str, frozenset[str]] | None = None,
 ) -> tuple[str | None, str | None]:
     """Rungs 0 to 6 for one candidate group: ``(basis, verdict)``."""
     group = [by_id[d] for d in members if d in by_id]
@@ -915,8 +1009,16 @@ def _ladder(
     )
     group_keys = [keys.get(r.document_id) for r in group]
 
-    # 2. reference: one document number + total + currency.
+    # 2. reference: one document number + total + currency. Item 257: the
+    # number may sit in any number field (reference, invoice number, receipt
+    # number) and the shared numbers need only connect the members, never
+    # over two members that name different cards.
     if same_money and all(group_keys) and len(set(group_keys)) == 1:
+        return BASIS_REFERENCE, VERDICT_COPY
+    if (
+        same_money and nums is not None and not _cards_conflict(group)
+        and _shares_a_number([r.document_id for r in group], nums)
+    ):
         return BASIS_REFERENCE, VERDICT_COPY
 
     # 3. printed_reference: one document's text layer prints another's
@@ -1017,6 +1119,7 @@ def decide_receipt_groups(
     by_id = {r.document_id: r for r in receipts}
     keys = reference_keys(receipts, account_keys=account_keys)
     cores = document_number_cores(receipts, account_keys=account_keys)
+    nums = number_keys(receipts, account_keys=account_keys)  # item 257
     out: list[ReceiptGroupDecision] = []
     copy_sets: set[tuple[str, ...]] = set()
     for members, _key in find_duplicate_receipt_groups(receipts, digests, account_keys, twins):
@@ -1030,7 +1133,7 @@ def decide_receipt_groups(
                 continue
             basis, tool_verdict = BASIS_BODY_TWIN, VERDICT_COPY
         else:
-            basis, tool_verdict = _ladder(members, by_id, keys, digests, text_of, cores, twins)
+            basis, tool_verdict = _ladder(members, by_id, keys, digests, text_of, cores, twins, nums)
         if gid in restored and tool_verdict == VERDICT_COPY:
             basis, tool_verdict = BASIS_STATEMENT, VERDICT_DISTINCT
         resolution = resolutions.get(gid)
@@ -1192,17 +1295,117 @@ def choose_kept(
     decisions: list[ReceiptGroupDecision],
     receipts: list[Receipt],
     held: set[str] | frozenset[str] = frozenset(),
+    pinned: "set[str] | frozenset[str] | None" = None,
 ) -> dict[str, str]:
     """group id -> kept document for every group whose verdict is ``copy``
-    (``kept_member`` over the group). Only a re-match calls this."""
+    (``kept_member`` over the group). Only a re-match calls this.
+
+    ``pinned`` (item 256) is the documents a PERSON's confirmed pick names, a
+    subset of ``held``. A group settled by one document number keeps its
+    receipt unless a person pinned the invoice, so only ``pinned`` holds it;
+    every other group is held by ``held`` as before. None: ``held`` for all."""
     by_id = {r.document_id: r for r in receipts}
+    pairs = number_pair_sets(decisions, by_id) if pinned is not None else set()
     out: dict[str, str] = {}
     for d in decisions:
         if not d.is_copy:
             continue
-        doc = kept_member(d.members, by_id, held)
+        holds = pinned if pairs and settled_by_number(d, by_id, pairs) else held
+        doc = kept_member(d.members, by_id, holds)
         if doc:
             out[d.group_id] = doc
+    return out
+
+
+# ── Item 256: one number, the receipt counts, nobody is asked ────────
+#
+# Dirk, 2026-10-29 (relayed by the owner): "if duplicate set has same item ID
+# number then default to receipt not invoice and dont ask user for
+# verification". Item 217 prefers the receipt only in a group no charge
+# holds, so an invoice the matcher paired once stayed kept at every later
+# re-match (September 2026: ElevenLabs 5.00). And the statement check (rung
+# 7) split both Anthropic pairs of September, each printing one invoice
+# number, into two purchases, because the card's PDF and its xlsx list the
+# same charge twice; both documents went back in front of a reviewer.
+#
+# A group whose documents are one payment receipt and its invoice(s), one
+# amount and currency, found by a rung that reads ONE document number, is
+# settled by that number: the receipt is kept even where the tool's own
+# match holds the invoice, the statement check never splits it, and the
+# set-aside copy asks nothing. Two things still outrank it: a reviewer's
+# "Not a copy", and a PERSON's confirmed pick of the invoice (moving that
+# would count both documents).
+
+NUMBER_BASES = frozenset({
+    BASIS_REFERENCE, BASIS_PRINTED_REFERENCE, BASIS_REFERENCE_DIGITS,
+    "intake_twin",  # BASIS_INTAKE_TWIN, defined with item 223 step 6 below
+})
+
+
+def _documents(members, by_id: dict[str, Receipt]) -> list[Receipt] | None:
+    """A group's documents: members minus rendered mail bodies and payment
+    reminders (``kept_member``'s own filter). None when a member is not in
+    ``by_id``."""
+    group = [by_id.get(m) for m in members if m]
+    if any(r is None for r in group):
+        return None
+    return [r for r in group if not is_rendered_body(r) and not is_reminder(r)]
+
+
+def is_number_pair(decision: ReceiptGroupDecision, by_id: dict[str, Receipt]) -> bool:
+    """The TOOL found ``decision`` by one document number (``NUMBER_BASES``)
+    and its documents are exactly one payment receipt and its invoice(s),
+    one amount and currency (``payment_document_kind``)."""
+    if decision.basis not in NUMBER_BASES or decision.tool_verdict != VERDICT_COPY:
+        return False
+    docs = _documents(decision.members, by_id)
+    if not docs or len(docs) < 2:
+        return False
+    money = {(str(r.detected_total), (r.detected_currency or "").upper()) for r in docs}
+    if len(money) != 1 or None in {r.detected_total for r in docs}:
+        return False
+    kinds = [payment_document_kind(r) for r in docs]
+    return kinds.count(KIND_RECEIPT) == 1 and all(
+        k in (KIND_RECEIPT, KIND_INVOICE) for k in kinds
+    )
+
+
+def number_pair_sets(
+    decisions: list[ReceiptGroupDecision], by_id: dict[str, Receipt]
+) -> set[frozenset[str]]:
+    """The document sets of every ``is_number_pair`` group."""
+    out: set[frozenset[str]] = set()
+    for d in decisions:
+        if is_number_pair(d, by_id):
+            out.add(frozenset(r.document_id for r in _documents(d.members, by_id)))
+    return out
+
+
+def settled_by_number(
+    decision: ReceiptGroupDecision,
+    by_id: dict[str, Receipt],
+    pairs: set[frozenset[str]],
+) -> bool:
+    """``decision``'s documents are one of ``pairs``: the number pair itself,
+    or a mail body's group over it (front 4 lists a body beside the pair it
+    repeats)."""
+    docs = _documents(decision.members, by_id)
+    return bool(docs) and frozenset(r.document_id for r in docs) in pairs
+
+
+def number_settled_copies(
+    decisions: list[ReceiptGroupDecision], receipts: list[Receipt]
+) -> set[str]:
+    """The set-aside members (every member after the first) of each copy
+    group settled by one number: the copies that ask a person nothing."""
+    by_id = {r.document_id: r for r in receipts}
+    pairs = number_pair_sets(decisions, by_id)
+    if not pairs:
+        return set()
+    out: set[str] = set()
+    for d in decisions:
+        if d.is_copy and settled_by_number(d, by_id, pairs):
+            out.update(d.members[1:])
     return out
 
 
@@ -1246,6 +1449,12 @@ def restore_copies_with_their_own_charge(
     condition keeps a lone document that merely resembles a stranger's
     charge from being called two purchases. The caller re-matches once with
     these groups restored; there is no second check.
+
+    Item 256: a group settled by one document number (``settled_by_number``)
+    is never restored. A receipt and the invoice it pays are one purchase
+    whatever the statement prints; a second line of the same amount is the
+    statement's to explain (September 2026: card 9693's PDF and xlsx list
+    the same Anthropic charge), not a second purchase.
     """
     from .matching.deterministic import (
         MatchingConfig,
@@ -1272,10 +1481,13 @@ def restore_copies_with_their_own_charge(
     for k in tx_keys.values():
         present |= k
     free = [t for t in charges if t.transaction_id not in held_tx]
+    pairs = number_pair_sets(decisions, by_id)
 
     restored: set[str] = set()
     for d in decisions:
         if d.decided_by != DECIDED_BY_TOOL or d.verdict != VERDICT_COPY:
+            continue
+        if pairs and settled_by_number(d, by_id, pairs):
             continue
         if d.members[0] not in settled_docs:
             continue
@@ -1328,6 +1540,10 @@ def _number_tokens(receipt: Receipt) -> set[str]:
     receipt number."""
     tokens = {
         reference_key(receipt),
+        # Item 257: the alphanumeric invoice / receipt numbers too, so a
+        # billing-account code printed there is learned across months.
+        _number_key(getattr(receipt, "invoice_number", None), receipt),
+        _number_key(getattr(receipt, "receipt_number", None), receipt),
         _digit_core(receipt.detected_reference, receipt),
         _digit_core(getattr(receipt, "invoice_number", None), receipt),
         _digit_core(getattr(receipt, "receipt_number", None), receipt),

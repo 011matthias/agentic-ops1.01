@@ -78,6 +78,14 @@ except Exception:
     def normalize_command(c: str) -> str:
         return c
 
+# Shared PR-state reader (mergeable + statusCheckRollup), also used by
+# tools/repo-sweep.py. Missing module -> every merge verdict is "unknown" (ASK).
+try:
+    from _gh import pr_merge_state
+except Exception:
+    def pr_merge_state(selector: str = "", timeout: int = 20) -> str | None:
+        return None
+
 HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.txt")
 
 # Ship-class shell command patterns. Matched against the FULL command string
@@ -191,7 +199,7 @@ def is_prototype_scoped(cmd: str, tag: str) -> bool:
         try:
             out = subprocess.run(
                 ["git", "diff", "--cached", "--name-only"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
             )
             files = [f for f in out.stdout.strip().splitlines() if f.strip()]
             if files and all(_has_prototype_prefix(f) for f in files):
@@ -205,7 +213,7 @@ def is_prototype_scoped(cmd: str, tag: str) -> bool:
             # Range: upstream..HEAD (commits being pushed)
             upstream = subprocess.run(
                 ["git", "rev-parse", "--abbrev-ref", "@{u}"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
             )
             up = upstream.stdout.strip()
             if not up or upstream.returncode != 0:
@@ -213,7 +221,7 @@ def is_prototype_scoped(cmd: str, tag: str) -> bool:
                 up = "origin/HEAD"
             out = subprocess.run(
                 ["git", "diff", "--name-only", f"{up}...HEAD"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
             )
             files = [f for f in out.stdout.strip().splitlines() if f.strip()]
             if files and all(_has_prototype_prefix(f) for f in files):
@@ -227,7 +235,7 @@ def is_prototype_scoped(cmd: str, tag: str) -> bool:
             # feature branches off main, so this is the correct compare.
             out = subprocess.run(
                 ["git", "diff", "--name-only", "main...HEAD"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
             )
             files = [f for f in out.stdout.strip().splitlines() if f.strip()]
             if files and all(_has_prototype_prefix(f) for f in files):
@@ -250,7 +258,7 @@ def current_branch() -> str | None:
     try:
         out = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
         )
         if out.returncode == 0:
             return out.stdout.strip()
@@ -310,36 +318,27 @@ def _merge_pr_selector(cmd: str) -> str:
     return ""
 
 
-def ci_is_green(cmd: str) -> bool | None:
-    """Decide the auto-merge gate from the target PR's CI status.
+def merge_verdict(cmd: str) -> str:
+    """Decide the auto-merge gate from the target PR's merge readiness.
 
-    True  -> all checks green (auto-merge sanctioned).
-    False -> a check is failing or pending (do not auto-merge).
-    None  -> undeterminable (gh missing/unauthed/no repo/timeout).
+    green       -> all checks green and not conflicting (auto-merge sanctioned).
+    conflicting -> GitHub refuses the merge whatever the checks say; ASK with
+                   the remedy (merge origin/main locally, push).
+    red | pending | none -> do not auto-merge; the named-override path applies.
+    unknown     -> undeterminable (gh missing/unauthed/no repo/timeout).
 
     Auto-merge is the one place autonomy keys on an OBJECTIVE external
     signal rather than the agent's judgment: the merge fires only when the
-    user's own CI is green. `gh pr checks` exit codes: 0 = all pass,
-    8 = pending, 1 = failure. Test seam: NO_AUTO_COMMIT_GATE_CI in
-    {green, red, pending} forces the verdict for deterministic smoke tests
-    (never set in production).
+    user's own CI is green. Reads `gh pr view --json
+    mergeable,statusCheckRollup`, because `gh pr checks` exits 0 on a
+    CONFLICTING PR with green checks (#1638, 2026-10-28). Test seam:
+    NO_AUTO_COMMIT_GATE_CI in {green, red, pending, none, conflicting} forces
+    the verdict for deterministic smoke tests (never set in production).
     """
     forced = os.environ.get("NO_AUTO_COMMIT_GATE_CI")
     if forced:
-        return forced.strip().lower() == "green"
-    selector = _merge_pr_selector(cmd)
-    args = ["gh", "pr", "checks"]
-    if selector:
-        args.append(selector)
-    try:
-        out = subprocess.run(args, capture_output=True, text=True, timeout=20)
-    except Exception:
-        return None
-    if out.returncode == 0:
-        return True
-    if out.returncode in (1, 8):
-        return False
-    return None  # 2/4/other -> error resolving the PR; fail safe to ASK
+        return forced.strip().lower()
+    return pr_merge_state(_merge_pr_selector(cmd)) or "unknown"
 
 
 def recent_user_messages(transcript_path: str, lookback: int = USER_TURN_LOOKBACK) -> list[str]:
@@ -487,11 +486,27 @@ def main() -> None:
     # falls through to the explicit-order scan below, which preserves a manual
     # override ("merge anyway") and otherwise ASKs.
     if ship_tag == "gh-pr-merge":
-        verdict = ci_is_green(view)
-        if verdict is True:
+        verdict = merge_verdict(view)
+        if verdict == "green":
             log(f"allow:{ship_tag} band=auto-merge ci=green")
             sys.exit(0)
-        log(f"fallthrough:{ship_tag} ci={'red/pending' if verdict is False else 'unknown'}")
+        if verdict == "conflicting":
+            # No override helps: GitHub refuses a conflicting merge, so the
+            # useful answer is the remedy, not a permission to try anyway.
+            log(f"ASK:{ship_tag} ci=conflicting")
+            print(json.dumps({
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "ask",
+                    "permissionDecisionReason": (
+                        "CONFLICTING: merge origin/main locally (union drivers "
+                        "apply), push, auto-merge fires on green. GitHub refuses "
+                        "this merge whatever the checks say."
+                    ),
+                }
+            }))
+            sys.exit(0)
+        log(f"fallthrough:{ship_tag} ci={verdict}")
 
     # Gated floor (push-to-main, force push, commit-on-main, deploy, tag,
     # release, subtree push, pr-close) + non-green merge: explicit order

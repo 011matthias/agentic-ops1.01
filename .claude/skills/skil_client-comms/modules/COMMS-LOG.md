@@ -2,7 +2,7 @@
 
 Persistent per-client conversation record. Lives at `workspace/clients/{client}/context/comms-log.md`.
 
-The comms-log bridges outbound drafting (`/draft`) and inbound processing (`/comms`). It gives every future message conversational memory and feeds into `/resume` for session continuity.
+The comms-log bridges outbound drafting (`/comd_draft`) and inbound processing (`/comd_comms`). It gives every future message conversational memory and feeds into `/comd_resume` for session continuity.
 
 ---
 
@@ -61,20 +61,20 @@ Each entry is an H3 header with a date, followed by structured fields.
 
 ## Read Procedures
 
-### For `/draft` (outbound context)
+### For `/comd_draft` (outbound context)
 Load the comms-log and extract:
 1. **Last 3-5 entries** — recent conversation thread for continuity
 2. **All unresolved open items** — scan all entries, collect items not yet marked resolved by any later entry
 3. **Recent decisions** (last 2 weeks) — for reference in messages
 4. **Last contact date + direction** — who spoke last, and when (for temporal opener rules)
 
-### For `/comms inbound` (deduplication)
+### For `/comd_comms inbound` (deduplication)
 Load the full log to:
 1. Compare pasted content against existing entries for deduplication
 2. Identify the last logged entry date for gap detection
 3. Check open items for auto-resolution
 
-### For `/resume` (session context)
+### For `/comd_resume` (session context)
 Extract:
 1. All unresolved open items — these are "things to address this session"
 2. Last 3 entries — recent conversation state
@@ -84,7 +84,7 @@ Extract:
 
 ## Write Procedures
 
-### After `/draft` (outbound logging — automatic)
+### After `/comd_draft` (outbound logging — automatic)
 
 After the user approves a draft, log it automatically (no confirmation needed — the system created the message):
 
@@ -96,7 +96,7 @@ After the user approves a draft, log it automatically (no confirmation needed �
 
 Why automatic: Outbound drafts are system-generated artifacts. Asking "want me to log?" makes logging opt-in, which causes comms to fall stale across sessions. The "always automate" rule applies.
 
-### After `/comms inbound` (inbound logging)
+### After `/comd_comms inbound` (inbound logging)
 
 After processing a client response, ask: "Want me to log this?"
 
@@ -110,7 +110,7 @@ If yes:
 
 ### Quick Capture (batch catch-up)
 
-Used when logging missed conversations during `/checkpoint` or `/resume` staleness prompts. Optimized for speed over analysis depth.
+Used when logging missed conversations during `/comd_checkpoint` or `/comd_resume` staleness prompts. Optimized for speed over analysis depth.
 
 1. Ask: "Briefly describe what was discussed (who, when, key points, any decisions or open items)."
 2. Accept natural-language input — no structured format required.
@@ -126,13 +126,13 @@ Used when logging missed conversations during `/checkpoint` or `/resume` stalene
 6. Ask: "Any more to log?" — repeat for each missed conversation.
 7. After all entries logged, update `unresolved_count` and `last_contact` in frontmatter.
 
-Skip deduplication, feasibility checks, and spec-impact analysis. Those are for full `/comms inbound` processing. Quick capture is "get it in the log" — entries can be elaborated later.
+Skip deduplication, feasibility checks, and spec-impact analysis. Those are for full `/comd_comms inbound` processing. Quick capture is "get it in the log" — entries can be elaborated later.
 
 ### Resolution Tracking
 
 An open item is considered resolved when:
 - A later inbound entry has it in its `Resolved:` field
-- The user manually marks it resolved via `/comms {client} status`
+- The user manually marks it resolved via `/comd_comms {client} status`
 
 When resolving, don't delete the original open item. The history stays. The resolution is tracked by the `Resolved:` field in the resolving entry.
 
@@ -153,7 +153,7 @@ This is the "what are we still waiting on?" view.
 
 ## Creating a New Log
 
-When `/comms` or `/draft` is used for a client that has no comms-log yet:
+When `/comd_comms` or `/comd_draft` is used for a client that has no comms-log yet:
 1. Create from `templates/comms-log-template.md`
 2. If there's a recent checkpoint with blockers/open questions, offer to seed those as the initial open items
 3. Don't force it — the log starts whenever the user first logs something

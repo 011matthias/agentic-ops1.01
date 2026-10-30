@@ -37,7 +37,7 @@ median session peak 402k, p95 703k; 23 compactions, all manual, at 468k-920k
 high near the earliest observed compaction, critical where most sessions had
 already compacted.
 
-**Major operations:** A complete skil_build-test-fix cycle, a /system-dev round, a full /comd_deploy cycle, or a cross-client context switch.
+**Major operations:** A complete skil_build-test-fix cycle, a /comd_system-dev round, a full /comd_deploy cycle, or a cross-client context switch.
 
 ## Adaptive Behavior
 
@@ -45,7 +45,7 @@ already compacted.
 
 **High pressure:** Strongly recommend `/comd_checkpoint` or `/comd_checkpoint --mini` before continuing. State: "Context pressure is high — recommend checkpointing to preserve work details." Prioritize completing current task over starting new ones. Proactively state pressure level in every response.
 
-**Critical pressure:** STOP. Do not start new work. State: "Context pressure is critical — checkpointing now to prevent work loss." Run `/comd_checkpoint --mini` immediately. After checkpoint, suggest the user start a fresh session with `/resume`. Do not start any task that cannot complete in <10 tool calls.
+**Critical pressure:** STOP. Do not start new work. State: "Context pressure is critical — checkpointing now to prevent work loss." Run `/comd_checkpoint --mini` immediately. After checkpoint, suggest the user start a fresh session with `/comd_resume`. Do not start any task that cannot complete in <10 tool calls.
 
 ## Pre-Task Scope Estimation
 
@@ -56,7 +56,7 @@ Before starting a large task, evaluate expected scope:
 | build-automation (1 spec, simple) | Moderate | Checkpoint at end |
 | build-automation (1 spec, complex / >4 phases) | High | Plan checkpoint at phase boundary |
 | build-automation (2+ specs) | High | Checkpoint after each spec |
-| /system-dev full round | High | Checkpoint after each change group |
+| /comd_system-dev full round | High | Checkpoint after each change group |
 | Cross-client context switch mid-session | High | Checkpoint before switching |
 
 When starting a task estimated as **High**, state upfront:

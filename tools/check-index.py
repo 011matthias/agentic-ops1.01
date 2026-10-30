@@ -23,6 +23,11 @@ could ship unregistered and the operator would never learn it exists. Its
 scorers appear inside one prose cell rather than one row each, which the
 backtick test handles unchanged.
 
+Client scan (layout plan W1-18): every workspace/clients/*/automations/tools/
+dir holding *.py, *.mjs, *.js or *.cjs needs a README.md beside it with one
+row per script in the same format, because a client's tools travel with its
+git subtree and tools/INDEX.md does not.
+
 Exit 0 if every tool is listed; exit 1 with the missing list otherwise.
 Run: uv run tools/check-index.py
 """
@@ -67,16 +72,7 @@ def _freshness_caveat(tools_dir: Path) -> None:
         pass
 
 
-def main(tools_dir: Path = TOOLS, index_path: Path = INDEX) -> int:
-    if not index_path.is_file():
-        print(f"[check-index] MISSING: {index_path}", file=sys.stderr)
-        return 1
-    _freshness_caveat(tools_dir)
-    index_text = index_path.read_text(encoding="utf-8")
-    tools = sorted(
-        {p.name for p in _scannable(tools_dir)}
-        | {p.name for p in _scannable(tools_dir / "scorers")}
-    )
+def _unlisted(names: list[str], index_text: str) -> list[str]:
     # Whole-name match within a table row only: `<name>` or `<name> args`.
     # The old backtick-prefix substring test accepted a prefix of a longer
     # name and mentions anywhere in prose (even a removed-tools note).
@@ -86,7 +82,51 @@ def main(tools_dir: Path = TOOLS, index_path: Path = INDEX) -> int:
         pat = re.compile(r"`" + re.escape(name) + r"(?=[`\s])")
         return any(pat.search(row) for row in table_rows)
 
-    missing = [t for t in tools if not _listed(t)]
+    return [n for n in names if not _listed(n)]
+
+
+CLIENT_SUFFIXES = (".py", ".mjs", ".js", ".cjs")
+
+
+def _client_problems(clients_dir: Path | None) -> list[str]:
+    """`<client>/automations/tools/<script>` entries with no README.md row."""
+    if clients_dir is None or not clients_dir.is_dir():
+        return []
+    problems = []
+    for tdir in sorted(clients_dir.glob("*/automations/tools")):
+        scripts = sorted(p.name for p in tdir.iterdir() if p.is_file() and p.suffix in CLIENT_SUFFIXES)
+        if not scripts:
+            continue
+        readme = tdir / "README.md"
+        rel = tdir.relative_to(clients_dir.parent.parent) if clients_dir.parent.parent in tdir.parents else tdir
+        if not readme.is_file():
+            problems.append(f"{rel.as_posix()}/README.md missing ({len(scripts)} scripts)")
+            continue
+        problems += [f"{rel.as_posix()}/{s}" for s in _unlisted(scripts, readme.read_text(encoding="utf-8"))]
+    return problems
+
+
+def main(tools_dir: Path = TOOLS, index_path: Path = INDEX, clients_dir: Path | None = None) -> int:
+    if clients_dir is None and tools_dir == TOOLS:
+        clients_dir = TOOLS.parent / "workspace" / "clients"
+    if not index_path.is_file():
+        print(f"[check-index] MISSING: {index_path}", file=sys.stderr)
+        return 1
+    _freshness_caveat(tools_dir)
+    index_text = index_path.read_text(encoding="utf-8")
+    tools = sorted(
+        {p.name for p in _scannable(tools_dir)}
+        | {p.name for p in _scannable(tools_dir / "scorers")}
+    )
+    missing = _unlisted(tools, index_text)
+    client_missing = _client_problems(clients_dir)
+    if client_missing:
+        print("[check-index] client automations/tools/ scripts with no README.md row:", file=sys.stderr)
+        for m in client_missing:
+            print(f"  - {m}", file=sys.stderr)
+        print("Add automations/tools/README.md with: | `<script> [args]` | <when to use> |", file=sys.stderr)
+        if not missing:
+            return 1
     if missing:
         print("[check-index] tools/ scripts with no tools/INDEX.md row:", file=sys.stderr)
         for m in missing:
