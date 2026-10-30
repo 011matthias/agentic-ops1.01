@@ -103,7 +103,7 @@ Files: `docs/INDEX.md`, `docs/friction-register.md`, `docs/sessions/*.md`
 
 ### W1-5 [truth-1, fit-9, truth-8, truth-11, ctx-10, truth-9, truth-12, harness-10, homes-10, truth-2, truth-14, truth-10, ctx-4, harness-6] cost S
 
-Status: todo
+Status: done PR #1705 (2026-10-29): CLAUDE.md 6,548 -> 3,983 B; 132 legacy /name tokens -> /comd_name (test-dev/test-production/verify-live -> /comd_test <mode>); test_doc_command_refs.py runs in ci.yml's every-PR step (deny-list = plan list + every comd_ stem + retired names; skill modules included, two non-commands allowlisted); [MERGE-NOT-LIVE] arm + 9 tests retired; anneal-metrics counts Hooks (30) + Patterns (37), drift none. Guard: reaches no surface (briefing Action runs tools/morning_briefing.py and is disabled). regress_check bites on both tests.
 
 Depends on: none
 
@@ -503,7 +503,7 @@ Files: `CLAUDE.md`, `workspace/clients/brisken/OWNERSHIP-HANDOFF.md`
 
 ### D3 [exposure-3, homes-3, exposure-5, exposure-6, exposure-7, ledger-7, homes-9, machine-8, exposure-1, homes-11, exposure-2] cost M
 
-Status: approved 2026-10-28 (owner): all of (a)-(g). (g)'s two remote-branch deletions were ordered in the 2026-10-28 session; a later session executing (g) needs a fresh explicit order. Rotation: hand the owner only the step that needs their login.
+Status: approved 2026-10-28 (owner): all of (a)-(g). (g)'s two remote-branch deletions were ordered in the 2026-10-28 session; a later session executing (g) needs a fresh explicit order. Rotation: hand the owner only the step that needs their login. Partial 2026-10-29/30: (a) repo half + (f) done PR #1706 (export csv/xlsx + m-mail-abgleich.html out of HEAD, links and search-index entries removed; root --full* gone, test_root_layout exemption dropped). Open: (a) live half (akkton/unpauseai-web still serves the two abgleich files + m-mail-abgleich.html, read 2026-10-30; prozesslandkarte-2026-09-30.pdf in the same downloads/ is NOT part of D3), (b) .. (e), (g) (fresh order). pii_scan dir-arg blind spot fixed PR #1708.
 
 Depends on: item 10, item 14
 
