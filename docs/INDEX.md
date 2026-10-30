@@ -507,29 +507,6 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-05-25 | Brisken Functional Spec v2 and Build Start | client-dev | [Checkpoint](docs/2026-05-25%20-%20Brisken%20Functional%20Spec%20v2%20and%20Build%20Start/Checkpoint.md) |
 | 2026-05-20 | Brisken Expense Recon Call Outcomes | comms | [Checkpoint](docs/2026-05-20%20-%20Brisken%20Expense%20Recon%20Call%20Outcomes/Checkpoint.md) |
 
-## jochen-projekt
-| Date | Topic | Type | Link |
-|------|-------|------|------|
-| 2026-07-29 | Nagarro ES Assessment + Ergebnisseiten-Leseführung | client-dev | [→](docs/2026-07-29%20-%20Nagarro%20ES%20Assessment%20%2B%20Ergebnisseiten-Lesef%C3%BChrung/Checkpoint.md) |
-| 2026-07-29 | One Assessment Ergebnis Download | client-dev | [→](docs/2026-07-29%20-%20One%20Assessment%20Ergebnis%20Download/Checkpoint.md) |
-| 2026-07-17 | One Assessment UI Feedback-Log Full-Width Readability | client-dev | [Checkpoint](docs/2026-07-17%20-%20One%20Assessment%20UI%20Feedback-Log%20Full-Width%20Readability/Checkpoint.md) |
-| 2026-07-17 | One Assessment Followup + Brisken Branding | client-dev | [Checkpoint](docs/2026-07-17%20-%20One%20Assessment%20Followup%20+%20Brisken%20Branding/Checkpoint.md) |
-| 2026-07-16 | One Assessment RG Calibration + Adjudication | client-dev | [Checkpoint](docs/2026-07-16%20-%20One%20Assessment%20RG%20Calibration%20+%20Adjudication/Checkpoint.md) |
-| 2026-07-16 | One Assessment Document Channel + Gate + Manual-LLM | client-dev | [Checkpoint](docs/2026-07-16%20-%20One%20Assessment%20Document%20Channel%20+%20Gate%20+%20Manual-LLM/Checkpoint.md) |
-| 2026-07-15 | One Assessment Workshop Channel + Feedback Resolution | client-dev | [Checkpoint](docs/2026-07-15%20-%20One%20Assessment%20Workshop%20Channel%20+%20Feedback%20Resolution/Checkpoint.md) |
-| 2026-07-15 | One Assessment Feedback Widget + Portal Access | client-dev | [Checkpoint](docs/2026-07-15%20-%20One%20Assessment%20Feedback%20Widget%20+%20Portal%20Access/Checkpoint.md) |
-| 2026-07-15 | One Assessment Portal Buttons + NextDecade | client-dev | [Checkpoint](docs/2026-07-15%20-%20One%20Assessment%20Portal%20Buttons%20+%20NextDecade/Checkpoint.md) |
-| 2026-07-15 | One Assessment Portal Access | client-dev | [Checkpoint](docs/2026-07-15%20-%20One%20Assessment%20Portal%20Access/Checkpoint.md) |
-| 2026-07-15 | One Assessment Portal Segmentation | client-dev | [Checkpoint](docs/2026-07-15%20-%20One%20Assessment%20Portal%20Segmentation/Checkpoint.md) |
-| 2026-07-14 | One Assessment Intake Portal + Portal Home | client-dev | [Checkpoint](docs/2026-07-14%20-%20One%20Assessment%20Intake%20Portal%20%2B%20Portal%20Home/Checkpoint.md) |
-| 2026-07-14 | One Assessment Fly Migration | client-dev | [Checkpoint](docs/2026-07-14%20-%20One%20Assessment%20Fly%20Migration/Checkpoint.md) |
-| 2026-07-14 | Jochen Protokoll for Dirk | comms | [Checkpoint](docs/2026-07-14%20-%20Jochen%20Protokoll%20for%20Dirk/Checkpoint.md) |
-| 2026-07-14 | Jochen Quick Treasury Assessment Build | client-dev | [Checkpoint](docs/2026-07-14%20-%20Jochen%20Quick%20Treasury%20Assessment%20Build/Checkpoint.md) |
-| 2026-07-14 | Jochen Projekt Transcript Synthesis | misc | [Checkpoint](docs/2026-07-14%20-%20Jochen%20Projekt%20Transcript%20Synthesis/Checkpoint.md) |
-| 2026-07-13 | Jochen Audio Transcription | misc | [Checkpoint](docs/2026-07-13%20-%20Jochen%20Audio%20Transcription/Checkpoint.md) |
-| 2026-07-13 | Jochen Treasury Assessment Pipeline | client-dev | [Checkpoint](docs/2026-07-13%20-%20Jochen%20Treasury%20Assessment%20Pipeline/Checkpoint.md) |
-| 2026-07-13 | Jochen Projekt Assessment Pipeline Plan | client-dev | [Checkpoint](docs/2026-07-13%20-%20Jochen%20Projekt%20Assessment%20Pipeline%20Plan/Checkpoint.md) |
-
 ## volabyg
 | Date | Topic | Type | Link |
 |------|-------|------|------|
@@ -546,16 +523,9 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-10-29 | Repo Layout Execution Batch 2 | system-infra | [Mini-Checkpoint-1](docs/2026-10-29%20-%20Repo%20Layout%20Execution%20Batch%202/Mini-Checkpoint-1.md) |
 | 2026-10-28 | Repo Layout Execution Batch 1 | system-infra | [Mini-Checkpoint-1](docs/2026-10-28%20-%20Repo%20Layout%20Execution%20Batch%201/Mini-Checkpoint-1.md) |
 | 2026-10-28 | Repo Layout Audit | system-infra | [→](docs/2026-10-28%20-%20Repo%20Layout%20Audit/Checkpoint.md) |
-| 2026-10-27 | KIT CDS Tutorien und Anmeldungen | misc | [Mini-Checkpoint-1](docs/2026-10-27%20-%20KIT%20CDS%20Tutorien%20und%20Anmeldungen/Mini-Checkpoint-1.md) |
-| 2026-10-22 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-1](docs/2026-10-22%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-1.md) |
-| 2026-10-20 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-3](docs/2026-10-20%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-3.md) |
-| 2026-10-20 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-2](docs/2026-10-20%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-2.md) |
-| 2026-10-20 | KIT CDS Studienstart Fristen | misc | [Mini-Checkpoint-1](docs/2026-10-20%20-%20KIT%20CDS%20Studienstart%20Fristen/Mini-Checkpoint-1.md) |
 | 2026-10-07 | Jotform Warme Wimmer Vault Entry | misc | [Mini-Checkpoint-1](docs/2026-10-07%20-%20Jotform%20Warme%20Wimmer%20Vault%20Entry/Mini-Checkpoint-1.md) |
 | 2026-10-07 | Zapier MCP Connector Setup | system-infra | [→](docs/2026-10-07%20-%20Zapier%20MCP%20Connector%20Setup/Checkpoint.md) |
 | 2026-10-05 | Handyvertrag HIGH Verlaengerung | misc | [→](docs/2026-10-05%20-%20Handyvertrag%20HIGH%20Verlaengerung/Checkpoint.md) |
-| 2026-09-24 | BAfoeG Antrag und Nachzahlung | misc | [→](docs/2026-09-24%20-%20BAfoeG%20Antrag%20und%20Nachzahlung/Checkpoint.md) |
-| 2026-09-24 | KIT Radar und tmbstud-l Austragung | misc | [→](docs/2026-09-24%20-%20KIT%20Radar%20und%20tmbstud-l%20Austragung/Checkpoint.md) |
 | 2026-09-21 | Friction Register Voids Closed | system-infra | [→](docs/2026-09-21%20-%20Friction%20Register%20Voids%20Closed/Checkpoint.md) |
 | 2026-09-17 | ECC Port Batch 1 | system-infra | [Mini-Checkpoint-2](docs/2026-09-17%20-%20ECC%20Port%20Batch%201/Mini-Checkpoint-2.md) |
 | 2026-09-17 | Friction Fix Program Complete | system-infra | [→](docs/2026-09-17%20-%20Friction%20Fix%20Program%20Complete/Checkpoint.md) |
@@ -566,13 +536,10 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-09-17 | ECC Port Batch 1 | system-infra | [→](docs/2026-09-17%20-%20ECC%20Port%20Batch%201/Checkpoint.md) |
 | 2026-09-17 | ECC Audit and Port Prompts | system-infra | [→](docs/2026-09-17%20-%20ECC%20Audit%20and%20Port%20Prompts/Checkpoint.md) |
 | 2026-09-16 | Vinted Catalogue Endpoint Move, Batch 2 Published, Three Gate Fixes | system-infra | [→](docs/2026-09-16%20-%20Vinted%20Catalogue%20Endpoint%20Move%2C%20Batch%202%20Published%2C%20Three%20Gate%20Fixes/Checkpoint.md) |
-| 2026-09-09 | KIT Studienstart Anmeldungen | misc | [→](docs/2026-09-09%20-%20KIT%20Studienstart%20Anmeldungen/Checkpoint.md) |
-| 2026-09-09 | Personal AI Content Channel (TikTok) | misc | [→](docs/2026-09-09%20-%20Personal%20AI%20Content%20Channel%20%28TikTok%29/Checkpoint.md) |
 | 2026-09-08 | System Development | system-infra | [Mini-Checkpoint-2](docs/2026-09-08%20-%20System%20Development/Mini-Checkpoint-2.md) |
 | 2026-09-08 | System Development | system-infra | [→](docs/2026-09-08%20-%20System%20Development/Checkpoint.md) |
 | 2026-09-08 | Vinted Bulk Listing Run | misc | [→](docs/2026-09-08%20-%20Vinted%20Bulk%20Listing%20Run/Checkpoint.md) |
 | 2026-09-08 | Vinted Resale Intake And Listings | misc | [Mini-Checkpoint-2](docs/2026-09-08%20-%20Vinted%20Resale%20Intake%20And%20Listings/Mini-Checkpoint-2.md) |
-| 2026-08-28 | KIT CoDaS Wechsel + Studienstart-Plan | misc | [→](docs/2026-08-28%20-%20KIT%20CoDaS%20Wechsel%20%2B%20Studienstart-Plan/Checkpoint.md) |
 | 2026-08-25 | Worktree and Branch Consolidation | system-infra | [Mini-Checkpoint-1](docs/2026-08-25%20-%20Worktree%20and%20Branch%20Consolidation/Mini-Checkpoint-1.md) |
 | 2026-08-24 | Structural Guards for the 2026-08-24 Friction Rows | system-infra | [→](docs/2026-08-24%20-%20Structural%20Guards%20for%20the%202026-08-24%20Friction%20Rows/Checkpoint.md) |
 | 2026-08-24 | Enforcement Hook Layer Fixes | system-infra | [→](docs/2026-08-24%20-%20Enforcement%20Hook%20Layer%20Fixes/Checkpoint.md) |
@@ -834,8 +801,3 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-10-09 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-1](docs/2026-10-09%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-1.md) |
 | 2026-10-07 | WW W1-06 Messeformular Zapier to n8n | client-dev | [→](docs/2026-10-07%20-%20WW%20W1-06%20Messeformular%20Zapier%20to%20n8n/Checkpoint.md) |
 | 2026-10-07 | Waerme Wimmer Takeover | client-dev | [→](docs/2026-10-07%20-%20Waerme%20Wimmer%20Takeover/Checkpoint.md) |
-
-## personal-kit
-| Date | Topic | Type | Link |
-|------|-------|------|------|
-| 2026-10-28 | KIT IAM-Praktikum und ECTS-Plan | misc | [Mini-Checkpoint-1](docs/2026-10-28%20-%20KIT%20IAM-Praktikum%20und%20ECTS-Plan/Mini-Checkpoint-1.md) |
