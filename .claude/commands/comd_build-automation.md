@@ -117,7 +117,7 @@ The agnt_build-orchestrator agent will:
 
 ## Phase Reports
 
-The orchestrator generates reports in `.claude/handoffs/{session-id}/`:
+The orchestrator generates reports in `.claude/handoffs/{client}-{session-id}/`:
 - `phase1-plan-report.md`
 - `phase2-implementation-report.md`
 - `phase3-test-report.md` (local testing)

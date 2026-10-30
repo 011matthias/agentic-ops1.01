@@ -97,10 +97,10 @@ After sending a test payload:
 
 When a form provider (Tally, Typeform, website form) sends different field names:
 
-1. **Check known formats first** — see the `webhook-inspector` skill → KNOWN-PROVIDERS.md
+1. **Check known formats first** — see the `make-pack` → KNOWN-PROVIDERS.md
 2. Send clean JSON via curl to verify the blueprint works with expected field names
 3. If clean JSON works → the issue is form field naming, not the blueprint
-4. **Discover the form's actual payload** — use `webhook-inspector` skill → CAPTURE-PATTERN.md, or check the provider's docs
+4. **Discover the form's actual payload** — use `make-pack` → CAPTURE-PATTERN.md, or check the provider's docs
 5. Update the blueprint mapper to reference the form's actual field structure
 6. Re-test with curl using the form's payload format to confirm
 
@@ -164,7 +164,7 @@ Tally sends a nested `data.fields[]` array. The blueprint must use `first(map(..
 }
 ```
 
-**Note:** The `label` values in these templates are placeholders. Replace them with the actual field labels from the client's Tally form. Use the `webhook-inspector` skill to discover exact labels if unknown.
+**Note:** The `label` values in these templates are placeholders. Replace them with the actual field labels from the client's Tally form. Use the `make-pack` to discover exact labels if unknown.
 
 ### Typeform Format
 

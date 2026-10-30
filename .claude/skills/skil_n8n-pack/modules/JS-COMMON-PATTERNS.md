@@ -300,6 +300,6 @@ return [{ json: { report, messageCount: messages.length, generatedAt: new Date()
 
 ## See Also
 
-- [DATA-ACCESS.md](DATA-ACCESS.md) — Data access methods
-- [ERROR-PATTERNS.md](ERROR-PATTERNS.md) — Common mistakes
+- [DATA-ACCESS.md](JS-DATA-ACCESS.md) — Data access methods
+- [ERROR-PATTERNS.md](JS-ERROR-PATTERNS.md) — Common mistakes
 - [BUILTIN-FUNCTIONS.md](BUILTIN-FUNCTIONS.md) — Built-in helpers

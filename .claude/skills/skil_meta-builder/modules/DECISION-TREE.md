@@ -57,12 +57,12 @@ When operationalizing after a fix or build, use this to bridge from the problem 
 
 | Friction / Error Category | Primitive | Example |
 |---|---|---|
-| Agent didn't know how to do X | Skill module (in existing skill) | Add IML gotcha to `make-mcp-tools-expert` |
+| Agent didn't know how to do X | Skill module (in existing skill) | Add IML gotcha to `make-pack` |
 | Agent did something it shouldn't / didn't do something it should | Rule (if universal) | Add outcome verification gate to `behaviors.md` |
 | Same manual steps done 3+ times | Command | `/spec-cleanup` wrapping the `spec-cleanup` skill |
-| Bug found only through manual testing | Validator/reconciler (skill module) | `blueprint-reconciler` DATA-STORE module |
-| Blueprint/data store/sheet drift | Reconciliation tool (skill module) | `blueprint-reconciler` SHEETS-COLUMN module |
-| Agent couldn't diagnose autonomously | Diagnostic module (in existing skill) | `WEBHOOK-PAYLOAD-INSPECTOR` in `make-mcp-tools-expert` |
+| Bug found only through manual testing | Validator/reconciler (skill module) | `make-pack` DATA-STORE module |
+| Blueprint/data store/sheet drift | Reconciliation tool (skill module) | `make-pack` SHEETS-COLUMN module |
+| Agent couldn't diagnose autonomously | Diagnostic module (in existing skill) | `WEBHOOK-PAYLOAD-INSPECTOR` in `make-pack` |
 
 ---
 
@@ -81,7 +81,7 @@ START: What do you want to add?
 │   │   │   │   Examples: testing-agent, bug-fixer, trigger-dev-expert
 │   │   │   │
 │   │   │   └─► NO → SKILL
-│   │   │       Examples: make-mcp-tools-expert, build-test-fix, spec-creator
+│   │   │       Examples: make-pack, build-test-fix, spec-creator
 │   │   │
 │   │   └─► NO (explicit trigger): "Simple or complex?"
 │   │       │
@@ -175,11 +175,10 @@ START: What do you want to add?
 ## Examples by Primitive (Agentic Ops)
 
 ### Skills (auto-discovered, domain knowledge)
-- `make-mcp-tools-expert` - Make.com MCP tool usage, IML gotchas, blueprint format
+- `make-pack` - Make.com MCP tool usage, IML gotchas, blueprint format, blueprint vs data store/sheet/template reconcilers
 - `build-test-fix` - Autonomous build/test/fix iteration loop with outcome verification
-- `blueprint-reconciler` - Cross-validates blueprints against data stores, sheets, templates
 - `spec-creator` - Creates automation specs from requirements with Mermaid diagrams
-- `n8n-workflow-patterns` - Proven architectural patterns for n8n workflows
+- `n8n-pack` - Proven architectural patterns for n8n workflows
 
 ### Commands (explicit `/trigger`)
 - `/comd_build-automation` - End-to-end build via build-orchestrator agent
@@ -328,11 +327,11 @@ For distributing a complete solution:
 
 | Scenario | Solution |
 |----------|----------|
-| "Agent didn't know Make.com IML syntax" | **Skill module** (add to `make-mcp-tools-expert/IML-GOTCHAS.md`) |
+| "Agent didn't know Make.com IML syntax" | **Skill module** (add to `make-pack/IML-GOTCHAS.md`) |
 | "Agent should always verify outcomes after builds" | **Rule** (`behaviors.md` — universal constraint) |
 | "User wants `/spec-cleanup` command" | **Command** (wraps existing `spec-cleanup` skill) |
 | "Agent needs to run blueprint validation in isolation" | **Agent** (if context isolation needed) or **Skill** (if same context) |
-| "n8n nodes need specific config patterns" | **Skill module** (`n8n-node-configuration`) |
+| "n8n nodes need specific config patterns" | **Skill module** (`n8n-pack`) |
 | "Same manual steps done every deploy" | **Command** (`/comd_deploy`) |
 | "Agent checked execution status but not output correctness" | **Skill module** (`build-test-fix/OUTCOME-VERIFICATION.md`) |
 | "Integrate Make.com MCP tools" | **MCP Server** (`.mcp.json` entry) |

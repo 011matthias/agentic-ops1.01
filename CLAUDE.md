@@ -49,11 +49,11 @@ Required: `id`, `name`, `type`, `stage` (spec|build|test|live), `orchestrator`, 
 ## Primitives
 
 - **Commands** (32) — Your interface. Type `/comd_<name>` to invoke.
-- **Skills** (37) — Domain expertise (first-party `skil_` dirs; ~11 are pack-consolidation stubs hosting modules for make-pack/n8n-pack), plus vendored plugin skills. Auto-load by context (e.g., Make.com work loads make-pack).
+- **Skills** (26) — Domain expertise (first-party `skil_` dirs; make-pack and n8n-pack keep their modules in their own `modules/`), plus vendored plugin skills. Auto-load by context (e.g., Make.com work loads make-pack).
 - **Agents** (12) — Specialists in `.claude/agents/`, spawned internally by commands (build-orchestrator, implementation-agent, testing-agent, bug-fixer, deployer, api-fetcher, and others).
 - **Rules** (20) — Always-on constraints in `.claude/rules/` (behaviors, session start, session pressure, plus the hard-constraint standards).
 - **Hooks** (30) — Enforcement scripts in `.claude/hooks/`, wired by `tools/wire-hooks.py` and self-healed at SessionStart.
-- **Patterns** (37) — Declarative regex rules in `.claude/patterns/`, read by `pattern-rules-gate.py`.
+- **Patterns** (38) — Declarative regex rules in `.claude/patterns/`, read by `pattern-rules-gate.py`.
 
 ## Platform / unpauseai.com
 
@@ -61,7 +61,7 @@ The live site publishes from `akkton/unpauseai-web`, never from `platform/` or `
 
 ## Git Workflow
 
-One author. Every change goes on a branch and reaches `main` by PR; direct push to `main` is prohibited. Branch families: `client/{client}/...`, `docs/...`, `sys/...`, `local-web/...`, `uwi/...`, `leadgen/...`. One worktree per concurrent session; `/comd_resume {client}` scopes each session to one client; handoffs are client-namespaced under `.claude/handoffs/{client}/`.
+One author. Every change goes on a branch and reaches `main` by PR; direct push to `main` is prohibited. Branch families: `client/{client}/...`, `docs/...`, `sys/...`, `local-web/...`, `uwi/...`, `leadgen/...`. One worktree per concurrent session; `/comd_resume {client}` scopes each session to one client; handoffs are client-namespaced under `.claude/handoffs/{client}-{session}/`.
 
 ## End-of-Session
 

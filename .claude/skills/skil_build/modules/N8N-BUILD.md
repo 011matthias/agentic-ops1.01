@@ -10,7 +10,7 @@ Workflows are built and deployed directly in the n8n instance via MCP tools. The
 
 ---
 
-## Step 1: Architecture (invoke `n8n-workflow-patterns` skill)
+## Step 1: Architecture (load `n8n-pack`)
 
 Before touching any tools, plan the workflow structure:
 
@@ -24,7 +24,7 @@ Before touching any tools, plan the workflow structure:
 2. Map the spec's flow diagram onto the pattern
 3. Identify branching points (IF nodes), loops (SplitInBatches), and error paths
 
-Reference: invoke `n8n-mcp-tools-expert` skill → `PROJECT-SETUP.md` module
+Reference: load `n8n-pack` → `PROJECT-SETUP.md` module
 
 ---
 
@@ -98,7 +98,7 @@ That is the only change needed. No node connections touched, no nodes disabled.
 
 ---
 
-## Step 3: Node Discovery (invoke `n8n-node-configuration` skill)
+## Step 3: Node Discovery (load `n8n-pack`)
 
 For each node needed:
 
@@ -111,9 +111,9 @@ get_node({nodeType: 'n8n-nodes-base.{node}', detail: 'standard', includeExamples
 
 ---
 
-## Step 4: Build via MCP (invoke `n8n-mcp-tools-expert` skill)
+## Step 4: Build via MCP (load `n8n-pack`)
 
-Use `n8n-mcp-tools-expert` for guidance on which MCP tools to use and in what order.
+Use `n8n-pack` for guidance on which MCP tools to use and in what order.
 
 ### Typical build sequence:
 
@@ -137,13 +137,13 @@ n8n_update_partial_workflow({id, operations: [
 - IF nodes need `branch: "true"` or `branch: "false"` on connections
 - Use `n8n_get_workflow({id, mode: 'structure'})` to verify topology (NOT `mode: 'full'`)
 
-Reference: invoke `n8n-mcp-tools-expert` skill → `LARGE-WORKFLOWS.md` module
+Reference: load `n8n-pack` → `LARGE-WORKFLOWS.md` module
 
 ---
 
-## Step 5: Expressions (invoke `n8n-expression-syntax` skill)
+## Step 5: Expressions (load `n8n-pack`)
 
-When writing `{{ }}` expressions, invoke `n8n-expression-syntax` skill to avoid common pitfalls:
+When writing `{{ }}` expressions, load `n8n-pack` to avoid common pitfalls:
 
 - **Iterating items**: use `$('Node').item.json.*` NOT `.first()`
 - **Upstream data**: use `$('NodeName').item.json.*` NOT `$json` (which is immediate predecessor only)
@@ -151,7 +151,7 @@ When writing `{{ }}` expressions, invoke `n8n-expression-syntax` skill to avoid 
 
 ---
 
-## Step 6: Validation (invoke `n8n-validation-expert` skill)
+## Step 6: Validation (load `n8n-pack`)
 
 Run the validation loop:
 
@@ -161,19 +161,19 @@ validate_node({nodeType, config, mode: 'full', profile: 'runtime'})  # Full chec
 validate_workflow(workflow)                                # Whole workflow
 ```
 
-Fix ALL errors before testing. Use `n8n-validation-expert` to interpret error messages and distinguish real errors from false positives.
+Fix ALL errors before testing. Use `n8n-pack` to interpret error messages and distinguish real errors from false positives.
 
 ---
 
-## Step 7: Code Nodes (invoke `n8n-code-javascript` or `n8n-code-python` skill)
+## Step 7: Code Nodes (load `n8n-pack`)
 
 Only if the spec requires custom logic that standard nodes can't handle.
 
 **JavaScript** (preferred — full n8n SDK access):
-- Invoke `n8n-code-javascript` skill for syntax, `$input`/`$json`/`$node` usage, and `$helpers`
+- Load `n8n-pack` for syntax, `$input`/`$json`/`$node` usage, and `$helpers`
 
 **Python** (limited — only stdlib, no n8n SDK):
-- Invoke `n8n-code-python` skill for Python-specific limitations and patterns
+- Load `n8n-pack` for Python-specific limitations and patterns
 
 ---
 

@@ -760,5 +760,5 @@ return [{
 
 **See Also**:
 - [SKILL.md](../SKILL.md) - Overview
-- [COMMON-PATTERNS.md](COMMON-PATTERNS.md) - Real usage examples
-- [ERROR-PATTERNS.md](ERROR-PATTERNS.md) - Error prevention
+- [COMMON-PATTERNS.md](JS-COMMON-PATTERNS.md) - Real usage examples
+- [ERROR-PATTERNS.md](JS-ERROR-PATTERNS.md) - Error prevention

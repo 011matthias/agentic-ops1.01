@@ -22,7 +22,7 @@ The user should not need to provide raw payloads, field names, or API responses 
 
 ### Level 2: Research (no side effects)
 
-6. **Search KNOWN-PROVIDERS.md:** Check `webhook-inspector` skill for pre-documented payload formats
+6. **Search KNOWN-PROVIDERS.md:** Check `make-pack` for pre-documented payload formats
 7. **Web search:** Search for "[provider name] webhook payload format" or "[provider name] Make.com integration"
 8. **Make community search:** Search Make Community forum for the provider + module combination
 9. **Check provider's official docs:** WebFetch the provider's webhook documentation
