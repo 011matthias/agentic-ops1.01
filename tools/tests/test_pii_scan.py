@@ -176,6 +176,28 @@ def test_unresolvable_range_is_none(tmp_path):
     assert pii_scan.scan_range(_repo(tmp_path), "nope...HEAD") is None
 
 
+# --- path arguments through main() --------------------------------------------
+
+def test_directory_argument_scans_the_files_under_it(tmp_path, capsys):
+    # Differential: the same roster flags whether named as a file or by its
+    # folder; a folder used to read as one unreadable file and report 0.
+    repo = _repo(tmp_path)
+    (repo / "docs" / "site").mkdir(parents=True)
+    roster = repo / "docs" / "site" / "roster.csv"
+    roster.write_text("\n".join(addr(i) for i in range(3)), encoding="utf-8")
+    assert pii_scan.main(["--repo", str(repo), str(roster)]) == 1
+    assert pii_scan.main(["--repo", str(repo), str(repo / "docs")]) == 1
+    assert "docs/site/roster.csv: consumer=3" in capsys.readouterr().out
+    roster.write_text("no addresses here\n", encoding="utf-8")
+    assert pii_scan.main(["--repo", str(repo), str(repo / "docs")]) == 0
+
+
+def test_missing_path_refuses_instead_of_reporting_clean(tmp_path, capsys):
+    repo = _repo(tmp_path)
+    assert pii_scan.main(["--repo", str(repo), str(repo / "no-such-dir")]) == 2
+    assert "no such path" in capsys.readouterr().err
+
+
 # --- the push gate, end to end ----------------------------------------------
 
 def _gate(repo: Path, command: str, **env) -> str:
