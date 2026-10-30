@@ -58,7 +58,7 @@ When the outcome doesn't match expectations:
    - **Missing fields:** Source doesn't include expected fields, mapper defaults kick in
    - **Empty values:** Field exists but is empty, `ifempty` fallback used
 
-3. **Use the webhook-inspector skill** to capture and analyze the actual payload if the issue is at the webhook stage.
+3. **Use make-pack's CAPTURE-PATTERN / ANALYZE-PAYLOAD modules** to capture and analyze the actual payload if the issue is at the webhook stage.
 
 4. **Use the debug tap pattern** (data store module after suspect module) to inspect intermediate data if the issue is mid-scenario.
 

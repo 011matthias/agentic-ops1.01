@@ -71,7 +71,7 @@ Show the suggestion and let user confirm or change. Use the same orchestrator op
 
 ## Step 5.5: Platform Feasibility Assessment
 
-Before creating any files, investigate the client's platform subscription. Load [PLATFORM-FEASIBILITY](../skills/skil_make-mcp-tools-expert/modules/PLATFORM-FEASIBILITY.md) and run Section A for the chosen orchestrator.
+Before creating any files, investigate the client's platform subscription. Load [PLATFORM-FEASIBILITY](../skills/skil_make-pack/modules/PLATFORM-FEASIBILITY.md) and run Section A for the chosen orchestrator.
 
 Follow the same procedure as `/comd_new-client` Step 2.5:
 - Ask minimum questions for the orchestrator (plan tier, API access, key limits)

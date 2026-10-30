@@ -52,7 +52,7 @@ Default to **n8n** unless the user chooses otherwise.
 
 ## Step 2.5: Platform Feasibility Assessment
 
-Before creating any files, investigate the client's platform subscription to catch mismatches early. Load [PLATFORM-FEASIBILITY](../skills/skil_make-mcp-tools-expert/modules/PLATFORM-FEASIBILITY.md) and run Section A (Full Platform Capability Audit) for the chosen orchestrator.
+Before creating any files, investigate the client's platform subscription to catch mismatches early. Load [PLATFORM-FEASIBILITY](../skills/skil_make-pack/modules/PLATFORM-FEASIBILITY.md) and run Section A (Full Platform Capability Audit) for the chosen orchestrator.
 
 **Minimum questions to ask:**
 

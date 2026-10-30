@@ -759,5 +759,5 @@ console.log('Input structure:', JSON.stringify(items[0], null, 2));
 
 **See Also**:
 - [SKILL.md](../SKILL.md) - Overview and best practices
-- [DATA-ACCESS.md](DATA-ACCESS.md) - Safe data access patterns
-- [COMMON-PATTERNS.md](COMMON-PATTERNS.md) - Working examples
+- [DATA-ACCESS.md](JS-DATA-ACCESS.md) - Safe data access patterns
+- [COMMON-PATTERNS.md](JS-COMMON-PATTERNS.md) - Working examples

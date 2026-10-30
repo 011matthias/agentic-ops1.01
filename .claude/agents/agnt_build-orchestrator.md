@@ -136,12 +136,12 @@ Generate session ID and create handoff directory:
 
 ```python
 session_id = f"{automation_id}-{timestamp}"
-handoff_dir = f".claude/handoffs/{client}/{session_id}"
+handoff_dir = f".claude/handoffs/{client}-{session_id}"
 ```
 
 Create directory:
 ```bash
-mkdir -p .claude/handoffs/{client}/{session_id}
+mkdir -p .claude/handoffs/{client}-{session_id}
 ```
 
 **Step 2: Determine Mode**
@@ -167,13 +167,13 @@ mkdir -p .claude/handoffs/{client}/{session_id}
    - Get automation ID and name
    - Generate spec file
 
-2. **Generate Phase Report** per Agent Handoff Protocol format. Save to `.claude/handoffs/{session}/phase1-plan-report.md`. Artifacts: spec file. Key context: automation ID, trigger type, systems, edge cases.
+2. **Generate Phase Report** per Agent Handoff Protocol format. Save to `.claude/handoffs/{client}-{session}/phase1-plan-report.md`. Artifacts: spec file. Key context: automation ID, trigger type, systems, edge cases.
 
 3. **Ops Feasibility Gate (Make.com clients only):**
 
    If the client's `infrastructure.yaml` shows `orchestrator: make`, run this before showing the approval prompt:
 
-   a. Load `skil_make-mcp-tools-expert/modules/OPERATIONS-ANALYZER.md` Section A
+   a. Load `skil_make-pack/modules/OPERATIONS-ANALYZER.md` Section A
    b. Estimate monthly ops for every scenario in the spec (use trigger type + module count from spec flow)
    c. Compare total against `infrastructure.yaml → platform.ops_limit` (default 10,000 if not set)
    d. Produce the OPS ESTIMATE block (see OPERATIONS-ANALYZER format)
@@ -231,7 +231,7 @@ Show spec summary and ask:
    - Add webhook route if needed
    - Update config if needed
 
-2. **Generate Phase Report** per Agent Handoff Protocol format. Save to `.claude/handoffs/{session}/phase2-implementation-report.md`. Artifacts: code file, test file, webhook route (if applicable), config updates. Key context: implementation pattern, test count, dry-run result.
+2. **Generate Phase Report** per Agent Handoff Protocol format. Save to `.claude/handoffs/{client}-{session}/phase2-implementation-report.md`. Artifacts: code file, test file, webhook route (if applicable), config updates. Key context: implementation pattern, test count, dry-run result.
 
 3. **Code Review:**
 
@@ -271,7 +271,7 @@ Show key code sections and ask:
 1. **Invoke agnt_testing-agent** with task=`test`, client, automation ID
    - Testing-agent runs unit tests, dry-run, acceptance criteria, coverage (see agnt_testing-agent.md for full workflow)
 2. **Pass/fail decision:**
-   - **Pass (coverage ≥ 80%):** Save report to `.claude/handoffs/{session}/phase3-test-report.md`, proceed to Phase 3.5
+   - **Pass (coverage ≥ 80%):** Save report to `.claude/handoffs/{client}-{session}/phase3-test-report.md`, proceed to Phase 3.5
    - **Fail:** Invoke agnt_bug-fixer with test output → re-run agnt_testing-agent → loop until pass or manual intervention
 3. **Update status** to `tested_locally` (see Status Update Procedure below)
 
@@ -306,7 +306,7 @@ After dev test execution succeeds, do NOT proceed to Phase 4 yet:
    - All verifiable outcomes match spec, AND
    - Unverifiable items are explicitly documented and acknowledged
 
-Save report to `.claude/handoffs/{session}/phase3.5-dev-test-report.md` (must include outcome verification table and any verification debt).
+Save report to `.claude/handoffs/{client}-{session}/phase3.5-dev-test-report.md` (must include outcome verification table and any verification debt).
 
 3. **Operationalization check:** After verification, ask: "What couldn't I verify autonomously? What manual steps did the user perform?" (per `operationalization-loop.md` "After Building" section)
 4. **Update status** to `tested_dev` (see Status Update Procedure below)
@@ -328,7 +328,7 @@ Save report to `.claude/handoffs/{session}/phase3.5-dev-test-report.md` (must in
 
 1. **Load DOC-GENERATION module** and generate technical + client-facing documentation directly (no agent spawn needed).
 
-2. **Generate Phase Report** per Agent Handoff Protocol format. Save to `.claude/handoffs/{session}/phase4-docs-report.md`. Artifacts: technical doc, client doc.
+2. **Generate Phase Report** per Agent Handoff Protocol format. Save to `.claude/handoffs/{client}-{session}/phase4-docs-report.md`. Artifacts: technical doc, client doc.
 
 ---
 
@@ -373,7 +373,7 @@ else:
 
    b. **Loop** until deploy succeeds or manual intervention needed
 
-4. **Generate Phase Report** per Agent Handoff Protocol format. Save to `.claude/handoffs/{session}/phase5-deploy-report.md`. Artifacts: Railway URL, health status, commit SHA.
+4. **Generate Phase Report** per Agent Handoff Protocol format. Save to `.claude/handoffs/{client}-{session}/phase5-deploy-report.md`. Artifacts: Railway URL, health status, commit SHA.
 
 5. **Update status** to `deployed` (see Status Update Procedure below)
 
@@ -404,7 +404,7 @@ After verifying deployment is live:
 3. **This catches deploy-time regressions** — config differences, connection swaps, environment variable mismatches between dev and production
 4. **If mismatch** → invoke `skil_build-test-fix` loop, do NOT mark as live until resolved
 
-Save report to `.claude/handoffs/{session}/phase6-verify-report.md` (must include post-deploy outcome verification table).
+Save report to `.claude/handoffs/{client}-{session}/phase6-verify-report.md` (must include post-deploy outcome verification table).
 
 3. **Update status** to `tested_live` (see Status Update Procedure below)
 

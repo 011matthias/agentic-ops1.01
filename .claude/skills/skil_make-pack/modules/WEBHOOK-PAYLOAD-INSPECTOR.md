@@ -43,7 +43,7 @@ If no submission has been received yet:
    - `udt: 1` → data at `{{1.body.*}}` (custom data structure defined)
    - `udt: 0` or missing → data at `{{1.*}}` (direct webhook body)
 3. If you have access to the form provider's docs:
-   - Check `webhook-inspector` skill → KNOWN-PROVIDERS.md for pre-documented formats
+   - Check `make-pack` → KNOWN-PROVIDERS.md for pre-documented formats
    - Tally: `data.fields[]` array with `{key, label, type, value}` objects
    - Typeform: `form_response.answers[]` array
    - JotForm: flat `{fieldN: value}` structure

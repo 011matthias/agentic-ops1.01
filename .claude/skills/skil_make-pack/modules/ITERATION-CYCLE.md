@@ -63,7 +63,7 @@ This is particularly useful for:
 - Checking what a mapper produced (tap after the mapper module)
 - Debugging router filter inputs (tap before the router)
 
-See also: `webhook-inspector` skill for a dedicated webhook payload capture workflow.
+See also: `make-pack` for a dedicated webhook payload capture workflow.
 
 ---
 
@@ -90,12 +90,12 @@ See also: `webhook-inspector` skill for a dedicated webhook payload capture work
 7. **If output wrong** → fix mapper/filter, go to step 1
 8. **Source schema verification** (BEFORE testing with real data):
    - If the scenario has an external trigger (form, API, webhook sender):
-   - Check `webhook-inspector` skill → KNOWN-PROVIDERS.md for the source system's payload format
+   - Check `make-pack` → KNOWN-PROVIDERS.md for the source system's payload format
    - If not listed → use the capture pattern to discover the format
    - Compare the source schema against the blueprint's mapper references
    - If structural mismatch (nested vs flat, different field names) → fix mapper FIRST
 9. **Test with real source data** (form submission, API event, etc.)
-10. **Post-execution outcome verification** (see `.claude/skills/skil_make-mcp-tools-expert/modules/POST-EXECUTION-VERIFICATION.md`):
+10. **Post-execution outcome verification** (see `.claude/skills/skil_make-pack/modules/POST-EXECUTION-VERIFICATION.md`):
     - Don't stop at "status: success" — verify the actual data in target systems
     - Check expected vs actual output field by field
     - If mismatch → diagnose where data was lost/transformed incorrectly

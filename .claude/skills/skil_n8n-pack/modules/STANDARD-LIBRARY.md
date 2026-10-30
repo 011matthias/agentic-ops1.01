@@ -969,6 +969,6 @@ return [{
 
 **See Also**:
 - [SKILL.md](../SKILL.md) - Python Code overview
-- [DATA-ACCESS.md](DATA-ACCESS.md) - Data access patterns
-- [COMMON-PATTERNS.md](COMMON-PATTERNS.md) - Production patterns
-- [ERROR-PATTERNS.md](ERROR-PATTERNS.md) - Avoid common mistakes
+- [DATA-ACCESS.md](PY-DATA-ACCESS.md) - Data access patterns
+- [COMMON-PATTERNS.md](PY-COMMON-PATTERNS.md) - Production patterns
+- [ERROR-PATTERNS.md](PY-ERROR-PATTERNS.md) - Avoid common mistakes

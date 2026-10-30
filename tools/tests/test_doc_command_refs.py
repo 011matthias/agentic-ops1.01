@@ -39,7 +39,7 @@ RETIRED = {"test-dev", "test-production", "verify-live"}
 # namespacing example and a Slack slash command in an n8n pattern.
 ALLOW = {
     (".claude/skills/skil_meta-builder/modules/COMMAND-GUIDE.md", "test"),
-    (".claude/skills/skil_n8n-workflow-patterns/modules/AI-AGENT-WORKFLOW.md", "deploy"),
+    (".claude/skills/skil_n8n-pack/modules/AI-AGENT-WORKFLOW.md", "deploy"),
 }
 
 COMD_RE = re.compile(r"/comd_([A-Za-z0-9][\w-]*)")

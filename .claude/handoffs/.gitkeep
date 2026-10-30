@@ -5,7 +5,7 @@ This directory stores handoff reports between agents during automation building.
 ## Structure
 
 ```
-.claude/handoffs/{session-id}/
+.claude/handoffs/{client}-{session-id}/
 ├── phase1-plan-report.md
 ├── phase2-implementation-report.md
 ├── phase3-test-report.md
