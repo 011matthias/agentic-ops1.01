@@ -21,12 +21,12 @@ Built the daily 06:00 morning-briefing system end to end: a `/comd_morning-brief
 1. Initial routine design depended on Gmail connector to send — turned out the claude.ai Gmail connector has NO send tool (only read/draft/label).
 2. Pivoted to Resend HTTP API. Direct `curl` test from local: HTTP 200 + message id. Declared "works."
 3. Scheduled 06:05 Berlin firing executed (confirmed by `last_fired_at`) but no email arrived. Diagnosed via `RemoteTrigger get` and re-running the exact code path locally: Python urllib gets `403 Forbidden code 1010` from Cloudflare. The curl-vs-urllib gap was the failure I shipped past.
-4. Added explicit `User-Agent: agentic-ops-morning-briefing/1.0` header in the script; re-tested the urllib path locally → `RESEND_OK` + id. Real briefing email delivered to matneumann07@gmail.com.
+4. Added explicit `User-Agent: agentic-ops-morning-briefing/1.0` header in the script; re-tested the urllib path locally → `RESEND_OK` + id. Real briefing email delivered to [redacted Gmail address].
 5. Re-architected the routine to be trivial: clone + run script. No more LLM-rendered prose or embedded heredocs in the prompt; deterministic Python is the source of truth.
 
 ### Infra adjustments
 1. Discovered the platform runs a GitHub-access check on any routine that declares a `git_repository` source — EVEN for public repos — and `/web-setup` is unavailable in this CLI. Workaround: `sources: []` + put `git clone <public url>` as STEP 0 in the prompt.
-2. Discovered Resend free tier (no verified domain) only delivers to the account-owner address. Recipient pragmatically switched from `neumath4@icloud.com` to `matneumann07@gmail.com`. Documented the icloud-via-domain path for later.
+2. Discovered Resend free tier (no verified domain) only delivers to the account-owner address. Recipient pragmatically switched from `[redacted iCloud address]` to `[redacted Gmail address]`. Documented the icloud-via-domain path for later.
 
 ---
 
@@ -41,7 +41,7 @@ Built the daily 06:00 morning-briefing system end to end: a `/comd_morning-brief
 - **Rationale:** A natural-language prompt asking an LLM to faithfully execute a multi-step shell heredoc, scan dozens of files, escape JSON, and curl an API is brittle and unobservable. A committed script is deterministic, locally testable, and the failure path (`emails its own traceback`) makes silence impossible.
 
 ### Pragmatic recipient: gmail now, icloud later
-- **Choice:** Ship to matneumann07@gmail.com (account-owner address allowed on Resend free tier).
+- **Choice:** Ship to [redacted Gmail address] (account-owner address allowed on Resend free tier).
 - **Rationale:** Switching to icloud needs a verified domain + DNS records. The user's gmail is their inbox too; getting daily delivery working today beats blocking on domain setup.
 
 ---
@@ -65,9 +65,9 @@ Live: cron `0 4 * * *` UTC = 06:00-ish Berlin, enabled, pointing at the committe
 ---
 
 ## Next Steps
-1. **Confirm tomorrow's 06:05 Berlin email lands** in matneumann07@gmail.com. If it does, the system is done. If it doesn't, the script's loud-failure design means an error email arrives instead; if even that is silent, suspect remote sandbox egress to api.resend.com and inspect the routine run page at https://claude.ai/code/routines/trig_015ZoMm18Evyj3PGfUPe7tC3.
+1. **Confirm tomorrow's 06:05 Berlin email lands** in [redacted Gmail address]. If it does, the system is done. If it doesn't, the script's loud-failure design means an error email arrives instead; if even that is silent, suspect remote sandbox egress to api.resend.com and inspect the routine run page at https://claude.ai/code/routines/trig_015ZoMm18Evyj3PGfUPe7tC3.
 2. **Brisken / Dirk call today (2026-05-20)** — Expense Reconciliation Platform; review `workspace/clients/brisken/context/drafts/2026-05-20-dirk-call-brief.md` + talking notes before the call.
-3. **Optional: verify a domain on Resend** if the user prefers neumath4@icloud.com delivery over Gmail. DNS records on a domain they own; I wire the rest.
+3. **Optional: verify a domain on Resend** if the user prefers [redacted iCloud address] delivery over Gmail. DNS records on a domain they own; I wire the rest.
 4. **Optional: add a small marker convention** so the briefing can detect paused projects beyond `PROJECT-BOUNDARIES.md` (e.g. a `paused: true` frontmatter flag).
 
 ---
@@ -82,7 +82,7 @@ Live: cron `0 4 * * *` UTC = 06:00-ish Berlin, enabled, pointing at the committe
 
 ### Open Questions
 - Will the remote sandbox at 06:05 Berlin reach api.resend.com with the User-Agent fix? Local urllib path is proven; remote test run was triggered but its execution was not directly observable. Tomorrow's cron answers this.
-- Switch delivery to neumath4@icloud.com via verified Resend domain? Parked.
+- Switch delivery to [redacted iCloud address] via verified Resend domain? Parked.
 
 ### Working Notes
 Failed approaches and why, kept here so the lesson sticks:
@@ -103,7 +103,7 @@ Failed approaches and why, kept here so the lesson sticks:
 ## How to Continue
 If tomorrow's 06:05 email arrives correctly, this is shipped — no action. If it doesn't:
 1. Check the routine page for run output.
-2. Run the script locally with the same key (`RESEND_API_KEY='re_...' uv run python tools/morning_briefing.py 'matneumann07@gmail.com'`) to isolate script vs sandbox.
+2. Run the script locally with the same key (`RESEND_API_KEY='re_...' uv run python tools/morning_briefing.py '[redacted Gmail address]'`) to isolate script vs sandbox.
 3. If local works, sandbox egress is the likely culprit; fallback options are (a) deliver via the Google Drive connector (already connected), or (b) verify a domain on Resend and target icloud directly.
 
 ---
