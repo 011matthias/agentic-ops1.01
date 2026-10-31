@@ -515,6 +515,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-29 | Ad Game Viability Ranker | misc | [Mini-Checkpoint-1](docs/2026-10-29%20-%20Ad%20Game%20Viability%20Ranker/Mini-Checkpoint-1.md) |
+| 2026-10-29 | Remote Control Phone Access | system-infra | [Mini-Checkpoint-1](docs/2026-10-29%20-%20Remote%20Control%20Phone%20Access/Mini-Checkpoint-1.md) |
 | 2026-10-30 | Repo Layout Execution Batch 7 | system-infra | [Mini-Checkpoint-1](docs/2026-10-30%20-%20Repo%20Layout%20Execution%20Batch%207/Mini-Checkpoint-1.md) |
 | 2026-10-30 | Repo Layout Execution Batch 6 | system-infra | [Mini-Checkpoint-1](docs/2026-10-30%20-%20Repo%20Layout%20Execution%20Batch%206/Mini-Checkpoint-1.md) |
 | 2026-10-29 | Repo Layout Execution Batch 5 | system-infra | [Mini-Checkpoint-1](docs/2026-10-29%20-%20Repo%20Layout%20Execution%20Batch%205/Mini-Checkpoint-1.md) |
@@ -635,6 +637,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## meji-media
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-10-30 | Meji Weekly Summary Ed4 and Season Value | client-dev | [→](docs/2026-10-30%20-%20Meji%20Weekly%20Summary%20Ed4%20and%20Season%20Value/Checkpoint.md) |
+| 2026-10-29 | Meji Campaign Check-up and Block List | client-dev | [→](docs/2026-10-29%20-%20Meji%20Campaign%20Check-up%20and%20Block%20List/Checkpoint.md) |
 | 2026-10-21 | Meji Weekly Summary 12 Oct and Outreach Plan | client-dev | [→](docs/2026-10-21%20-%20Meji%20Weekly%20Summary%2012%20Oct%20and%20Outreach%20Plan/Checkpoint.md) |
 | 2026-10-13 | Meji Row 1361 Contact Swap and Campaign Pulse | client-dev | [→](docs/2026-10-13%20-%20Meji%20Row%201361%20Contact%20Swap%20and%20Campaign%20Pulse/Checkpoint.md) |
 | 2026-10-09 | Meji October Corporate Trial and Weekly Summary System | client-dev | [→](docs/2026-10-09%20-%20Meji%20October%20Corporate%20Trial%20and%20Weekly%20Summary%20System/Checkpoint.md) |
