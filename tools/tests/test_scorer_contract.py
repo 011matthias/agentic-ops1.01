@@ -82,7 +82,7 @@ def test_refuses_an_unmeasurable_asset(scorer: Path):
     """Clause 4, behaviorally: exit 0 means 'this is a real measurement'."""
     proc = subprocess.run(
         [sys.executable, str(scorer), BOGUS_ASSET],
-        capture_output=True, text=True, timeout=120, cwd=str(REPO))
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120, cwd=str(REPO))
     assert proc.returncode != 0, (
         f"{scorer.name} exited 0 for a nonexistent asset ({BOGUS_ASSET}). "
         "Exit 0 tells the engine the score is real, so this would feed the "

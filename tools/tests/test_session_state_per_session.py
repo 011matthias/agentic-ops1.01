@@ -47,7 +47,7 @@ def _hook(script, payload, tmp_path):
 def _cli(tmp_path, *args, session=""):
     r = subprocess.run(
         [sys.executable, str(TOOLS / "session_state.py"), *args],
-        capture_output=True, text=True, timeout=30, cwd=str(REPO),
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30, cwd=str(REPO),
         env={**os.environ, **_env(tmp_path, CLAUDE_CODE_SESSION_ID=session)},
     )
     return json.loads(r.stdout)

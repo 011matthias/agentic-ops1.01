@@ -1,6 +1,6 @@
 ---
 name: system-digest
-description: Generates structured system digests (overview, changelog, client report) with internal and client-facing templates. Scans live system state and delivers via terminal, file, or email. Use when running /system-digest or when user wants a system overview, progress report, or client update.
+description: Generates structured system digests (overview, changelog, client report) with internal and client-facing templates. Scans live system state and delivers via terminal, file, or email. Use when running /comd_system-digest or when user wants a system overview, progress report, or client update.
 ---
 
 # System Digest
@@ -10,9 +10,9 @@ Scans the live Agentic Ops system and generates structured digests for system aw
 ## Quick Start
 
 ```bash
-/system-digest --overview              # What does this system do?
-/system-digest --changes --since DATE  # What changed recently?
-/system-digest --client NAME           # Client-specific report
+/comd_system-digest --overview              # What does this system do?
+/comd_system-digest --changes --since DATE  # What changed recently?
+/comd_system-digest --client NAME           # Client-specific report
 ```
 
 ## Available Operations

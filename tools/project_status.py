@@ -340,7 +340,7 @@ def _fresher_on_origin(path: Path, local_updated: str | None) -> bool:
     try:
         proc = subprocess.run(
             ["git", "-C", str(REPO_ROOT), "show", f"origin/main:{rel}"],
-            capture_output=True, text=True, timeout=10)
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10)
     except (OSError, subprocess.SubprocessError):
         return False
     if proc.returncode != 0:

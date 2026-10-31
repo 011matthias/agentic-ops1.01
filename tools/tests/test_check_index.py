@@ -121,3 +121,38 @@ def test_bare_name_in_row_still_counts(tmp_path):
     (tmp_path / "INDEX.md").write_text(
         "| `a.py` | does a |\n", encoding="utf-8")
     assert ci.main(tmp_path, tmp_path / "INDEX.md") == 0
+
+
+def _client_tree(tmp_path):
+    """tools/ that passes on its own, plus one client with automations/tools/."""
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    (tools / "INDEX.md").write_text("| `a.py` | does a |\n", encoding="utf-8")
+    (tools / "a.py").write_text("x", encoding="utf-8")
+    ctools = tmp_path / "workspace" / "clients" / "acme" / "automations" / "tools"
+    ctools.mkdir(parents=True)
+    (ctools / "sync.mjs").write_text("x", encoding="utf-8")
+    (ctools / "fetch.py").write_text("x", encoding="utf-8")
+    return tools, tmp_path / "workspace" / "clients", ctools
+
+
+def test_client_tools_dir_without_readme_fails(tmp_path, capsys):
+    tools, clients, _ = _client_tree(tmp_path)
+    assert ci.main(tools, tools / "INDEX.md", clients) == 1
+    assert "acme/automations/tools/README.md missing" in capsys.readouterr().err
+
+
+def test_client_tools_unlisted_script_fails_and_listed_passes(tmp_path, capsys):
+    tools, clients, ctools = _client_tree(tmp_path)
+    (ctools / "README.md").write_text("| `sync.mjs --dry-run` | pulls |\n", encoding="utf-8")
+    assert ci.main(tools, tools / "INDEX.md", clients) == 1
+    assert "fetch.py" in capsys.readouterr().err
+    (ctools / "README.md").write_text("| `sync.mjs --dry-run` | pulls |\n| `fetch.py` | reads |\n", encoding="utf-8")
+    assert ci.main(tools, tools / "INDEX.md", clients) == 0
+
+
+def test_real_main_scans_the_repo_clients_dir(monkeypatch):
+    seen = []
+    monkeypatch.setattr(ci, "_client_problems", lambda d: seen.append(d) or [])
+    assert ci.main() == 0
+    assert seen and seen[0].as_posix().endswith("workspace/clients")

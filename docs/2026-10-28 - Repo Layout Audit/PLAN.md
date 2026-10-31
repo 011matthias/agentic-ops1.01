@@ -103,7 +103,7 @@ Files: `docs/INDEX.md`, `docs/friction-register.md`, `docs/sessions/*.md`
 
 ### W1-5 [truth-1, fit-9, truth-8, truth-11, ctx-10, truth-9, truth-12, harness-10, homes-10, truth-2, truth-14, truth-10, ctx-4, harness-6] cost S
 
-Status: todo
+Status: done PR #1705 (2026-10-29): CLAUDE.md 6,548 -> 3,983 B; 132 legacy /name tokens -> /comd_name (test-dev/test-production/verify-live -> /comd_test <mode>); test_doc_command_refs.py runs in ci.yml's every-PR step (deny-list = plan list + every comd_ stem + retired names; skill modules included, two non-commands allowlisted); [MERGE-NOT-LIVE] arm + 9 tests retired; anneal-metrics counts Hooks (30) + Patterns (37), drift none. Guard: reaches no surface (briefing Action runs tools/morning_briefing.py and is disabled). regress_check bites on both tests.
 
 Depends on: none
 
@@ -173,7 +173,7 @@ Files: `tools/memory_audit.py`, `tools/tests/test_memory_audit.py`, `tools/wire-
 
 ### W1-10 [ledger-1, ledger-7, exposure-7] cost S
 
-Status: todo
+Status: (a) and (b) done PR #1702 (2026-10-29), the one-time heading merge in the batch-5 checkpoint docs PR. finalize slugs and validates the section (known = system/platform/personal, client/project folders in the checkout or the primary, existing slug-shaped headings, since WW checkpoints land before its folder); `private: true` or a personal* section writes the prose to the primary's gitignored docs/personal/ with no INDEX row, session-log entry or register rows, after proving the folder ignored (adds it to the shared info/exclude when the primary's .gitignore predates the line); private minis number from a `.finalized` marker. Verified: 53 scaffold tests, regress_check on four wirings, preflight --full 2177 passed; INDEX 770 rows before and after the merge, 0 case-duplicate headings; the 59 dead rows are listed in #1702's body. Open: (c) the `index --rebuild|--check` generator.
 
 Depends on: item 4
 
@@ -229,7 +229,7 @@ Files: `tools/repo-sweep.py`, `.claude/hooks/file-placement-gate.py`, `.claude/h
 
 ### W1-14 [exposure-4, exposure-6, exposure-8] cost M
 
-Status: todo
+Status: done PR #1664 (2026-10-29, owner yes under the client-ops guard). Range mode scans only ADDED lines (old ledgers and removals stay silent); the token check fires on whole new files only (a one-line recon regex edit had tripped it). CI step warns, never fails. Calibration `--all`: 18 files, not the predicted 5: the predicted ones plus the 10-09 WW and 05-20 Morning Briefing checkpoints, the Rome roster + build-master-v2.py, the WW m-mail-abgleich page, two meji Instantly audits (named mailboxes), and personal addresses (likely the owner's) in two brisken status files and test_intake_mail.py. Replay of 200 merges: asks on 2, both WW checkpoints. confidential-names.txt does not exist for any client yet, so that detector is inert until seeded. After-check: primary fast-forwarded to d6a4b063, gate wired (30 hooks), sweep dry run clean.
 
 Depends on: item 13
 
@@ -257,7 +257,7 @@ Files: `.claude/hooks/file-placement-gate.py`, `tools/tests/test_file_placement_
 
 ### W1-16 [harness-2, onboard-2, onboard-3, onboard-1, onboard-12, fit-5, harness-5] cost M
 
-Status: todo
+Status: done PR #1671 (2026-10-29). tools/infra_yaml.py + infra_check.py (CI hooks job, `--all`); builder agents, comd_resume, skil_build and n8n-pack read through the loader. The WW shape is a synthetic fixture (tools/fixtures/infra_yaml/ww-shape). Deviation: brisken got `deploy: .../expense-reconciliation/deploy.py` beside `orchestrator: fastapi`, because agnt_deployer maps FastAPI to `railway up`; D1 must keep honoring `deploy:`. Against the real WW file infra_check names N8N_API_KEY/URL_WARME_WIMMER missing from its .env.example: the migration adds them. PLATFORM-FEASIBILITY lives in skil_make-mcp-tools-expert/modules (the only copy), not skil_make-pack.
 
 Depends on: none
 
@@ -271,7 +271,7 @@ Files: `tools/infra_yaml.py`, `tools/infra_check.py`, `.claude/agents/agnt_make-
 
 ### W1-17 [onboard-4] cost M
 
-Status: todo
+Status: done PR #1684 + follow-up #1686 (2026-10-29): tools/mcp_config.py renders .mcp.json from infra + the primary's context/.env + a gitignored `.mcp.local.json` (`_scope` tags); primary = union, worktree = branch client (+ vercel on platform/proposal); `--ensure` writes on change only, refuses until `--adopt`; SessionStart + worktree-add hooks; comd_n8n-instances/new-client/resume read through it. Owner yes (AskUserQuestion): adopt + ensure ran in the primary, `.mcp.json` sha256 unchanged, `claude mcp list` 7 connected 0 failed. #1686: `--adopt` also writes `.git/info/exclude`, because the primary (on an older main) showed the token-bearing local file as untracked for ~1 min. Verified: 15 tests, regress_check bites, `--check` on a fresh worktree renders brisken without make-meji-media and meji-media with it. Open: the "lists n8n-warme-wimmer" half waits for the WW import; the primary needs a fast-forward before its SessionStart runs the new hook.
 
 Depends on: item 16
 
@@ -285,7 +285,7 @@ Files: `tools/mcp_config.py`, `tools/wire-hooks.py`, `.claude/commands/comd_n8n-
 
 ### W1-18 [homes-8, onboard-7, onboard-9, onboard-5, fit-5, homes-1, homes-4] cost M
 
-Status: todo
+Status: done PR #1693 (2026-10-29): rule_file_placement client rows, check-index client scan (README.md per automations/tools/), tools/n8n_export.py (infra-derived map, scrubbed stable export, `--check`), builder + N8N-BUILD flat export path, comd_resume Step 4 READMEs, recon CI paths, workspace/templates/client-n8n/. Template manifest is tools/README.md (not INDEX.md) to match check-index. Verified: tests + regress_check on both wirings, preflight --full 2154 passed. Open: `n8n_export.py --client warme-wimmer --check` against live after the import.
 
 Depends on: item 16
 
@@ -299,7 +299,7 @@ Files: `.claude/rules/rule_file_placement.md`, `tools/check-index.py`, `tools/n8
 
 ### W1-19 [ci-12, onboard-8, onboard-10] cost S
 
-Status: todo
+Status: done PR #1695 (2026-10-29) except the harness template: warme-wimmer-tests.yml (path-filtered, no credential, fetch-live*/fixtures excluded, zero matches fails, a 'No WW tree yet' path until the import), agnt_testing-agent n8n mode, comd_test pointer, skil_build-test-fix n8n activation shape (builder hands it on, never runs it). Verified: synthetic tree run (decoys skipped, pass 1), the PR's own run took the no-tree path. Deferred to the WW import: the harness copy to workspace/templates/n8n-tests/ (the harness exists only in the WW tree).
 
 Depends on: item 18
 
@@ -313,7 +313,7 @@ Files: `.github/workflows/warme-wimmer-tests.yml`, `.claude/agents/agnt_testing-
 
 ### W1-20 [exposure-8, onboard-6, onboard-11, onboard-12, homes-2, exposure-10] cost M
 
-Status: todo
+Status: repo half done PR #1700 (2026-10-29): .gitignore `.env.*` (four templates re-included), `/output/`, `/webhook-dump*.json`, `.claude/worktrees/`, `/workspace/hours-tracker.xlsx`; context/portable/ exemption gone (before-check: no portable folder in the primary, none tracked); the gate's static fallback mirrors all of it; tools/scrub-test-data.py (consumer domains -> person-N@example.com, `--all-domains`, `--keep-domain`; numbers, not hashes) with the WW-automations guard in test_scrub_test_data.py run on every PR. Verified: check-ignore per pattern, 0 tracked files newly ignored, guard bites on a seeded address, regress_check on three wirings, dry run on the akkton WW tests 7 files / 33 occurrences (11 / 111 with --all-domains). The migration-day checklist is item 5 of the 2026-10-21 WW checkpoint's Next Steps. Open: the WW-tree half, with the import.
 
 Depends on: item 14, item 18
 
@@ -471,7 +471,7 @@ Deletions, repo settings, convention changes and anything the verifiers flagged 
 
 ### D1 [harness-1, harness-3, truth-3, fit-4, truth-15, homes-8, truth-5, onboard-1, harness-5] cost M
 
-Status: approved 2026-10-28 (owner, AskUserQuestion): retire now, one PR before the WW migration.
+Status: approved 2026-10-28 (owner, AskUserQuestion): retire now, one PR before the WW migration. Guard evidence 2026-10-30 (read-only): no client or project infrastructure.yaml names Railway or Trigger.dev (brisken's says "FastAPI on Fly, never Railway"); neither CLI is installed on this machine; brisken `deploy:` = workspace/clients/brisken/automations/expense-reconciliation/deploy.py. Not started.
 
 Depends on: item 5, item 16
 
@@ -503,7 +503,7 @@ Files: `CLAUDE.md`, `workspace/clients/brisken/OWNERSHIP-HANDOFF.md`
 
 ### D3 [exposure-3, homes-3, exposure-5, exposure-6, exposure-7, ledger-7, homes-9, machine-8, exposure-1, homes-11, exposure-2] cost M
 
-Status: approved 2026-10-28 (owner): all of (a)-(g). (g)'s two remote-branch deletions were ordered in the 2026-10-28 session; a later session executing (g) needs a fresh explicit order. Rotation: hand the owner only the step that needs their login.
+Status: approved 2026-10-28 (owner): all of (a)-(g). (g)'s two remote-branch deletions were ordered in the 2026-10-28 session; a later session executing (g) needs a fresh explicit order. Rotation: hand the owner only the step that needs their login. Done: (a) repo half + (f) PR #1706; (a) live half akkton/unpauseai-web#56, live 2026-10-30 as promote 99cb6cc (the deployed tree holds no abgleich file and no link to one, downloads/ = the PDF only, the gate answers cold; that PR also pins its smoke job to ubuntu-24.04, because ubuntu-latest = 26.04 cannot install chromium); (b) PR #1711 (74 files to the primary's gitignored brisken context/lead-generation/rome-2026/ and meji context/, hash-verified); (c)+(d) PR #1713 (29 folders to the primary's gitignored docs/personal/: six Jochen, Nagarro, all 13 One Assessment / 1Assessment, the 8 KIT/BAfoeG/TikTok plus 2026-10-28 KIT IAM; 30 INDEX rows, the jochen-projekt and personal-kit sections and 28 session-log entries removed); (e) PR #1714 (SCOPE.md to the primary's docs/personal/prototype-fund/, both PrototypeFund tasks retargeted). The primary's shared .git/info/exclude carries docs/personal/ since 2026-10-30 (it still lacks #1702). Open: (g) needs a fresh explicit order; Verify not met: `pii_scan.py --all` on ad1621cc still flags 10 files outside (a)-(g): docs/2026-05-20 Morning Briefing, the two WW Sales Process 72627 Mini-Checkpoint-2 files, friction-register-archive.md, session-inventory-2026-05-10.md, brisken expense-reconciliation tests/test_intake_mail.py, status/p1-expense-reconciliation.md, status/p1-improvement-backlog.md, both meji instantly-audit2.md copies; each needs an allowlist entry or a move. Not driven: a signed-in pass through the WW gate (the code is in no file the agent may read).
 
 Depends on: item 10, item 14
 
@@ -979,7 +979,7 @@ Files: `.claude/settings.json`, `~/.claude/settings.json`, `.claude/hooks/no-aut
 
 ### W1-31 [G5] cost S
 
-Status: todo. Scope measured 2026-10-28: 50 non-test and 50 test `text=True` calls lack `encoding=`; .claude/settings.json has PYTHONIOENCODING only. Larger than its S label. Rescoped 2026-10-28 under the client-ops guard: drop the `PYTHONUTF8=1` part of the Action; the helper, doctor.py and the CI leg stay.
+Status: done PR #1669 + PR #1677 (2026-10-29). #1677 converted the three job scripts after the owner's yes naming BriskenReconNotify, RepoSweep and AgenticOpsWeeklySynthesis; DEFERRED is empty. weekly_synthesis.send() also passes PYTHONIOENCODING=utf-8 to send_email.py, whose stdin would otherwise decode the UTF-8 body as cp1252. Batch-3 notes on #1669 follow. 92 call sites now pass `encoding="utf-8", errors="replace"` inline (tools/ are standalone uv scripts, so no shared import from .claude/hooks); doctor.py marks an exit-0 check with a `Traceback` header not-ok; the CI leg is tools/tests/test_text_encoding.py (AST scan, multi-line calls included, plus a 0x8d round trip), proven with regress_check. The sweep completes from the worktree. Left out under the client-ops guard and listed in the test's DEFERRED set: tools/brisken-recon-notify-run.py:154 (BriskenReconNotify), tools/repo-sweep.py:354 (RepoSweep), tools/weekly_synthesis.py x4 (AgenticOpsWeeklySynthesis); the auto-mode classifier also refused the edit without an owner yes. After-check: notifier clone at 27348341, exit 0 at 11:47Z. No global PYTHONUTF8.
 
 Depends on: none
 
@@ -993,7 +993,7 @@ Files: `.claude/settings.json`, `tools/project_status.py`, `tools/doctor.py`, `.
 
 ### W1-32 [G4] cost S
 
-Status: todo. Found 2026-10-28: BriskenReconNotify had exited nonzero on ~3 of 4 runs every day since at least 10-16 (SSLEOFError on /api/login): this machine's IPv6 route to Fly drops the TLS handshake (IPv4 4/4, IPv6 2/4 and 0/4). Notifications were delayed, never lost (state advances only after a send). Fixed on branch client/brisken/recon-notify-ipv4 (owner yes): IPv4 pin in main(); dry runs 0/3 before, 3/3 after.
+Status: todo. Found 2026-10-28: BriskenReconNotify had exited nonzero on ~3 of 4 runs every day since at least 10-16 (SSLEOFError on /api/login): this machine's IPv6 route to Fly drops the TLS handshake (IPv4 4/4, IPv6 2/4 and 0/4). Notifications were delayed, never lost (state advances only after a send). Fixed PR #1663 (owner yes): IPv4 pin in main(); dry runs 0/3 before, 3/3 after; 13 of 13 scheduled runs exit 0 through 2026-10-29 10:32Z. The rest of W1-32 (the other jobs' outcomes) is still todo.
 
 Depends on: W1-24
 
@@ -1035,7 +1035,7 @@ Files: `tools/wire-hooks.py`, `tools/repo-sweep.py`, `.claude/rules/rule_brisken
 
 ### W1-35 [G12] cost S, lands with W1-14
 
-Status: todo
+Status: done PR #1664 (2026-10-29). Probe, gitleaks 8.30.1 defaults: caught Graph, Hero, Instantly, Zoho only through KEY/TOKEN/SECRET names and a realistic n8n key via the jwt rule; missed the Make MCP URL (`<zone>.make.com/mcp/u/<UUID>/stateless`) and tok.txt (57415748). New rules make-mcp-url, zoho-oauth-token, token-named-file catch both; CI log shows "using gitleaks config from GITLEAKS_CONFIG". Verify deviation: main's history is NOT 0, it holds 57 findings under the default and the new config alike (40 airtable-api-key on herbox-sweden Airtable IDs, 17 generic), so the config adds none and CI only scans new commits. Not done: the push gate running gitleaks locally (no gitleaks on the machine; probe used a scratch download). tok.txt's shape (8 + 73 lowercase alnum, one dot) matches no common token format; identifying the service stays with D3(g).
 
 Depends on: none
 
@@ -1049,7 +1049,7 @@ Files: `.gitleaks.toml`, `.github/workflows/ci.yml`, `.claude/hooks/pii-push-gat
 
 ### W1-36 [G7] cost S, lands with W1-17
 
-Status: todo
+Status: done except the fresh-session Verify (2026-10-29). The rest landed with W1-17 (#1684): vercel scoped to platform/proposal worktrees, per-client rendering, doctor check `mcp-health` (`mcp_config.py --mcp-health`, names only, "Needs authentication" is not a failure; read 2026-10-29: 7 connected, 0 failed). Still to read: a fresh session start in the primary reports no failed MCP connection (this session's start showed a transient context7 CONNECT_TIMEOUT that `claude mcp list` later read as connected). Earlier: partly done 2026-10-29 (owner yes, AskUserQuestion: "Remove all three"). Removed via the `claude mcp remove` CLI: user-scope `n8n` (~/.claude.json) and project-scope `firebase` + `serena` (the primary's gitignored .mcp.json, which now holds context7, github, make-meji-media, playwright, vercel). Backups: the primary's `.scratch/claude.json.pre-w1-36-2026-10-29` and `.scratch/mcp.json.pre-w1-36-2026-10-29`. Still todo with W1-17: `vercel` only in a platform worktree, per-client rendering (owner chose "Union in primary": the primary gets every client's servers, worktrees get per-client sets), the doctor `claude mcp list` check. Verify (no failed MCP connection at start) is read at the next fresh session.
 
 Depends on: W1-17
 

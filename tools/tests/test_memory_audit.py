@@ -136,7 +136,7 @@ def store(tmp_path):
 
 def _audit(mem, env):
     p = subprocess.run([sys.executable, str(TOOLS / "memory_audit.py"), "--memory-dir", str(mem),
-                        "--format", "json"], capture_output=True, text=True, timeout=60,
+                        "--format", "json"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
                        env={**os.environ, **env["env"]})
     assert p.returncode == 0, p.stderr
     return json.loads(p.stdout)
@@ -197,7 +197,7 @@ def test_reads_from_another_store_do_not_count(store, env):
 def test_text_output_reports_counts_and_changes_nothing(store, env):
     before = {p.name: p.read_bytes() for p in store.iterdir()}
     p = subprocess.run([sys.executable, str(TOOLS / "memory_audit.py"), "--memory-dir", str(store)],
-                       capture_output=True, text=True, timeout=60, env={**os.environ, **env["env"]})
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60, env={**os.environ, **env["env"]})
     assert "9 index entries" in p.stdout and "no read-based Retire" in p.stdout
     assert "Nothing was changed" in p.stdout
     assert {q.name: q.read_bytes() for q in store.iterdir()} == before

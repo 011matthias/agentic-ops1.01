@@ -274,7 +274,7 @@ def test_cli_watch_check_done_roundtrip(tmp_path):
         full = dict(os.environ)
         full.update(env)
         return subprocess.run([sys.executable, str(TOOLS / "bg_watch.py"), *args],
-                              capture_output=True, text=True, timeout=60, env=full)
+                              capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60, env=full)
 
     # `--cwd` AFTER the subcommand must parse: argparse rejects a top-level
     # option in that position, which made every registration in the first live
@@ -299,6 +299,6 @@ def test_cli_json_after_subcommand_parses(tmp_path):
     env.update(_meter_env(tmp_path, tmp_path / "watches.json"))
     r = subprocess.run([sys.executable, str(TOOLS / "bg_watch.py"),
                         "watch", "--label", "fanout", "--json"],
-                       capture_output=True, text=True, timeout=60, env=env)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60, env=env)
     assert r.returncode == 0, r.stderr
     assert json.loads(r.stdout)["id"] == "fanout"

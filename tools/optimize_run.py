@@ -92,7 +92,7 @@ def _now() -> _dt.datetime:
 
 def repo_root() -> str:
     proc = subprocess.run(["git", "rev-parse", "--show-toplevel"],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         die("not inside a git repository")
     return proc.stdout.strip()
@@ -100,7 +100,7 @@ def repo_root() -> str:
 
 def git(repo: str, *args: str, check: bool = True) -> subprocess.CompletedProcess:
     proc = subprocess.run(["git", "-C", repo, *args],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
     if check and proc.returncode != 0:
         die(f"git {' '.join(args)} failed: {proc.stderr.strip()}")
     return proc
@@ -388,7 +388,7 @@ def run_under_timeout(repo: str, argv: list[str],
     if os.name != "nt":
         kwargs["start_new_session"] = True
     proc = subprocess.Popen(argv, cwd=repo, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT, text=True, **kwargs)
+                            stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", **kwargs)
     try:
         out, _ = proc.communicate(timeout=timeout)
         return out or "", proc.returncode

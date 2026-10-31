@@ -69,6 +69,6 @@ def test_check_command_is_green():
     import sys
     proc = subprocess.run(
         [sys.executable, str(TOOLS / "pin_scorer.py"), "check"],
-        capture_output=True, text=True, cwd=str(REPO),
+        capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=str(REPO),
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr

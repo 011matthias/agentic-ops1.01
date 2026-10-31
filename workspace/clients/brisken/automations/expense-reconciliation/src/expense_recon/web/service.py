@@ -65,6 +65,7 @@ from ..duplicates import (
     with_kept_first,
 )
 from ..duplicates import stamp_intake_twins, twin_links  # item 223 step 6
+from ..duplicates import number_settled_copies  # item 256
 from ..ingest._common import merge_transactions
 from ..matching.types import (
     DECIDED_ORIGINS,
@@ -4194,6 +4195,10 @@ def build_view(
                 "vendor": r.detected_vendor or "(no vendor)",
                 "total": _fmt_amount(r.detected_total),
                 "currency": r.detected_currency or "",
+                # Note #133: the hand-match picker sorts and reads by date
+                # and reference; it printed "-" for every date without them.
+                "date": r.detected_date.isoformat() if r.detected_date else "",
+                "reference": r.detected_reference or "",
                 "legal_entity_id": r.legal_entity_id,
                 "held_by": holder_by_doc.get(r.document_id),
             }
@@ -4396,6 +4401,13 @@ def build_view(
             no_receipt_expected=charge_no_receipt_expected(row),
         )
         row["reason_label"] = CHARGE_REASON_TEXT[row["reason_code"]]
+        # Note #132 / item 260: `reason_code` names ONE cause, so a gray-filled
+        # fee line reads `not_a_purchase` while the month gate already counts
+        # it closed (live August: tile 43 open, chase list 42). The screen
+        # reads this flag instead of guessing closure from the code.
+        row["closed_without_receipt"] = bool(
+            charge_booked_recurring(row) or charge_no_receipt_expected(row)
+        )
     for tx_entry in unmatched_transactions:
         tx_entry["reason_code"] = charge_reasons[tx_entry["transaction_id"]]
         tx_entry["reason_label"] = CHARGE_REASON_TEXT[tx_entry["reason_code"]]
@@ -8633,6 +8645,11 @@ def build_expense_view(
         run, receipts, resolutions,
         charge_decisions=decisions, receipt_decisions=grid_decisions,
     )
+    # Item 256: a set-aside invoice whose receipt prints its number asks
+    # nothing (review `none`), so it leaves `n_review` like every count.
+    grid_quiet_copies = (
+        number_settled_copies(grid_decisions, receipts) & set(grid_copies)
+    )
     for r in receipts:
         res = card_res.get(r.document_id) or {
             "hint": "", "card": None, "entity": r.legal_entity_id or "",
@@ -8948,6 +8965,8 @@ def build_expense_view(
             # every row that counts, which is every row an older backend
             # served, so absent keeps reading "counts".
             expenses[-1]["counts_in_total"] = False
+            if r.document_id in grid_quiet_copies:
+                expenses[-1]["review"] = _review("none")
         # Build 4 / item 218: which way the row was paid, and why. Both always
         # present (parallel fields). A bill stays on screen and leaves the
         # month's total, item 94's `counts_in_total: false`, so every surface
@@ -9170,7 +9189,9 @@ def build_expense_view(
                 copies_set_aside_totals(receipts, grid_copies).items()
             )
         },
-        "n_set_aside": sum(1 for e in set_aside if not e["restored"]),
+        "n_set_aside": sum(
+            1 for e in set_aside if not e["restored"] and not e.get("dismissed")
+        ),
         # Item 62, same name and same question as the run payload.
         "n_settled_outside": len(grid_settled_outside),
         "n_categorized": n_categorized,
@@ -11203,6 +11224,8 @@ def attach_expense_card_tabs(
     edits: list[dict],
     resolutions: dict[str, str] | None,
     decisions: dict | None,
+    month_batch=None,
+    today: date | None = None,
 ) -> dict:
     """Item 138 on `GET /api/expense-batches/{id}` (the Expenses page):
     `card_sections` and `expenses[].card_section`. Mutates and returns
@@ -11261,6 +11284,19 @@ def attach_expense_card_tabs(
         str(rec.get("document_id") or "")
         for rec in card_view.get("unmatched_receipts") or []
     }
+    # Item 264 (note #137, 2026-10-29): a receipt no charge holds and whose
+    # date lies in another calendar month has nothing keeping it here, so it
+    # is offered the move even inside the batch's window. Inside the window
+    # a READ date is otherwise never offered (item 251), because a receipt
+    # printed on the 30th is usually held by the next month's charge; once no
+    # charge holds it that reason is gone. Offer only, never a move on read.
+    # Only where a statement is loaded: without one, "no charge holds it" is
+    # only "no statement yet", and a receipt from the 30th still waits for
+    # its charge on the 1st.
+    batch_month = month_from_label(run.label) if view.get("has_statement") else None
+    trip = is_trip_batch(run)
+    added = {e["document_id"] for e in edits if e["op"] == "add"}
+    move_today = today or datetime.now(timezone.utc).date()
     counted: dict[str, int] = {}
     sums: dict[str, dict[str, Decimal]] = {}
     for expense in view.get("expenses") or []:
@@ -11268,6 +11304,28 @@ def attach_expense_card_tabs(
         key = by_doc.get(doc, "")
         expense["card_section"] = key
         expense["without_charge"] = doc in unmatched
+        if (
+            expense["without_charge"]
+            and not trip
+            and not expense.get("month_move")
+            and expense.get("counts_in_total") is not False
+            and (not doc.startswith("manual:") or doc in added)
+        ):
+            try:
+                row_date = date.fromisoformat(str(expense.get("date") or "")[:10])
+            except ValueError:
+                row_date = None
+            move_to = date_month_target(
+                row_date, batch_month=batch_month, today=move_today,
+            )
+            if move_to is not None:
+                from .intake_mail import _month_human
+
+                offer = {"month": move_to, "label": _month_human(move_to)}
+                joins = month_batch(move_to) if month_batch is not None else None
+                if joins:
+                    offer["batch_id"] = joins
+                expense["month_move"] = offer
         if expense.get("counts_in_total") is False:
             continue
         counted[key] = counted.get(key, 0) + 1
@@ -11310,6 +11368,11 @@ def attach_expense_card_tabs(
     for entry in view.get("set_aside") or []:
         doc = str(entry.get("document_id") or "")
         entry["card_section"] = (set_aside_cards.get(doc) or ("", ""))[0]
+    # Item 264: the offers added above count in the banner too.
+    if isinstance(view.get("summary"), dict):
+        view["summary"]["n_month_moves"] = sum(
+            1 for e in view.get("expenses") or [] if e.get("month_move")
+        )
     return view
 
 
@@ -13976,6 +14039,9 @@ def set_aside_view(snapshot: dict, work_dir: Path | None = None) -> list[dict]:
             "display": e.get("display") or _display_name(e["file"]),
             "reason": e.get("reason") or "other",
             "restored": bool(e.get("restored")),
+            # Item 262: taken off the month's list by a person, bytes kept;
+            # reversible through the same route with `undo`.
+            "dismissed": bool(e.get("dismissed")),
             "at": e.get("at"),
             # Note item T3/T1: the receipt this entry set aside, under
             # the name every other surface calls it. `file` has always
@@ -14043,6 +14109,52 @@ def restore_set_aside_file(
     return out
 
 
+def dismiss_set_aside_file(
+    store: RunStore, run: RunRow, file: str, now_iso: str, *, undo: bool = False,
+) -> dict:
+    """Item 262 (notes #127, #130): take one set-aside file off the month's
+    list, or put it back (`undo`). The entry is flagged `dismissed`, never
+    deleted, and the bytes stay where they are: the storage description
+    promises nothing this system accepted is destroyed, and a flag is the
+    removal that keeps that promise and can be reversed. A restored entry is
+    already an expense and refuses; delete the expense instead."""
+    with _BATCH_ADD_LOCK:
+        fresh = store.get_run(run.run_id)
+        if fresh is None:
+            raise RunInputError(
+                "This batch no longer exists (it was deleted).",
+                code="batch_deleted",
+            )
+        snapshot = dict(fresh.snapshot)
+        entries = set_aside_entries(snapshot)
+        entry = next((e for e in entries if e["file"] == file), None)
+        if entry is None:
+            raise RunInputError(
+                f"{file} is not in this batch's set-aside list.",
+                code="set_aside_file_not_found",
+                file=file,
+            )
+        if entry.get("restored"):
+            raise RunInputError(
+                f"{file} was restored as an expense; delete the expense instead.",
+                code="set_aside_already_restored",
+                file=file,
+            )
+        if undo:
+            entry.pop("dismissed", None)
+            entry.pop("dismissed_at", None)
+        else:
+            entry["dismissed"] = True
+            entry["dismissed_at"] = now_iso
+        snapshot["set_aside"] = entries
+        store.update_run_snapshot(fresh.run_id, snapshot)
+        n_set_aside = sum(
+            1 for e in entries if not e.get("restored") and not e.get("dismissed")
+        )
+        store.update_run_summary(fresh.run_id, {**fresh.summary, "n_set_aside": n_set_aside})
+    return {"ok": True, "file": file, "dismissed": not undo, "n_set_aside": n_set_aside}
+
+
 def _restore_set_aside_locked(
     store: RunStore,
     run: RunRow,
@@ -14068,6 +14180,12 @@ def _restore_set_aside_locked(
         raise RunInputError(
             f"{file} was already restored.",
             code="set_aside_already_restored",
+            file=file,
+        )
+    if entry.get("dismissed"):
+        raise RunInputError(
+            f"{file} was removed from this month; put it back first.",
+            code="set_aside_dismissed",
             file=file,
         )
 
@@ -14175,7 +14293,9 @@ def _restore_set_aside_locked(
     snapshot["outcome"] = outcome_to_dict(outcome)
     snapshot["set_aside"] = entries
     store.update_run_snapshot(run.run_id, snapshot)
-    n_set_aside = sum(1 for e in entries if not e.get("restored"))
+    n_set_aside = sum(
+        1 for e in entries if not e.get("restored") and not e.get("dismissed")
+    )
     store.update_run_summary(run.run_id, {
         **run.summary,
         "n_expenses": len(pool),
@@ -15076,7 +15196,19 @@ def execute_statement_attach(
         )
         if not transactions:
             raise statement_outside_month(month_filter, upload_name or stmt_name)
-    merged = merge_transactions(existing, transactions)
+    # Item 257: a line the month already holds from ANOTHER file of this card
+    # is the same charge (the interim workbook inside the closing PDF).
+    held_files = {
+        tid: str(o.get("statement_file") or "")
+        for tid, o in origins_from_snapshot(run.snapshot).items()
+    }
+    merged = merge_transactions(
+        existing,
+        transactions,
+        files=held_files,
+        incoming_file=stmt_name,
+        decided=frozenset(store.get_decisions(run.run_id)),
+    )
 
     result = rematch_month(
         store,
@@ -15289,6 +15421,11 @@ def reread_statements(
     transactions: list = []
     issues: list = []
     rebuilt: list[dict] = []
+    # Item 257: which file each held charge came from, built as the files
+    # are folded in upload order, and the ids a person or the tool decided.
+    held_files: dict[str, str] = {}
+    folded_doubles: list[str] = []
+    decided_ids = frozenset(store.get_decisions(run.run_id))
     new_cfg: dict = cfg
     entity = ""
     # Item 215: an entry attached under the month filter is re-read under it,
@@ -15386,8 +15523,16 @@ def reread_statements(
                 file=stored,
                 n_rows=entry["n_rows"],
             )
-        merged = merge_transactions(transactions, txs)
+        merged = merge_transactions(
+            transactions,
+            txs,
+            files=held_files,
+            incoming_file=stored,
+            decided=decided_ids,
+        )
         transactions = merged.transactions
+        held_files = merged.files
+        folded_doubles.extend(merged.folded)
         issues.extend(stmt_issues)
         rebuilt.append(
             build_statement_entry(
@@ -15466,6 +15611,7 @@ def reread_statements(
     result["n_transactions_before"] = len(old_ids)
     result["n_transactions"] = len(transactions)
     result["n_decisions_rekeyed"] = len(rekey)
+    result["n_doubles_folded"] = len(folded_doubles)
     return result
 
 
@@ -16101,6 +16247,7 @@ def rematch_month(
     pool, collapsed, dup_decisions = duplicate_pool(
         run, pool, dup_resolutions, held=held_documents(store, run),
         account_keys=dup_account_keys,
+        pinned=pinned_documents(store, run),  # item 256
     )
     receipt_digest_map = receipt_digests(run, receipts)
     # R4b (item 38 ruling 3): the pool spans trips. Receipts from trips
@@ -18409,6 +18556,25 @@ def held_documents(store: "RunStore", run: RunRow) -> set[str]:
     return {m.document_id for m in effective.matches}
 
 
+def pinned_documents(store: "RunStore", run: RunRow) -> set[str]:
+    """The receipts a PERSON's confirmed pick holds (item 256): the part of
+    `held_documents` that a re-match never moves off a number pair's
+    invoice. A tool self-confirmation pins nothing; `apply_self_confirmations`
+    re-judges it after the re-match. Read-only."""
+    try:
+        transactions, pool, outcome, _errors = snapshot_from_dict(run.snapshot)
+    except Exception:  # noqa: BLE001 - an unreadable snapshot pins nothing
+        return set()
+    if not transactions:
+        return set()
+    decisions = store.get_decisions(run.run_id)
+    people = reviewer_confirmed_tx_ids(decisions)
+    if not people:
+        return set()
+    effective = apply_decisions(outcome, transactions, pool, decisions)
+    return {m.document_id for m in effective.matches if m.transaction_id in people}
+
+
 def decided_copies(
     run: RunRow,
     receipts: list[Receipt],
@@ -18516,6 +18682,7 @@ def duplicate_pool(
     work_dir: "Path | None" = None,
     held: "set[str] | None" = None,
     account_keys: "frozenset[str] | None" = None,
+    pinned: "set[str] | None" = None,
 ):
     """`(pool without collapsed copies, collapsed ids, decisions)`: the
     candidate pool a re-match hands the matcher before the statement check.
@@ -18524,13 +18691,18 @@ def duplicate_pool(
 
     Item 217: each group's kept copy is chosen here (`choose_kept`): the one a
     charge already holds (`held`), else the payment receipt over its
-    invoice, else the first. The returned decisions carry it first."""
+    invoice, else the first. The returned decisions carry it first. Item 256:
+    a receipt and its invoice found by one number keep the receipt unless a
+    person's pick holds the invoice (`pinned`, see `pinned_documents`)."""
     decisions = duplicate_decisions(
         run, pool, resolutions, work_dir=work_dir, with_statement_check=False,
         account_keys=account_keys,  # item 223 step 5: a re-match's own keys
     )
     decisions = with_kept_first(
-        decisions, choose_kept(decisions, pool, frozenset(held or ()))
+        decisions, choose_kept(
+            decisions, pool, frozenset(held or ()),
+            pinned=frozenset(pinned) if pinned is not None else None,
+        )
     )
     collapsed = copies_to_collapse(decisions)
     kept = [r for r in pool if r.document_id not in collapsed] if collapsed else pool

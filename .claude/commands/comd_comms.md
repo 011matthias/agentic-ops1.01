@@ -16,7 +16,7 @@ argument-hint: <client-name> <inbound|log|status>
    - `$2` = subcommand (required). One of: `inbound`, `log`, `status`.
 
 2. **Verify client exists:** Check that `workspace/clients/$1/` exists. If not, list available clients and ask.
-   - Note: `/comms` only applies to `type: client` projects. If the project is found in `workspace/projects/` with `type: internal` or `type: platform`, stop with: "Client comms don't apply to `type: {type}` projects."
+   - Note: `/comd_comms` only applies to `type: client` projects. If the project is found in `workspace/projects/` with `type: internal` or `type: platform`, stop with: "Client comms don't apply to `type: {type}` projects."
 
 3. **Load the client-comms skill** and execute based on subcommand:
 
@@ -32,7 +32,7 @@ Load and follow the INBOUND-PROCESSING.md module:
 7. Suggest next actions
 8. Offer to log (ask before writing)
 
-If the user wants to reply after processing, suggest: "Want me to draft a reply? I'll use `/draft` with this context."
+If the user wants to reply after processing, suggest: "Want me to draft a reply? I'll use `/comd_draft` with this context."
 
 ### `log` — View Conversation History
 
@@ -52,13 +52,13 @@ Read `workspace/clients/$1/context/comms-log.md` and present a concise summary:
 4. **Staleness tier:**
    - OK (0-3 days) — no action needed
    - NOTICE (4-7 days) — mention in passing
-   - STALE (8-14 days) — suggest: "Consider `/draft {client} follow-up`"
+   - STALE (8-14 days) — suggest: "Consider `/comd_draft {client} follow-up`"
    - URGENT (15+ days) — flag prominently: "No contact in {N} days. Send a follow-up."
 
 ## Examples
 
 ```
-/comms meji-media inbound              # Process a client reply (then paste it)
-/comms meji-media log                  # View conversation history
-/comms meji-media status               # Quick overview of open items
+/comd_comms meji-media inbound              # Process a client reply (then paste it)
+/comd_comms meji-media log                  # View conversation history
+/comd_comms meji-media status               # Quick overview of open items
 ```

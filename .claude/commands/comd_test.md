@@ -21,10 +21,10 @@ Run tests or verify an automation. Delegates to the `agnt_testing-agent`.
 Parse the arguments in order. If the first argument matches a mode keyword (`dev`, `production`, `verify`), use it as the mode and shift. Otherwise default to `test`.
 
 Examples:
-- `/test meji-media a1` → mode=test, client=meji-media, id=a1
-- `/test dev meji-media a1` → mode=test-dev, client=meji-media, id=a1
-- `/test production meji-media a1` → mode=test-production, client=meji-media, id=a1
-- `/test verify meji-media a1` → mode=verify-live, client=meji-media, id=a1
+- `/comd_test meji-media a1` → mode=test, client=meji-media, id=a1
+- `/comd_test dev meji-media a1` → mode=test-dev, client=meji-media, id=a1
+- `/comd_test production meji-media a1` → mode=test-production, client=meji-media, id=a1
+- `/comd_test verify meji-media a1` → mode=verify-live, client=meji-media, id=a1
 
 If arguments are missing, ask the user.
 
@@ -41,4 +41,4 @@ Invoke the `agnt_testing-agent` with:
 - **Client:** parsed from arguments
 - **Automation ID:** parsed from arguments
 
-The agnt_testing-agent handles all test execution, result interpretation, and status updates.
+The agnt_testing-agent handles all test execution, result interpretation, and status updates. For an n8n client it uses its n8n mode: the infrastructure.yaml `test:` commands offline, then an `n8n_executions` readback for `dev` and `verify`.

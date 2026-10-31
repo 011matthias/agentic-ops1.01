@@ -88,24 +88,43 @@ def _run_fixture(tmp_path) -> dict:
     return json.loads(proc.stdout)
 
 
-def test_pack_consumed_stub_module_not_flagged(tmp_path):
-    # C1: a pack spine routes into a consolidation stub's module via a cross-skill
-    # link; the module is reachable even though the stub's own SKILL.md never
-    # names it. A genuine orphan (referenced by no spine anywhere) still fires.
+def test_module_only_another_skill_names_is_unreachable(tmp_path):
+    # The stub-skill exception is gone (layout plan W1-29): a module counts as
+    # reachable only when its OWN spine names it, whatever other spines link.
     skills = tmp_path / ".claude" / "skills"
     pack = skills / "skil_pack"
-    pack.mkdir(parents=True)
+    (pack / "modules").mkdir(parents=True)
     (pack / "SKILL.md").write_text(
-        "# Pack\n\nLoad `../skil_stub/modules/THING.md` for the detail.\n", encoding="utf-8")
-    stub = skills / "skil_stub"
-    (stub / "modules").mkdir(parents=True)
-    (stub / "SKILL.md").write_text("# Stub\n\nConsolidated into skil_pack.\n", encoding="utf-8")
-    (stub / "modules" / "THING.md").write_text("detail\n", encoding="utf-8")
-    (stub / "modules" / "ORPHAN.md").write_text("nobody references me\n", encoding="utf-8")
+        "# Pack\n\nLoad `modules/THING.md`, or `../skil_other/modules/LENT.md`.\n",
+        encoding="utf-8")
+    (pack / "modules" / "THING.md").write_text("detail\n", encoding="utf-8")
+    other = skills / "skil_other"
+    (other / "modules").mkdir(parents=True)
+    (other / "SKILL.md").write_text("# Other\n", encoding="utf-8")
+    (other / "modules" / "LENT.md").write_text("detail\n", encoding="utf-8")
 
     msgs = [h["message"] for h in _run_fixture(tmp_path)["hits"]]
-    assert not any("THING.md exists but" in m for m in msgs), msgs   # reachable via pack
-    assert any("ORPHAN.md exists but" in m for m in msgs), msgs       # genuine orphan
+    assert not any("THING.md exists but" in m for m in msgs), msgs
+    assert any("LENT.md exists but" in m for m in msgs), msgs
+
+
+def test_dead_slash_command_in_a_command_file_fires(tmp_path):
+    claude = tmp_path / ".claude"
+    (claude / "skills" / "skil_n8n-pack").mkdir(parents=True)
+    (claude / "skills" / "skil_n8n-pack" / "SKILL.md").write_text("# Pack\n", encoding="utf-8")
+    (claude / "commands").mkdir()
+    (claude / "agents").mkdir()
+    (claude / "commands" / "comd_resume.md").write_text("# Resume\n", encoding="utf-8")
+    (claude / "commands" / "comd_test.md").write_text(
+        "Run `/comd_resume` or /resume first, load /n8n-pack, then /loop it.\n"
+        "Then run /proposal-retro on the result.\n"            # dead -> fires
+        "Hit `/api/modules/x` and https://x.dev/verify-live.\n"  # paths -> quiet
+        "```\ncurl localhost/health\n```\n", encoding="utf-8")  # fenced -> quiet
+    (claude / "agents" / "agnt_x.md").write_text("Pass task=`verify-live`.\n", encoding="utf-8")
+
+    hits = [h for h in _run_fixture(tmp_path)["hits"] if h["category"] == "dead-command-ref"]
+    assert [h["message"].split("`")[1] for h in hits] == ["/proposal-retro"], hits
+    assert hits[0]["line"] == 2, hits
 
 
 def test_illustrative_paths_skipped_real_drift_still_flagged(tmp_path):

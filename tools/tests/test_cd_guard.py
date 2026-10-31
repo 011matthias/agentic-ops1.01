@@ -343,9 +343,9 @@ def test_rewritten_command_runs_in_bash_and_the_cd_does_not_leak(tmp_path, cmd, 
     (tmp_path / "sub").mkdir()
     rewritten = _updated_input(_run_mode(cmd, "auto"))["command"]
     baseline = subprocess.run([bash, "-c", "pwd"], cwd=tmp_path,
-                              capture_output=True, text=True).stdout.strip()
+                              capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
     r = subprocess.run([bash, "-c", rewritten + "\npwd"], cwd=tmp_path,
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stderr
     assert r.stdout.strip().splitlines()[-1] == baseline
     assert (tmp_path / "sub" / "inner.txt").read_text() == content

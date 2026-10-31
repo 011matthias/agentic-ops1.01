@@ -68,7 +68,7 @@ Re-invoke with both. Cannot resolve spec without them.
 
 ### Step 2 — Resolve target n8n instance
 
-`Read` `workspace/clients/{client}/infrastructure.yaml`. Find the n8n instance(s). If multiple (dev + prod), pick based on spec frontmatter:
+Run `uv run tools/infra_yaml.py --client {client} --json`. It normalizes every infrastructure.yaml shape in use (an `instances:` list, an `n8n_instances:` map, or a top-level `n8n:` block with workflows nested under `workflows:` maps) into one `instances` list; never parse the file by hand. Take the instances with `type: n8n`. If multiple (dev + prod), pick based on spec frontmatter:
 - `ship: true` or `stage: live` → production instance
 - `ship: false` or `stage: build|test` → dev instance
 - Ambiguous → BLOCK with reason "Multiple n8n instances exist and target is ambiguous. Spec says ship={value}, stage={value}. Re-invoke with explicit instance."
@@ -182,10 +182,10 @@ n8n best practice is iterative builds: create with a minimal skeleton, then appl
 
 Working file (so the JSON survives across iterations and is reviewable):
 ```
-workspace/clients/{client}/automations/workflows/{automation_id}.json
+workspace/clients/{client}/automations/{automation_id}-{slug}.n8n.json
 ```
 
-Create the `workflows/` directory if missing. Write the workflow body locally first, then deploy.
+Flat in `automations/`, no subfolder; `{slug}` is the workflow name in kebab case. Set the same path as the workflow's `export:` in infrastructure.yaml, so `tools/n8n_export.py` maps it. Write the workflow body locally first, then deploy; after the deploy, `uv run tools/n8n_export.py --client {client} --only {n8n_workflow_id}` rewrites the file from live, scrubbed, and `--check` proves repo and live match.
 
 Pattern (call the n8n MCP tools, not synthesized HTTP):
 
@@ -209,27 +209,29 @@ False-positive validation errors (per skill-pack reference module FALSE-POSITIVE
 ### Step 6 — Post-build artifact write + credential check
 
 After validation passes:
-- `Write` the canonical workflow JSON to `workspace/clients/{client}/automations/workflows/{automation_id}.json` for git tracking and review
+- `Write` the canonical workflow JSON to `workspace/clients/{client}/automations/{automation_id}-{slug}.n8n.json` for git tracking and review
 - Verify credentials are bound by inspecting the deployed workflow JSON for `credentials: {<service>: {id: <num>}}` on each authenticated node
 - If any credential is bound to `null` or missing, surface as a `### Credential rebind requirements` section in the report (USER ACTION)
 
 ### Step 7 — Update infrastructure.yaml (modify-scenario gate)
 
-In the same turn as a successful build, `Edit` `workspace/clients/{client}/infrastructure.yaml`:
-- Find or create the entry under `n8n_instances.{instance}.workflows.{id}`
+In the same turn as a successful build, `Edit` `workspace/clients/{client}/infrastructure.yaml` (a targeted Edit, so comments survive):
+- Find the workflow where the file already keeps its workflows (the loader's `workflows` keys tell you which block they live in); for a new workflow, add it beside its siblings in that same block. Only when the instance has no workflows yet, create `workflows:` under the instance's own block.
 - Update fields:
   - `trigger:` (if changed)
   - `status:` (e.g., `inactive` — agent does NOT activate; that's deployer's job)
   - `workflow_id:` (set to the deployed n8n workflow ID)
   - `note:` (append: `{YYYY-MM-DD}: built via agnt_n8n-builder — {summary}`)
-  - `last_workflow_json_path:` set to `workspace/clients/{client}/automations/workflows/{automation_id}.json`
+  - `last_workflow_json_path:` set to `workspace/clients/{client}/automations/{automation_id}-{slug}.n8n.json`
   - `last_built_at:` ISO timestamp
 
-If `infrastructure.yaml` has no `n8n_instances` block for the client, BLOCK with: "infrastructure.yaml does not have n8n_instances block for {client}. Run /comd_n8n-instances add {client} before building."
+Then run `uv run tools/infra_check.py --client {client}` and fix any ERROR it names before emitting the report.
+
+If the loader returns no `type: n8n` instance for the client, BLOCK with: "infrastructure.yaml has no n8n instance for {client}. Run /comd_n8n-instances add {client} before building."
 
 ### Step 8 — Emit build report
 
-Compose per **Output Format** below. No preamble; the first line is the `##` header.
+Compose per **Output Format** below. No preamble; the first line is the `##` header. Under "Next step for orchestrator", name the activation shape in skil_build-test-fix ("n8n activation shape": idle, PUT by id, read back, activate, acceptance run, rollback) with this workflow's `n8n_workflow_id` and export path filled in. You do not run it.
 
 ## Hard rules
 
@@ -266,7 +268,7 @@ Compose per **Output Format** below. No preamble; the first line is the `##` hea
 - N7 execution-budget: {PASS / N-A — self-hosted} — projected {N}/month vs plan {M} ({pct}%) {WARN if >50%}
 
 ### Files created/modified
-- workspace/clients/{client}/automations/workflows/{automation_id}.json: {created | modified} ({N nodes})
+- workspace/clients/{client}/automations/{automation_id}-{slug}.n8n.json: {created | modified} ({N nodes})
 - workspace/clients/{client}/infrastructure.yaml: updated ({fields})
 
 ### Workflow build
@@ -280,9 +282,9 @@ Compose per **Output Format** below. No preamble; the first line is the `##` hea
 (Or: "None — all credentials bound via API.")
 
 ### infrastructure.yaml updated
-- n8n_instances.{instance}.workflows.{id}.workflow_id: {id}
-- n8n_instances.{instance}.workflows.{id}.status: inactive
-- n8n_instances.{instance}.workflows.{id}.note: appended "{YYYY-MM-DD}: ..."
+- {workflow path in the file}.workflow_id: {id}
+- {workflow path in the file}.status: inactive
+- {workflow path in the file}.note: appended "{YYYY-MM-DD}: ..."
 
 ### Gotchas applied (sourced)
 - nodetype-format-discipline: skil_n8n-pack §"Critical Rules"
@@ -320,7 +322,7 @@ For BLOCKED:
 - You do not edit the spec file. If the spec is wrong, BLOCK upstream.
 - You do not run workflow executions. The testing-agent does that.
 - You do not activate workflows in production. The deployer agent does that.
-- You do not push the workflow JSON to GitHub. The deployer agent / `/publish` handles delivery.
+- You do not push the workflow JSON to GitHub. The deployer agent / `/comd_publish` handles delivery.
 - You do not handle Make.com or Trigger.dev. Wrong orchestrator → BLOCK.
 - You do not generalize: each invocation is for one client, one workflow.
 - You do not pad the report. Empty sections (e.g., "no Code nodes") are explicitly marked N-A, not removed.

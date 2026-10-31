@@ -1,0 +1,94 @@
+# Mini-Checkpoint: Repo Layout Execution Batch 5
+
+**Date:** 2026-10-29
+**Status:** W1-20 repo half and W1-10 shipped; W1-5 is next (it unblocks D1 and W1-29)
+**Type:** mini
+
+---
+
+## Summary
+Two layout-plan items merged on green CI: #1700 (W1-20 repo half: ignore lines, context/portable removal, the WW test-data scrubber and its every-PR guard) and #1702 (W1-10: validated INDEX sections, private personal checkpoints). This docs PR carries the one-time INDEX heading merge, the WW migration-day checklist and the PLAN.md Status lines.
+
+## What Was Done
+- After-checks: W1-36 held (`mcp_config.py --mcp-health` from the primary: 7 connected, none failed). #1677 still unreadable: the primary sits on d6a4b063 without fab6a530, and a live sibling (985d29d3) holds it on main with a dirty INDEX.md, so it was left alone.
+- #1700 W1-20 repo half: `.gitignore` `.env.*` (four templates re-included), `/output/`, `/webhook-dump*.json`, `.claude/worktrees/`, `/workspace/hours-tracker.xlsx`; the `context/portable/` exemption deleted (no folder in the primary, none tracked); the placement gate's static fallback mirrors all of it; `tools/scrub-test-data.py` plus `test_scrub_test_data.py`, whose WW-automations guard runs in CI's every-PR step. Surfaces reached: none. After-check: the notifier clone has #1700 and its 15:17 run returned 0.
+- #1702 W1-10 (a)+(b): finalize slugs and validates the section; `private: true` or a `personal*` section routes the prose to the primary's gitignored `docs/personal/`, with no INDEX row, session-log entry or register rows, after proving the folder ignored (self-heals the shared info/exclude). `pre --private`; comd_checkpoint and comd_resume (scope `me`) document it. Surfaces reached: none.
+- This docs PR: `## Brisken` folded into `## brisken` (+7 rows) and `## system/platform` into `## system` (+5); 770 rows before and after, 0 case-duplicate headings. The migration-day checklist is item 5 of the 2026-10-21 WW checkpoint's Next Steps. PLAN.md Status lines for W1-20 and W1-10.
+
+## What Did NOT Work (and why)
+- **Closing the turn while preflight ran in the background:** the Stop hook `block-stop-merge-left-pending` refused it; the ship chain must finish in-turn (until-loop on the log, then push, PR, CI poll, merge).
+- **A `cd` inside a Bash call:** the cd-guard hook rewrote it into a subshell, and auto mode refused to review the rewritten call; use absolute paths and `git -C` instead.
+- **Squash-merging a branch whose first commit said `wip: ...`:** main got "wip: W1-10 before merging main (#1702)" as the subject; pass `--subject` to `gh pr merge` or make the first commit's message final.
+
+## Current Status
+Batches 1-5 merged. W1-20's WW-tree half waits for the import. Of the approved D items only D18 has no open dependency; D1 waits on W1-5, D3 is now unblocked by W1-10, D4 waits on W1-29 (which waits on W1-5). Residual: until the primary fast-forwards, any session that runs checkpoint_scaffold from the primary uses the pre-#1702 code, so a section like `Brisken` would re-create its heading at the end of INDEX.
+
+## Next Steps
+See the continuation prompt below.
+
+## Files to Read First
+- `docs/2026-10-28 - Repo Layout Audit/PLAN.md` (Client-ops guard, then W1-5, D3, D1, W1-29, D4, D18)
+- `docs/2026-10-21 - WW Hero Key And Zapier Migration Prep/Checkpoint.md` (Next Steps item 5)
+
+---
+
+## Continuation prompt
+
+````
+/comd_resume system
+
+(System scope, no client. If resume asks you to pick a project folder, answer "system" and carry on with this prompt; the context YAML has a `system` entry from the 2026-10-29 Batch 5 mini-checkpoint.)
+
+## Where it stands
+
+The repo layout plan is the queue: `docs/2026-10-28 - Repo Layout Audit/PLAN.md` on origin/main (read it from a fresh worktree). Read its "Client-ops guard" section FIRST: owner directive 2026-10-28, "i cannot risk this jeopardizing any ongoing client operations", chosen mode guarded per item. An item whose changed paths reach a surface in its table needs (1) the surfaces named in the PR body, (2) a read-only before-check, (3) the owner's yes for THAT item at execution time through AskUserQuestion with the surface named (earlier D approvals do not cover this), (4) the same check after, stated in the checkpoint. Map an item to surfaces with `Get-ScheduledTask` actions (which file each task runs) and the workflow triggers, not from memory. Notes: `docs/2026-10-29 - Repo Layout Execution Batch 5/Mini-Checkpoint-1.md`.
+
+Shipped 2026-10-29 (batch 5), all merged on green CI:
+- PR #1700 W1-20 repo half: .gitignore `.env.*` (with `!.env.example|.env.sample|.env.template|.env.dist`), `/output/`, `/webhook-dump*.json`, `.claude/worktrees/`, `/workspace/hours-tracker.xlsx`; the context/portable exemption deleted from .gitignore, file-placement-gate's static fallback, its test and rule_file_placement's client row; the gate's static fallback mirrors the new lines (prefixes plus `.env`/`.env.*` and root `webhook-dump*.json` name arms). `tools/scrub-test-data.py PATH... [--check|--write] [--all-domains] [--keep-domain D]`: consumer-domain addresses become `person-N@example.com`, numbered per run (not hashed), counts only in output, skips context/. `tools/tests/test_scrub_test_data.py` holds the guard that no consumer-domain address sits under `workspace/clients/warme-wimmer/automations/`; ci.yml's every-PR step runs it. Dry run on the akkton WW tests: 7 files / 33 occurrences, 11 / 111 with `--all-domains --keep-domain waerme-wimmer.de`.
+- PR #1702 W1-10 (a)+(b): `checkpoint_scaffold.py finalize` slugs the INDEX section and refuses `system/platform` or an unknown one (known = system/platform/personal, client/project folders in the checkout or the primary, existing slug-shaped headings). `"private": true` or a `personal*` section writes the prose to the PRIMARY's gitignored `docs/personal/{date} - {topic}/`, no INDEX row, session-log entry or register rows; it proves `docs/personal/` ignored first and appends it to the shared `.git/info/exclude` when the primary's .gitignore lacks the line. `pre --private`. comd_checkpoint documents private sessions; comd_resume has scope `me`. (Its main commit subject reads "wip: W1-10 before merging main (#1702)": cosmetic, leave it.)
+- The batch-5 docs PR: INDEX `## Brisken` folded into `## brisken`, `## system/platform` into `## system` (770 rows kept); the WW migration-day checklist as item 5 of `docs/2026-10-21 - WW Hero Key And Zapier Migration Prep/Checkpoint.md` Next Steps; PLAN.md Status lines for W1-20 and W1-10.
+Batch 4: #1684, #1686, #1693, #1695, #1696; batch 3: #1669, #1671, #1677; batch 2: #1662 .. #1664; batch 1: #1654 .. #1661.
+
+Live evidence the next session needs: the primary clone `C:\Users\neuma_p1qrsic\Repo\agentic-ops1` was still on d6a4b063 at 15:30 on 2026-10-29, with a live sibling session (985d29d3) on main there, a dirty docs/INDEX.md and untracked docs folders. It LACKS #1677, #1684, #1700 and #1702, so its scheduled jobs run pre-#1677 code, its SessionStart does not run mcp_config, and any checkpoint run FROM the primary uses the old scaffold (a `Brisken` section would re-create that heading at INDEX's end). The notifier clone `Repo/agentic-ops1-notify` had #1700 and returned 0 at 15:17.
+
+Waiting on the owner: D5 (after W1-24's dry-run table); D6 .. D15 and D19 (D10 is MEMORY.md near the ~24.4 KB read limit); the UnpauseAI GitHub account or org for D2; a fresh explicit order for the D3(g) remote-branch deletions; gh `delete_repo` scope for 011matthias/agentic-ops1; the Brisken-Oct1-Invoice-And-Retainer task outcome.
+
+## Queue, in order
+
+PLAN.md's "Depends on" lines decide the order (item N = W1-N): D1 waits on W1-5, D3 on W1-10 (done) and W1-14 (done), D4 on W1-13 (done) and W1-29, W1-29 on W1-5, D18 on nothing.
+
+1. After-checks. (a) #1677: first `git -C C:\Users\neuma_p1qrsic\Repo\agentic-ops1 merge-base --is-ancestor fab6a530 HEAD`. Only once it holds does a RepoSweep result count; then `Get-ScheduledTaskInfo -TaskName RepoSweep` (expect 0x0) and AgenticOpsWeeklySynthesis after Mon 11-02 06:10 (0x1 is W1-32's; a new traceback in its log would be #1677's). If the primary is still behind, say so and do not fast-forward a shared clone with a sibling's dirty files. (b) Once the primary has #1702: `git -C <primary> check-ignore -v docs/personal/x.md` names a line.
+2. W1-5 (always-loaded context, PLAN.md ~L104; cost S but wide, budget 150-200k, start it first). It creates `tools/tests/test_doc_command_refs.py` (deny-list of legacy `/name` tokens in CLAUDE.md, README.md, .claude/rules, commands, agents, skil_* SKILL.md, plus any `/comd_x` without a file), so every existing legacy token must be fixed in the same PR; retires post-action-gate's [MERGE-NOT-LIVE] arm and its 9 tests; extends anneal-metrics compute_drift to Hooks and Patterns. Guard: it edits comd_morning-briefing.md, and the scheduled morning-briefing Action is a surface; read `gh workflow view` and the workflow file before deciding whether it reaches it (memory says the briefing is disabled).
+3. D3 (now unblocked), with guard checks and the owner's yes at execution: D3(a) touches akkton/unpauseai-web and the live WW docs (remove from the public tree first; from the live site only after confirming WW no longer uses `m-mail-abgleich.html` and the downloads); D3(f) deletes the two root PNGs and must drop the TEMPORARY exemption in tools/tests/test_root_layout.py in the same change; D3(g) needs a fresh explicit order.
+4. D1 (after W1-5), guard: enumerate Railway and Trigger.dev live before deleting the lane; `/comd_deploy` must keep routing Brisken recon to its `deploy.py` (infra `deploy:`). D2's CLAUDE.md change rides with it.
+5. W1-29 (after W1-5), then D4 with its guard checks (notifier and recon deploy import none of the deleted `tools/brisken-*.py`; `onepilot-site/` is not brisken-onepilot-proto's deploy source; MejiReplySLA runs once from its new path with LastTaskResult 0 before the old file goes).
+6. D18 (covers D17): `tools/context_backup.py` wired into repo-sweep, private repo 011matthias/agentic-ops1-context. Guard: the hardcoded `Repo/agentic-ops1` in `tools/brisken-recon-notify-run.py:47` runs in the notify clone, which is a SEPARATE clone, so `main_worktree()` there returns the notify clone itself; keep an `AGENTIC_OPS_PRIMARY` default that equals today's path, and check the notifier's LastTaskResult after. The first push of client context needs the owner's yes.
+After steps 3-6 (D1, D3, D4, D18 landed) the WW migration prompt may run in its own session, following item 5 of the 2026-10-21 WW checkpoint's Next Steps (it covers the scrub run, functional addresses to n8n variables before export, WW_TEST_DATA_DIR, the infrastructure.yaml split, N8N_API_KEY/URL_WARME_WIMMER in `automations/.env.example`, the n8n instance's `mcp_server`/`api_url_env`/`api_key_env`, pii_scan + gitleaks, the owner reading the public file list, then `mcp_config.py --ensure`, `n8n_export.py --client warme-wimmer --check` and the harness copy to `workspace/templates/n8n-tests/`).
+7. The rest: W1-6 .. W1-9, W1-11, W1-12, W1-15, W1-21 .. W1-28, W1-30, the rest of W1-32 (the other scheduled jobs' outcomes), W1-33, W1-34, W1-10(c) (`index --rebuild|--check`); W1-24 builds the prune tool and must protect agentic-ops1-notify, -watcher, -deploy, then ask D5 with its dry-run table; W1-26 should also cover the git-stash-gate false positive on a commit message that quotes `git stash push`. Then D6 .. D15 and D19 as the owner answers, X1 .. X8 when their triggers fire.
+
+Each item's Verify line is the acceptance criterion; a green suite alone is not.
+
+## How to work
+
+- Work in a fresh worktree off origin/main, never in the primary clone (shared by sibling sessions and the scheduled tasks): `git -C C:\Users\neuma_p1qrsic\Repo\agentic-ops1 worktree add -b sys/layout-<item> C:\Users\neuma_p1qrsic\Repo\ao1-layout-<n> origin/main`. A new worktree has no .mcp.json; `uv run tools/mcp_config.py --ensure` in it renders the session's set (restart to load). Gitignored client context/ exists only in the primary clone; read it by absolute path when an item needs it.
+- Never `cd` inside a Bash call: the cd-guard hook rewrites it into a subshell and auto mode then refuses to review the call. Use absolute paths, `git -C`, `uv run --directory`.
+- One PR per item on a `sys/layout-<item>` branch; the B6 chain runs without asking except where the guard asks for the owner's yes: commit, push, `gh pr create`, merge on CI green, one `gh pr merge --repo 011matthias/agentic-ops1.01 --squash --subject "<PR title> (#N)"` per Bash call with nothing chained before it, never in a loop or in parallel. Finish the chain in the same turn: wait on a background suite or on `gh pr checks` with an in-turn until-loop (read `gh pr view N --json mergeable` inside the loop too: a conflicted PR gets no checks); a closing message that leaves a suite, CI or merge pending is blocked by the Stop hook. Ledger PRs merge strictly one at a time: GitHub's merge ignores the union drivers, so every merge to main re-conflicts the other ledger PRs on INDEX.md until each is re-merged locally. Ledger edits (INDEX, register, session logs, checkpoint folders, PLAN.md Status lines) go on `docs/...` branches only. A sys/ branch that predates a merge touching the same files: `git merge origin/main` before the full preflight. For changes under tools/, .claude/hooks/ or tools/tests/: `uv run tools/preflight-hooks.py --full` whenever tools/tests changes, plain preflight otherwise, before the push; prove each fix with `uv run tools/regress_check.py` from the worktree that holds the change. Every `subprocess.run(text=True)` in new code or tests passes `encoding="utf-8", errors="replace"`. Tests that load a hook in-process must put `hooklib.HOOKS` on sys.path themselves; the test env has no requests/urllib3. Write test files and long text with the Write or Edit tool, never a heredoc; run py_compile after any mechanical sed over Python. Scripts that need pyyaml run as `uv run tools/x.py` (inline deps), not `uv run python tools/x.py`; there is no pyproject.
+- A new gitignored file that can hold a secret is protected by `.gitignore` only in checkouts that already have the line; add it to the shared `.git/info/exclude` too before writing it into the primary.
+- Owner decisions only through AskUserQuestion with the recommendation first; never an open offer. The owner can be away for hours (a yes on 2026-10-28 arrived ~12 h later), so ask once the PR is green and the ask is the last step.
+- The repo is public by owner decision (2026-09-16); never re-raise it. Never push a file carrying real addresses, rosters, client record IDs or secrets; count PII, never print values. Test fixtures build secret- and PII-shaped strings at runtime so neither gitleaks nor pii_scan has a literal to flag; a WW-shaped fixture uses placeholder values only (see tools/fixtures/infra_yaml/ww-shape/). Nothing of WW is pushed until W1-20's scan is clean and the owner has seen the public file list.
+- Hero, n8n and mail writes in any client tenant need a per-action yes; never touch the held R1 test record (its ID lives in the WW context, not in tracked files).
+- Client operations come first (owner, 2026-10-28: "i cannot risk this jeopardizing any ongoing client operations"). Every merge to main reaches the Brisken notifier within 15 min (its clone fast-forwards each run); the Meji tasks and the notifier read the primary's gitignored context/ by path. PLAN.md's Client-ops guard table is the map; check it before every item.
+- PLAN.md is the only queue: update its Status lines in your checkpoint's docs PR. When an item touches a client's status/ workstream, bump that status file in the same session.
+
+## SESSION LOOP (copy this whole section verbatim into every continuation prompt you write)
+
+1. Measure YOUR session's context, not the machine's. `uv run tools/session_state.py --status` prints the most recently active session on the machine; trust its `context=` only when its `session=` matches the UUID in your scratchpad path. Otherwise read your own transcript: the last assistant record's `usage` (input_tokens + cache_read_input_tokens + cache_creation_input_tokens) in `~/.claude/projects/c--Users-neuma-p1qrsic-Repo-agentic-ops1/<your-session-uuid>.jsonl` (keep a small script for it in your scratchpad), or the per-session `[PRESSURE: ...]` advisory. On 2026-09-17 `--status` read a sibling's 474k while this session sat at 307k. Bands on the 1M window: moderate 300k, high 500k, critical 700k. A resumed session starts near 170k before any work.
+2. Measure before starting each item and after each merge or deploy. A small backend item with tests, suite, deploy and live check cost about 45k on 2026-09-17 (item 102); a matcher item with before/after measurement cost about 225k (item 137, 173k to 396k); a two-builder PDF restructure is budgeted at 150-250k. Never start an item that would cross 500k.
+3. At moderate: keep replies short, read targeted line ranges instead of whole files, do not re-read what is already in context.
+4. When the next item will not fit, or context is at or past 500k: leave nothing uncommitted (commit and push the branch; open the PR even if the item is unfinished and say so in its body; merge only on green and only when the item is actually done). Never stop half-deployed: if a merge landed, deploy it and verify it first. Close browser sessions and clear `tools/bg_watch.py` entries.
+5. Checkpoint: invoke the `/comd_checkpoint --mini` skill (never hand-roll it), with the ledger edits in a `docs/...` worktree off origin/main and `finalize --root <that worktree>`; write the checkpoint prose after `finalize`; do not clear friction candidates that belong to sibling sessions; commit, push, PR, merge on green.
+6. Write the next continuation prompt: first line `/comd_resume system`; where it stands (what shipped this session with PR numbers, what is in flight and why, what waits on the owner); the remaining queue in order with the exact code pointers and live evidence the next session needs; the "How to work" section; then this SESSION LOOP section verbatim. Deliver it in the reply inside a FOUR-backtick fence, together with any other paste-ready prompt written this session, and append the same continuation text to the checkpoint file.
+7. The closing reply of every loop iteration lays out, in the chat itself and not only inside the prompt, the items still left to work through: the remaining queue in order, then what waits on the owner (owner directive 2026-09-17).
+8. At critical (700k): stop right after step 4's commit and push, then do steps 5, 6 and 7.
+9. When the queue is empty and no PLAN.md item is open, do not write another prompt: say the loop is done and list what shipped and what waits on the owner.
+````

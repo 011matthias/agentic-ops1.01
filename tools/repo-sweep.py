@@ -351,7 +351,7 @@ def fold_session_shards(repo: str, execute: bool, lines: list[str]) -> None:
 
 
 def run(args: list[str], cwd: str) -> subprocess.CompletedProcess:
-    return subprocess.run(args, cwd=cwd, capture_output=True, text=True)
+    return subprocess.run(args, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def git(repo: str, *args: str) -> subprocess.CompletedProcess:

@@ -200,7 +200,7 @@ def run_check() -> tuple[object, str]:
         argv = ["uv", "run", CHECK, "real", "--markdown"]
     try:
         out = subprocess.run(
-            argv, cwd=REPO, capture_output=True, text=True,
+            argv, cwd=REPO, capture_output=True, text=True, encoding="utf-8", errors="replace",
             timeout=BUDGET, shell=shell,
         )
     except subprocess.TimeoutExpired:

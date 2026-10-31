@@ -6,7 +6,7 @@ Load this module when generating phase reports, session summaries, progress upda
 
 ## Session Summary Template
 
-Create `.claude/handoffs/{session}/session-summary.md`:
+Create `.claude/handoffs/{client}-{session}/session-summary.md`:
 
 ```markdown
 # Build Session Summary
@@ -51,7 +51,7 @@ Create `.claude/handoffs/{session}/session-summary.md`:
 
 ## Session Files
 
-All phase reports saved to: `.claude/handoffs/{session_id}/`
+All phase reports saved to: `.claude/handoffs/{client}-{session_id}/`
 ```
 
 ---

@@ -21,6 +21,10 @@ Three checks per skill:
   3. rule IDs — every `<!-- rule:... -->` anchor is unique across the skill
                 (one home per rule; a duplicate ID is documented drift).
 
+Plus, over .claude/commands and .claude/agents: every `/name` slash command
+resolves to a command file (comd_{name}), a skill dir (skil_{name}) or a
+harness built-in. Scope: skil_* dirs plus FIRST_PARTY_EXTRA.
+
 Usage:
   uv run tools/check-skill-map.py                       # all .claude/skills/*
   uv run tools/check-skill-map.py PATH [...]            # skill(s) owning PATH(s)
@@ -63,13 +67,20 @@ SKIP_PREFIXES = ("context/", "handover/", "docs/client/", "app/", "src/",
 # (marketing pack etc.) follow their own internal conventions.
 FIRST_PARTY_PREFIX = "skil_"
 
-# A consolidation pack (make-pack / n8n-pack / trigger-pack) routes into the
-# modules of its stub skills via a cross-skill link (../make-mcp-tools-expert/
-# modules/NAME.md). The stub's OWN SKILL.md does not name those modules, so the
-# reverse check would false-positive without this. We collect every basename any
-# spine references this way; a genuine orphan, referenced by no spine anywhere,
-# still fires.
-CROSS_SKILL_MODULE_REF = re.compile(r"/(?:modules|references|components)/([A-Za-z0-9._-]+\.md)")
+# First-party skills whose directory sits outside the skil_ prefix. Vendored
+# skills are the ones skills-lock.json lists.
+FIRST_PARTY_EXTRA = {"brisken-design"}
+
+# A slash command named in a command or agent file (`/comd_resume`, `/resume`,
+# `/n8n-pack`) must resolve to a command file or a skill dir, or be one of the
+# harness's own commands. Paths (`/api/x`) never match: the name stops at a slash.
+SLASH_TOKEN = re.compile(r"(?:(?<=`)|(?<=^)|(?<=[\s(]))/([a-z][a-z0-9_-]*[a-z0-9])(?=[\s`),.:;]|$)")
+BUILTIN_SLASH = {
+    "agents", "artifacts", "clear", "code-review", "compact", "config", "cost",
+    "doctor", "fast", "help", "hooks", "ide", "init", "login", "logout", "loop",
+    "mcp", "memory", "model", "permissions", "plugin", "schedule",
+    "security-review", "simplify", "status",
+}
 
 # Vendored Claude Code guide docs (skil_meta-builder): documentation ABOUT how to
 # build skills/hooks/plugins. Their backtick paths are illustrative examples
@@ -157,21 +168,37 @@ def skill_md_files(skill_dir: Path) -> list[Path]:
     return sorted(p for p in skill_dir.rglob("*.md") if p.is_file())
 
 
-def collect_cross_skill_refs(skill_dirs: list[Path]) -> set[str]:
-    """Module/reference basenames any spine routes into via a cross-skill link
-    (a pack -> its consolidation stub's modules, e.g. make-pack ->
-    ../make-mcp-tools-expert/modules/NAME.md). Those modules are reachable even
-    though the stub's own SKILL.md does not name them. A genuine orphan, which no
-    spine references anywhere, is absent from this set and still fires."""
-    referenced: set[str] = set()
-    for sd in skill_dirs:
-        spine = sd / "SKILL.md"
-        if spine.is_file():
-            referenced.update(CROSS_SKILL_MODULE_REF.findall(spine.read_text(encoding="utf-8")))
-    return referenced
+def is_first_party(p: Path) -> bool:
+    return p.is_dir() and (p.name.startswith(FIRST_PARTY_PREFIX) or p.name in FIRST_PARTY_EXTRA)
 
 
-def audit_skill(skill_dir: Path, cross_skill_refs: frozenset[str] = frozenset()) -> list[dict]:
+def audit_slash_refs(md: Path) -> list[dict]:
+    """Slash commands a command/agent file names resolve to a command, a skill
+    or a harness built-in. Fenced blocks are code (endpoint paths, shell)."""
+    claude = md.parent.parent
+    cmds = {p.stem for p in (claude / "commands").glob("*.md")}
+    skills = {p.name for p in (claude / "skills").iterdir() if p.is_dir()} if (claude / "skills").is_dir() else set()
+    hits: list[dict] = []
+    in_fence = False
+    for i, line in enumerate(md.read_text(encoding="utf-8").splitlines(), 1):
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        for name in SLASH_TOKEN.findall(line):
+            if (name in BUILTIN_SLASH or name in cmds or f"comd_{name}" in cmds
+                    or name in skills or f"skil_{name}" in skills):
+                continue
+            hits.append({
+                "line": i, "category": "dead-command-ref", "severity": "HIGH",
+                "message": f"{md.parent.name}/{md.name}: `/{name}` is no command, skill or built-in",
+                "snippet": line.strip()[:120],
+            })
+    return hits
+
+
+def audit_skill(skill_dir: Path) -> list[dict]:
     hits: list[dict] = []
     spine = skill_dir / "SKILL.md"
     spine_text = spine.read_text(encoding="utf-8") if spine.is_file() else ""
@@ -205,11 +232,10 @@ def audit_skill(skill_dir: Path, cross_skill_refs: frozenset[str] = frozenset())
                         "snippet": line.strip()[:120],
                     })
 
-    # 2. reverse: every module/reference/component reachable from the spine OR
-    # from a pack spine that consumes this skill's modules (cross_skill_refs).
+    # 2. reverse: every module/reference/component reachable from the spine.
     for sub in SKILL_DIRS:
         for f in sorted((skill_dir / sub).glob("*.md")) if (skill_dir / sub).is_dir() else []:
-            if f.name not in spine_text and f.name not in cross_skill_refs:
+            if f.name not in spine_text:
                 hits.append({
                     "line": 0, "category": "unreachable-module", "severity": "MEDIUM",
                     "message": f"{sub}/{f.name} exists but SKILL.md never references it",
@@ -249,27 +275,25 @@ def main() -> int:
         print(f"no skills dir at {SKILLS}", file=sys.stderr)
         return 2
 
+    agent_files = sorted([*(SKILLS.parent / "commands").glob("*.md"),
+                          *(SKILLS.parent / "agents").glob("*.md")])
     if args.paths:
         skill_dirs = sorted({s for p in args.paths if (s := owning_skill(Path(p)))})
-        if not skill_dirs:
+        wanted = {Path(p).resolve() for p in args.paths}
+        agent_files = [f for f in agent_files if f.resolve() in wanted]
+        if not skill_dirs and not agent_files:
             # path outside .claude/skills — out of scope, clean exit
             if args.format == "json":
                 json.dump({"total": 0, "hits": [], "by_category": {}, "by_severity": {}}, sys.stdout)
             return 0
     else:
-        skill_dirs = sorted(p for p in SKILLS.iterdir()
-                            if p.is_dir() and p.name.startswith(FIRST_PARTY_PREFIX))
-
-    # Cross-skill module references are collected from ALL first-party spines (not
-    # just the scanned subset) so a pack spine consuming a stub's modules is seen
-    # even when scanning a single skill by path.
-    all_first_party = sorted(p for p in SKILLS.iterdir()
-                             if p.is_dir() and p.name.startswith(FIRST_PARTY_PREFIX))
-    cross_skill_refs = frozenset(collect_cross_skill_refs(all_first_party))
+        skill_dirs = sorted(p for p in SKILLS.iterdir() if is_first_party(p))
 
     hits: list[dict] = []
     for sd in skill_dirs:
-        hits += audit_skill(sd, cross_skill_refs)
+        hits += audit_skill(sd)
+    for md in agent_files:
+        hits += audit_slash_refs(md)
 
     if args.format == "json":
         by_cat: dict[str, int] = {}
@@ -285,8 +309,9 @@ def main() -> int:
             for h in hits:
                 print(f"  [{h['severity']}] [{h['category']}] {h['message']}")
         else:
-            print(f"[check-skill-map] OK: {len(skill_dirs)} skill(s), no dead pointers, "
-                  f"no unreachable modules, no duplicate rule IDs")
+            print(f"[check-skill-map] OK: {len(skill_dirs)} skill(s) + {len(agent_files)} "
+                  f"command/agent file(s), no dead pointers, no unreachable modules, "
+                  f"no duplicate rule IDs, no dead slash commands")
     return 1 if hits else 0
 
 

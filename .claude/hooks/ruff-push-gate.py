@@ -104,7 +104,7 @@ def _git(args, cwd=None):
     """Run a git command, return CompletedProcess or None on failure."""
     try:
         return subprocess.run(
-            ["git", *args], capture_output=True, text=True, timeout=5, cwd=cwd,
+            ["git", *args], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5, cwd=cwd,
         )
     except Exception:
         return None
@@ -172,7 +172,7 @@ def run_ruff(cwd: str | None):
     cmd = ["uv", "run", "--no-project", "--with", "ruff", *RUFF_ARGS]
     try:
         out = subprocess.run(
-            cmd, cwd=cwd, capture_output=True, text=True, timeout=RUFF_TIMEOUT,
+            cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=RUFF_TIMEOUT,
         )
     except Exception:
         return None  # uv/ruff missing or slow -> fail-open, CI is the backstop

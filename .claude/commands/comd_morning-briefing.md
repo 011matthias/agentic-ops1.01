@@ -9,8 +9,9 @@ Produce a single prioritized todo list spanning every ongoing client and
 project, then deliver it by email. Designed to run unattended at 06:00
 Europe/Berlin (remote routine) or on demand locally.
 
-Default recipient: **neumath4@icloud.com**. Override with `--email <addr>`.
-`--no-email` prints to terminal only (no send).
+Default recipient: the `BRIEFING_TO` repo variable
+(`gh variable get BRIEFING_TO --repo 011matthias/agentic-ops1.01`). Override
+with `--email <addr>`. `--no-email` prints to terminal only (no send).
 
 This command is **read-only** over the repo. It writes nothing except the
 optional archived briefing file. It must never modify specs, comms, or
@@ -21,6 +22,14 @@ proposals.
 - Working directory: !`pwd`
 - Today: !`date +%Y-%m-%d`
 - Arguments: $ARGUMENTS
+- Scheduled briefing state: !`gh api repos/011matthias/agentic-ops1.01/actions/workflows/morning-briefing.yml --jq .state`
+
+## Step 0 — Stop if the briefing is disabled
+
+If the state above is anything but `active` (the owner disabled it on
+2026-06-27 with "make it stop"), say so in one line and stop. Proceed only when
+the arguments include `--no-email` (a terminal preview sends nothing) or the
+owner re-enabled the workflow.
 
 ## Step 1 — Scan client specs
 
@@ -62,19 +71,13 @@ read its `infrastructure.yaml` / `README.md` / latest session note for an
 open `next_steps` or in-flight item. One line per project, only if it has
 an open item. Skip dirs with no open work.
 
-## Step 5 — Proposal pipeline + the daily 2-proposal directive
+## Step 5 — Proposal pipeline
 
 Read `platform/src/content/proposals/*.md` frontmatter (skip the `p000`
 sample). Count by `status` (draft|sent|viewed|won|lost). Action items:
 - `draft` older than 3 days → send or archive
 - `sent` older than 7 days → follow-up
 - `won` with no `workspace/clients/{slug}/` → run `/comd_convert-proposal`
-
-Then append the **standing directive**: the user commits to **2 new
-proposals every day**. Surface it as an explicit, unmissable todo with two
-concrete starting points pulled from the freshest unworked leads or
-`/comd_new-proposal` candidates (name them if identifiable; otherwise state
-"pick 2 from the Upwork queue").
 
 ## Step 6 — Render the briefing
 
@@ -86,9 +89,6 @@ Morning Briefing — {Weekday} {YYYY-MM-DD}
 
 TODAY / IMMINENT
   • {client/project} — {what + when}
-
-DAILY COMMITMENT
-  • 2 new proposals — start: {candidate 1}, {candidate 2}
 
 BLOCKED / NEEDS DECISION
   • {client} {spec-id} — {why blocked / needs_fixes}
@@ -124,7 +124,7 @@ Unless `--no-email`:
 
 1. Send the rendered briefing as a plain-text email.
    - Subject: `Morning Briefing — {YYYY-MM-DD}`
-   - To: `neumath4@icloud.com` (or `--email` override)
+   - To: the `BRIEFING_TO` repo variable (or `--email` override)
    - Body: the rendered briefing exactly as built in Step 6.
    - Use whatever email tool is available in the running environment:
      the Gmail MCP tool locally, or the email connector attached to the

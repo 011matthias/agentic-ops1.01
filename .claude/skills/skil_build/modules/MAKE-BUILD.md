@@ -12,7 +12,7 @@ Scenarios are built via Make.com MCP tools (programmatic blueprint deployment) o
 
 ## Step 1: Architecture Planning
 
-Invoke the **`make-scenario-patterns`** skill to choose the right pattern.
+Invoke the **`make-pack`** skill to choose the right pattern.
 
 1. **Identify the trigger type:**
    - **Instant trigger** (webhook) -- scenario runs immediately when event is received
@@ -21,7 +21,7 @@ Invoke the **`make-scenario-patterns`** skill to choose the right pattern.
 
 2. **Map the spec flow to Make.com modules:**
    - Each spec step maps to one or more Make.com modules
-   - Check `make-scenario-patterns` for the module selection guide (native app vs HTTP)
+   - Check `make-pack` for the module selection guide (native app vs HTTP)
    - Note where Routers (branching), Iterators (array processing), or Aggregators (combining) are needed
 
 3. **Plan error handling:**
@@ -48,7 +48,7 @@ If any are missing, update the spec first using `/spec-updater`.
 
 ## Step 3: Connection Verification
 
-Invoke the **`make-mcp-tools-expert`** skill.
+Invoke the **`make-pack`** skill.
 
 Use MCP tools to verify connections exist in the client's Make.com org:
 
@@ -74,7 +74,7 @@ This prevents the IMPORT_FORMAT_ERROR (IF-1) class of failures where an API-vali
 
 ### Option B: Generate from spec (API-deploy-only scenarios)
 
-Using the spec and the **`make-mcp-tools-expert` > BLUEPRINT-FORMAT.md** reference:
+Using the spec and the **`make-pack` > BLUEPRINT-FORMAT.md** reference:
 
 1. Build the blueprint JSON following the standard format
 2. Populate `flow` array with modules matching the spec's flow diagram
@@ -84,7 +84,7 @@ Using the spec and the **`make-mcp-tools-expert` > BLUEPRINT-FORMAT.md** referen
 6. Configure `metadata` (instant, sequential, maxErrors)
 7. Reference connection IDs from Step 3
 
-> **If using Option B and the scenario may later become a handover:** Run `blueprint-reconciler` > HANDOVER-FORMAT-CHECKER immediately after generating the blueprint, before the missing UI-import fields are forgotten.
+> **If using Option B and the scenario may later become a handover:** Run `make-pack` > HANDOVER-FORMAT-CHECKER immediately after generating the blueprint, before the missing UI-import fields are forgotten.
 
 **Save blueprint to:** `workspace/clients/{client}/automations/blueprints/{id}-{name}.json`
 
@@ -120,11 +120,11 @@ Get zone and team ID from `workspace/clients/{client}/infrastructure.yaml`.
 
 If the scenario has an external trigger (webhook from a form, API, or third-party system):
 
-1. **Check known providers:** Consult `webhook-inspector` skill → KNOWN-PROVIDERS.md
+1. **Check known providers:** Consult `make-pack` → KNOWN-PROVIDERS.md
    - Tally: nested `data.fields[]` array — requires `first(map(...))` accessor
    - Typeform: nested `form_response.answers[]` — requires field ID matching
    - Stripe: nested `data.object` — requires deep path references
-2. **If provider not listed:** Use `webhook-inspector` skill → CAPTURE-PATTERN.md to capture a real payload
+2. **If provider not listed:** Use `make-pack` → CAPTURE-PATTERN.md to capture a real payload
 3. **Compare source format against mapper expressions:**
    - Does the source send flat fields or nested structures?
    - Do field names match the `1.body.*` references in the blueprint?
@@ -248,7 +248,7 @@ If MCP tools are unavailable (no API token, free plan, etc.), build directly in 
 5. **Configure Settings** -- Max cycles, sequential processing, data confidentiality
 6. **Test & Activate** -- Follow Steps 6-8 above
 
-Reference: `../../skil_make-mcp-tools-expert/modules/PROJECT-SETUP.md` for detailed UI building guidelines.
+Reference: `../../skil_make-pack/modules/PROJECT-SETUP.md` for detailed UI building guidelines.
 
 ---
 

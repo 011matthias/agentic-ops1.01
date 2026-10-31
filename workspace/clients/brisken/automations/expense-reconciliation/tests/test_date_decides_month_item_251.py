@@ -275,6 +275,50 @@ def test_a_published_month_holds_the_move(client, monkeypatch):
 # --- 4. the caller: a reconciling month re-matches on arrival ------------
 
 
+def _attach_statement(client, batch_id):
+    resp = client.post(
+        f"/api/expense-batches/{batch_id}/statement",
+        files={"statement": (
+            "statement.example.csv",
+            (EXAMPLES / "statement.example.csv").read_bytes(), "text/csv",
+        )},
+        data={
+            "account_id": "amex-9001",
+            "account_legal_entities": '{"amex-9001": "Corporate Services"}',
+            "account_card_currency": "USD",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    if resp.json().get("job_id"):
+        assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+
+
+def test_a_receipt_no_charge_holds_is_offered_its_own_month(client, monkeypatch):
+    """Item 264 (note #137, "dont show data from different months"): a
+    receipt READ as 4 May sits inside April's window, so item 251 never
+    offered it a move. Once April's statement is loaded and no charge holds
+    it, nothing keeps it in April: the row offers May, and the banner counts
+    it. Before the statement it is only waiting, and is offered nothing."""
+    _wire(monkeypatch, ExtractedReceipt(
+        date="2026-05-04", total="17.00", currency="USD", vendor="Notion",
+        reference="", line_items=(), confidence=0.9, notes="",
+    ))
+    april = _month(client, APRIL)
+    _add(client, april)
+    (row,) = _rows(client, april)
+    assert "month_move" not in row, "no statement yet: nothing proves no charge holds it"
+
+    _attach_statement(client, april)
+    page = client.get(f"/api/expense-batches/{april}").json()
+    (row,) = page["expenses"]
+    assert row["without_charge"] is True
+    assert row["month_move"]["month"] == "2026-05"
+    assert row["month_move"]["label"] == "May 2026"
+    assert "batch_id" not in row["month_move"], "no May month exists yet"
+    assert page["summary"]["n_month_moves"] == 1
+    assert "May 2026" not in _months(client), "an offer never moves on read"
+
+
 def test_an_edit_into_a_reconciling_month_settles_its_charge(client, monkeypatch):
     january = _slip_in(client, monkeypatch)
     april = _month(client, APRIL)

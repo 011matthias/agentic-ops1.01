@@ -245,6 +245,27 @@ def scan_paths(repo: Path, rels: list[str]) -> dict[str, dict[str, int]]:
     return hits
 
 
+def expand_paths(repo: Path, paths: list[str]) -> tuple[list[str], list[str]]:
+    """Repo-relative files for the given paths, plus the ones that do not exist.
+
+    A directory stands for every file under it. Until 2026-10-29 a directory
+    argument was read as one file, failed to read, and the scan reported
+    "0 file(s) flagged" for a folder holding 880 addresses."""
+    rels, missing = [], []
+    for p in paths:
+        path = Path(p).resolve()
+        if path.is_dir():
+            files = sorted(f for f in path.rglob("*")
+                           if f.is_file() and ".git" not in f.relative_to(path).parts)
+        elif path.is_file():
+            files = [path]
+        else:
+            missing.append(p)
+            continue
+        rels += [os.path.relpath(f, repo).replace("\\", "/") for f in files]
+    return rels, missing
+
+
 def format_hits(hits: dict[str, dict[str, int]]) -> list[str]:
     return [f"{rel}: " + " ".join(f"{k}={v}" for k, v in sorted(found.items()))
             for rel, found in sorted(hits.items())]
@@ -268,8 +289,13 @@ def main(argv: list[str] | None = None) -> int:
         listed = _git(repo, "ls-files", "-z") or ""
         hits = scan_paths(repo, [p for p in listed.split("\0") if p])
     else:
-        hits = scan_paths(repo, [os.path.relpath(Path(p).resolve(), repo).replace("\\", "/")
-                                 for p in args.paths])
+        rels, missing = expand_paths(repo, args.paths)
+        if missing:
+            # Scanning nothing would print a clean result for a typo.
+            for p in missing:
+                print(f"pii_scan: no such path: {p}", file=sys.stderr)
+            return 2
+        hits = scan_paths(repo, rels)
     for line in format_hits(hits):
         print(line)
     print(f"pii_scan: {len(hits)} file(s) flagged", file=sys.stderr)

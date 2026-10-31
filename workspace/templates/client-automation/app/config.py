@@ -1,6 +1,11 @@
 """
 Configuration management using Pydantic Settings.
 Loads from environment variables.
+
+AI models (code-first automations only): this file is the single source of
+truth. Code calls settings.get_ai_model("operation"); override one with the
+env var AI_MODEL_{OPERATION}=provider/model; the default is
+openai/gpt-4o-mini. Make.com and n8n set AI in their own modules.
 """
 
 from pydantic_settings import BaseSettings

@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-10-07
+updated: 2026-10-29
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -13460,10 +13460,362 @@ merchant-list entries, conflicts, an owner-held merchant and an already-saved
 month), regressed green -> red -> green at the route's language switch and at
 the per-language builder; the six existing memory suites (86 tests) unchanged.
 
+### 256. One document number: the receipt counts and nobody is asked (Dirk, 2026-10-29, relayed by the owner: "if duplicate set has same item ID number then default to receipt not invoice and dont ask user for verification") (LIVE 2026-10-29: PR #1666, Fly on `3e37fe93`; backend only, no paste; see Shipped row 166)
+
+Item 74 already decides every group and item 217 already prefers the receipt,
+yet a same-number pair still reached a person three ways on the live months
+(read-only reads 2026-10-29):
+
+- **A tool hold kept the invoice.** Item 217 moves the kept copy only in a
+  group no charge holds, and `held_documents` counts the tool's own matches
+  and self-confirmations, so an invoice paired once stayed kept at every
+  re-match. September: ElevenLabs 5.00 (`Invoice-214D91B6-0006` kept,
+  `Receipt-2459-0337-0793` set aside).
+- **The statement check split two pairs.** Card 9693's PDF
+  (`20261004-statements-9693-.pdf`) and its xlsx
+  (`Chase9693_2026-09_posted_0906-0915`) both list Anthropic 187.15 (09-04)
+  and 184.35 (09-11), so rung 7 called `Invoice-890D70BF-0033` /
+  `Receipt-2791-6434-9326` and `-0034` / `Receipt-2642-9215-3921` two
+  purchases and both documents went back to the charges.
+- **The set-aside invoice still asked.** Its row kept its own review prompt
+  and counted in `n_review`: October "Needs a look" 27 held 4 copies.
+
+Rule: a group the TOOL found by one number (`reference`, `printed_reference`,
+`reference_digits`, `intake_twin`) whose documents are one payment receipt and
+its invoice(s), one amount and currency, is settled by the number
+(`duplicates.is_number_pair`, `settled_by_number`; a mail body's group over
+the pair follows it). The re-match keeps the receipt unless a PERSON's
+confirmed pick names the invoice (`service.pinned_documents`; a tool
+confirmation pins nothing and `apply_self_confirmations` re-judges it), the
+statement check never restores it, and the set-aside copy reads review `none`
+and leaves `n_review` (`number_settled_copies`). "Not a copy" still outranks.
+Copies found without a number (vendor/date, misread digit, hash) are unchanged.
+
+When it reaches the months (no live writes): October (no statement) on the
+next read; measured after the deploy, its 10 invoice copies read `none` and
+`n_review` went 27 -> 24 (predicted 23: the fourth asking copy is the
+CamScanner pair, two scans that read as neither receipt nor invoice, so it
+asks as before by design). September at its
+next natural re-match: ElevenLabs keeps the receipt; both Anthropic pairs
+become copies, the receipt keeps one charge and the other statement line
+(the PDF/xlsx double) waits with no receipt, which is the statement's
+duplicate showing honestly. July's two `reference` groups Criss ruled "Not a
+copy" stay hers. Not fixed here: the PDF and xlsx of one card listing one
+charge twice (stable transaction identity across the two formats), and copies
+found without a number still count in `n_review`.
+
+Proof: `tests/test_duplicate_same_number_item_256.py` (6 route tests through
+the re-match and the grid, 13 rule tests), each of the three wirings
+regressed green -> red -> green with `tools/regress_check.py` (the re-match's
+`pinned=` argument, rung 7's skip, the grid's quiet copies).
+
+### 257. A shared number in any field makes one purchase; apply to every month waiting; statements for what is left (owner, 2026-10-29, after item 256: "look when duplicates enter they usually have important numbers in common so invoice number o reference number multiple didgits the same or that type of thing and in those cases we need you to recognize their relation and default to the receipt (or document with payment information). we need to make sure that the statements are used to help categorize and match any left over expenses") (RECOGNITION LIVE 2026-10-29: PR #1670, Fly `416a5272`; apply DONE; statement-double merge LIVE 2026-10-29: PR #1681, Fly `d37a3c96`, September re-read)
+
+The owner's screenshot (Compare copies, October's Anthropic 66.00): the
+receipt's reference is its OWN receipt number (`2709 9940`), the invoice's
+is the invoice number, and both carry `EF742DD0 0062` as invoice number.
+October grouped it only because one mail delivered both (rung 0); uploaded
+apart or re-mailed, rung 4 compared references alone and called it two
+purchases. `number_keys` now reads reference, invoice number and receipt
+number (account ids excluded as before, and the alphanumeric invoice /
+receipt numbers join the cross-month account keys); rung 2 accepts members
+connected by a shared number (same amount, never two cards), and
+`find_duplicate_receipts_by_any_number` nominates the pairs no older key
+found, appended last so no saved ruling's group moves. Which copy counts is
+item 256's rule: the receipt, read from what the document calls itself and
+its receipt number. A card line is NOT used as the payment signal, because
+`inherit_card_from_copies` lends the receipt's card to its invoice before
+the choice is made.
+
+Measured before building (read-only, 2026-10-29): every live same-amount
+pair sharing a number is already one group, so nothing moves on today's
+months; the rule covers the next arrivals. Proof:
+`tests/test_duplicate_any_number_item_257.py` (5), the broadened rung and the
+new key each regressed green -> red -> green.
+
+LIVE 2026-10-29: PR #1670, Fly `416a5272` (`/healthz` commit verified by
+deploy.py). After the deploy October and September read the same groups,
+totals and `n_review` as before it, as predicted; the October page reads back
+unchanged. Two existing intake-twin tests pinned the old rule (a hand-uploaded
+pair sharing an invoice number counted twice) and now assert one group.
+
+- **Apply to every month waiting: DONE, by no write of ours.** September
+  re-matched at 11:34 UTC (trigger `adjacent_receipts`: a receipt filed in
+  August pulled its neighbour) on item 256's code. ElevenLabs keeps its
+  receipt; both Anthropic pairs are copies (187.15 `reference`, 184.35
+  `printed_reference`: the receipt's text prints the invoice number while
+  its reference field read only `890D70BF`); USD total 7,594.48 -> 7,222.98
+  (the two invoices). The reapply dry run then reported 0 groups to change.
+  October applies as read; August holds no group; July's groups are Criss's
+  rulings plus one with two different numbers.
+- **Statements on what is left (owner DECIDED 2026-10-29: merge the doubles,
+  build in a fresh session).** Statements already categorize the leftovers:
+  115 of September's 125 receiptless charges carry a category read from the
+  statement (71 guesses awaiting a confirm, 46 from the list or a rule), and
+  21 of 27 unmatched receipts wait for a statement not yet loaded for their
+  date. The waste is card 9693 listed twice for 15 charges: the interim xlsx
+  (`Chase9693_2026-09_posted_0906-0915`, 15 charges) lies entirely inside the
+  PDF statement (`20261004-statements-9693-`, 49), with different descriptors
+  ("OPENAI" vs "OPENAI OPENAI.COM CA"), so `transaction_content_id` (vendor in
+  the identity) keeps both, and 21 receiptless rows are one side of a double.
+  Decided shape: same card + date + amount from two statement files of that
+  card is ONE charge (multiset: n lines in one file and m in the other merge
+  to max(n, m)); the side a person or the tool already decided is the one
+  kept; preview first, then a re-read of September (live write, owner yes on
+  the preview). Never fold two lines of ONE file: two identical coffees are
+  two charges.
+  **BUILT 2026-10-29** (`merge_transactions(files=, incoming_file=, decided=)`,
+  both callers: the attach and the re-read; held lines of unknown file or card
+  are never folded; with no decision the held line stays, so the re-read keeps
+  the interim xlsx side, which carries all 9 receipts). Tests
+  `tests/test_statement_doubles_item_257.py` (18), each caller regressed
+  green -> red -> green. Local preview on the 12:22 UTC backup, fold off vs
+  on: 216 -> 201 charges, the 15 PDF-side lines go, no surviving row changes,
+  USD total 7,288.38 -> 5,345.57, receiptless 122 -> 107.
+  **LIVE 2026-10-29:** PR #1681, Fly on `d37a3c96` (`/healthz` commit
+  verified by deploy.py). September re-read live on the owner's yes to that
+  preview: 216 -> 201 charges, the 15 PDF-side lines gone (all unmatched, none
+  with a receipt or decision), USD 7,288.38 -> 5,345.57, receiptless
+  125 -> 110, reconciled 73 and review 14 unchanged, 0 cross-file doubles
+  left, the 3 same-file repeats kept. One row moved by the re-read itself
+  (Dollar General 24.25, 10-02: pending -> confirmed by the tool). Page read
+  back cold: "201 charges", "110 charges without a receipt", the 10-04 9693
+  PDF row reads 49 rows / 34 new; the drive sent no write.
+
+### 258. Act on a charge from the "to chase" list: match a receipt, say none exists, say the holder was asked (notes #133, #134, #135, #128; 2026-10-29; licence: defect, covered) (BACKEND SHIPPED 2026-10-29; SPA prompt `docs/lovable-chase-actions-prompt.md` NOT pasted)
+
+The panel lists every charge with no receipt and gives its rows no actions.
+The three things a person does with such a charge already exist further down
+the page (the hand-match picker, "asked", "no receipt exists"), where the
+operator is not looking. #133 (GITHUB INC.): "an option to match a charge with
+the expense the system has not matched yet". #134: "a button to justify
+whether a receipt exists". #135 (September, 111 charges, "Criss wants a line
+item specific match receipt button here that works"). #128: the page's action
+buttons belong in the top bar.
+
+Backend: `POST .../manual-match` already pairs any charge with any receipt in
+the month, so the missing half is the screen. One real backend gap: the
+hand-match picker reads `date` and `reference` off `assignable_receipts[]`,
+which carried neither, so every picker row showed "-" for its date and two
+same-vendor receipts could not be told apart. Both are now parallel fields.
+The prompt wires the three actions into the panel's rows (one component for
+both callers), ranks the picker by currency, amount gap and date distance, and
+moves the page-level buttons into the header bar (#128).
+
+Proof: `tests/test_chase_hand_match_item_257.py`; the date/reference
+assertion regressed green -> red -> green with `tools/regress_check.py`, and
+the hand-match test goes through the real route and out of `receipt_chase`.
+
+### 259. "Retry held" renders held body-only mail (note #131; 2026-10-29; licence: defect, covered) (SHIPPED 2026-10-29)
+
+Operator on October: "why is retrying not working, you should be able to read
+receipts that are in the body of the email". Five waiting mails, none moved.
+Cause: `replay_held` never visited `held_body_only` archives (`REPLAYABLE` is
+`{held_no_batch, held_failed}`) and its docstring said they "stay held (they
+need the round-2 body renderer)", which has existed since the per-mail render
+button. Live read the same day: the 7 held mails are direct vendor sends
+(Toast, Google payments, Nicolas's outlook address) that arrival correctly
+holds because the sender is not a known sender, and two of them are real
+receipts (Charm Taphouse order, "Thank you for your business").
+
+Fix: the press is an operator click, the same authorization as the per-mail
+render button, so `POST /api/inbound/replay-held` now passes
+`render_body_only=25` and each held body-only mail goes through
+`render_ingest` (document-type quarantine and extraction apply unchanged, so
+"Action required for your Google Account" lands set aside, not as an
+expense). The cap bounds one press's vision spend on Dirk's key; the rest stay
+held and read `still_held`. Arrival does not change: a stranger's mail is
+still never rendered unprompted. The existing toast reads `replayed`, which
+now includes rendered mail, so no SPA change is needed; `rendered` is a
+parallel field.
+
+Proof: `tests/test_intake_mail.py::test_retry_held_renders_body_only_mail`
+and `..._renders_at_most_the_cap`; the route's `render_body_only=` wiring
+regressed green -> red -> green. **Pressed live once on owner yes, 2026-10-29** (readiness first: nothing in
+flight, 8 held body-only mails, cap 25). Reply `rendered 8, replayed 7,
+failed 1`. Read back per mail: the Charm Taphouse order became an October
+expense (Charm Tap House and Kitchen, USD 107.19); three Google "Action
+required" mails, Toast's "Welcome", Toast's "Thank you for your business"
+(a marketing note with no order or amount, so set aside correctly) and a
+GitHub verify-email mail were read as not receipts and set aside (October
+set-aside 6 -> 11, September 4 -> 5, no other expense count moved).
+"Nico - Receipts" (neumann.nicolas@outlook.com, 09-27) failed: its body has
+no readable text at all, so `render_ingest` refuses it and it stays
+`held_body_only`. Open defect, small: that status reads "Needs one click to
+read", which the per-mail button cannot honour either; a partless mail with
+no readable text belongs under `held_no_valid_files`. Its receipts are
+probably images or links (item 261).
+
+### 260. What "open" means on the charges tile (note #132; 2026-10-29; licence: defect, covered) (BACKEND SHIPPED 2026-10-29; the words ride the item 258 prompt)
+
+"Charges without receipt... 47 open... what does this 'Open' mean specifically".
+Reproduced on live August: the tile reads 43 open and the chase list 42; the
+one-row gap is ANNUAL MEMBERSHIP FEE, gray-filled, so the backend counts it
+closed (`n_charges_closed_recurring` 40), but its `reason_code` is
+`not_a_purchase` and the SPA's `isRowDecided` only reads the codes
+`closed_recurring` / `no_receipt_expected`. First fix (deployed 4cc99a7e) was
+wrong: `summary.n_charges_open_no_receipt_due` counts non-purchase lines that
+nothing closed, which is 0 on August; a synthetic fee row had hidden that.
+Fix: `rows[].closed_without_receipt`, the month gate's own verdict, and the
+prompt makes `isRowDecided` read it. The counter stays for ungrayed fee lines. The prompt
+adds the tooltip defining "open" and a sentence under the chase subtitle
+naming the fee lines.
+
+Proof: `tests/test_open_without_receipt_due_item_259.py` (the predicate through
+`completeness_counts`) plus the route-level assertion in the item 258 test file;
+the counter's wiring regressed green -> red -> green.
+
+### 261. Mail the intake does not understand: links, meaningless images, a credit-card statement read as not-an-expense (note #129; 2026-10-29; licence: defect, covered) (PART SHIPPED 2026-10-29: links listed, unreadable bodies honest; statement recognition and logos OPEN)
+
+Operator, on a `rendered-body.pdf` flagged "Does not look like an expense
+document": links in a mail should be followed if they can be processed;
+images that are logos or signatures should be recognized and ignored; and the
+1176 statement "is a credit card statement and you did not recognize that even
+though you could if you put in enough effort".
+
+Three separate questions, none safe to guess at:
+(a) **Links**: following a link fetches an attacker-controllable URL
+(rule_untrusted_inbound: inbound text never decides a URL to fetch), so this
+needs an owner ruling on an allowlist of vendor domains before any design.
+SHIPPED instead, no ruling needed: `links[]` on the body view lists where a
+mail points (footer links dropped), and the prompt shows them with "the tool
+does not open links"; nothing is fetched. Also shipped: a body with no
+readable text holds as `held_no_valid_files` at arrival, and Retry moves an
+already-stored one there (the live "Nico - Receipts" mail on its next
+press). Proof: three tests in `test_intake_mail.py`, both wirings regressed
+green -> red -> green.
+(b) **Logos**: attachments under 4096 bytes are already dropped as signature
+art (item 155's trap); the live question is images above that size. Measure
+how many stored images are logos before building.
+(c) **Statement recognition**: the classifier path. A prompt edit moves stable
+readings (item 77: a one-word change moved 12 of 129), so the change goes in
+the response schema only and is A/B'd old x2 against new x2 over the stored
+documents first. Start by reading why 1176's file was typed as not-an-expense
+(the stored reading), not by editing the prompt.
+
+### 262. Set-aside files: room to act, delete a document, hide a file with no receipt (notes #126, #127, #130; 2026-10-09 to 2026-10-29; licence: defect, covered) (NOT STARTED, one owner call)
+
+#127 (Portuguese, on the Statements section of August): "I need the option to
+delete documents". #130 (October, "Set aside (not counted as expenses)", 6
+files, statements among them): more room to act on those rows. #126 (Receipt
+overview): "not a receipt" so do not show the receipt's file when there is no
+receipt.
+
+The owner call: the storage description
+(`docs/electronic-storage-system-description.md`) promises that nothing this
+system accepted is destroyed (item 66 archives a superseded file rather than
+deleting it). "Delete a document" must therefore mean "remove it from the
+month and archive the bytes", with a typed confirm, and for a STATEMENT it also
+removes its charges from the month's reconciliation, which can strand
+decisions made on them. Recommended: build delete as archive-and-remove for
+set-aside files first (no charges depend on them), statements second behind a
+dry-run that lists the decisions it would orphan. #126 is a display rule in the
+SPA (hide the file link when the overview row's status is "not a receipt") and
+rides the next prompt.
+
+**Set-aside half SHIPPED 2026-10-29** (owner: "fix those"):
+`POST /api/expense-batches/{id}/set-aside/dismiss` flags the entry
+`dismissed` (bytes and entry kept, `undo` reverses, a dismissed file refuses
+restore with `set_aside_dismissed`), `n_set_aside` stops counting it. #126
+rides `docs/lovable-setaside-links-prompt.md`. Proof:
+`test_document_type_quarantine.py::test_web_dismiss_set_aside_keeps_the_file_and_undoes`,
+regressed green -> red -> green. **Statement removal (#127's own anchor)
+stays OPEN**: it removes charges Criss has decided on, so it needs a dry run
+listing the decisions it would orphan before any write exists.
+
+### 263. A mail of receipts from several months files each receipt in its own month (notes #138, #139; 2026-10-29; licence: defect, covered) (BACKEND SHIPPED 2026-10-29)
+
+#138 (August, "GitHub, Inc. registry, From: Dirk Neumann"): "is not being
+matched to statement line item from github even though amount, date and vendor
+are the same". #139, same row: "belongs in september not in august".
+
+Read live (GET only): Dirk's one mail "Github Receipts 8-10/2026" carried three
+receipts printed 2026-08-05, 2026-09-05 and 2026-10-05. The inbound log reads
+`mixed_months: true`, `pool_month: 2026-08`, all three documents (0062, 0063,
+0064) filed in August. The 09-05 receipt matched nothing there because its
+charge is in September, where the same receipt was already held as 0007 and
+matched (11.56 USD, card 2838); the September charge listed 0063 as a second
+candidate. Nothing was wrong with matching.
+
+Cause: `resolve_receipt_month` (the 2026-08-24 ruling) routes a multi-receipt
+mail whole by its EARLIEST plausible date. Item 251 moved a receipt when its
+date CHANGED; a mixed mail never changes a date, and a read date inside the
+three-month window is not even offered the move.
+
+Built: `intake_mail._file_mixed_months`, called from `_ingest_job` after the
+mail's rows exist. For a mail stamped `mixed_months` it hands each created row
+to `route_expense_by_date` (item 251's mover), so a receipt outside the month
+it arrived in is filed in its own, creating the month when absent; a published
+month or an unroutable date holds in place, as on an edit. The archive records
+`split_to`, which the inbound log rows carry. Test:
+`test_a_mixed_month_mail_files_each_receipt_in_its_own_month` (regress_check:
+green, red with the call unwired, green). Suite `tests/test_intake_mail.py`
+125 passed.
+
+Deployed 2026-10-29 (Fly, commit `6d4c00d6`). Live clean-up on the owner's
+yes: 0063 moved August -> September by the per-receipt move route; the bytes
+matched September's 0007, so only August's row went (`already_in_batch`), and
+September's 11.56 charge now has one candidate, chosen, `turn: decide`. 0062
+had already left August before the move (October holds its own copy, 0011,
+from a 10-05 mail), so nothing was done to it.
+
+Materialize path, closed the same day: `_ensure_month_for_arrival` now hands
+the mail's rows to the same split once the materialize hold is RELEASED (the
+mover takes `_MATERIALIZE_LOCK` itself and it is not reentrant, so calling it
+inside `_create_month_from_mail` would deadlock). Test:
+`test_a_mixed_mail_that_opens_its_month_sends_the_rest_on` (regress_check
+bites).
+
+Receipt Batch 01 and 02 (2026-10-28, filed whole into September): audited
+read-only, 17 receipts printed in October sit in September. 14 hold no charge
+and are item 264's offers; 3 (0122, 0136, 0137, dated 10-02/10-03) are held by
+September charges and stay. No live write: Criss moves them (memory: no live
+writes on her months).
+
+### 264. A receipt no charge holds, dated in another month, is offered its own month (note #137; 2026-10-29; licence: defect, covered) (BACKEND SHIPPED 2026-10-29)
+
+#137 (August, "Receipts without a charge 8"): "dont show data from different
+months". At 11:39 the list held 8: today's 6 plus 0062 (10-05) and 0063
+(09-05), both item 263's strays. Of the 6 left, 5 are late-August receipts for
+charges in September's statement (they belong where they are); the sixth is
+`folder:1a2c5654a31c70fa`, SAP SE 183.00 EUR dated 2026-07-05, which nothing
+offered to move: item 251 offers a READ date only outside the batch's window,
+and July 5 is inside August's.
+
+Built: `attach_expense_card_tabs` (the Expenses page payload) offers
+`expenses[].month_move` on a row that no charge holds (`without_charge`), whose
+date's CALENDAR month differs from the batch's, on a month with a statement
+loaded (without one, "no charge holds it" only means "no statement yet").
+`summary.n_month_moves` is recounted so the banner agrees. Offer only, never a
+move on read; the SPA already renders the offer (item 77). Test:
+`test_a_receipt_no_charge_holds_is_offered_its_own_month` (no offer before the
+statement, offer after; regress_check bites).
+
+Predicted from the live payloads before shipping: 14 new offers, 13 in
+September (Receipt Batch 01/02's unheld October receipts) and 1 in August (the
+July SAP SE receipt). No other month gains one; the 3 held October receipts and
+the late-August receipts get none.
+
+### 265. The card's Zoho account is picked from a list (note #124; 2026-10-07; licence: defect, covered) (BACKEND SHIPPED 2026-10-29; SPA prompt `docs/lovable-card-account-picker-prompt.md` NOT pasted)
+
+#124 (Settings > Cards, the Zoho account field): "this should be a drop down
+list of available zoho accounts for credit cards". Built:
+`category_vocabulary.card_account_options` on `GET /api/settings` as
+`card_account_options[]` (`company`, `org_id`, `name`, `account_id`): every
+active `credit_card` account not marked DO NOT USE, from each company's chart,
+the filter `card_account_check` already holds a stored name to, so a pick from
+the list checks ok. Listed in `SETTINGS_DERIVED_KEYS`, so the SPA's
+whole-object PUT accepts it back and ignores it (without that it would be
+refused as an unknown key; regress_check bites). Tests in
+`tests/test_card_account_check_item_172.py`.
+
 ## Shipped (loop history)
 
 | Iteration | What | Why it mattered | Shipped |
 |---|---|---|---|
+| 168 | Item 257, statements on what is left: one card's charge printed in two statement files (same card + day + amount + currency) is ONE charge, n and m lines leave max(n, m), two lines of one file never fold, the decided side is kept (`merge_transactions(files=, incoming_file=, decided=)`, attach and re-read) | Card 9693's interim xlsx lay inside its closing PDF with different merchant text, so September listed 15 charges twice and 15 receiptless rows were phantom doubles. Live September after the owner-approved re-read: 216 -> 201 charges, USD 7,288.38 -> 5,345.57, receiptless 125 -> 110, no receipt or decision touched | 2026-10-29, PR #1681, Fly on `d37a3c96`; local preview (fold off vs on) shown to the owner first, live payload diffed before/after, September page read back cold (no writes) |
+| 167 | Item 257: a number shared in ANY number field (reference, invoice number, receipt number) makes documents of one amount one purchase (`number_keys`, broadened rung 2, `find_duplicate_receipts_by_any_number` appended last); receipt kept per item 256 | Owner on October's Anthropic pair: the receipt's reference is its own receipt number while both carry the invoice number, so a hand-uploaded or re-mailed pair read as two purchases. Nothing moved on the live months (every same-amount number pair already grouped); covers the next arrivals | 2026-10-29, PR #1670, Fly `416a5272`; live October + September groups, totals and `n_review` identical before/after, October page read back, read-only |
+| 166 | Item 256: a receipt and its invoice found by one document number are settled by it. The re-match keeps the receipt even where the tool's own match held the invoice (`pinned_documents`: only a person's confirmed pick holds), the statement check never splits the pair, the set-aside invoice reads review `none` | Dirk: "default to receipt not invoice and dont ask user for verification". Live: October's 10 invoice copies stopped asking, `n_review` 27 -> 24, totals unchanged; September (ElevenLabs invoice kept by a tool hold, two Anthropic pairs split by card 9693's PDF/xlsx double line) changes at its next natural re-match | 2026-10-29, PR #1666, Fly on `3e37fe93`; `/healthz` commit verified by deploy.py, live payload diffed before/after, SPA October drive read back the copy row ("Ready · Duplicate, not in the total"), read-only |
 | 165 | Fix (no item), follow-up to 163: `DELETE /api/runs/{id}/expenses/{doc}?views=1` and `POST /api/runs/{id}/duplicates/resolve?views=1` reply with `views.batch` / `views.run`, equal to the two page GETs at that moment; no flag, no change. SPA half `docs/lovable-duplicate-click-reply-views-prompt.md` (cache the reply, no refetch), handed to the owner, not pasted | After a duplicate click the page refetched the month twice and showed the old row until both landed. Local, September, click until the grid holds the new month: Delete 3.96 / 4.41 -> 3.83 / 3.71 s, Not a copy 3.68 / 4.48 -> 3.13 / 3.70 s; one screen update instead of two, and Not a copy refreshes the reconciliation line it left stale | 2026-10-07, PR #1590, Fly v284 (commit `0541288a`); live GET /api/runs + /api/expense-batches for September and October hash-identical before/after (baseline stable across two reads), page driven cold (read-only); the `views` reply itself not exercised live (it needs a write on Criss's month) |
 | 164 | Item 248: `GET /api/receipts/overview`, every receipt the tool holds in one list (months, trips, set-aside files, and mail that never became or is no longer an expense), statuses read off each month's own verdicts, memoized under the card key plus the mail archive's; SPA prompt with the TanStack Table v8 page | Dirk 2026-10-07: users could not see or filter receipts; the Email intake page listed mails only, so uploads never appeared. Live after deploy (one read-only GET): 363 receipts, 184 email / 179 upload, every row with an arrival date, 2.5 s; published SPA unchanged until the paste, cold drive 0 writes | 2026-10-07, PR #1587, Fly on `501edf7d` |
 | 163 | Fix (no item): a duplicate click's re-match memoizes its vendor work. `vendor_similarity`, its word-pair ratio and `strip_reference_tokens` are `lru_cache`d (pure, bounded ~25 MB); `MerchantRegistry.resolve` memoizes per instance; `_distinctive` cached on its tokens. No output moves | Owner 2026-10-07: "removing duplicates takes way too long to load". "Delete this copy" and "Not a copy" re-match the month inside the request; on September (216 charges x 112 receipts since the 10-05 statement) the matcher scored 26,163 vendor pairs for 3,710 distinct ones, twice per re-match, and the registry resolved 700 times for 274 names. Local A/B on the 10-07 backup: Delete this copy 3.88 -> 1.75 s, Not a copy 5.28 -> 2.73 s, payloads byte-identical | 2026-10-07, PR #1583, Fly v281 (commit `5ae5905d`); live September duplicate layer, totals and vendors identical before/after, page driven cold (read-only); the click itself not timed live (it is a write on Criss's month) |

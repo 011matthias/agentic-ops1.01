@@ -179,8 +179,7 @@ def marker_path(session_id: str = "") -> str:
 # Re-resolved in main() once the payload's session_id is known.
 MARKER_FILE = marker_path()
 # A marker older than this is assumed dead (machine left on, session over) so a
-# forgotten deploy can never nag or block indefinitely. Mirrors the
-# platform-not-live marker TTL in post-action-gate.
+# forgotten deploy can never nag or block indefinitely.
 MARKER_TTL_SEC = 6 * 3600
 
 # Deploys whose consumer is an APP: a client-side renderer stands between the

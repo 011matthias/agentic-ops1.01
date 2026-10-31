@@ -74,7 +74,7 @@ def _run(book, *args):
     """
     return subprocess.run(
         [sys.executable, str(SCRIPT), "--file", str(book), *args],
-        capture_output=True, text=True, cwd=book.parent)
+        capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=book.parent)
 
 
 # --- --file targets a workbook that is not the latest month ----------------

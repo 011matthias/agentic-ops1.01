@@ -222,7 +222,7 @@ def _git_baseline_size(path: Path) -> int | None:
         resolved = path.resolve()
         top = subprocess.run(
             ["git", "-C", str(resolved.parent), "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15,
         )
         if top.returncode != 0 or not top.stdout.strip():
             return None
@@ -230,7 +230,7 @@ def _git_baseline_size(path: Path) -> int | None:
         rel = resolved.relative_to(root).as_posix()
         size = subprocess.run(
             ["git", "-C", str(root), "cat-file", "-s", f"origin/main:{rel}"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15,
         )
         if size.returncode != 0:
             return None

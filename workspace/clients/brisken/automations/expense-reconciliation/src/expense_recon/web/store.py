@@ -220,6 +220,8 @@ SETTINGS_DERIVED_KEYS = (
     "gl_revision",
     "entity_options",
     "cards_effective",
+    # Item 265: the card form's Zoho-account picker.
+    "card_account_options",
     "merchants_inert",
     "cost_center_options",
     "fx_daily_rates",

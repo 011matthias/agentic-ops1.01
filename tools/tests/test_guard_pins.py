@@ -126,7 +126,7 @@ def test_pin_guard_refuses_without_the_seam(tmp_path):
     proc = subprocess.run(
         [sys.executable, str(REPO / "tools" / "pin_scorer.py"),
          "pin-guard", "tools/gtm-stress-guard.py"],
-        capture_output=True, text=True, env=env)
+        capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     assert proc.returncode == 1
     assert "SCORER_LOCK_ALLOW" in proc.stderr
 
@@ -138,7 +138,7 @@ def test_pin_guard_refuses_a_scorer():
     proc = subprocess.run(
         [sys.executable, str(REPO / "tools" / "pin_scorer.py"),
          "pin-guard", "tools/scorers/page-weight.py"],
-        capture_output=True, text=True, env=env)
+        capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     assert proc.returncode == 1
     assert "is a SCORER" in proc.stderr
 

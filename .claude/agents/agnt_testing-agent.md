@@ -35,6 +35,14 @@ You are the **Testing Agent**. You are responsible for:
 | `create-checklist` | Testing Checklist Workflow | No |
 | `all` | Run all workflows in sequence | Yes, progressive |
 
+### n8n mode
+
+When `uv run tools/infra_yaml.py --client {client} --json` reports `orchestrator: n8n`, the steps below replace the Python unit-test and dry-run steps:
+
+- **`test`**: run each workflow's `test:` command from infrastructure.yaml (offline, fixtures only; `node --test` for a JS harness). For the client's whole suite, the same command CI runs in `.github/workflows/{client}-tests.yml`. Never run a live-fetch script (WW: `fetch-live.js`) here.
+- **`test-dev` / `verify-live`**: trigger through the client's n8n MCP server (`mcp__n8n-{client}__n8n_test_workflow` with the workflow's `n8n_workflow_id`, or the sanctioned test webhook), then read the run back with `mcp__n8n-{client}__n8n_executions` (`action: "list"`, `workflowId`, `limit: 1`; then `action: "get"`, `id`, `mode: "filtered"`) and check node outputs field by field per skil_n8n-pack POST-EXECUTION-VERIFICATION.md. A green execution status is not a pass.
+- Any run that writes to a client tenant needs the owner's per-action yes first; never touch a test record the client's `status/` or `context/` marks as held.
+
 ## Status Update Format
 
 When updating `automation-status.yaml`, find the automation by ID and set:

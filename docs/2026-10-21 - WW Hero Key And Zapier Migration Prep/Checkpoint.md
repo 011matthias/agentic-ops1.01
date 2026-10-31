@@ -60,6 +60,16 @@ No WW workflow touched. W1-06 stays live from the 2026-10-07 session. Ops status
 2. Test-log-in to n8n.osneo.de with the vault entry; fix the password from Proton Pass if a character was misread, before 2026-11-06.
 3. Before any Hero test: confirm with Tobias which default step matches which stage, and check W2-02/05/06/09 against the test projects.
 4. Open from the 2026-10-07 session: merge akkton/agentic-ops PR #304 on owner order, Jotform entries 13:18-14:02 UTC gap, error alerts still go to Nico.
+5. WW import migration day (added 2026-10-29, layout plan W1-20's WW-tree half). Runs only after D1, D3, D4 and D18 have landed; the repo half shipped as PR #1700. Never touch the held R1 test record.
+   - Branch `client/warme-wimmer/import` off origin/main in its own worktree, never in the primary.
+   - Data goes to the primary's gitignored `workspace/clients/warme-wimmer/context/`, never into the branch: `tools/ww-logic-tests/live-snapshots`, fixtures built from live Hero data (D16: `fixtures/sabine-task-hardening/executions.json`), `output/`, the handoff bundles and screenshots, and the 582-file context tree (copy; the akkton original stays). D16: the eight dated backup JSONs beside the exports stay behind; only the canonical exports move.
+   - Test data: `uv run tools/scrub-test-data.py --check` over the ww-*-test files and ww-logic-tests, then `--write` (default rewrites consumer domains; `--all-domains --keep-domain waerme-wimmer.de` for personal local parts on business domains), then run the WW harness. A test that keys on a consumer domain builds the address at runtime. Dry run on 2026-10-29: 7 files / 33 occurrences by default, 11 / 111 with `--all-domains`.
+   - Functional addresses in production logic and n8n exports (the watchdog digest export holds a consumer address; ww-alert-logic.mjs and ww-deploy-alert-logic.mjs hold some) move to an n8n variable or env BEFORE the export is committed, or `n8n_export.py --check` reports drift against live forever.
+   - harness.js / fetch-live.js read `WW_TEST_DATA_DIR` (default `../../../context/test-data`) and skip when absent.
+   - infrastructure.yaml split by kind, under 40 KB: identifiers and per-workflow {n8n_workflow_id, status, trigger, export, test} stay; prose to `status/` via `uv run tools/project_status.py --scaffold`; `secret_value:` to `context/.env`; the make: block to a checkpoint. Add N8N_API_KEY_WARME_WIMMER and N8N_API_URL_WARME_WIMMER to `automations/.env.example`; set the n8n instance's `mcp_server` / `api_url_env` / `api_key_env`.
+   - a1-a5 to stage folders via skil_spec-cleanup; tools/build-warme-wimmer-doc-site.py replaced by the akkton version (WEBSITE_REPO kept, INDEX row updated) pointing at ../unpauseai-web/docs/publishing.md.
+   - Before any push: `uv run tools/pii_scan.py --range origin/main...HEAD` and over the branch's files, gitleaks over the branch, `test_scrub_test_data.py` green; the owner reads the public file list (`git diff --stat origin/main...HEAD`) and says yes. A push to this public repo is permanent.
+   - After: `uv run tools/mcp_config.py --ensure` lists n8n-warme-wimmer; `uv run tools/n8n_export.py --client warme-wimmer --check`; the harness copy lands in `workspace/templates/n8n-tests/`.
 
 ---
 

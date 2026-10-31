@@ -99,7 +99,7 @@ User types /command
 ## Build Lifecycle
 
 ```
-/build-automation {client}
+/comd_build-automation {client}
   Phase 1: Plan      → spec-creator → user approval
   Phase 2: Implement  → build skill (routes by orchestrator)
   Phase 3: Test       → build-test-fix (3-iteration loop)

@@ -30,13 +30,13 @@ Resolve project directory — check in order:
 1. `workspace/clients/$ARGUMENTS/` — for `type: client` projects
 2. `workspace/projects/$ARGUMENTS/` — for `type: internal` or `type: platform` projects
 
-If neither exists, suggest `/new-client $ARGUMENTS --type [client|internal|platform]`
+If neither exists, suggest `/comd_new-client $ARGUMENTS --type [client|internal|platform]`
 
 ## Important: Does Not Auto-Build Everything
 
 ⚠️ **This command does NOT automatically build all automations** in the client's status file.
 
-When you run `/build-automation herbox`, the orchestrator will:
+When you run `/comd_build-automation herbox`, the orchestrator will:
 
 1. **Ask what you want to build:**
    - New automation from requirements?
@@ -87,7 +87,7 @@ Using Task tool:
        - n8n → agnt_n8n-builder
        - Trigger.dev / FastAPI → agnt_implementation-agent
     5. Phase 3: Test - Local (agnt_testing-agent) - unless --skip-test
-    6. Phase 3.5: Test - Dev (agnt_testing-agent with /test dev) - unless --skip-test
+    6. Phase 3.5: Test - Dev (agnt_testing-agent with /comd_test dev) - unless --skip-test
     7. Phase 4: Deploy (agnt_deployer) - unless --skip-deploy
     8. Phase 5: Verify (status-check)
 
@@ -117,7 +117,7 @@ The agnt_build-orchestrator agent will:
 
 ## Phase Reports
 
-The orchestrator generates reports in `.claude/handoffs/{session-id}/`:
+The orchestrator generates reports in `.claude/handoffs/{client}-{session-id}/`:
 - `phase1-plan-report.md`
 - `phase2-implementation-report.md`
 - `phase3-test-report.md` (local testing)
@@ -153,14 +153,14 @@ The orchestrator will prompt for approval at:
 | Implement (n8n) | agnt_n8n-builder | Workflow JSON + build report | `implemented` |
 | Implement (Trigger.dev / FastAPI) | agnt_implementation-agent | Code + tests | `implemented` |
 | Test - Local | agnt_testing-agent | Local test report | `tested_locally` |
-| Test - Dev | agnt_testing-agent + /test dev | Dev test report (real APIs) | `tested_dev` |
+| Test - Dev | agnt_testing-agent + /comd_test dev | Dev test report (real APIs) | `tested_dev` |
 | Fix (if needed) | agnt_bug-fixer | Fixed code | (revert to previous) |
 | Deploy | agnt_deployer | Live service | `deployed` |
 | Verify | status-check | Health confirmation | `tested_live` |
 
 **Testing Phases Explained:**
 - **Local Testing (tested_locally)**: Unit tests + dry-run with mocked/stubbed data
-- **Dev Testing (tested_dev)**: Live test with real APIs in dev environment (via /test-dev)
+- **Dev Testing (tested_dev)**: Live test with real APIs in dev environment (via /comd_test dev)
 - **Production Testing (tested_production)**: Limited live test in production
 - **Live Testing (tested_live)**: Verified working in production via logs
 

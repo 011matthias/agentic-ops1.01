@@ -43,14 +43,19 @@ jobs:
         run: uv run tools/check-index.py
       - name: Pattern rules lint
         run: uv run tools/pattern_rules.py lint
+      # W1-16: every tracked infrastructure.yaml loads through the one loader
+      # and its mcp_server / export / test / env / deploy references resolve.
+      - name: infrastructure.yaml consistency
+        run: uv run tools/infra_check.py --all
       # Tests whose inputs any PR can change (the friction register, the
-      # committed repo root) run on every PR; the full suite only when its
-      # inputs change (layout plan W1-2).
-      - name: Ledger and root-layout tests (every PR)
+      # committed repo root, WW test data) run on every PR; the full suite
+      # only when its inputs change (layout plan W1-2, W1-20).
+      - name: Ledger, root-layout, WW test-data and doc command-ref tests (every PR)
         run: >-
           uv run --no-project --with pytest --with python-pptx --with requests --with httpx --with pyyaml --with openpyxl
-          pytest -q tools/tests/test_root_layout.py
-          tools/tests/test_validate_output_slop.py -k "friction_register or root"
+          pytest -q tools/tests/test_root_layout.py tools/tests/test_scrub_test_data.py
+          tools/tests/test_validate_output_slop.py tools/tests/test_doc_command_refs.py
+          -k "friction_register or root or scrub or doc_ref"
       - name: Did the suite's inputs change?
         id: filter
         if: github.event_name == 'pull_request'

@@ -45,7 +45,7 @@ PAGE = """<!doctype html>
 def run(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(GUARD), *args],
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
 
 

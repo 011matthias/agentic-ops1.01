@@ -84,7 +84,7 @@ def _load_friction_watch():
 
 def _git(args: list[str], timeout: int = 30) -> str:
     out = subprocess.run(["git", "-C", str(REPO), *args],
-                         capture_output=True, text=True, timeout=timeout)
+                         capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
     return out.stdout if out.returncode == 0 else ""
 
 
@@ -152,7 +152,7 @@ def ops_health(scheduled: bool) -> dict:
         out = subprocess.run(
             ["gh", "pr", "list", "--state", "open",
              "--json", "number,headRefName,createdAt"],
-            capture_output=True, text=True, timeout=60, cwd=str(REPO))
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60, cwd=str(REPO))
         for pr in json.loads(out.stdout or "[]"):
             br = pr.get("headRefName", "")
             if not br.startswith("sys/sweep-"):
@@ -194,7 +194,7 @@ def ops_health(scheduled: bool) -> dict:
                  head, "origin/main"], capture_output=True).returncode == 0
             dirty = subprocess.run(
                 ["git", "-C", path, "status", "--porcelain"],
-                capture_output=True, text=True).stdout.strip()
+                capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
             if merged and not dirty:
                 ops["close_candidate_worktrees"].append(path)
         if ops["close_candidate_worktrees"]:
@@ -303,9 +303,12 @@ def render_text(r: dict) -> str:
 
 
 def send(subject: str, body: str) -> bool:
+    # The pipe is UTF-8 both ways: send_email.py reads sys.stdin with the
+    # locale codec (cp1252 under the scheduled task), so it is told explicitly.
     proc = subprocess.run(
         [sys.executable, str(REPO / "tools" / "send_email.py"), subject],
-        input=body, capture_output=True, text=True, timeout=60,
+        input=body, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
+        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
     )
     sys.stderr.write(proc.stderr or "")
     print(proc.stdout.strip())

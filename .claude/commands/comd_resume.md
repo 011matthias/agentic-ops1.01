@@ -5,7 +5,7 @@ argument-hint: <project-or-client-name>
 
 # Resume Work
 
-Reloads context for a project or client so work can continue from where it left off. Eliminates the cold-start problem at the beginning of sessions. **This command scopes the session to a single project** — all subsequent operations target only this project's directory. For parallel work, open separate sessions and `/resume` in each.
+Reloads context for a project or client so work can continue from where it left off. Eliminates the cold-start problem at the beginning of sessions. **This command scopes the session to a single project** — all subsequent operations target only this project's directory. For parallel work, open separate sessions and `/comd_resume` in each.
 
 ## Context
 
@@ -45,9 +45,12 @@ Use these when building the session header slug and title:
 | `bris` | brisken |
 | `peak` | peakora |
 | `uwi` | upwork-independence |
+| `me` | personal (KIT, BAföG, private admin): checkpoints are private, read from the primary clone's gitignored `docs/personal/` instead of `docs/`; no INDEX rows exist for them |
 | `{3-4 char initials}` | any new client/project |
 
-## Step 0: Try YAML Fast-Path
+## Step 0: MCP check, then YAML Fast-Path
+
+Run `uv run tools/mcp_config.py --ensure` first. In a worktree it renders the servers this session's client needs (and says to restart Claude Code when it wrote anything); in the primary clone it is a no-op unless a client's infrastructure.yaml or `.env` changed. It refuses, naming what it would drop, if `--adopt` has not been run on this machine.
 
 Check for a session context YAML:
 
@@ -115,10 +118,13 @@ Read all files in `{resolved_path}/context/`:
 
 ## Step 4: Read Infrastructure
 
-Read `{resolved_path}/infrastructure.yaml` (if it exists) to identify:
+If `{resolved_path}/infrastructure.yaml` exists, run `uv run tools/infra_yaml.py --client {project} --json` rather than parsing the file by hand. The loader reads every shape in use (an `instances:` list, `n8n_instances:` / `make_instances:` maps, top-level `n8n:` / `make:` blocks) and returns:
 - Project `type` (client | internal | platform)
-- Orchestrator type (make, n8n, trigger-dev, fastapi, vercel, etc.)
-- Instance details (org IDs, URLs, team IDs)
+- `orchestrator`, resolved in order: top-level `orchestrator:`, then an instance `type:`, then files in `automations/`. `.mcp.json` only says which credentials are wired on this machine, never which orchestrator a client uses.
+- `deploy`, when the file names an explicit deploy entry point (Brisken: `deploy.py`, never Railway)
+- Instances with `mcp_server`, URL, credentials and workflows
+
+Then read `{resolved_path}/automations/README.md` and `{resolved_path}/automations/tools/README.md` when they exist: the first says what the client's automations are, the second lists its scripts one row each.
 
 ## Step 4.5: Read Comms Context
 
@@ -152,8 +158,9 @@ If no comms-log exists, skip this step silently.
   ```
 
 **If n8n:**
-- Check `.mcp.json` for n8n MCP server entry
-- Note workflow IDs from checkpoint
+- Take workflow IDs and the instance's `mcp_server` (canonical `n8n-{client}`) from the loader output
+- Check `.mcp.json` for that MCP server entry only to learn whether this machine has the API credentials wired
+- Run `uv run tools/infra_check.py --client {client}` and surface any ERROR in the Step 6 summary
 
 **If Trigger.dev:**
 - Check `trigger.config.ts` for registered tasks
@@ -165,32 +172,15 @@ If no comms-log exists, skip this step silently.
 
 **Mandatory:** the index line is a pointer, never the fact. Never act on a hook line alone and never cite one as if it were the memory; open the file. Confirm what you opened, by name, on the session header's `Memories:` line, so a gap is visible.
 
-**Do not bulk-load the directory.** The store is 128 files / 659 KB (~165k tokens, measured 2026-09-08) and grows weekly. The retired instruction here ("~1,800 tokens, ~0.2% of budget, read every file") was ~90x under reality, which made the step unfollowable as written and therefore silently skipped (register row 2026-09-08, `infrastructure-deferred`). Index-plus-targeted is what working sessions already do.
+**Do not bulk-load the directory.** It is far larger than the index and grows weekly; run `uv run tools/memory_audit.py` for its current size. The retired instruction here ("~1,800 tokens, ~0.2% of budget, read every file") was ~90x under reality, which made the step unfollowable as written and therefore silently skipped (register row 2026-09-08, `infrastructure-deferred`). Index-plus-targeted is what working sessions already do.
 
-When scope is broad or a specific system is in play, grep the store instead of loading it whole (`--no-ignore`; the directory is outside the repo):
+When scope is broad or a specific system is in play, grep the store instead of loading it whole (plain grep; `--no-ignore` is an `rg` flag and grep rejects it):
 
 ```bash
-grep -ril --no-ignore "{system-or-tool}" {memory_directory}
+grep -ril "{system-or-tool}" {memory_directory}
 ```
 
-**Domain-specific extras (load when applicable):**
-
-| File | When |
-|---|---|
-| `workspace/projects/platform/context/brand.md` | Platform work: canonical company/domain/contact names |
-
-### Platform Brand Verification (when type = platform)
-
-After reading `brand.md`, include this block in the Step 6 summary:
-
-```
-### Brand Constants (verified)
-- Company: {from brand.md}
-- Domain: {from brand.md}
-- Contact: {from infrastructure.yaml or brand.md}
-```
-
-Do not proceed with platform work if brand.md cannot be read.
+**Platform work:** the canonical brand name, product name and contact address are in `rule_platform_standards.md` §1 (always loaded); quote them from there.
 
 ## Step 5.6: Load Recent Session History
 
@@ -293,7 +283,7 @@ If comms status is STALE or URGENT:
 
 > "Comms log is {N} days old. Want to catch it up before we start?
 > - **a)** Log missed conversations now (quick capture)
-> - **b)** Draft an outbound follow-up (`/draft {client}`)
+> - **b)** Draft an outbound follow-up (`/comd_draft {client}`)
 > - **c)** Skip for now"
 
 Wait for the user's response before asking "What would you like to work on?"
@@ -307,5 +297,5 @@ Then ask: "What would you like to work on?"
 ## Notes
 
 - This command is READ-ONLY — it gathers context but makes no changes
-- If no checkpoint exists for this client, report that and suggest starting with `/status-check`
-- For new clients with no history, suggest `/new-client` instead
+- If no checkpoint exists for this client, report that and suggest starting with `/comd_status-check`
+- For new clients with no history, suggest `/comd_new-client` instead

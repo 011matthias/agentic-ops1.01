@@ -85,6 +85,7 @@ class TestFinalizeFresh:
     @pytest.fixture()
     def root(self, tmp_path: Path) -> Path:
         (tmp_path / "docs" / "sessions").mkdir(parents=True)
+        (tmp_path / "workspace" / "clients" / "brisken").mkdir(parents=True)
         return tmp_path
 
     def test_creates_all_artifacts(self, root: Path):
@@ -261,6 +262,7 @@ class TestNotWorked:
     @pytest.fixture()
     def root(self, tmp_path: Path) -> Path:
         (tmp_path / "docs" / "sessions").mkdir(parents=True)
+        (tmp_path / "workspace" / "clients" / "brisken").mkdir(parents=True)
         return tmp_path
 
     def _ctx(self, root: Path, date: str = "2026-07-23") -> dict:
@@ -486,7 +488,7 @@ class TestContextRootWorktree:
 
     def _git(self, *args: str, cwd: Path) -> None:
         subprocess.run(["git", *args], cwd=str(cwd), check=True,
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
 
     def test_context_yaml_lands_in_primary_not_worktree(self, tmp_path: Path):
         primary = tmp_path / "primary"
@@ -498,6 +500,9 @@ class TestContextRootWorktree:
         (primary / "seed.txt").write_text("seed", encoding="utf-8")
         self._git("add", "-A", cwd=primary)
         self._git("commit", "-qm", "seed", cwd=primary)
+        # An untracked client folder exists only in the primary, like the
+        # gitignored ones do; the worktree's section check must still find it.
+        (primary / "workspace" / "clients" / "brisken").mkdir(parents=True)
 
         wt = tmp_path / "wt"
         self._git("worktree", "add", "-q", str(wt), "HEAD", cwd=primary)
@@ -578,3 +583,107 @@ class TestSharedContextFailClosed:
         data = cs.load_context_text(self._ctx(root).read_text(encoding="utf-8"))
         assert data["clients"]["brisken"]["next_steps"] == ["keep me"]
         assert data["clients"]["sys"]["next_steps"] == ["mine"]
+
+
+def _git(*args: str, cwd: Path) -> str:
+    return subprocess.run(["git", *args], cwd=str(cwd), check=True, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace").stdout
+
+
+class TestSections:
+    """INDEX sections are slugged and validated (layout plan W1-10), through finalize."""
+
+    @pytest.fixture()
+    def root(self, tmp_path: Path) -> Path:
+        (tmp_path / "docs" / "sessions").mkdir(parents=True)
+        (tmp_path / "workspace" / "clients" / "brisken").mkdir(parents=True)
+        (tmp_path / "workspace" / "projects" / "Automation services").mkdir(parents=True)
+        return tmp_path
+
+    def _client_payload(self, section: str) -> dict:
+        return base_payload(work_type="client-dev", projects=["brisken"], section=section)
+
+    def test_case_variant_lands_in_the_lowercase_section(self, root: Path):
+        (root / "docs" / "INDEX.md").write_text(
+            "# Session Index\n\n## brisken\n| Date | Topic | Type | Link |\n"
+            "|------|-------|------|------|\n| 2026-07-01 | Old | client-dev | [→](x) |\n",
+            encoding="utf-8")
+        assert run_finalize(root, self._client_payload("Brisken")) == 0
+        index = (root / "docs" / "INDEX.md").read_text(encoding="utf-8")
+        assert "## Brisken" not in index
+        assert index.count("## brisken") == 1
+        assert index.index("| 2026-07-23 | Test Topic") < index.index("| 2026-07-01 | Old")
+
+    def test_folder_name_with_space_is_slugged(self, root: Path):
+        payload = base_payload(work_type="client-dev", projects=["x"], section="Automation services")
+        assert run_finalize(root, payload) == 0
+        assert "## automation-services" in (root / "docs" / "INDEX.md").read_text(encoding="utf-8")
+
+    @pytest.mark.parametrize("section", ["system/platform", "{INDEX section}", "nope-client"])
+    def test_placeholder_or_unknown_section_refuses_and_writes_nothing(self, root: Path, capsys, section):
+        assert run_finalize(root, self._client_payload(section)) == 2
+        assert "section" in capsys.readouterr().out
+        assert not (root / "docs" / "INDEX.md").exists()
+        assert not (root / "docs" / "sessions" / "2026-07-23.md").exists()
+
+    def test_existing_slug_heading_stays_valid_without_a_folder(self, root: Path):
+        # WW checkpoints land in this repo before its client folder does.
+        (root / "docs" / "INDEX.md").write_text(
+            "# Session Index\n\n## warme-wimmer\n| Date | Topic | Type | Link |\n"
+            "|------|-------|------|------|\n", encoding="utf-8")
+        assert run_finalize(root, self._client_payload("warme-wimmer")) == 0
+
+
+class TestPrivateCheckpoint:
+    """`private: true` (or a personal* section) writes no tracked file."""
+
+    @pytest.fixture()
+    def repo(self, tmp_path: Path) -> Path:
+        _git("init", "-q", cwd=tmp_path)
+        _git("config", "user.email", "t@t.t", cwd=tmp_path)
+        _git("config", "user.name", "t", cwd=tmp_path)
+        (tmp_path / "docs" / "sessions").mkdir(parents=True)
+        (tmp_path / "docs" / "INDEX.md").write_text("# Session Index\n", encoding="utf-8")
+        (tmp_path / ".gitignore").write_text("docs/sessions/*-context.yaml\n", encoding="utf-8")
+        _git("add", "-A", cwd=tmp_path)
+        _git("commit", "-qm", "seed", cwd=tmp_path)
+        return tmp_path
+
+    def _finalize(self, repo: Path, **over) -> int:
+        p = repo / ".git" / "payload.json"  # outside the working tree's status
+        p.write_text(json.dumps(base_payload(**over)), encoding="utf-8")
+        return cs.main(["--root", str(repo), "finalize", "--payload", str(p)])
+
+    def test_private_finalize_leaves_git_status_empty(self, repo: Path, capsys):
+        rows = [{"client": "system", "type": "slow-path", "desc": "d", "fix": "documented"}]
+        assert self._finalize(repo, private=True, friction_rows=rows) == 0
+        prose = repo / "docs" / "personal" / "2026-07-23 - Test Topic" / "Checkpoint.md"
+        prose.write_text("private prose", encoding="utf-8")
+        assert _git("status", "--porcelain", cwd=repo) == ""
+        assert (repo / "docs" / "INDEX.md").read_text(encoding="utf-8") == "# Session Index\n"
+        assert not (repo / "docs" / "sessions" / "2026-07-23.md").exists()
+        assert not (repo / "docs" / "friction-register.md").exists()
+        out = capsys.readouterr().out
+        assert "NOT written to the public register" in out
+        ctx = cs.load_context_text(
+            (repo / "docs" / "sessions" / "2026-07-23-context.yaml").read_text(encoding="utf-8"))
+        assert ctx["checkpoint_file"].startswith("docs/personal/")
+
+    def test_personal_section_is_private_without_the_flag(self, repo: Path):
+        assert self._finalize(repo, work_type="personal", projects=["me"], section="personal-kit") == 0
+        assert _git("status", "--porcelain", cwd=repo) == ""
+        assert (repo / "docs" / "personal" / "2026-07-23 - Test Topic").is_dir()
+
+    def test_private_minis_never_overwrite_each_other(self, repo: Path, capsys):
+        folder = repo / "docs" / "personal" / "2026-07-23 - Test Topic"
+        assert self._finalize(repo, private=True, mini=True) == 0
+        (folder / "Mini-Checkpoint-1.md").write_text("one", encoding="utf-8")
+        capsys.readouterr()
+        assert self._finalize(repo, private=True, mini=True) == 0
+        assert "Mini-Checkpoint-2.md" in capsys.readouterr().out
+        assert cs.checkpoint_filename(folder, True, private=True) == "Mini-Checkpoint-2.md"
+
+    def test_pre_private_targets_the_personal_folder(self, repo: Path, capsys):
+        cs.main(["--root", str(repo), "pre", "--topic", "T", "--date", "2026-07-23", "--private"])
+        out = capsys.readouterr().out
+        assert "personal" in out and "2026-07-23 - T" in out

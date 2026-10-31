@@ -120,3 +120,27 @@ def test_an_unverified_chart_says_it_may_be_the_chart(web):
     check = _checks(web, {"3645": _card("3645", "Credit Card - 2838")})["3645"]
     assert check["chart_verified"] is False
     assert "may be the chart that is stale" in check["detail"]
+
+
+def test_settings_lists_the_card_accounts_a_card_may_pay_through(web):
+    """Item 265 (note #124): the picker's list is every active credit-card
+    account per company, never an expense account or an inactive card,
+    and a name picked from it checks ok."""
+    options = web.get("/api/settings").json()["card_account_options"]
+    assert options == [
+        {"company": CLOUD, "org_id": CLOUD_ORG,
+         "name": "Chase Visa | 9693 | Cloud Expenses", "account_id": "444"},
+        {"company": CORP, "org_id": CORP_ORG, "name": TRAVEL, "account_id": "111"},
+        {"company": CORP, "org_id": CORP_ORG, "name": APPLE, "account_id": "112"},
+    ]
+    picked = next(o["name"] for o in options if o["company"] == CORP)
+    assert _checks(web, {"card-2838": _card("2838", picked)})["card-2838"]["status"] == "ok"
+
+
+def test_the_picker_list_round_trips_through_a_whole_object_put(web):
+    """The SPA sends the settings object back whole: the derived list is
+    accepted and ignored, never stored and never refused."""
+    body = web.get("/api/settings").json()
+    r = web.put("/api/settings", json=body)
+    assert r.status_code == 200, r.text
+    assert web.get("/api/settings").json()["card_account_options"] == body["card_account_options"]
