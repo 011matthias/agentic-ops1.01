@@ -22,6 +22,9 @@ waiting for a click. A stranger's still waits, and still alerts. Decision logic 
 through its decision functions and its handler, never a real socket. See
 web/intake_mail.py + web/smtp_server.py."""
 from __future__ import annotations
+# pii-allow: no personal addresses here: example domains, made-up consumer
+# mailboxes, vendor billing senders, and @brisken.com aliases or the three
+# staff work addresses .claude/rules/ already names.
 
 import asyncio
 import calendar
@@ -315,7 +318,7 @@ def test_an_outside_submitter_gets_no_acknowledgement(monkeypatch):
     # The one exception is explicit and per call: an outside address the
     # operator LISTED. The same recipient is refused without the list and
     # passes with it, so the widening is the list and nothing else.
-    private = "dirk_.neumann@icloud.com"
+    private = "private.sender@icloud.com"
     assert graph_notify.send_mail(private, "s", "b") is False
     assert reached_network == ["token"]
     graph_notify.send_mail(private, "s", "b", allow_external=(private,))
@@ -2426,7 +2429,7 @@ def test_a_listed_private_address_gets_the_ack(client, monkeypatch):
     identical from his chair. That is the question that took a whole
     session to answer on 2026-08-24."""
     calls = _patch_notify(monkeypatch)
-    private = "dirk_.neumann@icloud.com"
+    private = "private.sender@icloud.com"
     resp = client.put("/api/settings", json={
         "intake": {"known_senders": [private.upper()]}
     })
@@ -2467,11 +2470,11 @@ def test_known_senders_settings_validation():
     from expense_recon.web.intake_mail import MAX_KNOWN_SENDERS
 
     ok = normalize_intake_setting({"known_senders": [
-        "Dirk_.Neumann@icloud.com", "dirk_.neumann@icloud.com",
+        "Private.Sender@icloud.com", "private.sender@icloud.com",
     ]})
-    assert ok["known_senders"] == ["dirk_.neumann@icloud.com"]
+    assert ok["known_senders"] == ["private.sender@icloud.com"]
     for bad in (
-        {"known_senders": "dirk@icloud.com"},          # not a list
+        {"known_senders": "someone@icloud.com"},          # not a list
         {"known_senders": ["not-an-address"]},
         {"known_senders": ["a@b.com,c@d.com"]},        # two smuggled as one
         {"known_senders": ["a@b.com\nbcc: x@y.com"]},  # header injection
@@ -2487,10 +2490,10 @@ def test_a_malformed_known_sender_in_stored_settings_is_ignored():
     """The PUT edge refuses a bad list. A settings blob edited around it
     has to degrade to "not known", never take the mailbox down."""
     cfg = IntakeConfig.from_settings({"intake": {"known_senders": [
-        "dirk_.neumann@icloud.com", "oops", "x@y.com,z@q.com", 7,
+        "private.sender@icloud.com", "oops", "x@y.com,z@q.com", 7,
     ]}})
-    assert cfg.known_senders == ("dirk_.neumann@icloud.com",)
-    assert is_known_sender("Dirk_.Neumann@icloud.com", cfg)
+    assert cfg.known_senders == ("private.sender@icloud.com",)
+    assert is_known_sender("Private.Sender@icloud.com", cfg)
     assert is_known_sender("anyone@brisken.com", cfg)
     assert not is_known_sender("oops", cfg)
     assert not is_known_sender("stranger@example.org", cfg)
@@ -2529,7 +2532,7 @@ def test_a_listed_senders_body_only_mail_renders_itself(client, monkeypatch):
     """One list, both halves: an address an operator listed is known for
     the render decision too, so Dirk forwarding from his private mailbox
     behaves exactly like Dirk forwarding from his work one."""
-    private = "dirk_.neumann@icloud.com"
+    private = "private.sender@icloud.com"
     assert client.put("/api/settings", json={
         "intake": {"known_senders": [private]}
     }).status_code == 200
@@ -2752,7 +2755,7 @@ def test_a_listed_outside_sender_is_told_and_a_stranger_is_not(
     tells the listed private address; a stranger's held mail reaches the
     operator and nobody else."""
     sent, _down = _patch_graph_wire(monkeypatch)
-    private = "dirk_.neumann@icloud.com"
+    private = "private.sender@icloud.com"
     resp = client.put("/api/settings", json={
         "intake": {"known_senders": [private]}
     })
@@ -3441,7 +3444,7 @@ def test_a_month_the_mail_creates_classifies_by_the_senders_note(
         "BTS only\n\n"
         "From: Lovable Labs Incorporated <invoice+statements@lovable.dev>\n"
         "Date: Monday, August 31, 2026 at 3:53 AM\n"
-        "To: dirk@neumanns.org\n"
+        "To: dirk@family.example\n"
         "Subject: Your receipt from Lovable Labs Incorporated\n\n"
         "Receipt from Lovable Labs Incorporated\n$15.00\n"
     )
