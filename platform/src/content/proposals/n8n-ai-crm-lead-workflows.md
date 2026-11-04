@@ -60,7 +60,7 @@ The team runs lead management across several tools with manual CRM updates, manu
 
 ## Our Proposed Solution
 
-An n8n pipeline with a Postgres idempotency table in front of every write, CRM upserts keyed on email, bounded retries with a dead-letter table and replay endpoint, schema-validated LLM output with a confidence threshold, a field allowlist for AI writes, and an approval queue where each draft is approved by exact text and sent once by ID.
+An n8n pipeline with a Postgres idempotency table in front of every write, every CRM write an upsert keyed on email, bounded retries with a dead-letter table and replay endpoint, schema-validated LLM output with a confidence threshold, a field allowlist for AI writes, and an approval queue where each draft is approved by exact text and sent once by ID.
 
 ## Timeline & Milestones
 
