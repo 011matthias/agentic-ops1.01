@@ -10,7 +10,7 @@ status: draft
 track: 1
 created: "2026-11-04"
 sent: null
-value_estimate: "$4,200 fixed in 3 phases ($1,400 / $1,600 / $1,200); Phase 1 standalone"
+value_estimate: "$3,500 fixed in 3 phases ($1,000 / $1,500 / $1,000); Phase 1 standalone"
 timeline: "4 to 5 weeks across the three phases (estimate, not stated in the letter)"
 tags: [n8n, fastapi, python, hubspot, gohighlevel, ai-lead-qualification, human-approval, postgres]
 access_code: ""
@@ -46,7 +46,7 @@ research:
     - "About 20 live n8n workflows against a CRM API for a heating-installation company, with error handler and watchdog (Warme Wimmer, run by Matthias since 2026-10-06; live count read 2026-11-04: 25 total, 21 active incl. 2 test duplicates)"
     - "FastAPI + LLM receipt reading with human confirmation, model guesses never reach the accounting system, duplicate-charge folding (Brisken expense recon, workspace/clients/brisken/status/p1-expense-reconciliation.md)"
     - "Per-message approval gate with exact-text hash, edit voids approval, one dispatch claim per message; built and drilled, sender dormant (Brisken Lead Desk, workspace/clients/brisken/status/p2-outreach-engine.md)"
-  budget_gap: "No budget posted. Client history $30.37/hr avg over 307 hours, about $650 per hire across 17 hires. $4,200 total is well above their typical job; Phase 1 at $1,400 standalone is the entry ticket."
+  budget_gap: "No budget posted. Client history $30.37/hr avg over 307 hours, about $650 per hire across 17 hires. $3,500 total is well above their typical job; Phase 1 at $1,000 standalone is the entry ticket."
   profile_cherry_picks:
     - "Lead with their own three failure classes and answer each with one control; that is the To Apply question"
     - "n8n + CRM proof is the WW setup, claimed as run and maintain, not built (Nico built it)"
@@ -72,7 +72,7 @@ An n8n pipeline with a Postgres idempotency table in front of every write, every
 
 ## Investment
 
-Fixed-price, about $4,200 in total: Phase 1 $1,400, Phase 2 $1,600, Phase 3 $1,200. Phase 1 stands on its own.
+Fixed-price, about $3,500 in total: Phase 1 $1,000, Phase 2 $1,500, Phase 3 $1,000. Phase 1 stands on its own.
 
 ## About UnpauseAI
 
@@ -80,4 +80,4 @@ Matthias applies within UnpauseAI, an EU-based automation consultancy; engagemen
 
 ## Research Notes
 
-Anonymous posting, budget not visible in the screenshot. Letter only per owner decision 2026-11-04 (no Loom guide, no site, nothing published to unpauseai.com). Proof points confirmed by the owner for this proposal; the WW workflow count was read live from the n8n API on 2026-11-04. HubSpot batch upsert accepts email as idProperty; GoHighLevel's /contacts/upsert follows the location's "Allow Duplicate Contact" setting (both checked 2026-11-04).
+Anonymous posting, budget not visible in the screenshot. Letter only per owner decision 2026-11-04 (no Loom guide, no site, nothing published to unpauseai.com). Proof points confirmed by the owner for this proposal; the WW workflow count was read live from the n8n API on 2026-11-04. HubSpot batch upsert accepts email as idProperty; GoHighLevel's /contacts/upsert follows the location's "Allow Duplicate Contact" setting (both checked 2026-11-04). Price set by the owner on 2026-11-04 to $3,500 ($1,000 / $1,500 / $1,000), replacing the first $4,200 draft. Two attachments sit beside the cover letter: a two-page brief PDF (pipeline diagram, the three controls, delivery table) and a stage-one n8n workflow JSON.

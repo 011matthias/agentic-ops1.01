@@ -1,0 +1,480 @@
+{
+  "name": "Lead intake: dedupe, qualify, review (skeleton)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Lead intake: dedupe, qualify, review (skeleton)\nFirst stage of the proposed pipeline, shared with the proposal.\n\n- Every lead gets one **idempotency key** before anything else runs.\n- AI output only reaches the CRM when it is **valid and confident**; everything else goes to a person.\n- Any failed call lands in **dead-letter** with its payload, ready to replay.\n- **Sending is deliberately not in this workflow.** Drafts wait in an approval queue; a person approves the exact text and the service sends each message once, by its ID.\n\nTo run: add a Postgres credential to the three Postgres nodes, point `lead-service` at the FastAPI service, set this workflow's Error Workflow (Settings) to your alerting workflow.",
+        "height": 380,
+        "width": 760,
+        "color": 5
+      },
+      "id": "a4c57f68-15b0-43c2-a596-be9cd081f7f3",
+      "name": "Read me",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -340
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 1. Duplicate records\nThe key is claimed with `ON CONFLICT DO NOTHING`. A repeated webhook or a replayed run gets no row back and stops at **Duplicate: stop here**.",
+        "height": 480,
+        "width": 680,
+        "color": 7
+      },
+      "id": "db94d00c-75b0-474d-a9c1-373f65a0e94e",
+      "name": "1. Duplicate records",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 3. Incorrect AI-generated actions\nFastAPI calls OpenAI or Claude and validates the JSON against a schema. Below the confidence threshold, or invalid: human review, not the CRM. The CRM write is an upsert keyed on email (HubSpot batch upsert with `idProperty=email`, or GoHighLevel `/contacts/upsert`) and touches only allowlisted fields.",
+        "height": 500,
+        "width": 1060,
+        "color": 6
+      },
+      "id": "73bb71cf-a7db-446e-a335-c1ebe118ab86",
+      "name": "3. Incorrect AI-generated actions",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1060,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 2. Failed executions\nn8n retries each call to the service 3 times, 5 s apart; the service retries HubSpot / GoHighLevel / the LLM on rate limits and server errors only. What still fails lands here with its error. Replay re-runs it; the idempotency key keeps a replay from writing twice.",
+        "height": 220,
+        "width": 440,
+        "color": 3
+      },
+      "id": "078c0f05-371f-4849-8786-c90ad85aa36f",
+      "name": "2. Failed executions",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        740
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Tables this workflow expects\n```sql\nCREATE TABLE lead_events (\n  id bigserial PRIMARY KEY,\n  idem_key text NOT NULL UNIQUE,\n  source text, email text, payload jsonb,\n  created_at timestamptz NOT NULL DEFAULT now());\n\nCREATE TABLE review_queue (\n  id bigserial PRIMARY KEY,\n  idem_key text NOT NULL UNIQUE,\n  reason text, model_output jsonb,\n  created_at timestamptz NOT NULL DEFAULT now());\n\nCREATE TABLE dead_letter (\n  id bigserial PRIMARY KEY,\n  failed_node text, error text, payload jsonb,\n  created_at timestamptz NOT NULL DEFAULT now(),\n  replayed_at timestamptz);\n```",
+        "height": 480,
+        "width": 760
+      },
+      "id": "89406c0e-ca29-49b4-9542-89cc493fd82a",
+      "name": "Schema",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-intake",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "53fba7fe-8616-49df-b287-78a681b17d9b",
+      "name": "Lead webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "22468dd9-e7d4-4605-b604-521301f9f827"
+    },
+    {
+      "parameters": {
+        "jsCode": "// One idempotency key per lead: the source plus that source's own lead ID,\n// falling back to the normalized email. The same lead arriving twice gets the same key.\nreturn $input.all().map((item) => {\n  const b = item.json.body ?? item.json;\n  const email = String(b.email ?? '').trim().toLowerCase();\n  const source = String(b.source ?? 'web').trim().toLowerCase();\n  const sourceId = String(b.lead_id ?? b.id ?? '').trim();\n  if (!email && !sourceId) {\n    // Nothing to deduplicate on: fail loudly so the error workflow alerts a person.\n    throw new Error(`Lead from \"${source}\" has neither an ID nor an email`);\n  }\n  return {\n    json: {\n      idem_key: `${source}:${sourceId || email}`,\n      source,\n      email,\n      first_name: b.first_name ?? null,\n      last_name: b.last_name ?? null,\n      company: b.company ?? null,\n      message: b.message ?? null,\n      raw: b,\n    },\n  };\n});"
+      },
+      "id": "786eb555-c384-4ad3-841c-c1c895369b19",
+      "name": "Normalize + idempotency key",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO lead_events (idem_key, source, email, payload)\nVALUES ($1, $2, $3, $4::jsonb)\nON CONFLICT (idem_key) DO NOTHING\nRETURNING id;",
+        "options": {
+          "queryReplacement": "={{ [$json.idem_key, $json.source, $json.email, JSON.stringify($json.raw)] }}"
+        }
+      },
+      "id": "0bb89fba-e32b-43e5-9085-487978316e04",
+      "name": "Claim key (skip duplicates)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        540,
+        300
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cbde8f7a-cfb7-4106-9c58-7e0400a1506b",
+              "leftValue": "={{ $json.id }}",
+              "operator": {
+                "type": "number",
+                "operation": "exists",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f5c756bd-b079-43c3-9b10-5baa30673d15",
+      "name": "New lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        780,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "a77bbee9-7f24-4e6a-9dde-793591c38acc",
+      "name": "Duplicate: stop here",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        780,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://lead-service:8000/leads/qualify",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ $('Normalize + idempotency key').item.json.idem_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Normalize + idempotency key').item.json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "1bf8e313-4d9e-4000-a2ee-17bd904a7ac0",
+      "name": "Qualify lead (FastAPI + LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "14b07d0f-0cf7-4f00-87a6-dce5aed29544",
+              "leftValue": "={{ $json.valid }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "rightValue": ""
+            },
+            {
+              "id": "384f64a2-6624-4088-a3f4-2b51fc910ea1",
+              "leftValue": "={{ $json.confidence }}",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              },
+              "rightValue": 0.7
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3c44fbaa-3cf3-46b0-a696-b8879e1ce6c4",
+      "name": "Valid and confident?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1380,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://lead-service:8000/crm/upsert",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ $('Normalize + idempotency key').item.json.idem_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ email: $('Normalize + idempotency key').item.json.email, fields: { lead_score: $json.score, ai_summary: $json.summary } }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "6927aac4-5f34-4602-8121-1f8a6784c917",
+      "name": "CRM sync (upsert by email)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1660,
+        180
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://lead-service:8000/drafts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ $('Normalize + idempotency key').item.json.idem_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ email: $('Normalize + idempotency key').item.json.email, summary: $('Qualify lead (FastAPI + LLM)').item.json.summary }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "81153a29-8237-4c2d-bd2d-7ba7db3c4b3f",
+      "name": "Create draft (approval queue)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1960,
+        180
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO review_queue (idem_key, reason, model_output)\nVALUES ($1, $2, $3::jsonb)\nON CONFLICT (idem_key) DO NOTHING;",
+        "options": {
+          "queryReplacement": "={{ [$('Normalize + idempotency key').item.json.idem_key, $json.valid ? 'low_confidence' : 'failed_schema', JSON.stringify($json)] }}"
+        }
+      },
+      "id": "9e3de8e2-d763-4c32-a410-550d4e78c22b",
+      "name": "Human review queue",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1660,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO dead_letter (failed_node, error, payload)\nVALUES ($1, $2, $3::jsonb);",
+        "options": {
+          "queryReplacement": "={{ [$prevNode.name, $json.error?.message ?? JSON.stringify($json.error ?? 'unknown'), JSON.stringify($json)] }}"
+        }
+      },
+      "id": "404a850f-3ba4-4d6b-936c-e8b376ce0272",
+      "name": "Dead-letter",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1380,
+        780
+      ]
+    }
+  ],
+  "connections": {
+    "Lead webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize + idempotency key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize + idempotency key": {
+      "main": [
+        [
+          {
+            "node": "Claim key (skip duplicates)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim key (skip duplicates)": {
+      "main": [
+        [
+          {
+            "node": "New lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New lead?": {
+      "main": [
+        [
+          {
+            "node": "Qualify lead (FastAPI + LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Duplicate: stop here",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qualify lead (FastAPI + LLM)": {
+      "main": [
+        [
+          {
+            "node": "Valid and confident?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dead-letter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid and confident?": {
+      "main": [
+        [
+          {
+            "node": "CRM sync (upsert by email)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Human review queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM sync (upsert by email)": {
+      "main": [
+        [
+          {
+            "node": "Create draft (approval queue)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dead-letter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create draft (approval queue)": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Dead-letter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
