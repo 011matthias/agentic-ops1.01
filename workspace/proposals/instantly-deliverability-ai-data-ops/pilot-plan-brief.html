@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pilot plan</title>
+<style>
+  @page { size: A4; margin: 0; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    color: #0f172a; background: #fff;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .page {
+    width: 210mm; height: 297mm; box-sizing: border-box;
+    padding: 13mm 15mm 16mm; position: relative; overflow: hidden;
+    break-after: page;
+  }
+  .page:last-child { break-after: auto; }
+  .eyebrow { font-size: 7.5pt; letter-spacing: .09em; text-transform: uppercase; color: #2563eb; font-weight: 600; }
+  h1 { font-size: 17pt; line-height: 1.22; margin: 2.5mm 0 2mm; font-weight: 700; letter-spacing: -.01em; }
+  .byline { font-size: 8.5pt; color: #475569; }
+  .intro { font-size: 9.5pt; line-height: 1.5; color: #1e293b; margin: 4mm 0 4mm; }
+  .diagram { width: 166mm; margin: 0 auto; }
+  .diagram svg { width: 100%; height: auto; display: block; }
+  .legend { display: flex; justify-content: center; gap: 7mm; margin-top: 4mm; font-size: 8.5pt; color: #334155; }
+  .legend span { display: inline-flex; align-items: center; gap: 1.6mm; }
+  .dot { font-style: normal; display: inline-flex; width: 4.4mm; height: 4.4mm; border-radius: 50%; color: #fff; font-size: 7pt; font-weight: 700; align-items: center; justify-content: center; }
+  .b1 { background: #7c3aed; } .b2 { background: #2563eb; } .b3 { background: #d97706; }
+  .control { border-left: 3px solid; padding: 2.6mm 4mm 2.6mm 4mm; margin-bottom: 3.2mm; border-radius: 0 2mm 2mm 0; }
+  .control.c1 { border-color: #7c3aed; background: #f8f6ff; }
+  .control.c2 { border-color: #2563eb; background: #f5f8ff; }
+  h2 { font-size: 11pt; margin: 0 0 1.6mm; display: flex; align-items: center; gap: 2mm; }
+  h3 { font-size: 10.5pt; margin: 4.5mm 0 2mm; }
+  ul { margin: 0; padding-left: 4.5mm; }
+  li { font-size: 8.9pt; line-height: 1.45; margin: 0 0 1.1mm; color: #1e293b; }
+  li:last-child { margin-bottom: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 8.7pt; }
+  th { text-align: left; font-weight: 600; color: #475569; border-bottom: 1.2px solid #cbd5e1; padding: 1.4mm 2mm; font-size: 8pt; }
+  td { padding: 1.5mm 2mm; border-bottom: 1px solid #e2e8f0; vertical-align: top; color: #1e293b; line-height: 1.4; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  td.wk { white-space: nowrap; font-weight: 600; }
+  tr.total td { font-weight: 700; border-bottom: none; border-top: 1.2px solid #cbd5e1; }
+  .built li b { color: #0f172a; }
+  .attach { margin-top: 4mm; border: 1px solid #cbd5e1; border-radius: 2mm; padding: 2.6mm 4mm; font-size: 8.7pt; line-height: 1.45; color: #1e293b; }
+  .attach code { font-family: Consolas, monospace; font-size: 8.3pt; background: #f1f5f9; padding: .2mm 1mm; border-radius: 1mm; }
+  footer { position: absolute; left: 15mm; right: 15mm; bottom: 8mm; display: flex; justify-content: space-between; font-size: 7.5pt; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 2mm; }
+</style>
+</head>
+<body>
+
+<section class="page">
+  <div class="eyebrow">UnpauseAI · Pilot plan</div>
+  <h1>From ICP brief to launched campaign, with a check at each place a list usually goes wrong</h1>
+  <div class="byline">Prepared for Assivo · Matthias, UnpauseAI · 4 November 2026</div>
+  <p class="intro">The four ICP lists each week run through one n8n workflow. The model does the company research; nothing reaches Instantly without a source behind its score, an address that is safe to send to, and a dedupe against every live campaign. The senders are watched every day the lists are sending.</p>
+
+  <div class="diagram">
+  <svg viewBox="-12 -4 704 750" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+      </marker>
+      <marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="#d97706"/>
+      </marker>
+    </defs>
+    <style>
+      .t { font-size: 13px; font-weight: 600; fill: #0f172a; }
+      .s { font-size: 10.5px; fill: #475569; }
+      .tag { font-size: 10px; fill: #64748b; font-weight: 600; }
+      .n { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.2; }
+      .k1 { fill: #f5f3ff; stroke: #7c3aed; stroke-width: 1.6; }
+      .k2 { fill: #eff6ff; stroke: #2563eb; stroke-width: 1.6; }
+      .ok { fill: #ecfdf5; stroke: #059669; stroke-width: 1.6; }
+      .stop { fill: #f1f5f9; stroke: #94a3b8; stroke-width: 1.2; stroke-dasharray: 4 3; }
+      .line { stroke: #64748b; stroke-width: 1.4; fill: none; }
+      .err { stroke: #d97706; stroke-width: 1.3; fill: none; stroke-dasharray: 4 3; }
+      .badge text { font-size: 10.5px; font-weight: 700; fill: #fff; }
+    </style>
+
+    <!-- main column: x 200..500, centre 350 -->
+    <rect class="n" x="200" y="0" width="300" height="50" rx="8"/>
+    <text class="t" x="350" y="21" text-anchor="middle">Your ICP brief</text>
+    <text class="s" x="350" y="38" text-anchor="middle">industry, size, region, buying signal, exclusions</text>
+    <line class="line" x1="350" y1="50" x2="350" y2="75" marker-end="url(#ar)"/>
+
+    <rect class="n" x="200" y="76" width="300" height="50" rx="8"/>
+    <text class="t" x="350" y="97" text-anchor="middle">Company sourcing</text>
+    <text class="s" x="350" y="114" text-anchor="middle">sources that fit the ICP; database exports as a fallback</text>
+    <line class="line" x1="350" y1="126" x2="350" y2="151" marker-end="url(#ar)"/>
+
+    <rect class="n" x="200" y="152" width="300" height="50" rx="8"/>
+    <text class="t" x="350" y="173" text-anchor="middle">n8n: research each company</text>
+    <text class="s" x="350" y="190" text-anchor="middle">site + search results to Claude, GPT or Gemini</text>
+    <line class="line" x1="350" y1="202" x2="350" y2="227" marker-end="url(#ar)"/>
+
+    <polygon class="k1" points="218,228 482,228 500,253 482,278 218,278 200,253"/>
+    <text class="t" x="350" y="249" text-anchor="middle">Sourced and over the line?</text>
+    <text class="s" x="350" y="266" text-anchor="middle">JSON: score, reasons, a URL per claim</text>
+    <g class="badge"><circle cx="212" cy="230" r="10" fill="#7c3aed"/><text x="212" y="234" text-anchor="middle">1</text></g>
+    <line class="line" x1="500" y1="253" x2="534" y2="253" marker-end="url(#ar)"/>
+    <text class="tag" x="510" y="246">no</text>
+    <rect class="k1" x="535" y="228" width="145" height="50" rx="8"/>
+    <text class="t" x="607" y="249" text-anchor="middle">Review tab</text>
+    <text class="s" x="607" y="266" text-anchor="middle">a person decides</text>
+    <line class="line" x1="350" y1="278" x2="350" y2="303" marker-end="url(#ar)"/>
+    <text class="tag" x="358" y="295">yes</text>
+
+    <rect class="n" x="200" y="304" width="300" height="50" rx="8"/>
+    <text class="t" x="350" y="325" text-anchor="middle">Find the right contact</text>
+    <text class="s" x="350" y="342" text-anchor="middle">role from your brief · email found and verified</text>
+    <line class="line" x1="350" y1="354" x2="350" y2="379" marker-end="url(#ar)"/>
+
+    <polygon class="k2" points="218,380 482,380 500,405 482,430 218,430 200,405"/>
+    <text class="t" x="350" y="401" text-anchor="middle">Safe to send?</text>
+    <text class="s" x="350" y="418" text-anchor="middle">verifier read per provider · mail server (MX)</text>
+    <g class="badge"><circle cx="212" cy="382" r="10" fill="#2563eb"/><text x="212" y="386" text-anchor="middle">2</text></g>
+    <line class="line" x1="500" y1="405" x2="534" y2="405" marker-end="url(#ar)"/>
+    <text class="tag" x="510" y="398">no</text>
+    <rect class="stop" x="535" y="380" width="145" height="50" rx="8"/>
+    <text class="t" x="607" y="401" text-anchor="middle" style="fill:#475569">Held</text>
+    <text class="s" x="607" y="418" text-anchor="middle">Mimecast, no MX, invalid</text>
+    <line class="line" x1="350" y1="430" x2="350" y2="455" marker-end="url(#ar)"/>
+    <text class="tag" x="358" y="447">yes</text>
+
+    <polygon class="k2" points="218,456 482,456 500,481 482,506 218,506 200,481"/>
+    <text class="t" x="350" y="477" text-anchor="middle">Not contacted yet?</text>
+    <text class="s" x="350" y="494" text-anchor="middle">live campaigns, suppression, open threads</text>
+    <g class="badge"><circle cx="212" cy="458" r="10" fill="#2563eb"/><text x="212" y="462" text-anchor="middle">2</text></g>
+    <line class="line" x1="500" y1="481" x2="534" y2="481" marker-end="url(#ar)"/>
+    <text class="tag" x="510" y="474">no</text>
+    <rect class="stop" x="535" y="456" width="145" height="50" rx="8"/>
+    <text class="t" x="607" y="477" text-anchor="middle" style="fill:#475569">Dropped</text>
+    <text class="s" x="607" y="494" text-anchor="middle">nobody gets two campaigns</text>
+    <line class="line" x1="350" y1="506" x2="350" y2="531" marker-end="url(#ar)"/>
+    <text class="tag" x="358" y="523">yes</text>
+
+    <rect class="k1" x="200" y="532" width="300" height="50" rx="8"/>
+    <text class="t" x="350" y="553" text-anchor="middle">Hand check</text>
+    <text class="s" x="350" y="570" text-anchor="middle">20 rows against their sources before the list loads</text>
+    <g class="badge"><circle cx="200" cy="532" r="10" fill="#7c3aed"/><text x="200" y="536" text-anchor="middle">1</text></g>
+    <line class="line" x1="350" y1="582" x2="350" y2="607" marker-end="url(#ar)"/>
+
+    <rect class="ok" x="200" y="608" width="300" height="50" rx="8"/>
+    <text class="t" x="350" y="629" text-anchor="middle">Pre-launch check, then launch</text>
+    <text class="s" x="350" y="646" text-anchor="middle">senders, limits, step delays, merge fields</text>
+
+    <!-- sending-health panel: x 0..165 -->
+    <rect x="0" y="228" width="165" height="430" rx="10" fill="#fffbeb" stroke="#d97706" stroke-width="1.6"/>
+    <g class="badge"><circle cx="0" cy="228" r="10" fill="#d97706"/><text x="0" y="232" text-anchor="middle">3</text></g>
+    <text class="t" x="82" y="252" text-anchor="middle">Sending health</text>
+    <text class="s" x="82" y="268" text-anchor="middle">every sending day</text>
+
+    <rect x="12" y="282" width="141" height="62" rx="6" fill="#fff" stroke="#f0c27a"/>
+    <text class="t" x="82" y="302" text-anchor="middle" style="font-size:12px">Domain auth</text>
+    <text class="s" x="82" y="318" text-anchor="middle">SPF, DKIM, DMARC</text>
+    <text class="s" x="82" y="332" text-anchor="middle">and MX per domain</text>
+    <line class="line" x1="82" y1="344" x2="82" y2="363" marker-end="url(#ar)"/>
+
+    <rect x="12" y="364" width="141" height="62" rx="6" fill="#fff" stroke="#f0c27a"/>
+    <text class="t" x="82" y="384" text-anchor="middle" style="font-size:12px">Each mailbox</text>
+    <text class="s" x="82" y="400" text-anchor="middle">warmup state, score,</text>
+    <text class="s" x="82" y="414" text-anchor="middle">daily limit</text>
+    <line class="line" x1="82" y1="426" x2="82" y2="445" marker-end="url(#ar)"/>
+
+    <rect x="12" y="446" width="141" height="62" rx="6" fill="#fff" stroke="#f0c27a"/>
+    <text class="t" x="82" y="466" text-anchor="middle" style="font-size:12px">Bounces by server</text>
+    <text class="s" x="82" y="482" text-anchor="middle">Mimecast, Microsoft,</text>
+    <text class="s" x="82" y="496" text-anchor="middle">Google, Proofpoint</text>
+    <line class="line" x1="82" y1="508" x2="82" y2="527" marker-end="url(#ar)"/>
+
+    <rect x="12" y="528" width="141" height="62" rx="6" fill="#fff" stroke="#f0c27a"/>
+    <text class="t" x="82" y="548" text-anchor="middle" style="font-size:12px">Seed placement</text>
+    <text class="s" x="82" y="564" text-anchor="middle">Gmail, Outlook,</text>
+    <text class="s" x="82" y="578" text-anchor="middle">Microsoft 365 business</text>
+
+    <text class="s" x="82" y="612" text-anchor="middle" style="font-style:italic">volume goes up only</text>
+    <text class="s" x="82" y="626" text-anchor="middle" style="font-style:italic">where placement holds</text>
+
+    <line class="err" x1="200" y1="633" x2="166" y2="633" marker-end="url(#ao)"/>
+    <text class="tag" x="183" y="647" text-anchor="middle" style="fill:#b45309;font-size:8px">watched</text>
+
+    <!-- weekly report -->
+    <rect x="0" y="688" width="680" height="54" rx="10" fill="#fffbeb" stroke="#d97706" stroke-width="1.2"/>
+    <g class="badge"><circle cx="0" cy="688" r="10" fill="#d97706"/><text x="0" y="692" text-anchor="middle">3</text></g>
+    <text class="t" x="340" y="710" text-anchor="middle">Weekly report, per campaign: sent, bounced, human replies, automatic replies, meetings</text>
+    <text class="s" x="340" y="728" text-anchor="middle">computed from the campaign records, never typed by hand</text>
+  </svg>
+  </div>
+
+  <div class="legend">
+    <span><i class="dot b1">1</i>Every score has a source</span>
+    <span><i class="dot b2">2</i>Every address is safe and new</span>
+    <span><i class="dot b3">3</i>Sending health and reporting</span>
+  </div>
+
+  <footer><span>Pilot plan · UnpauseAI</span><span>Page 1 of 2</span></footer>
+</section>
+
+<section class="page">
+  <div class="control c1">
+    <h2><i class="dot b1">1</i>Every score has a source</h2>
+    <ul>
+      <li>The model gets your ICP brief, the company's site and search results, and returns JSON: a fit score, the reasons, and a source URL for each claim.</li>
+      <li>Output that fails the schema, cites nothing, or scores under the line goes to a review tab, not the list.</li>
+      <li>Before a list loads, 20 rows are checked by hand against their sources. Where my read and the model's disagree, the prompt changes before the list ships.</li>
+    </ul>
+  </div>
+
+  <div class="control c2">
+    <h2><i class="dot b2">2</i>Every address is safe and new</h2>
+    <ul>
+      <li>A verifier checks that a mailbox exists, not that its mail server accepts cold mail. NeverBounce-valid addresses behind Mimecast bounced 10 times in 11 sends; behind Microsoft, once in 80.</li>
+      <li>The reverse holds too: "unknown" on Hotmail, iCloud and NHS is the server refusing the probe. All 335 such addresses we could check had already received mail, so they stay.</li>
+      <li>Each domain's mail server is read at load; Mimecast and no-MX addresses are held. Dedupe runs against every live campaign, the suppression list and open threads.</li>
+    </ul>
+  </div>
+
+  <h3>Week 1: the audit</h3>
+  <table>
+    <thead><tr><th style="width:36%">Check</th><th>What it catches</th></tr></thead>
+    <tbody>
+      <tr><td>SPF, DKIM, DMARC and MX on every sending domain</td><td>Domains that can't authenticate or receive replies. In one audit of 53 purchased domains, none had MX records and 3 had SPF and DKIM.</td></tr>
+      <tr><td>Warmup, daily limit and bounces per mailbox, grouped by recipient mail server</td><td>Senders that dropped out of the warmup pool (three mailboxes on a domain missing from DNS), and gateway blocks a list verifier can't see.</td></tr>
+      <tr><td>Seed-inbox placement on Gmail, Outlook and Microsoft 365 business</td><td>Inbox or spam per provider, before volume goes up.</td></tr>
+      <tr><td>Step delays and merge fields in every live sequence</td><td>Instantly puts the delay on the earlier step; a 0 there sends the follow-up minutes after the first email.</td></tr>
+      <tr><td>Report figures recomputed from the campaign records</td><td>Hand-typed numbers. One report said 34 people in conversation; the database said 40.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Four weeks, against the posted milestones</h3>
+  <table>
+    <thead><tr><th>Week</th><th>Deliverability ($80)</th><th>Data operations ($120)</th></tr></thead>
+    <tbody>
+      <tr><td class="wk">1</td><td>Audit and findings list, fixes in order</td><td>Research workflow built on your first ICP briefs; the week's lists go through it</td></tr>
+      <tr><td class="wk">2</td><td>Fixes applied, seed tests repeated, daily sender checks</td><td>Four ICP lists through the workflow</td></tr>
+      <tr><td class="wk">3</td><td>Pre-launch check on every campaign; volume up only where placement holds</td><td>Four lists; scoring adjusted from week 2's replies</td></tr>
+      <tr><td class="wk">4</td><td>Monitoring and a written runbook for the ongoing weeks</td><td>Four lists; workflow documented for the ongoing weeks</td></tr>
+      <tr class="total"><td></td><td>Total, fixed price</td><td class="num">$800</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Built before <span style="font-weight:400;color:#475569;font-size:8.7pt">(charts in the attached outbound-case-study.pdf)</span></h3>
+  <ul class="built">
+    <li><b>UK events company, Instantly since May:</b> three sending domains on Google Workspace. Corporate bounce rate went 8.6%, then 1.5%, then 0% over three waves; a 773-person re-engagement bounced 0.6%.</li>
+    <li><b>Treasury-software company:</b> a lead desk that replaced nine scattered sources, each contact's stage computed from an event log and a daily mailbox scan. Conference follow-up: 127 reached, 40 in conversation, 20 meetings booked.</li>
+    <li><b>Finance team:</b> Gemini and OpenAI in a production receipt pipeline. The model proposes, a person confirms, and nothing it guessed reaches the books.</li>
+  </ul>
+
+  <footer><span>Pilot plan · UnpauseAI</span><span>Page 2 of 2</span></footer>
+</section>
+
+</body>
+</html>
