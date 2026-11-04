@@ -10,7 +10,7 @@ status: draft
 track: 1
 created: "2026-11-04"
 sent: null
-value_estimate: "$800 fixed four-week pilot ($200/week: $80 deliverability + $120 data operations), then $200/week ongoing; client-set"
+value_estimate: "$1,400 fixed four-week pilot bid ($350/week: $140 deliverability + $210 data operations), owner-set 2026-11-04 against the posted $800 ($200/week); ongoing rate not stated"
 timeline: "four weeks, then weekly"
 tags: [instantly, deliverability, google-workspace, microsoft-365, icp, ai-research, lead-scoring, enrichment, n8n, claude, openai, gemini]
 access_code: ""
@@ -63,7 +63,7 @@ A week-one audit of every sending domain and mailbox with a findings list, then 
 
 ## Timeline & Milestones
 
-| Week | Deliverability ($80) | Data operations ($120) |
+| Week | Deliverability ($140) | Data operations ($210) |
 |------|----------------------|------------------------|
 | 1 | Audit and findings list | Research workflow built on the first ICP briefs |
 | 2 | Fixes applied, seed tests repeated | Four ICP lists |
@@ -72,7 +72,7 @@ A week-one audit of every sending domain and mailbox with a findings list, then 
 
 ## Investment
 
-Client-set: $800 fixed for the four-week pilot, $200 a week ongoing after it.
+Bid $1,400 fixed for the four-week pilot: four milestones of $350 (owner-set 2026-11-04). The posting offered $800 ($200 a week) and $200 a week ongoing; the letter states the gap and its reason, and names no ongoing rate.
 
 ## About UnpauseAI
 

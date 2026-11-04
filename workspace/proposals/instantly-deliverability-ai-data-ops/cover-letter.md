@@ -17,7 +17,7 @@ Two files attached: a two-page case study with the numbers behind the examples b
 3) How I'd start
 Week 1: audit every sending domain (SPF, DKIM, DMARC, MX) and every mailbox (warmup, limits, bounces and replies per sender), run seed-inbox placement on Gmail, Outlook and Microsoft 365 business, and send a findings list with the fixes in order. The research workflow gets built on your first ICP briefs, so week one's campaigns ship on it. Weeks 2 to 4 run four lists a week through it, each launched after a read-only check against the Instantly API: senders, limits, the delay on every step, merge fields, dedupe against every live campaign. The weekly report counts human replies apart from automatic ones: in the November wave all 12 replies were out-of-office notices.
 
-The $800 pilot and the weekly milestones work for me as posted. I work within UnpauseAI, an EU-based automation consultancy, and do this work myself. I'm in Karlsruhe, Germany, nine hours ahead of Los Angeles, so lists and checks are ready by your morning.
+I've priced the pilot at $350 a week, $1,400 for the four weeks, above the posted $800: four researched and verified lists a week plus the sending work runs past what $200 covers, and the checks above are where those hours go. I work within UnpauseAI, an EU-based automation consultancy, and do this work myself. I'm in Karlsruhe, Germany, nine hours ahead of Los Angeles, so lists and checks are ready by your morning.
 
 How many sending domains and mailboxes are in the account today, and how are they split between Google Workspace and Microsoft 365?
 
