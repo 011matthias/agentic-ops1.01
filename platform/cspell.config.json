@@ -219,10 +219,6 @@
     ".next",
     "drizzle",
     "node_modules",
-    "package-lock.json",
-    "src/app/api/wimmer-comments/**",
-    "src/app/api/wimmer-triage-feedback/**",
-    "src/app/docs/warme-wimmer/**",
-    "src/lib/triage-log.ts"
+    "package-lock.json"
   ]
 }
