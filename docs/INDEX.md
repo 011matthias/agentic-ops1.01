@@ -525,7 +525,6 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-10-29 | Repo Layout Execution Batch 2 | system-infra | [Mini-Checkpoint-1](docs/2026-10-29%20-%20Repo%20Layout%20Execution%20Batch%202/Mini-Checkpoint-1.md) |
 | 2026-10-28 | Repo Layout Execution Batch 1 | system-infra | [Mini-Checkpoint-1](docs/2026-10-28%20-%20Repo%20Layout%20Execution%20Batch%201/Mini-Checkpoint-1.md) |
 | 2026-10-28 | Repo Layout Audit | system-infra | [→](docs/2026-10-28%20-%20Repo%20Layout%20Audit/Checkpoint.md) |
-| 2026-10-07 | Jotform Warme Wimmer Vault Entry | misc | [Mini-Checkpoint-1](docs/2026-10-07%20-%20Jotform%20Warme%20Wimmer%20Vault%20Entry/Mini-Checkpoint-1.md) |
 | 2026-10-07 | Zapier MCP Connector Setup | system-infra | [→](docs/2026-10-07%20-%20Zapier%20MCP%20Connector%20Setup/Checkpoint.md) |
 | 2026-10-05 | Handyvertrag HIGH Verlaengerung | misc | [→](docs/2026-10-05%20-%20Handyvertrag%20HIGH%20Verlaengerung/Checkpoint.md) |
 | 2026-09-21 | Friction Register Voids Closed | system-infra | [→](docs/2026-09-21%20-%20Friction%20Register%20Voids%20Closed/Checkpoint.md) |
@@ -789,21 +788,4 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-09-08 | Vinted Watcher Outage Fix + Knowledge Base | client-dev | [→](docs/2026-09-08%20-%20Vinted%20Watcher%20Outage%20Fix%20%2B%20Knowledge%20Base/Checkpoint.md) |
 
 ## warme-wimmer
-| Date | Topic | Type | Link |
-|------|-------|------|------|
-| 2026-10-30 | WW W1 Gap and Jessica Testseite Draft | client-dev | [→](docs/2026-10-30%20-%20WW%20W1%20Gap%20and%20Jessica%20Testseite%20Draft/Checkpoint.md) |
-| 2026-10-28 | WW W2-14 Jessica als Testempfaenger | client-dev | [→](docs/2026-10-28%20-%20WW%20W2-14%20Jessica%20als%20Testempfaenger/Checkpoint.md) |
-| 2026-10-21 | WW Hero Key And Zapier Migration Prep | client-dev | [→](docs/2026-10-21%20-%20WW%20Hero%20Key%20And%20Zapier%20Migration%20Prep/Checkpoint.md) |
-| 2026-10-21 | WW W2-14 Testseite Jetzt pruefen | client-dev | [→](docs/2026-10-21%20-%20WW%20W2-14%20Testseite%20Jetzt%20pruefen/Checkpoint.md) |
-| 2026-10-14 | WW W2-14 Startknopf und Hero-Reiter | client-dev | [→](docs/2026-10-14%20-%20WW%20W2-14%20Startknopf%20und%20Hero-Reiter/Checkpoint.md) |
-| 2026-10-13 | WW W2-14 Kalender-Ortszeit und R20-Titel | client-dev | [→](docs/2026-10-13%20-%20WW%20W2-14%20Kalender-Ortszeit%20und%20R20-Titel/Checkpoint.md) |
-| 2026-10-12 | WW W2-14 Duplicate Test Run | client-dev | [→](docs/2026-10-12%20-%20WW%20W2-14%20Duplicate%20Test%20Run/Checkpoint.md) |
-| 2026-10-11 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-3](docs/2026-10-11%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-3.md) |
-| 2026-10-11 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-2](docs/2026-10-11%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-2.md) |
-| 2026-10-11 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-1](docs/2026-10-11%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-1.md) |
-| 2026-10-09 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-4](docs/2026-10-09%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-4.md) |
-| 2026-10-09 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-3](docs/2026-10-09%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-3.md) |
-| 2026-10-09 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-2](docs/2026-10-09%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-2.md) |
-| 2026-10-09 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-1](docs/2026-10-09%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-1.md) |
-| 2026-10-07 | WW W1-06 Messeformular Zapier to n8n | client-dev | [→](docs/2026-10-07%20-%20WW%20W1-06%20Messeformular%20Zapier%20to%20n8n/Checkpoint.md) |
-| 2026-10-07 | Waerme Wimmer Takeover | client-dev | [→](docs/2026-10-07%20-%20Waerme%20Wimmer%20Takeover/Checkpoint.md) |
+Moved 2026-11-05 to the private `UnpauseAI/ClientSense` repo, `clients/warme-wimmer/agentic-ops1/docs/` (18 checkpoint files, 2026-05-07 to 2026-10-30).
