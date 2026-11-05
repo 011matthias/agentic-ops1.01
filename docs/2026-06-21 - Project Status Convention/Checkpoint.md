@@ -77,7 +77,7 @@ WIP). No client-facing action taken.
 
 1. On next `/resume brisken`, the `status/` files load; correct any element state I pitched too optimistically (p1 was kept conservative, pointing to BLUEPRINT for slice truth).
 2. When the W2 file-placement system (currently uncommitted on the user's tree) lands, add a `status/` row to the W2 home map in `rule_file_placement.md` (noted inline in `rule_project_status.md`).
-3. Roll the convention to other active clients (meji, ww) on next touch, or via an explicit pass — not back-filled now.
+3. Roll the convention to other active clients (meji, WW) on next touch, or via an explicit pass — not back-filled now.
 
 ---
 
