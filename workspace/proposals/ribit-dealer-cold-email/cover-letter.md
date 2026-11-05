@@ -37,5 +37,5 @@ event-log reporting from the case study section 3 and `workspace/clients/brisken
 automatic replies on the 134-person October run from the case study and `workspace/clients/meji-media/status/enquiry-automation.md`.
 CASL conspicuous-publication reading: CRTC Compliance and Enforcement Decision 2016-428 (Blackstone), as summarized by
 Bennett Jones. Ribit's product (dealership AI that turns in-market shoppers into booked showroom appointments) from
-its public listings, read 2026-11-05. Price ($200 per held appointment, $600 advance) is the agent's recommendation,
-pending the owner's call.
+its public listings, read 2026-11-05. Price ($200 per held appointment, $600 advance) confirmed by the owner
+2026-11-05, chosen over $250 with no advance and $150 with the same advance.
