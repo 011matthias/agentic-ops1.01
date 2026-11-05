@@ -28,14 +28,6 @@ export interface GatedSite {
 
 export const GATED_SITES: GatedSite[] = [
   {
-    id: "wimmer",
-    pathRoot: "/docs/warme-wimmer",
-    pathPrefix: "/docs/warme-wimmer/",
-    cookie: "wimmer-auth",
-    accessCodeEnv: "WIMMER_ACCESS_CODE",
-    label: "Wärme Wimmer Documentation",
-  },
-  {
     id: "meji",
     pathRoot: "/docs/meji-media",
     pathPrefix: "/docs/meji-media/",

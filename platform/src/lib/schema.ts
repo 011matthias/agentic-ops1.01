@@ -168,10 +168,10 @@ export const clientResources = pgTable("client_resources", {
   updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
 })
 
-// ── Wärme Wimmer doc-site comments ───────────────────────────────────────────
-// Threaded comments on /docs/warme-wimmer/*. Page-scoped via pageSlug.
-// Reading: gated by the wimmer-auth cookie (passcode), same as the static HTML.
-// Writing: requires Auth.js session AND email on allowlist (env var).
+// ── Client doc-site comments ─────────────────────────────────────────────────
+// Threaded comments on a gated client doc site. Page-scoped via pageSlug.
+// The routes and doc site that used this table moved out of this repo on
+// 2026-11-05; the table stays so the schema matches the applied migrations.
 
 export const docComments = pgTable("doc_comments", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -190,7 +190,7 @@ export const docComments = pgTable("doc_comments", {
   bodyMd: text("body_md").notNull(),
   // Inline-highlight anchor (W3C TextQuoteSelector triple). NULL = page-level comment
   // (the original flat-thread mode). Resilient to small page edits via prefix/suffix
-  // fuzzy matching done client-side. See platform/public/wimmer-comments.js.
+  // fuzzy matching done client-side.
   selectionAnchor: jsonb("selection_anchor").$type<{
     exact: string
     prefix?: string
@@ -206,8 +206,8 @@ export const docCommentsRelations = relations(docComments, ({ one }) => ({
   author: one(users, { fields: [docComments.authorId], references: [users.id] }),
 }))
 
-// ── Wärme Wimmer triage feedback ─────────────────────────────────────────────
-// Team feedback on the Sabine mail-triage automation (/docs/warme-wimmer/triage).
+// ── Client triage feedback ───────────────────────────────────────────────────
+// Team feedback on a client mail-triage automation (page moved out 2026-11-05).
 // The triage LOG itself lives in an n8n data table on the client's German-hosted
 // instance (data residency: customer mail metadata never reaches Neon). This table
 // only holds team-authored feedback: per-row verdicts ("richtig"/"falsch" + who it
