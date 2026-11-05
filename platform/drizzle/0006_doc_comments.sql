@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS "doc_comments" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-  "doc_host" text NOT NULL DEFAULT 'warme-wimmer',
+  "doc_host" text NOT NULL DEFAULT 'ww',
   "page_slug" text NOT NULL,
   "parent_id" uuid,
   "author_id" text,

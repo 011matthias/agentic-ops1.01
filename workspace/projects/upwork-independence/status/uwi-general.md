@@ -62,7 +62,7 @@ the weekly hours ledger. It is a roll-up, not a copy.
 8. **n8n is the platform; HERO channel opened** (2026-10-26). Make is not a
    growth route: no own Make account, no new clients onto Make, no Make
    partner program. Platform-partner reach runs through n8n. The HERO x n8n
-   channel (publish the missing n8n node for HERO, Wärme Wimmer as proof,
+   channel (publish the missing n8n node for HERO, WW as proof,
    HERO's partner doors) opens as u9.
 
 ## Cross-model reconciliation (do not re-litigate)

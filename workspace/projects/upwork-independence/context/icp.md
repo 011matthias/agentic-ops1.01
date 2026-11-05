@@ -5,7 +5,7 @@ editorial buyer-intent queries. Derived 2026-07-22 from
 three evidence layers (5-agent extraction, run wf_7981a3ef-8ed):
 
 1. **Won engagements** (strongest): meji-media, brisken p1+p2, jochen/One
-   Assessment, warme-wimmer.
+   Assessment, WW.
 2. **The 34-proposal Upwork corpus** (`platform/src/content/proposals/`) —
    what buyers actually asked for, with posted budgets.
 3. **The optimize-model segments** (pricing-tiers + leadgen-portfolio
@@ -23,14 +23,14 @@ retired it 2026-09-05):
 
 | Trait | Value | Provenance |
 |---|---|---|
-| Decision-maker | Owner / MD / founder, bought DIRECT, no procurement layer | OBSERVED: every won deal (Gurmej owner, Dirk MD, Tobias/Irina founder+PM, Ibrahim owner-level) |
+| Decision-maker | Owner / MD / founder, bought DIRECT, no procurement layer | OBSERVED: every won deal (Gurmej owner, Dirk MD, WW founder+PM, Ibrahim owner-level) |
 | Company size | SMB / Mittelstand, ~5-50 people; solo founders at the micro end | OBSERVED: won deals 11-50 or owner-run; corpus skews solo founders + small agencies |
 | Trigger state | A BROKEN or manual existing process, not greenfield ambition: fired the prior contractor, outbound producing zero (Brisken: ~150 mailboxes, ~2M cold emails, 0 leads), leads silently dropping in a handoff, multi-day manual back-office ritual | OBSERVED: all won work is rescue/take-over; none is greenfield |
-| What they buy | "One owner, end to end, ongoing" - takeover + rebuild + recurring operation, never a one-off artifact | OBSERVED: volabyg ask verbatim; wimmer migration->maintenance; meji rescue->retainer |
+| What they buy | "One owner, end to end, ongoing" - takeover + rebuild + recurring operation, never a one-off artifact | OBSERVED: volabyg ask verbatim; WW migration->maintenance; meji rescue->retainer |
 | Industry | No single vertical. Won set spans events marketing, SAP treasury, HVAC/renewables, construction. The COMMON factor is an owner running revenue-relevant process on low-code + spreadsheets | OBSERVED |
 | Stack markers (list filters) | Make.com / n8n / Zapier present or wanted; Google Sheets as the data plane; Instantly/Apollo for outbound-minded buyers; GHL in agency-land | OBSERVED: n8n or Make in ~10/12 and 9/12 of corpus batches; Sheets in 6/9 |
 | Geography | DE/DACH reachable via LinkedIn, referral, content, demo-first, where German language + CET is decisive: both German-language proposals in batch 1 were the only sent/won ones. (Cold email, the UK/US-only channel under UWG §7, was retired 2026-09-05.) | OBSERVED constraint + OBSERVED signal |
-| Budget reality | Won pricing is modest: $30/hr (wimmer, ~$2,400/mo), $1,000-1,500/mo retainer (meji), EUR14/hr engagement tabs (Brisken family). Upwork posted budgets anchor at hobby level ($10-600) and every proposal absorbed a large gap via fixed-price + de-risked entry (free phase 0, EUR850 audit-first, $120 phase 1) | OBSERVED |
+| Budget reality | Won pricing is modest: $30/hr (WW, ~$2,400/mo), $1,000-1,500/mo retainer (meji), EUR14/hr engagement tabs (Brisken family). Upwork posted budgets anchor at hobby level ($10-600) and every proposal absorbed a large gap via fixed-price + de-risked entry (free phase 0, EUR850 audit-first, $120 phase 1) | OBSERVED |
 | Expansion motion | Land-and-expand inside one account is the strongest revenue path: Brisken spawned three separately-billed workstreams; meji runs the hourly->retainer->fixed ladder | OBSERVED |
 
 ## Segment bands (tier mapping — ASSUMED, validate against real quotes)
@@ -41,7 +41,7 @@ scope-to-deliverables mapping:
 | Segment | Size (pool) | Tier | Price | Who this plausibly is |
 |---|---|---|---|---|
 | Micro | 150 prospects | good EUR650/mo thin | solo founders / one-person operators (7/12 of one corpus batch) who anchor low but convert on de-risked entry |
-| Core | 95 prospects | better EUR1850/mo | the won-deal persona above; the nearest observed price signals bracket this point but both are adverse or hourly (meji REFUSED $1-1.5k/mo as "seems high" 2026-05-19; wimmer's ~$2.4k/mo was our own $30/hr x 20h proposal projection, never invoiced) - see open question 1 |
+| Core | 95 prospects | better EUR1850/mo | the won-deal persona above; the nearest observed price signals bracket this point but both are adverse or hourly (meji REFUSED $1-1.5k/mo as "seems high" 2026-05-19; WW's ~$2.4k/mo was our own $30/hr x 20h proposal projection, never invoiced) - see open question 1 |
 | Scale | 30 prospects | best EUR6300/mo full | funded/scaling orgs (the corpus's agency-intermediary + enterprise outliers). LEAST validated: no won deal at this level; the corpus's closest analog is the EUR1,800-2,200/mo agency retainer ask |
 
 ## Route 1 persona (local SMB care — fill only, never outbound hours)
@@ -49,7 +49,7 @@ scope-to-deliverables mapping:
 Owner-run local service business (Handwerk first: pool 60/yr ASSUMED),
 Karlsruhe-region, buys a EUR1,200 build + EUR200/mo care annuity. Reached via
 demo-first/AEO proof, never cold email (UWG §7). The 5 live prototype sites
-are the pitch asset. OBSERVED corroboration: warme-wimmer IS this persona at
+are the pitch asset. OBSERVED corroboration: WW IS this persona at
 larger scale (Meisterbetrieb, renewables), won with German language + niche
 stack familiarity.
 
@@ -102,7 +102,7 @@ Ranked by corpus frequency:
 
 ## Open validation questions (feed results back to the scorers via re-pin)
 
-1. Does the core persona bear EUR1,850/mo? (meji + wimmer bracket it:
+1. Does the core persona bear EUR1,850/mo? (meji + WW bracket it:
    plausible; not yet proven at the tiered menu's framing.)
 2. Does the scale segment exist for us at EUR6,300/mo? (No won evidence;
    highest-risk tier assumption.)

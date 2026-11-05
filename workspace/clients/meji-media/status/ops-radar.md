@@ -249,8 +249,8 @@ test inboxes. Cold-drive verified 09-08 (no session, curl, entry point onward):
   with `var MEJI_CODE = 'meji2026'` in plain page source. Violates
   rule_gated_access (server-side only). Live now, separate code from `mn040307`.
 - Cosmetic: the `/review` gate screen reads "Bitte Zugangscode eingeben" (German,
-  inherited from the Wärme Wimmer template) on a UK client's page; endpoint is
-  still `/api/wimmer-unlock`.
+  inherited from another client's template) on a UK client's page; endpoint is
+  still that client's legacy unlock route in akkton/unpauseai-web.
 
 **Draft message with the link + code is WRITTEN AND UNSENT**, held until the
 redirect lands him on `/review`. Text is in the session transcript.

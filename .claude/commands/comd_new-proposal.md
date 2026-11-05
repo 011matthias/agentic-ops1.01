@@ -43,7 +43,7 @@ Also load `feedback_upwork_formatting.md` (memory) for cover letter text formatt
 
 ### Slug
 Create a URL-safe slug from the prospect name + a short project keyword:
-- Lowercase, kebab-case (e.g., `warme-wimmer-make-migration`)
+- Lowercase, kebab-case (e.g., `acme-make-migration`)
 - No special characters
 
 ### ID

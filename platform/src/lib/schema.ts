@@ -175,9 +175,9 @@ export const clientResources = pgTable("client_resources", {
 
 export const docComments = pgTable("doc_comments", {
   id: uuid("id").defaultRandom().primaryKey(),
-  // Doc-site host (e.g. 'warme-wimmer'). Keeps the table multi-tenant if/when
+  // Doc-site host (e.g. 'ww'). Keeps the table multi-tenant if/when
   // we add comment threads to other client doc sites.
-  docHost: text("doc_host").notNull().default("warme-wimmer"),
+  docHost: text("doc_host").notNull().default("ww"),
   // Page slug within the host -- 'index', 's-01-aufgabe-erledigt', 'r-runbook', etc.
   pageSlug: text("page_slug").notNull(),
   // Parent comment for reply threading. Null = top-level comment.
@@ -211,7 +211,7 @@ export const docCommentsRelations = relations(docComments, ({ one }) => ({
 // The triage LOG itself lives in an n8n data table on the client's German-hosted
 // instance (data residency: customer mail metadata never reaches Neon). This table
 // only holds team-authored feedback: per-row verdicts ("richtig"/"falsch" + who it
-// should have gone to) and free-form suggestions. Writing is gated by the wimmer
+// should have gone to) and free-form suggestions. Writing is gated by the WW
 // passcode cookie (NO Auth.js session — the team has no portal accounts).
 
 export const triageFeedback = pgTable("triage_feedback", {

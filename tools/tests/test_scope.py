@@ -82,7 +82,7 @@ def test_deliverable_still_rejects_txt():
 def test_h2h_deliverable():
     # Absolute path: the "/platform/public/" segment needs its leading slash
     # (real hook invocations always pass absolute paths).
-    assert S.in_human_to_human_scope("/repo/platform/public/docs/wimmer/index.html")
+    assert S.in_human_to_human_scope("/repo/platform/public/docs/acme/index.html")
 
 
 def test_h2h_drafts():
