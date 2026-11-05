@@ -43,7 +43,7 @@ Wraps the iterative cycle that happens after every initial build: execute → ch
 
 ## n8n activation shape
 
-An n8n workflow goes live in one fixed order, through the client's n8n MCP server (`mcp__n8n-{client}__*`) or the client's own release script. The reference is WW's `ww-vertrieb-release-72627.mjs`:
+An n8n workflow goes live in one fixed order, through the client's n8n MCP server (`mcp__n8n-{client}__*`) or the client's own release script. The reference is WW's release script (kept with the WW code, outside this repo):
 
 1. **Idle**: confirm no execution of the workflow is running (`n8n_executions` with `action: "list"`, `workflowId`).
 2. **PUT by id**: update the existing workflow by its `n8n_workflow_id` from infrastructure.yaml; never create a second copy.

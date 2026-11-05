@@ -182,7 +182,7 @@ print findings, save canonical state, delete the rest.
 Operationalises at Layer 1 (structural gate, fires at decision
 time) rather than Layer 3 (memory, depends on agent recall),
 because the failure pattern was systematic and recurrent across
-both the meji-media and the wimmer build periods, not a one-off.
+both the meji-media and the WW build periods, not a one-off.
 
 Related: [[feedback_no_unrequested_client_drafts]] (sister rule
 on outbound comms drafting), [[rule_behaviors]] B2 (mark-done

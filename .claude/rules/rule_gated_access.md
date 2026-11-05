@@ -20,11 +20,9 @@ security reasons"). Applies retroactively, not just to new pages.
 Access codes and the master password live in **Vercel env vars** and are
 never committed to git and never sent to the browser:
 
-- Per-site code: the site's `accessCodeEnv` (e.g. `WIMMER_ACCESS_CODE`,
-  `MEJI_ACCESS_CODE`).
+- Per-site code: the site's `accessCodeEnv` (e.g. `MEJI_ACCESS_CODE`).
 - Master password: `MASTER_ACCESS_CODE` — unlocks **every** gated site.
-- Grant-cookie HMAC secret: `GATE_AUTH_SECRET` (falls back to
-  `WIMMER_AUTH_SECRET`).
+- Grant-cookie HMAC secret: `GATE_AUTH_SECRET`.
 
 ## Adding a new gated client site (the only allowed path)
 

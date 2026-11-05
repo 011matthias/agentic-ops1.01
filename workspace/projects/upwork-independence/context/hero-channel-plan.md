@@ -28,11 +28,11 @@ where four facts line up:
    Community-Experte (webinars in the HERO community), Vorteilswelt (offers to
    HERO customers) and Tippgeber (referrals)
    (hero-software.de/kooperationen/partnerschaften).
-4. **We have production proof.** Wärme Wimmer runs its mail triage and its
+4. **We have production proof.** WW runs its mail triage and its
    status and task workflows on n8n against the HERO GraphQL API (v9 in
    production), and the API's quirks are already proven (memory
    `reference_ww_hero_api_quirks`). WW's operating knowledge lives in the
-   `akkton/agentic-ops` clone (memory `project_warme_wimmer_takeover`).
+   `akkton/agentic-ops` clone (memory `project_ww_takeover`).
 
 Size of the pool: HERO's own figure is "mehr als 10.000 Handwerker" in its
 network; third-party sources range from 8,000+ (ki-syndikat.de) to 20,000+
@@ -82,7 +82,7 @@ Owner decisions:
   `n8n-nodes-influencer-hero` already exists), in its own public GitHub repo
   under the UnpauseAI identity, README linking unpauseai.com. Public is
   required anyway: n8n verification needs npm provenance from GitHub Actions.
-- **D2 WW as a named reference.** Ask Raphael whether WW may be named in the
+- **D2 WW as a named reference.** Ask WW's tech lead whether WW may be named in the
   case study, the n8n Experts application and the HERO pitch. Fallback:
   anonymised ("SHK-Meisterbetrieb in Bayern, 11 bis 50 Mitarbeiter").
 - **D3 package prices** (see above).
@@ -157,7 +157,7 @@ All inbound or partner-mediated, so the UWG §7 fence never applies.
 - n8n: verified node in the nodes panel, templates in the library, a release
   post in the n8n community forum, and an update to the n8n Experts waitlist
   entry (every HERO client on n8n counts toward its 3-customer bar).
-- Referral: one intro ask to Raphael and Tobias after D2 (trade owners know
+- Referral: one intro ask to WW's tech lead and founder after D2 (trade owners know
   each other through the Innung).
 - LinkedIn posts on the owner's profile: node release, then the case study.
 

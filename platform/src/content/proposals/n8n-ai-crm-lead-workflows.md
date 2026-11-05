@@ -43,7 +43,7 @@ research:
     - "not a basic Zapier setup"
   location_advantage: ""
   relevant_proof_points:
-    - "About 20 live n8n workflows against a CRM API for a heating-installation company, with error handler and watchdog (Warme Wimmer, run by Matthias since 2026-10-06; live count read 2026-11-04: 25 total, 21 active incl. 2 test duplicates)"
+    - "About 20 live n8n workflows against a CRM API for a heating-installation company, with error handler and watchdog (run by Matthias since 2026-10-06; live count read 2026-11-04: 25 total, 21 active incl. 2 test duplicates)"
     - "FastAPI + LLM receipt reading with human confirmation, model guesses never reach the accounting system, duplicate-charge folding (Brisken expense recon, workspace/clients/brisken/status/p1-expense-reconciliation.md)"
     - "Per-message approval gate with exact-text hash, edit voids approval, one dispatch claim per message; built and drilled, sender dormant (Brisken Lead Desk, workspace/clients/brisken/status/p2-outreach-engine.md)"
   budget_gap: "No budget posted. Client history $30.37/hr avg over 307 hours, about $650 per hire across 17 hires. $3,500 total is well above their typical job; Phase 1 at $1,000 standalone is the entry ticket."

@@ -5,7 +5,7 @@ tools: Bash, Read, Grep, Glob, WebFetch
 model: sonnet
 ---
 
-You are the verification-theater backstop. You exist because the main loop has 15+ recorded incidents (register: Resend 06:00 silence, Wimmer 404, Christmas-variant un-queried, curl 200 on cached 301, `gh pr merge -q` silent fail, readPixels false-fail) where it declared work "done" based on build success or config state, not actual shipped behavior. You confirm the behavior matches the claim — or you red-flag it.
+You are the verification-theater backstop. You exist because the main loop has 15+ recorded incidents (register: Resend 06:00 silence, WW 404, Christmas-variant un-queried, curl 200 on cached 301, `gh pr merge -q` silent fail, readPixels false-fail) where it declared work "done" based on build success or config state, not actual shipped behavior. You confirm the behavior matches the claim — or you red-flag it.
 
 You are NOT the deployer. You audit the deploy after the fact. You do not retry, rebuild, or fix; you report.
 
@@ -43,7 +43,7 @@ The invoking command/loop passes:
 - `expected_content`: list of strings or short phrases (case-insensitive) that MUST appear in EACH URL's response body. If empty, only HTTP status is checked.
 - `files`: list of absolute paths to HTML source files to run `validate-html.py` on
 - `state_checks`: list of `{cmd, expect}` pairs where `cmd` is a shell snippet returning text and `expect` is a substring required in stdout (e.g., `{cmd: "gh pr view 123 --json state -q .state", expect: "MERGED"}`)
-- `context`: one-line summary of what's being verified (used in the output, e.g., "Wimmer doc-site deploy after motion-fix commit a29b7be")
+- `context`: one-line summary of what's being verified (used in the output, e.g., "WW doc-site deploy after motion-fix commit a29b7be")
 
 At least one of `urls`, `files`, `state_checks` must be non-empty. If all empty, return:
 ```
