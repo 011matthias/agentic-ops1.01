@@ -22,7 +22,7 @@ Built the canonical problem-and-solution understanding for the VolaByg Loom vide
 4. Created `workspace/proposals/volabyg-lead-automation/solution-context.md` as the canonical brief that drives landing-page narrative (untracked on the current branch).
 
 ### 404 diagnosis + gating
-5. Diagnosed the live 404 correctly and fast (B3): isolated volabyg-specific vs whole-deploy by probing other `/clients/` sites (menovia 200, brisken 200, warme-wimmer migrated to /docs), confirmed files on origin/main, concluded stale production deploy (repo does not auto-deploy main).
+5. Diagnosed the live 404 correctly and fast (B3): isolated volabyg-specific vs whole-deploy by probing other `/clients/` sites (menovia 200, brisken 200, ww migrated to /docs), confirmed files on origin/main, concluded stale production deploy (repo does not auto-deploy main).
 6. Surfaced a gating fork (public vs gated). User chose public, then reverted to "gate it" because the application was already sent with code `volabyg-2026`.
 7. Found the existing gate is client-side JavaScript (`if(code==='volabyg-2026')`) in all 7 pages, which `rule_gated_access` bans (code shipped in plaintext source).
 8. Verified the sanctioned server-side path is feasible: `gated-sites.ts` model is path-agnostic (works for the `/clients/...` URL Ibrahim has), and the Vercel CLI is authed as `akkton` (can set the env var).

@@ -152,7 +152,7 @@ force-deploy is a Band-3 floor action awaiting the owner's order.
 
 ### Working Notes
 
-- The EUR6300 scale tier has ZERO won-deal evidence (meji $1-1.5k/mo + wimmer
+- The EUR6300 scale tier has ZERO won-deal evidence (meji $1-1.5k/mo + ww
   ~$2.4k/mo bracket only the EUR1850 core tier). Highest-risk tier assumption;
   encoded in icp.md.
 - 11/12 of one proposal batch died at status:draft, never sent — the Upwork

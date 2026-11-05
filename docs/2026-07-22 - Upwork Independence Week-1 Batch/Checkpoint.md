@@ -14,7 +14,7 @@ Executed the week-1 batch of the uwi program in an isolated worktree: u4 referra
 ## What Was Done This Session
 
 ### u4 — referral partnership
-1. `context/referral-ledger.md` (#384): 7 first-degree names collapsing to 5 independent sources (Brisken/Dirk, Jochen, Meji/Gurmej+Jess, Wimmer/Irina+Tobias, Coolify/Dzmitry), 5 second-degree SI-ecosystem rows via Dirk, 0 subcontractors. Honest warm supply: 3-4 sources vs model pool-15 (~3x over reality) — the gtm-v2-confirm supply gap is confirmed at enumeration time.
+1. `context/referral-ledger.md` (#384): 7 first-degree names collapsing to 5 independent sources (Brisken/Dirk, Jochen, Meji/Gurmej+Jess, WW (PM + founder), Coolify/Dzmitry), 5 second-degree SI-ecosystem rows via Dirk, 0 subcontractors. Honest warm supply: 3-4 sources vs model pool-15 (~3x over reality) — the gtm-v2-confirm supply gap is confirmed at enumeration time.
 2. Offer definition recommendation: no upfront commission for the client network; defined post-conversion thank-you; Jochen routed to partnership/subcontract (u7); commission reserved for arm's-length future partners. Owner call pending.
 
 ### u1 — cold-email infra

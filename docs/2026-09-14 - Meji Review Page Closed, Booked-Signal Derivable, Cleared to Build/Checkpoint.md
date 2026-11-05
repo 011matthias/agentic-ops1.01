@@ -72,7 +72,7 @@ Proved the "who has booked" filter is derivable from Meji's own database (no cli
 
 ### Working Notes
 - Read-only DB path: UTIL scenario `s8974201_util_my_sql_parameterized_query`, `by_id` mode concatenates `param1` after `WHERE id =` (SELECT * FROM enquiries), so free-form boolean/UNION/GROUP BY rides along. The `s8842540` count tool and `s8842538` test tool BOTH ignore their inputs (return fixed results) — do not trust; differential-probe.
-- Review-page read-back: FORM-encoded POST /api/wimmer-unlock (code=MEJI_DOC_GATE_CODE, site=meji); JSON body 500s. Run via PowerShell `Invoke-WebRequest -SessionVariable` — Git-Bash curl `-o`/`-c` fail to write here (error 23) and MSYS mangles the `from` path.
+- Review-page read-back: FORM-encoded POST /api/ww-unlock (code=MEJI_DOC_GATE_CODE, site=meji); JSON body 500s. Run via PowerShell `Invoke-WebRequest -SessionVariable` — Git-Bash curl `-o`/`-c` fail to write here (error 23) and MSYS mangles the `from` path.
 - `booking_confirmed` / `confirmed` columns are 0 across all 271 `parties` rows (dead columns); do not gate on them.
 
 ### Reference Materials

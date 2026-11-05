@@ -93,7 +93,7 @@ Built and shipped Track 2 Upwork proposal p024 (German AI shipment-support bot),
 - docs/sessions/2026-05-19-context.yaml
 - platform/src/content/proposals/ai-shipment-support-bot.md
 - workspace/projects/platform/upwork-agency/intro-video-script.md (uncommitted)
-- platform/src/lib/gated-sites.ts (Meji/Wimmer gate model)
+- platform/src/lib/gated-sites.ts (Meji/WW gate model)
 
 ### Open Questions
 - Is Vercel git-integration production auto-deploy reliably firing on main merges, or does every platform change now need a manual `vercel-force-deploy.sh`? (Meji 404 implies the latter.)
