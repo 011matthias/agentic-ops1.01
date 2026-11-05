@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dealer launch plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=block">
+<style>
+  :root { --ink: #111827; --ink-2: #4b5563; --muted: #6b7280; --rule: #e5e7eb; --accent: #2563eb; --panel: #f8fafc; }
+  @page { size: A4 portrait; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #ffffff; }
+  body { font-family: Geist, -apple-system, "Segoe UI", sans-serif; color: var(--ink); font-size: 8.3pt;
+    line-height: 1.32; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .page { width: 210mm; height: 297mm; padding: 9.5mm 12mm 7mm; display: flex; flex-direction: column; overflow: hidden; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid var(--rule); padding-bottom: 3mm; }
+  h1 { font-size: 15.5pt; line-height: 1.15; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 1.2mm; }
+  .byline { color: var(--muted); font-size: 8.6pt; margin: 0; }
+  .logo { height: 7.5mm; width: auto; }
+  .lede { font-size: 9pt; margin: 2.6mm 0 0; }
+  h2 { font-size: 10pt; font-weight: 600; margin: 2.8mm 0 0.8mm; }
+  h2 .num { color: var(--accent); margin-right: 1.5mm; }
+  table { width: 100%; border-collapse: collapse; }
+  .rows td { vertical-align: top; padding: 1mm 0 1mm; border-top: 1px solid var(--rule); }
+  .rows td.what { width: 24%; padding-right: 4mm; font-weight: 500; }
+  .rows td.who { width: 30%; padding-right: 4mm; }
+  .rows td.why { color: var(--ink-2); }
+  .rows td.why b, .rows td.who b { color: var(--ink); font-weight: 600; }
+  .pay { background: var(--panel); border-radius: 6px; padding: 2.4mm 3.2mm 2.2mm; }
+  .pay .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+  .pay h3 { font-size: 8.4pt; font-weight: 600; margin: 0 0 0.8mm; }
+  .pay ul { margin: 0; padding-left: 3.6mm; }
+  .pay li { margin: 0 0 0.5mm; color: var(--ink-2); }
+  .pay .price { margin: 2mm 0 0; padding-top: 1.8mm; border-top: 1px solid #cbd5e1; }
+  .pay .price b { font-weight: 600; }
+  .send { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2mm 6mm; margin-top: 1mm; }
+  .send p { margin: 0; border-left: 2px solid var(--accent); padding-left: 3mm; color: var(--ink-2); }
+  .send b { color: var(--ink); font-weight: 600; }
+  .timeline td { vertical-align: top; padding: 1mm 0; border-top: 1px solid var(--rule); }
+  .timeline td.when { width: 13%; font-weight: 600; color: var(--accent); }
+  .timeline td.do { color: var(--ink-2); }
+  .note { margin: 1mm 0 0; color: var(--ink-2); }
+  .note b { color: var(--ink); font-weight: 600; }
+  .report { margin-top: 0.6mm; background: var(--panel); border-radius: 6px; padding: 2.2mm 3.2mm 2mm; }
+  .report table { font-size: 7.6pt; }
+  .report th { text-align: left; font-weight: 600; padding: 0 2mm 1.2mm 0; border-bottom: 1px solid #cbd5e1; vertical-align: bottom; }
+  .report td { color: var(--muted); padding: 1.2mm 2mm 0 0; vertical-align: top; }
+  .report p { margin: 2mm 0 0; color: var(--ink-2); }
+  footer { display: flex; justify-content: space-between; gap: 6mm; font-size: 7.4pt; color: var(--muted);
+    border-top: 1px solid var(--rule); padding-top: 2mm; margin-top: auto; }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div>
+      <h1>Dealer appointments for Ribit: the first 30 days</h1>
+      <p class="byline">Matthias Neumann &#183; UnpauseAI &#183; November 2026</p>
+    </div>
+    <svg class="logo" viewBox="0 0 800 180" aria-label="UnpauseAI"><g transform="translate(20 38) scale(4.5)" fill="#2563eb"><path d="M8 5.14v13.72a1 1 0 001.5.86l11.04-6.86a1 1 0 000-1.72L9.5 4.28a1 1 0 00-1.5.86z"/></g><text x="155" y="125" font-size="96" letter-spacing="-2" font-family="Geist, sans-serif"><tspan font-weight="700" fill="#111827">Unpause</tspan><tspan font-weight="800" fill="#2563eb">AI</tspan></text></svg>
+  </header>
+
+  <p class="lede">How I'd run cold email to dealership owners and managers in the US and Canada, starting with the term a
+  per-appointment deal turns on: what counts as qualified. Nothing sends, loads or changes in a live system without your yes.</p>
+
+  <h2><span class="num">1</span>What you pay for</h2>
+  <div class="pay">
+    <div class="cols">
+      <div>
+        <h3>Counts as a qualified appointment</h3>
+        <ul>
+          <li>A meeting on your calendar that takes place</li>
+          <li>The attendee holds a title you approve before launch, at a US or Canadian dealership: Dealer Principal, owner, GM or General Sales Manager; at a group, the executive over digital, marketing or operations</li>
+          <li>Not a current customer or an open opportunity in your CRM, checked before any list loads</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Does not count</h3>
+        <ul>
+          <li>A no-show, until it is rescheduled and held</li>
+          <li>An attendee below the approved titles</li>
+          <li>A second meeting with the same rooftop</li>
+          <li>Anyone already in your pipeline</li>
+        </ul>
+      </div>
+    </div>
+    <p class="price"><b>$200 per qualified appointment held.</b> A $600 advance at the start covers the first three and the
+    weeks the new mailboxes spend warming up. You have 48 hours after a meeting to flag one that did not qualify, and it comes
+    off the bill. Domains, mailboxes and the Instantly workspace sit in Ribit's name at cost, so the warmed setup and the list
+    stay with you.</p>
+  </div>
+
+  <h2><span class="num">2</span>Who we write to</h2>
+  <table class="rows">
+    <tr><td class="what">Single-store dealers</td>
+        <td class="who"><b>Dealer Principal</b> or owner, and the GM</td>
+        <td class="why">One store, one decision: the person who signs for software is usually the person reading the email.</td></tr>
+    <tr><td class="what">Dealer groups</td>
+        <td class="who">The <b>group executive</b> over digital, marketing or operations</td>
+        <td class="why">One conversation can cover every rooftop in the group, so groups get their own list and their own copy.</td></tr>
+    <tr><td class="what">Second entry point, tested as its own stream</td>
+        <td class="who"><b>BDC manager</b> (the team that answers leads and books showroom visits) or internet sales manager</td>
+        <td class="why">They see the unanswered inquiries Ribit fixes every day. The test is whether they bring a GM into the meeting.</td></tr>
+  </table>
+
+  <h2><span class="num">3</span>Where the list comes from</h2>
+  <table class="rows">
+    <tr><td class="what">US dealers</td>
+        <td class="why" colspan="2">Apollo, filtered to dealerships and the approved titles, with each contact checked against the dealer's own staff page for a current name and title.</td></tr>
+    <tr><td class="what">Canadian dealers</td>
+        <td class="why" colspan="2">CASL sets the source. Implied consent by publication covers an address <b>the dealership publishes itself</b>, usually on its staff page, with no notice refusing unsolicited email, and only for an email relevant to that person's role. An address from a data vendor does not qualify on its own. Each Canadian contact keeps the page URL and the date it was found; your counsel signs off on the basis before launch.</td></tr>
+    <tr><td class="what">Before every load</td>
+        <td class="why" colspan="2">Verification, then a mail-server check: in a July batch where every address was NeverBounce "valid", <b>10 of 11</b> bounces sat behind Mimecast, a security gateway a verifier cannot see. Those domains, and any with no mail server, are held out. Then a dedupe against your CRM and every live campaign.</td></tr>
+  </table>
+
+  <h2><span class="num">4</span>What we send from</h2>
+  <div class="send">
+    <p><b>Three new domains in Ribit's name.</b> Your main domain never sends cold email, so its reputation is untouched.</p>
+    <p><b>Two Google Workspace mailboxes per domain,</b> with SPF, DKIM and DMARC, warmed in Instantly for two to three weeks.</p>
+    <p><b>Up to 30 cold emails per mailbox a day:</b> 180 a day, about 300 new contacts a week on three emails each.</p>
+    <p><b>Recipient's time zone, Monday to Friday,</b> easing off at month-end, when sales managers chase the month's numbers.</p>
+  </div>
+
+  <h2><span class="num">5</span>Timeline, starting from zero <span style="font-weight:400;color:var(--muted)">&#183; with warmed mailboxes already in place, sending starts in week one</span></h2>
+  <table class="timeline">
+    <tr><td class="when">Days 1 to 2</td><td class="do">Domains, mailboxes and DNS records set up; warmup starts. The title list and the qualified definition agreed with you.</td></tr>
+    <tr><td class="when">Week 1</td><td class="do">First list built, about 1,000 contacts. Copy and reply playbook to you for approval; booking link and CRM handoff wired.</td></tr>
+    <tr><td class="when">Week 2</td><td class="do">Warmup continues. The list is checked: verification, mail servers, duplicates, and the CASL record on every Canadian row.</td></tr>
+    <tr><td class="when">Week 3</td><td class="do">First cold emails, ramping to the full daily cap. Interested replies answered the same day with times or your booking link.</td></tr>
+    <tr><td class="when">Week 4 on</td><td class="do">Appointments, the weekly report, and one change at a time, each logged with the number it should move.</td></tr>
+  </table>
+
+  <h2><span class="num">6</span>Every week</h2>
+  <div class="report">
+    <p style="margin:0">Per stream (single store, group, BDC): emails sent, bounces by mail server, human replies, automatic replies,
+    meetings booked, held, no-shows, appointments billed, and the one change made that week with the number it should move.
+    Counted from Instantly and your calendar when the report is written, never typed by hand.</p>
+  </div>
+
+  <footer><span>CASL reading per CRTC Compliance and Enforcement Decision 2016-428; not legal advice. Campaign figures from work for
+  a UK events company in 2026 (anonymized), detailed in the attached case study.</span><span style="white-space:nowrap">Matthias Neumann &#183; UnpauseAI</span></footer>
+</div>
+</body>
+</html>
