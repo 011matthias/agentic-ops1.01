@@ -74,7 +74,7 @@ structural corrections to client pages.
   ProposalCTA, contact, terms, privacy, assessment-thank-you,
   lib/email.ts, api/contact/route.ts)
 - 110 + 5 replacements across 66 client/docs HTML+JS files
-  (prospect proposals + Wimmer + Meji doc sites)
+  (prospect proposals + WW + Meji doc sites)
 - `rule_platform_standards.md` §1 updated
 - `validate-platform-content.py` SANCTIONED set updated
 
@@ -167,7 +167,7 @@ uncommitted, awaiting separate ship order.
 | `platform/src/app/(public)/oneproposal/page.tsx` | Modified | 7 em-dash variants → `; ` / `:` / `(...)` |
 | `platform/src/content/proposals/*.md` (21 files) | Modified | em-dash sweep + heading normalization + 2 brand typo fixes + 2 banned-word fixes |
 | `platform/public/clients/{slug}/*.html` (60+ folders) | Modified | Email migration + boot script + print block |
-| `platform/public/docs/{client}/*.html` (Meji + Wimmer) | Modified | Email migration + boot script + print block |
+| `platform/public/docs/{client}/*.html` (Meji + WW) | Modified | Email migration + boot script + print block |
 | `docs/2026-06-01 - Platform Style Standards Trio/Checkpoint.md` | Created | This file |
 | `docs/sessions/2026-06-01.md` | Updated | Session 2 entry |
 | `docs/sessions/2026-06-01-context.yaml` | Updated | Platform section merged |

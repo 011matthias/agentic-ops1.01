@@ -6,7 +6,7 @@ Date: 2026-10-28. Source: Workflow run wf_6956c984-be3 (10 audit lenses over ori
 
 - Every item carries a `Status:` line. The session that lands an item sets it to `done PR #N` (or `dropped: <reason>`) in the same docs PR as its checkpoint. This file is the queue; do not keep a second list.
 - Wave 1 (W1-1 .. W1-30, plus W1-0 and W1-31 .. W1-36 from section G; the synthesis summary's '29' is a miscount, the list has 30): mechanical, no owner decision, one PR each, ordered by what every session or PR pays first. Wave 2 (D1 .. D16): owner decisions, each with a recommendation and consequence; ask with AskUserQuestion, recommendation first. Wave 3 (X1 .. X8): deferred. Section G (G1 .. G12): gaps the completeness critic raised after the lenses, each with the 2026-10-28 live verification; the additions they produced are W1-31 .. W1-36, W1-0 and D17 .. D19 at the end.
-- Ordering that matters: W1-13, W1-14, W1-35, W1-16 .. W1-20, D1 .. D4, D16, D17 and D18 land BEFORE the Waerme Wimmer migration prompt (already issued on 2026-10-27) is executed, because they define where WW files land and the gate that keeps personal data out of the public tree.
+- Ordering that matters: W1-13, W1-14, W1-35, W1-16 .. W1-20, D1 .. D4, D16, D17 and D18 land BEFORE the WW migration prompt (already issued on 2026-10-27) is executed, because they define where WW files land and the gate that keeps personal data out of the public tree.
 
 ## Client-ops guard (owner, 2026-10-28)
 
@@ -23,8 +23,8 @@ Surfaces, read 2026-10-28 from Get-ScheduledTask, the workflow triggers on main 
 | RepoSweep (02:30), AgenticOpsWeeklySynthesis, ClaudeRemoteControl | tracked code in whatever branch the primary has checked out | the primary's git state | the primary's branch: an old branch brings back old sweep code |
 | Fly apps: brisken-expense-recon (api.expenses.brisken.com), Lead Desk, one-assessment-demo, brisken-onepilot-proto | deployed by hand from their source dirs under `workspace/clients/` | the source dir at deploy time | a merge deploys nothing; the next deploy ships what main holds, and a deleted source dir leaves the app running but undeployable |
 | Scheduled Actions: expense-recon-uptime (10 min), morning-briefing, eod-capture, weekly-review | main's workflow files | the tools they call | any merge to main |
-| Client tenants: WW n8n + Hero (held R1 test on HUK-106488), Meji Make + Instantly, Brisken M365 | nothing in this plan writes to them | | only a test, activation or send, each already under its per-action yes |
-| unpauseai.com gated client docs (`/docs/warme-wimmer`) | akkton/unpauseai-web | | D3(a) removes files from the live site |
+| Client tenants: WW n8n + Hero (held R1 test), Meji Make + Instantly, Brisken M365 | nothing in this plan writes to them | | only a test, activation or send, each already under its per-action yes |
+| unpauseai.com gated client docs (`/docs/ww`) | akkton/unpauseai-web | | D3(a) removes files from the live site |
 
 Per-item checks:
 - W1-14 pii-push-gate: `ask` with fail-open, never `deny`, so an urgent client fix can still push; calibrate on the current tree first.
@@ -257,7 +257,7 @@ Files: `.claude/hooks/file-placement-gate.py`, `tools/tests/test_file_placement_
 
 ### W1-16 [harness-2, onboard-2, onboard-3, onboard-1, onboard-12, fit-5, harness-5] cost M
 
-Status: done PR #1671 (2026-10-29). tools/infra_yaml.py + infra_check.py (CI hooks job, `--all`); builder agents, comd_resume, skil_build and n8n-pack read through the loader. The WW shape is a synthetic fixture (tools/fixtures/infra_yaml/ww-shape). Deviation: brisken got `deploy: .../expense-reconciliation/deploy.py` beside `orchestrator: fastapi`, because agnt_deployer maps FastAPI to `railway up`; D1 must keep honoring `deploy:`. Against the real WW file infra_check names N8N_API_KEY/URL_WARME_WIMMER missing from its .env.example: the migration adds them. PLATFORM-FEASIBILITY lives in skil_make-mcp-tools-expert/modules (the only copy), not skil_make-pack.
+Status: done PR #1671 (2026-10-29). tools/infra_yaml.py + infra_check.py (CI hooks job, `--all`); builder agents, comd_resume, skil_build and n8n-pack read through the loader. The WW shape is a synthetic fixture (tools/fixtures/infra_yaml/ww-shape). Deviation: brisken got `deploy: .../expense-reconciliation/deploy.py` beside `orchestrator: fastapi`, because agnt_deployer maps FastAPI to `railway up`; D1 must keep honoring `deploy:`. Against the real WW file infra_check names N8N_API_KEY/URL_WW missing from its .env.example: the migration adds them. PLATFORM-FEASIBILITY lives in skil_make-mcp-tools-expert/modules (the only copy), not skil_make-pack.
 
 Depends on: none
 
@@ -271,7 +271,7 @@ Files: `tools/infra_yaml.py`, `tools/infra_check.py`, `.claude/agents/agnt_make-
 
 ### W1-17 [onboard-4] cost M
 
-Status: done PR #1684 + follow-up #1686 (2026-10-29): tools/mcp_config.py renders .mcp.json from infra + the primary's context/.env + a gitignored `.mcp.local.json` (`_scope` tags); primary = union, worktree = branch client (+ vercel on platform/proposal); `--ensure` writes on change only, refuses until `--adopt`; SessionStart + worktree-add hooks; comd_n8n-instances/new-client/resume read through it. Owner yes (AskUserQuestion): adopt + ensure ran in the primary, `.mcp.json` sha256 unchanged, `claude mcp list` 7 connected 0 failed. #1686: `--adopt` also writes `.git/info/exclude`, because the primary (on an older main) showed the token-bearing local file as untracked for ~1 min. Verified: 15 tests, regress_check bites, `--check` on a fresh worktree renders brisken without make-meji-media and meji-media with it. Open: the "lists n8n-warme-wimmer" half waits for the WW import; the primary needs a fast-forward before its SessionStart runs the new hook.
+Status: done PR #1684 + follow-up #1686 (2026-10-29): tools/mcp_config.py renders .mcp.json from infra + the primary's context/.env + a gitignored `.mcp.local.json` (`_scope` tags); primary = union, worktree = branch client (+ vercel on platform/proposal); `--ensure` writes on change only, refuses until `--adopt`; SessionStart + worktree-add hooks; comd_n8n-instances/new-client/resume read through it. Owner yes (AskUserQuestion): adopt + ensure ran in the primary, `.mcp.json` sha256 unchanged, `claude mcp list` 7 connected 0 failed. #1686: `--adopt` also writes `.git/info/exclude`, because the primary (on an older main) showed the token-bearing local file as untracked for ~1 min. Verified: 15 tests, regress_check bites, `--check` on a fresh worktree renders brisken without make-meji-media and meji-media with it. Open: the "lists n8n-ww" half waits for the WW import; the primary needs a fast-forward before its SessionStart runs the new hook.
 
 Depends on: item 16
 
@@ -279,13 +279,13 @@ Action: tools/mcp_config.py --ensure|--check: render .mcp.json for the current r
 
 Why: The per-client MCP server lives in one gitignored file; worktree sessions have none, and the WW key is duplicated in .env and .mcp.json (the 2026-09-13 25-hour outage shape).
 
-Verify: tools/tests/test_mcp_config.py renders from a fixture infra + .env; `--check` in a fresh worktree reports the diff; after --ensure a worktree session lists make-meji-media and n8n-warme-wimmer servers.
+Verify: tools/tests/test_mcp_config.py renders from a fixture infra + .env; `--check` in a fresh worktree reports the diff; after --ensure a worktree session lists make-meji-media and n8n-ww servers.
 
 Files: `tools/mcp_config.py`, `tools/wire-hooks.py`, `.claude/commands/comd_n8n-instances.md`, `.claude/commands/comd_new-client.md`, `.claude/commands/comd_resume.md`, `tools/tests/test_mcp_config.py`
 
 ### W1-18 [homes-8, onboard-7, onboard-9, onboard-5, fit-5, homes-1, homes-4] cost M
 
-Status: done PR #1693 (2026-10-29): rule_file_placement client rows, check-index client scan (README.md per automations/tools/), tools/n8n_export.py (infra-derived map, scrubbed stable export, `--check`), builder + N8N-BUILD flat export path, comd_resume Step 4 READMEs, recon CI paths, workspace/templates/client-n8n/. Template manifest is tools/README.md (not INDEX.md) to match check-index. Verified: tests + regress_check on both wirings, preflight --full 2154 passed. Open: `n8n_export.py --client warme-wimmer --check` against live after the import.
+Status: done PR #1693 (2026-10-29): rule_file_placement client rows, check-index client scan (README.md per automations/tools/), tools/n8n_export.py (infra-derived map, scrubbed stable export, `--check`), builder + N8N-BUILD flat export path, comd_resume Step 4 READMEs, recon CI paths, workspace/templates/client-n8n/. Template manifest is tools/README.md (not INDEX.md) to match check-index. Verified: tests + regress_check on both wirings, preflight --full 2154 passed. Open: `n8n_export.py --client ww --check` against live after the import.
 
 Depends on: item 16
 
@@ -293,23 +293,23 @@ Action: rule_file_placement §2 client table gains rows: `automations/{id}-{slug
 
 Why: WW lands next session with ~100 scripts, exports and two test harnesses and no defined home; brisken's client tools at tools/ top level are the opposite convention; the id-to-file map is kept in three places.
 
-Verify: test_check_index.py client-scan case; a fixture client dir without README makes `check-index.py` exit 1; `uv run tools/n8n_export.py --client warme-wimmer --check` (after import) exits 0 against live; expense-recon PR runs its suite on a tools/recon* change.
+Verify: test_check_index.py client-scan case; a fixture client dir without README makes `check-index.py` exit 1; `uv run tools/n8n_export.py --client ww --check` (after import) exits 0 against live; expense-recon PR runs its suite on a tools/recon* change.
 
 Files: `.claude/rules/rule_file_placement.md`, `tools/check-index.py`, `tools/n8n_export.py`, `.claude/commands/comd_resume.md`, `.claude/agents/agnt_n8n-builder.md`, `.claude/skills/skil_build/modules/N8N-BUILD.md`, `.github/workflows/expense-recon-tests.yml`, `workspace/templates/client-n8n/`, `tools/tests/test_check_index.py`, `tools/tests/test_n8n_export.py`
 
 ### W1-19 [ci-12, onboard-8, onboard-10] cost S
 
-Status: done PR #1695 (2026-10-29) except the harness template: warme-wimmer-tests.yml (path-filtered, no credential, fetch-live*/fixtures excluded, zero matches fails, a 'No WW tree yet' path until the import), agnt_testing-agent n8n mode, comd_test pointer, skil_build-test-fix n8n activation shape (builder hands it on, never runs it). Verified: synthetic tree run (decoys skipped, pass 1), the PR's own run took the no-tree path. Deferred to the WW import: the harness copy to workspace/templates/n8n-tests/ (the harness exists only in the WW tree).
+Status: done PR #1695 (2026-10-29) except the harness template: ww-tests.yml (path-filtered, no credential, fetch-live*/fixtures excluded, zero matches fails, a 'No WW tree yet' path until the import), agnt_testing-agent n8n mode, comd_test pointer, skil_build-test-fix n8n activation shape (builder hands it on, never runs it). Verified: synthetic tree run (decoys skipped, pass 1), the PR's own run took the no-tree path. Deferred to the WW import: the harness copy to workspace/templates/n8n-tests/ (the harness exists only in the WW tree).
 
 Depends on: item 18
 
-Action: .github/workflows/warme-wimmer-tests.yml path-filtered on workspace/clients/warme-wimmer/** (setup-node, npm ci, `node --test` in automations/tests; fetch-live.js never invoked). agnt_testing-agent and comd_test gain an n8n mode: run each infrastructure.yaml `test:` command, then `n8n_executions` readback per POST-EXECUTION-VERIFICATION.md. agnt_n8n-builder's closing phase and skil_build-test-fix gain the activation shape: activate via the client's n8n MCP `activateWorkflow` or the client's release script, read back active=true, name ww-vertrieb-release-72627.mjs as the reference (idle -> PUT by id -> readback hash -> activate -> acceptance run -> rollback). A reusable harness copy goes to workspace/templates/n8n-tests/, never tools/.
+Action: .github/workflows/ww-tests.yml path-filtered on workspace/clients/ww/** (setup-node, npm ci, `node --test` in automations/tests; fetch-live.js never invoked). agnt_testing-agent and comd_test gain an n8n mode: run each infrastructure.yaml `test:` command, then `n8n_executions` readback per POST-EXECUTION-VERIFICATION.md. agnt_n8n-builder's closing phase and skil_build-test-fix gain the activation shape: activate via the client's n8n MCP `activateWorkflow` or the client's release script, read back active=true, name the WW release script as the reference (idle -> PUT by id -> readback hash -> activate -> acceptance run -> rollback). A reusable harness copy goes to workspace/templates/n8n-tests/, never tools/.
 
 Why: The 145+ offline WW assertions run only when someone remembers the command; /comd_test and the builder have no n8n path; the harness in tools/ would break the subtree handoff.
 
 Verify: The workflow runs on a PR touching the WW tree and not on a docs PR; `node --test` passes in CI with live-snapshots absent (skip path); agnt_testing-agent n8n section cites real MCP tool names from skil_n8n-pack.
 
-Files: `.github/workflows/warme-wimmer-tests.yml`, `.claude/agents/agnt_testing-agent.md`, `.claude/agents/agnt_n8n-builder.md`, `.claude/commands/comd_test.md`, `.claude/skills/skil_build-test-fix/SKILL.md`, `workspace/templates/n8n-tests/`
+Files: `.github/workflows/ww-tests.yml`, `.claude/agents/agnt_testing-agent.md`, `.claude/agents/agnt_n8n-builder.md`, `.claude/commands/comd_test.md`, `.claude/skills/skil_build-test-fix/SKILL.md`, `workspace/templates/n8n-tests/`
 
 ### W1-20 [exposure-8, onboard-6, onboard-11, onboard-12, homes-2, exposure-10] cost M
 
@@ -317,13 +317,13 @@ Status: repo half done PR #1700 (2026-10-29): .gitignore `.env.*` (four template
 
 Depends on: item 14, item 18
 
-Action: WW import pre-flight PR (lands before the migration branch is pushed): .gitignore adds `.env.*` with `!.env.example|.env.sample|.env.template|.env.dist`, `/output/`, `/webhook-dump*.json`, `.claude/worktrees/`, `/workspace/hours-tracker.xlsx`; delete the dead context/portable exemption (.gitignore L92-96, L98-99; file-placement-gate.py:209 lookahead; test at test_file_placement_gate.py:335-337; rule_file_placement.md:37); mirror the new prefixes in file-placement-gate's static ignored list; tools/scrub-test-data.py rewriting addresses in ww-* scripts to example.com fixtures plus a pytest scoped to workspace/clients/warme-wimmer/automations/ asserting no consumer-domain address; harness.js/fetch-live.js read WW_TEST_DATA_DIR (default `../../../context/test-data`) and skip when absent; migration-day checklist written into docs/2026-10-21 WW checkpoint's next steps: live-snapshots, fixtures, output/ and handoff bundles to context/; infrastructure.yaml split by kind (identifiers + per-workflow {n8n_workflow_id, status, trigger, export, test} stay; prose to status/ files via `project_status.py --scaffold`; `secret_value:` to context/.env; make: block to a checkpoint); a1-a5 to stage folders via skil_spec-cleanup; replace tools/build-warme-wimmer-doc-site.py with the akkton version (WEBSITE_REPO kept, INDEX row updated) pointing at ../unpauseai-web/docs/publishing.md; run `uv run tools/pii_scan.py` and gitleaks locally before the first push; the owner reads the public file list.
+Action: WW import pre-flight PR (lands before the migration branch is pushed): .gitignore adds `.env.*` with `!.env.example|.env.sample|.env.template|.env.dist`, `/output/`, `/webhook-dump*.json`, `.claude/worktrees/`, `/workspace/hours-tracker.xlsx`; delete the dead context/portable exemption (.gitignore L92-96, L98-99; file-placement-gate.py:209 lookahead; test at test_file_placement_gate.py:335-337; rule_file_placement.md:37); mirror the new prefixes in file-placement-gate's static ignored list; tools/scrub-test-data.py rewriting addresses in ww-* scripts to example.com fixtures plus a pytest scoped to workspace/clients/ww/automations/ asserting no consumer-domain address; harness.js/fetch-live.js read WW_TEST_DATA_DIR (default `../../../context/test-data`) and skip when absent; migration-day checklist written into docs/2026-10-21 WW checkpoint's next steps: live-snapshots, fixtures, output/ and handoff bundles to context/; infrastructure.yaml split by kind (identifiers + per-workflow {n8n_workflow_id, status, trigger, export, test} stay; prose to status/ files via `project_status.py --scaffold`; `secret_value:` to context/.env; make: block to a checkpoint); a1-a5 to stage folders via skil_spec-cleanup; replace tools/build-ww-doc-site.py with the akkton version (WEBSITE_REPO kept, INDEX row updated) pointing at ../unpauseai-web/docs/publishing.md; run `uv run tools/pii_scan.py` and gitleaks locally before the first push; the owner reads the public file list.
 
 Why: A straight `git mv` publishes 79 addresses, ten live Hero snapshots and 24 screenshots under the handoff subtree; the owner decision is 'code public, data private' and nothing enforces the second half.
 
-Verify: `git check-ignore -v` confirms each new pattern; test_file_placement_gate.py green without the portable case; the WW scrub test green on the import branch; `pii_scan.py` over the import branch reports 0 hits outside allowlisted fixtures; `ls workspace/clients/warme-wimmer/status/` shows the scaffolded files and infrastructure.yaml is under 40 KB.
+Verify: `git check-ignore -v` confirms each new pattern; test_file_placement_gate.py green without the portable case; the WW scrub test green on the import branch; `pii_scan.py` over the import branch reports 0 hits outside allowlisted fixtures; `ls workspace/clients/ww/status/` shows the scaffolded files and infrastructure.yaml is under 40 KB.
 
-Files: `.gitignore`, `.claude/hooks/file-placement-gate.py`, `tools/tests/test_file_placement_gate.py`, `.claude/rules/rule_file_placement.md`, `tools/scrub-test-data.py`, `tools/build-warme-wimmer-doc-site.py`, `tools/INDEX.md`, `docs/2026-10-21 - WW Hero Key And Zapier Migration Prep/Checkpoint.md`
+Files: `.gitignore`, `.claude/hooks/file-placement-gate.py`, `tools/tests/test_file_placement_gate.py`, `.claude/rules/rule_file_placement.md`, `tools/scrub-test-data.py`, `tools/build-ww-doc-site.py`, `tools/INDEX.md`, `docs/2026-10-21 - WW Hero Key And Zapier Migration Prep/Checkpoint.md`
 
 ### W1-21 [ci-9] cost S
 
@@ -509,13 +509,13 @@ Depends on: item 10, item 14
 
 Decision and recommendation: Recommendation: approve all of (a)-(g) now, history purge later as its own force-push decision. Consequence: the public tree stops carrying client PII and personal admin; GitHub history still serves it until a purge; one Band-3 branch deletion and one rotation are the owner's own actions.
 
-Action: D3 Public-data removals from HEAD (history stays until a separate purge order). (a) platform/public/docs/warme-wimmer/ (downloads + m-mail-abgleich.html, 579 addresses) and the same files in akkton/unpauseai-web via the content/<slug> publish path; (b) brisken rome-2026-leadgen task-2..7 output and the invite xlsx -> context/lead-generation/rome-2026/, meji US_Emails_sourced CSV -> context/, pointers in status/p2-rome.md; (c) the six Jochen, the Nagarro and the One Assessment checkpoint folders -> gitignored docs/personal (scores, submission ids and a third-party email are in the bodies); (d) the 8 KIT/BAfoeG/TikTok checkpoint folders, their INDEX rows and session-log entries -> docs/personal; keep the 13 Vinted folders; (e) workspace/projects/prototype-fund/SCOPE.md -> a gitignored home, retarget the two PrototypeFund notepad tasks; (f) `git rm --full-page --fullpage`; (g) tok.txt: identify the service from the 2026-08-23 deckgen transcript, rotate, then `git push origin --delete client/brisken/deckgen-native parking/primary-clone-wip-2026-08-25` and `git branch -D parking/...` after a diff --stat review; enable GitHub secret-scanning non-provider patterns.
+Action: D3 Public-data removals from HEAD (history stays until a separate purge order). (a) platform/public/docs/ww/ (downloads + m-mail-abgleich.html, 579 addresses) and the same files in akkton/unpauseai-web via the content/<slug> publish path; (b) brisken rome-2026-leadgen task-2..7 output and the invite xlsx -> context/lead-generation/rome-2026/, meji US_Emails_sourced CSV -> context/, pointers in status/p2-rome.md; (c) the six Jochen, the Nagarro and the One Assessment checkpoint folders -> gitignored docs/personal (scores, submission ids and a third-party email are in the bodies); (d) the 8 KIT/BAfoeG/TikTok checkpoint folders, their INDEX rows and session-log entries -> docs/personal; keep the 13 Vinted folders; (e) workspace/projects/prototype-fund/SCOPE.md -> a gitignored home, retarget the two PrototypeFund notepad tasks; (f) `git rm --full-page --fullpage`; (g) tok.txt: identify the service from the 2026-08-23 deckgen transcript, rotate, then `git push origin --delete client/brisken/deckgen-native parking/primary-clone-wip-2026-08-25` and `git branch -D parking/...` after a diff --stat review; enable GitHub secret-scanning non-provider patterns.
 
 Why: Hundreds of third-party consumer addresses, named lead rosters, a confidential assessment's results, the owner's address and a credential-shaped file are world-readable today.
 
-Verify: `uv run tools/pii_scan.py --all` reports 0 hits outside allowlists; `git ls-tree HEAD` root has no `--full*`; `gh api repos/akkton/unpauseai-web/contents/public/docs/warme-wimmer/downloads` 404; `git branch -r --contains 57415748` empty.
+Verify: `uv run tools/pii_scan.py --all` reports 0 hits outside allowlists; `git ls-tree HEAD` root has no `--full*`; `gh api repos/akkton/unpauseai-web/contents/public/docs/ww/downloads` 404; `git branch -r --contains 57415748` empty.
 
-Files: `platform/public/docs/warme-wimmer/`, `workspace/clients/brisken/deliverables/rome-2026-leadgen/`, `workspace/clients/meji-media/deliverables/US_Emails_sourced_2026-07-27.csv`, `docs/`, `docs/INDEX.md`, `workspace/projects/prototype-fund/`, `--full-page`, `--fullpage`
+Files: `platform/public/docs/ww/`, `workspace/clients/brisken/deliverables/rome-2026-leadgen/`, `workspace/clients/meji-media/deliverables/US_Emails_sourced_2026-07-27.csv`, `docs/`, `docs/INDEX.md`, `workspace/projects/prototype-fund/`, `--full-page`, `--fullpage`
 
 ### D4 [homes-2, homes-4, homes-6, homes-7, truth-13, ledger-12, truth-6, fit-11, exposure-9] cost M
 
@@ -635,7 +635,7 @@ Status: todo
 
 Depends on: item 24, item 17
 
-Decision and recommendation: Recommendation: yes, with the junction tool first; the WW session works in a worktree and copies WW context into the primary's workspace/clients/warme-wimmer/context/. Consequence: no more check-then-act dance on the hub; the sweep always sees main; two live jobs get re-registered (owner's machine).
+Decision and recommendation: Recommendation: yes, with the junction tool first; the WW session works in a worktree and copies WW context into the primary's workspace/clients/ww/context/. Consequence: no more check-then-act dance on the hub; the sweep always sees main; two live jobs get re-registered (owner's machine).
 
 Action: D11 Primary clone as read-only hub. Rule sentence in rule_branch_isolation §2 ('the main worktree stays on main; branches are cut in worktrees'); tools/worktree_add.py (or the native EnterWorktree) that creates the worktree AND a junction of each client's gitignored context/ back to the primary, then retire the §3 in-place-checkout carve-out; pattern rule warning on `checkout -b` / `switch -c` in the main worktree; re-register AgenticOpsWeeklySynthesis against the notify clone; VintedWatcher gets the notify pattern (dedicated clone, fetch + ff-only daily); the Meji tasks keep their gitignored script dir in the primary.
 
@@ -717,13 +717,13 @@ Depends on: item 20
 
 Decision and recommendation: Recommendation: leave both out of the public tree. Consequence: the import PR carries 15 canonical exports and synthetic fixtures only; the drift guard reads live snapshots from context/.
 
-Action: D16 WW import content calls: do not import the eight dated backup JSONs beside the exports (they stay in akkton history; future backups go to .scratch/); keep fixtures/sabine-task-hardening/executions.json (real Hero record ids) under gitignored context/; copy only ww-export-workflows' canonical exports.
+Action: D16 WW import content calls: do not import the eight dated backup JSONs beside the exports (they stay in akkton history; future backups go to .scratch/); keep the task-hardening fixture's executions.json (real Hero record ids) under gitignored context/; copy only ww-export-workflows' canonical exports.
 
 Why: Both are tracked in the source repo, so leaving them behind is a choice the owner makes, not a mechanical scrub.
 
-Verify: `git ls-files workspace/clients/warme-wimmer | grep -E '_w2-|vor-|fremdstand|executions.json'` = 0.
+Verify: `git ls-files workspace/clients/ww | grep -E '_w2-|vor-|fremdstand|executions.json'` = 0.
 
-Files: `workspace/clients/warme-wimmer/automations/`, `workspace/clients/warme-wimmer/context/test-data/`
+Files: `workspace/clients/ww/automations/`, `workspace/clients/ww/context/test-data/`
 
 ## Wave 3: defer or not worth it
 
@@ -783,7 +783,7 @@ Why: Most of the WW release script is workflow-specific invariants and self-host
 
 Verify: n/a
 
-Files: `workspace/clients/warme-wimmer/automations/tools/`
+Files: `workspace/clients/ww/automations/tools/`
 
 ### X5 [ctx-12] cost S
 
@@ -1053,7 +1053,7 @@ Status: done except the fresh-session Verify (2026-10-29). The rest landed with 
 
 Depends on: W1-17
 
-Action: remove the user-scope `n8n` entry (ENDPOINT_NOT_FOUND at unpauseai1.app.n8n.cloud) and the `firebase` and `serena` entries (30 s connect timeouts at every start) from the primary's `.mcp.json`; `vercel` only in a platform worktree; W1-17's mcp_config.py renders per client so a Brisken or WW session carries no make-meji-media (57 tools) and a Meji session no n8n-warme-wimmer; `claude mcp list` becomes a doctor check (W1-33).
+Action: remove the user-scope `n8n` entry (ENDPOINT_NOT_FOUND at unpauseai1.app.n8n.cloud) and the `firebase` and `serena` entries (30 s connect timeouts at every start) from the primary's `.mcp.json`; `vercel` only in a platform worktree; W1-17's mcp_config.py renders per client so a Brisken or WW session carries no make-meji-media (57 tools) and a Meji session no n8n-ww; `claude mcp list` becomes a doctor check (W1-33).
 
 Why: the harness reported at this session's start: firebase CONNECT_TIMEOUT, serena CONNECT_TIMEOUT, n8n ENDPOINT_NOT_FOUND, vercel needs auth; about 190 tool definitions load into every session regardless of client, and the next registration is WW's per-client n8n server.
 

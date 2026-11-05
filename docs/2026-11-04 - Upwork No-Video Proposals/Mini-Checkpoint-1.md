@@ -11,7 +11,7 @@ Started no-video, mass-production proposal mode on the "Outbound Product Manager
 
 ## What Was Done
 - Letter format for no-video mode: opening block at most 225 chars (the client's collapsed preview; this one 218), then a short body carrying the proof the video used to carry, then "How I'd start", organization line, Karlsruhe / German line, sign-off "Matthias". Delivered in chat only.
-- Default proof set, all anonymized: Meji = "UK events company", Brisken lead desk = "treasury-software company", Wärme Wimmer = "German heat-pump installer". Owner rejected the Brisken expense-recon app as a second Brisken entry.
+- Default proof set, all anonymized: Meji = "UK events company", Brisken lead desk = "treasury-software company", WW = "German heat-pump installer". Owner rejected the Brisken expense-recon app as a second Brisken entry.
 - `workspace/projects/platform/upwork-agency/assets/outbound-case-study.{html,pdf}`: v1 one page (#1725), v2 two pages (#1727). v2 = three program tiles + five cases, five charts. Every figure traced to Meji `status/enquiry-automation.md`, `context/weekly-summaries/2026-10-30.json`, `docs/2026-07-07 - Meji Media Ops/Checkpoint.md`, Brisken `status/p2-outreach-engine.md` rows 47-48, lead-desk `web/review.py` (booked = contact with a calendar 'booked' event).
 
 ## What Did NOT Work (and why)
