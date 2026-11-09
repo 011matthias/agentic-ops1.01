@@ -4,8 +4,10 @@ Read detection is driven THROUGH the wired meter with real PostToolUse
 payloads (rule_behaviors B2). The audit runs as a subprocess against a fixture
 store. Nothing here touches the real memory store or live telemetry.
 """
+import importlib.util
 import json
 import os
+import shlex
 import subprocess
 import sys
 import time
@@ -13,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from hooklib import TOOLS, run_hook
+from hooklib import REPO, TOOLS, run_hook
 
 STORE = "c--Users-someone-Repo-agentic-ops1"
 MEM = f"C:/Users/someone/.claude/projects/{STORE}/memory"
@@ -200,4 +202,60 @@ def test_text_output_reports_counts_and_changes_nothing(store, env):
                        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60, env={**os.environ, **env["env"]})
     assert "9 index entries" in p.stdout and "no read-based Retire" in p.stdout
     assert "Nothing was changed" in p.stdout
+    assert "[MEMORY-INDEX]" not in p.stdout
     assert {q.name: q.read_bytes() for q in store.iterdir()} == before
+
+
+# ------------------------------------------------------------- index cap
+def _index_of(mem, n):
+    """A MEMORY.md of exactly n lines (heading, blank, n-2 entries)."""
+    lines = ["# Memory Index", ""] + [f"- [M{i}](project_m{i}.md) - x" for i in range(n - 2)]
+    (mem / "MEMORY.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _session_start_cap_args():
+    """The args of the SessionStart command wire-hooks.py actually wires."""
+    spec = importlib.util.spec_from_file_location("wire_hooks_for_test", TOOLS / "wire-hooks.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    cmds = [h["command"] for e in mod.CANONICAL_HOOKS["SessionStart"] for h in e["hooks"]
+            if "memory_audit.py" in h["command"]]
+    assert len(cmds) == 1, cmds
+    return shlex.split(cmds[0].split(" python ", 1)[1])
+
+
+def _run_wired(mem, env):
+    """Run the wired SessionStart args against a fixture store (via the env override)."""
+    return subprocess.run([sys.executable, *_session_start_cap_args()], cwd=REPO,
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
+                          env={**os.environ, **env["env"], "AGENTIC_OPS_MEMORY_DIR": str(mem)})
+
+
+def test_session_start_wiring_runs_the_cap_check(store, env):
+    assert _session_start_cap_args() == ["tools/memory_audit.py", "--cap-check"]
+    p = _run_wired(store, env)                     # 11-line fixture index
+    assert p.returncode == 0 and p.stdout == ""
+
+
+def test_cap_check_warns_from_150_lines_with_the_fold_in_hint(store, env):
+    _index_of(store, 149)
+    assert _run_wired(store, env).stdout == ""
+    _index_of(store, 150)
+    p = _run_wired(store, env)
+    assert p.returncode == 0
+    assert "MEMORY.md has 150 lines" in p.stdout
+    assert "fitting existing memory file" in p.stdout and "only a new topic" in p.stdout
+
+
+def test_cap_check_fails_open_on_a_missing_store(tmp_path, env):
+    p = _run_wired(tmp_path / "no-such-store", env)
+    assert p.returncode == 0 and p.stdout == ""
+
+
+def test_full_report_carries_the_cap_warning(store, env):
+    _index_of(store, 160)
+    assert _audit(store, env)["meta"]["index_lines"] == 160
+    p = subprocess.run([sys.executable, str(TOOLS / "memory_audit.py"), "--memory-dir", str(store)],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
+                       env={**os.environ, **env["env"]})
+    assert "[MEMORY-INDEX] MEMORY.md has 160 lines" in p.stdout
