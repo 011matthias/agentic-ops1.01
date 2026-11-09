@@ -3,11 +3,13 @@ project: meji-media
 workstream: ops-radar
 group: ""
 spec: ""
-state: active
-updated: 2026-10-09
+state: paused
+updated: 2026-11-09
 ---
 
 # Meji Media / Opportunity Radar
+
+**Paused (2026-11-09):** Gurmej asked on 2026-10-30 to stop all work after that week, so no light pass or deep sweep runs until the engagement resumes (see `context/comms-log.md`).
 
 **Historical note (2026-10-09):** the September narrative below (live state,
 September launch prep, Gurmej 09-07/09-08 exchanges, review-page build) is

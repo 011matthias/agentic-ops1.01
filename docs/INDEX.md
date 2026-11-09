@@ -636,6 +636,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## meji-media
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-11-09 | Ribit Proposal and Meji Mailbox Cost Answer | comms | [→](docs/2026-11-09%20-%20Ribit%20Proposal%20and%20Meji%20Mailbox%20Cost%20Answer/Checkpoint.md) |
 | 2026-10-21 | Meji Weekly Summary 12 Oct and Outreach Plan | client-dev | [→](docs/2026-10-21%20-%20Meji%20Weekly%20Summary%2012%20Oct%20and%20Outreach%20Plan/Checkpoint.md) |
 | 2026-10-13 | Meji Row 1361 Contact Swap and Campaign Pulse | client-dev | [→](docs/2026-10-13%20-%20Meji%20Row%201361%20Contact%20Swap%20and%20Campaign%20Pulse/Checkpoint.md) |
 | 2026-10-09 | Meji October Corporate Trial and Weekly Summary System | client-dev | [→](docs/2026-10-09%20-%20Meji%20October%20Corporate%20Trial%20and%20Weekly%20Summary%20System/Checkpoint.md) |
