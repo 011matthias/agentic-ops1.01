@@ -515,6 +515,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-11-11 | Memory Index Merge And Cap | system-infra | [→](docs/2026-11-11%20-%20Memory%20Index%20Merge%20And%20Cap/Checkpoint.md) |
 | 2026-11-09 | Memory Index Merge And Cap | system-infra | [Mini-Checkpoint-1](docs/2026-11-09%20-%20Memory%20Index%20Merge%20And%20Cap/Mini-Checkpoint-1.md) |
 | 2026-11-09 | WW Out Of The Public Repo | system-infra | [→](docs/2026-11-09%20-%20WW%20Out%20Of%20The%20Public%20Repo/Checkpoint.md) |
 | 2026-10-31 | Repo Layout Execution Batch 8 | system-infra | [Mini-Checkpoint-1](docs/2026-10-31%20-%20Repo%20Layout%20Execution%20Batch%208/Mini-Checkpoint-1.md) |
