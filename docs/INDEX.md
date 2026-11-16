@@ -792,3 +792,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-09-08 | Vinted Watcher Outage Fix + Knowledge Base | client-dev | [Mini-Checkpoint-2](docs/2026-09-08%20-%20Vinted%20Watcher%20Outage%20Fix%20%2B%20Knowledge%20Base/Mini-Checkpoint-2.md) |
 | 2026-09-08 | Vinted Watcher Outage Fix + Knowledge Base | client-dev | [→](docs/2026-09-08%20-%20Vinted%20Watcher%20Outage%20Fix%20%2B%20Knowledge%20Base/Checkpoint.md) |
 
+## air-to-sea-shuttles
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-11-16 | Air to Sea Shuttles Reply | comms | [→](docs/2026-11-16%20-%20Air%20to%20Sea%20Shuttles%20Reply/Checkpoint.md) |
