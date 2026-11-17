@@ -73,7 +73,6 @@ prospect template. Examples in the current repo:
   `changelog.html`, drops `workflow.html` and `onboarding.html`
 - `docs/meji-media/` — domain-specific operating pages
   (`build-plan`, `lead-scoring`, `volume-forecast`, etc.)
-- `docs/warme-wimmer/` — multilingual runbook + flowchart set
 
 The shared shape requirement is just §2 below (navigation
 chrome + last-updated stamp). The page ROSTER is free.

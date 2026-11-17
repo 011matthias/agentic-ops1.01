@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lead pipeline design</title>
+<style>
+  @page { size: A4; margin: 0; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    color: #0f172a; background: #fff;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .page {
+    width: 210mm; height: 297mm; box-sizing: border-box;
+    padding: 13mm 15mm 16mm; position: relative; overflow: hidden;
+    break-after: page;
+  }
+  .page:last-child { break-after: auto; }
+  .eyebrow { font-size: 7.5pt; letter-spacing: .09em; text-transform: uppercase; color: #2563eb; font-weight: 600; }
+  h1 { font-size: 17pt; line-height: 1.22; margin: 2.5mm 0 2mm; font-weight: 700; letter-spacing: -.01em; }
+  .byline { font-size: 8.5pt; color: #475569; }
+  .intro { font-size: 9.5pt; line-height: 1.5; color: #1e293b; margin: 4mm 0 4mm; }
+  .diagram { width: 166mm; margin: 0 auto; }
+  .diagram svg { width: 100%; height: auto; display: block; }
+  .legend { display: flex; justify-content: center; gap: 7mm; margin-top: 4mm; font-size: 8.5pt; color: #334155; }
+  .legend span { display: inline-flex; align-items: center; gap: 1.6mm; }
+  .dot { font-style: normal; display: inline-flex; width: 4.4mm; height: 4.4mm; border-radius: 50%; color: #fff; font-size: 7pt; font-weight: 700; align-items: center; justify-content: center; }
+  .b1 { background: #2563eb; } .b2 { background: #d97706; } .b3 { background: #7c3aed; }
+  .control { border-left: 3px solid; padding: 2.6mm 4mm 2.6mm 4mm; margin-bottom: 3.2mm; border-radius: 0 2mm 2mm 0; }
+  .control.c1 { border-color: #2563eb; background: #f5f8ff; }
+  .control.c2 { border-color: #d97706; background: #fffaf0; }
+  .control.c3 { border-color: #7c3aed; background: #f8f6ff; }
+  h2 { font-size: 11pt; margin: 0 0 1.6mm; display: flex; align-items: center; gap: 2mm; }
+  h3 { font-size: 10.5pt; margin: 4.5mm 0 2mm; }
+  ul { margin: 0; padding-left: 4.5mm; }
+  li { font-size: 8.9pt; line-height: 1.45; margin: 0 0 1.1mm; color: #1e293b; }
+  li:last-child { margin-bottom: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 8.7pt; }
+  th { text-align: left; font-weight: 600; color: #475569; border-bottom: 1.2px solid #cbd5e1; padding: 1.4mm 2mm; font-size: 8pt; }
+  td { padding: 1.5mm 2mm; border-bottom: 1px solid #e2e8f0; vertical-align: top; color: #1e293b; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  tr.total td { font-weight: 700; border-bottom: none; border-top: 1.2px solid #cbd5e1; }
+  .built li b { color: #0f172a; }
+  .attach { margin-top: 4mm; border: 1px solid #cbd5e1; border-radius: 2mm; padding: 2.6mm 4mm; font-size: 8.7pt; line-height: 1.45; color: #1e293b; }
+  .attach code { font-family: Consolas, monospace; font-size: 8.3pt; background: #f1f5f9; padding: .2mm 1mm; border-radius: 1mm; }
+  footer { position: absolute; left: 15mm; right: 15mm; bottom: 8mm; display: flex; justify-content: space-between; font-size: 7.5pt; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 2mm; }
+</style>
+</head>
+<body>
+
+<section class="page">
+  <div class="eyebrow">UnpauseAI · Proposal brief</div>
+  <h1>Lead pipeline design: where duplicates, failed runs and AI mistakes get stopped</h1>
+  <div class="byline">Prepared for the Riyadh team · Matthias, UnpauseAI · 4 November 2026</div>
+  <p class="intro">One path for every lead, with a control at each of the three places you named. n8n moves the lead, FastAPI holds the business logic and the model calls, and Postgres holds the keys, the queues and the dead-letter table.</p>
+
+  <div class="diagram">
+  <svg viewBox="-12 -4 704 750" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+      </marker>
+      <marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="#d97706"/>
+      </marker>
+    </defs>
+    <style>
+      .t { font-size: 13px; font-weight: 600; fill: #0f172a; }
+      .s { font-size: 10.5px; fill: #475569; }
+      .tag { font-size: 10px; fill: #64748b; font-weight: 600; }
+      .n { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.2; }
+      .k1 { fill: #eff6ff; stroke: #2563eb; stroke-width: 1.6; }
+      .k3 { fill: #f5f3ff; stroke: #7c3aed; stroke-width: 1.6; }
+      .ok { fill: #ecfdf5; stroke: #059669; stroke-width: 1.6; }
+      .stop { fill: #f1f5f9; stroke: #94a3b8; stroke-width: 1.2; stroke-dasharray: 4 3; }
+      .line { stroke: #64748b; stroke-width: 1.4; fill: none; }
+      .err { stroke: #d97706; stroke-width: 1.3; fill: none; stroke-dasharray: 4 3; }
+      .badge text { font-size: 10.5px; font-weight: 700; fill: #fff; }
+    </style>
+
+    <!-- main column: x 200..500, centre 350 -->
+    <rect class="n" x="200" y="0" width="300" height="50" rx="8"/>
+    <text class="t" x="350" y="21" text-anchor="middle">Your lead sources</text>
+    <text class="s" x="350" y="38" text-anchor="middle">forms, ads, inbound mail: each posts to one webhook</text>
+    <line class="line" x1="350" y1="50" x2="350" y2="75" marker-end="url(#ar)"/>
+
+    <rect class="n" x="200" y="76" width="300" height="50" rx="8"/>
+    <text class="t" x="350" y="97" text-anchor="middle">n8n: receive and normalize</text>
+    <text class="s" x="350" y="114" text-anchor="middle">one lead shape, whatever the source</text>
+    <line class="line" x1="350" y1="126" x2="350" y2="151" marker-end="url(#ar)"/>
+
+    <rect class="k1" x="200" y="152" width="300" height="50" rx="8"/>
+    <text class="t" x="350" y="173" text-anchor="middle">Claim the lead's key in Postgres</text>
+    <text class="s" x="350" y="190" text-anchor="middle">source + lead ID, or email · unique constraint</text>
+    <g class="badge"><circle cx="200" cy="152" r="10" fill="#2563eb"/><text x="200" y="156" text-anchor="middle">1</text></g>
+    <line class="line" x1="500" y1="177" x2="534" y2="177" marker-end="url(#ar)"/>
+    <rect class="stop" x="535" y="152" width="145" height="50" rx="8"/>
+    <text class="t" x="607" y="173" text-anchor="middle" style="fill:#475569">Already seen: stop</text>
+    <text class="s" x="607" y="190" text-anchor="middle">nothing is written</text>
+    <line class="line" x1="350" y1="202" x2="350" y2="227" marker-end="url(#ar)"/>
+    <text class="tag" x="358" y="219">new</text>
+
+    <rect class="n" x="200" y="228" width="300" height="50" rx="8"/>
+    <text class="t" x="350" y="249" text-anchor="middle">FastAPI: qualify the lead</text>
+    <text class="s" x="350" y="266" text-anchor="middle">OpenAI or Claude · JSON checked against a schema</text>
+    <line class="line" x1="350" y1="278" x2="350" y2="303" marker-end="url(#ar)"/>
+
+    <polygon class="k3" points="218,304 482,304 500,329 482,354 218,354 200,329"/>
+    <text class="t" x="350" y="325" text-anchor="middle">Valid and confident?</text>
+    <text class="s" x="350" y="342" text-anchor="middle">schema passes, confidence above the threshold</text>
+    <g class="badge"><circle cx="212" cy="306" r="10" fill="#7c3aed"/><text x="212" y="310" text-anchor="middle">3</text></g>
+    <line class="line" x1="500" y1="329" x2="534" y2="329" marker-end="url(#ar)"/>
+    <text class="tag" x="510" y="322">no</text>
+    <rect class="k3" x="535" y="304" width="145" height="50" rx="8"/>
+    <text class="t" x="607" y="325" text-anchor="middle">Human review queue</text>
+    <text class="s" x="607" y="342" text-anchor="middle">a person decides</text>
+    <line class="line" x1="350" y1="354" x2="350" y2="379" marker-end="url(#ar)"/>
+    <text class="tag" x="358" y="371">yes</text>
+
+    <rect class="n" x="200" y="380" width="300" height="50" rx="8"/>
+    <text class="t" x="350" y="401" text-anchor="middle">CRM upsert by email</text>
+    <text class="s" x="350" y="418" text-anchor="middle">HubSpot or GoHighLevel · allowlisted fields only</text>
+    <g class="badge"><circle cx="200" cy="380" r="10" fill="#2563eb"/><text x="200" y="384" text-anchor="middle">1</text></g>
+    <g class="badge"><circle cx="223" cy="380" r="10" fill="#7c3aed"/><text x="223" y="384" text-anchor="middle">3</text></g>
+    <line class="line" x1="350" y1="430" x2="350" y2="455" marker-end="url(#ar)"/>
+
+    <rect class="n" x="200" y="456" width="300" height="50" rx="8"/>
+    <text class="t" x="350" y="477" text-anchor="middle">Outreach draft</text>
+    <text class="s" x="350" y="494" text-anchor="middle">written by the model, held, not sent</text>
+    <line class="line" x1="350" y1="506" x2="350" y2="531" marker-end="url(#ar)"/>
+
+    <rect class="k3" x="200" y="532" width="300" height="50" rx="8"/>
+    <text class="t" x="350" y="553" text-anchor="middle">Approval queue</text>
+    <text class="s" x="350" y="570" text-anchor="middle">a person approves the exact text</text>
+    <g class="badge"><circle cx="200" cy="532" r="10" fill="#7c3aed"/><text x="200" y="536" text-anchor="middle">3</text></g>
+    <line class="line" x1="350" y1="582" x2="350" y2="607" marker-end="url(#ar)"/>
+
+    <rect class="ok" x="200" y="608" width="300" height="50" rx="8"/>
+    <text class="t" x="350" y="629" text-anchor="middle">Sent once, by message ID</text>
+    <text class="s" x="350" y="646" text-anchor="middle">a replay can't send it twice</text>
+
+    <!-- failed-executions panel: x 0..165 -->
+    <rect x="0" y="228" width="165" height="430" rx="10" fill="#fffbeb" stroke="#d97706" stroke-width="1.6"/>
+    <g class="badge"><circle cx="0" cy="228" r="10" fill="#d97706"/><text x="0" y="232" text-anchor="middle">2</text></g>
+    <text class="t" x="82" y="252" text-anchor="middle">Failed executions</text>
+    <text class="s" x="82" y="268" text-anchor="middle">every call that leaves n8n</text>
+
+    <rect x="12" y="282" width="141" height="62" rx="6" fill="#fff" stroke="#f0c27a"/>
+    <text class="t" x="82" y="302" text-anchor="middle" style="font-size:12px">Retry with backoff</text>
+    <text class="s" x="82" y="318" text-anchor="middle">rate limits and</text>
+    <text class="s" x="82" y="332" text-anchor="middle">server errors only</text>
+    <line class="line" x1="82" y1="344" x2="82" y2="363" marker-end="url(#ar)"/>
+
+    <rect x="12" y="364" width="141" height="62" rx="6" fill="#fff" stroke="#f0c27a"/>
+    <text class="t" x="82" y="384" text-anchor="middle" style="font-size:12px">Dead-letter table</text>
+    <text class="s" x="82" y="400" text-anchor="middle">payload and error,</text>
+    <text class="s" x="82" y="414" text-anchor="middle">kept for replay</text>
+    <line class="line" x1="82" y1="426" x2="82" y2="445" marker-end="url(#ar)"/>
+
+    <rect x="12" y="446" width="141" height="48" rx="6" fill="#fff" stroke="#f0c27a"/>
+    <text class="t" x="82" y="466" text-anchor="middle" style="font-size:12px">Alert</text>
+    <text class="s" x="82" y="482" text-anchor="middle">n8n error workflow</text>
+    <line class="line" x1="82" y1="494" x2="82" y2="513" marker-end="url(#ar)"/>
+
+    <rect x="12" y="514" width="141" height="62" rx="6" fill="#fff" stroke="#f0c27a"/>
+    <text class="t" x="82" y="534" text-anchor="middle" style="font-size:12px">Replay</text>
+    <text class="s" x="82" y="550" text-anchor="middle">every step is keyed,</text>
+    <text class="s" x="82" y="564" text-anchor="middle">so nothing writes twice</text>
+
+    <text class="s" x="82" y="606" text-anchor="middle" style="font-style:italic">a bad payload is not</text>
+    <text class="s" x="82" y="620" text-anchor="middle" style="font-style:italic">retried; it fails at once</text>
+    <text class="s" x="82" y="634" text-anchor="middle" style="font-style:italic">and lands in dead-letter</text>
+
+    <!-- error connectors from the external calls -->
+    <line class="err" x1="200" y1="253" x2="166" y2="253" marker-end="url(#ao)"/>
+    <line class="err" x1="200" y1="405" x2="166" y2="405" marker-end="url(#ao)"/>
+    <line class="err" x1="200" y1="481" x2="166" y2="481" marker-end="url(#ao)"/>
+    <line class="err" x1="200" y1="633" x2="166" y2="633" marker-end="url(#ao)"/>
+    <text class="tag" x="183" y="246" text-anchor="middle" style="fill:#b45309;font-size:9px">error</text>
+
+    <!-- daily check -->
+    <rect x="0" y="688" width="680" height="54" rx="10" fill="#fffbeb" stroke="#d97706" stroke-width="1.2"/>
+    <g class="badge"><circle cx="0" cy="688" r="10" fill="#d97706"/><text x="0" y="692" text-anchor="middle">2</text></g>
+    <text class="t" x="340" y="710" text-anchor="middle">Daily check: leads received vs. leads in the CRM</text>
+    <text class="s" x="340" y="728" text-anchor="middle">a run that stops without an error still shows up within a day</text>
+  </svg>
+  </div>
+
+  <div class="legend">
+    <span><i class="dot b1">1</i>Duplicate records</span>
+    <span><i class="dot b2">2</i>Failed executions</span>
+    <span><i class="dot b3">3</i>Incorrect AI-generated actions</span>
+  </div>
+
+  <footer><span>Lead pipeline design · UnpauseAI</span><span>Page 1 of 2</span></footer>
+</section>
+
+<section class="page">
+  <div class="control c1">
+    <h2><i class="dot b1">1</i>Duplicate records</h2>
+    <ul>
+      <li>Each lead gets one key: the source plus the source's own lead ID, or the normalized email when there is no ID.</li>
+      <li>The key goes into Postgres with a unique constraint before anything else runs; a repeated webhook or a replayed run stops there.</li>
+      <li>CRM writes are upserts keyed on email. HubSpot's batch upsert takes email as the identifier; GoHighLevel's upsert follows the location's "Allow Duplicate Contact" setting, so that setting is checked before go-live.</li>
+    </ul>
+  </div>
+
+  <div class="control c2">
+    <h2><i class="dot b2">2</i>Failed executions</h2>
+    <ul>
+      <li>Calls retry with backoff on rate limits and server errors only; a bad payload fails at once.</li>
+      <li>Whatever still fails is stored in a dead-letter table with its payload and error, and the n8n error workflow sends an alert.</li>
+      <li>Replay re-runs a stored item. Because every step is keyed, a replay can't create a second record, task or message.</li>
+      <li>A daily check compares leads received with leads in the CRM, so a silent stop shows up within a day.</li>
+    </ul>
+  </div>
+
+  <div class="control c3">
+    <h2><i class="dot b3">3</i>Incorrect AI-generated actions</h2>
+    <ul>
+      <li>The model returns JSON (score, reasons, summary) that is validated against a schema.</li>
+      <li>Invalid output, or confidence below the threshold, goes to a person instead of the CRM.</li>
+      <li>The AI writes only allowlisted fields (score, summary, draft). Stage, owner and deletions stay with people.</li>
+      <li>Every customer message is a draft until someone approves its exact text; an edit afterwards voids the approval, and the message is sent once, by its ID.</li>
+      <li>LangGraph comes in where a flow branches on the model's answer; qualification, summary and draft usually fit one validated call.</li>
+    </ul>
+  </div>
+
+  <h3>Delivery</h3>
+  <table>
+    <thead><tr><th>Phase</th><th>What ships</th><th>Duration</th><th class="num">Price</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Lead intake, duplicate prevention, CRM sync, retries, logging, alerts</td><td>about 1.5 weeks</td><td class="num">$1,000</td></tr>
+      <tr><td>2</td><td>AI qualification, lead summaries, outreach drafts, approval queue</td><td>about 2 weeks</td><td class="num">$1,500</td></tr>
+      <tr><td>3</td><td>Follow-ups, tasks, notifications, documentation, Docker deployment</td><td>about 1 week</td><td class="num">$1,000</td></tr>
+      <tr class="total"><td></td><td>Total, fixed price</td><td></td><td class="num">$3,500</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Built before</h3>
+  <ul class="built">
+    <li><b>n8n + CRM:</b> about 20 live n8n workflows against a CRM API for a heating-installation company, with an error handler and a health-digest watchdog.</li>
+    <li><b>FastAPI + LLM:</b> a receipt-matching service for a finance team; the model proposes, a person confirms, and nothing guessed reaches the accounting system.</li>
+    <li><b>Approval gate:</b> per-message approval with an exact-text check, built and tested for a B2B outreach tool.</li>
+  </ul>
+
+  <div class="attach">
+    <b>Attached:</b> <code>lead-intake-dedupe-review-workflow.json</code>, stage one of this design as an n8n workflow: the key claim, the duplicate stop, the review route and the dead-letter route. Sending is left out on purpose; drafts wait for approval.
+  </div>
+
+  <footer><span>Lead pipeline design · UnpauseAI</span><span>Page 2 of 2</span></footer>
+</section>
+
+</body>
+</html>

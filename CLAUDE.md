@@ -50,7 +50,7 @@ Required: `id`, `name`, `type`, `stage` (spec|build|test|live), `orchestrator`, 
 
 - **Commands** (32) — Your interface. Type `/comd_<name>` to invoke.
 - **Skills** (26) — Domain expertise (first-party `skil_` dirs; make-pack and n8n-pack keep their modules in their own `modules/`), plus vendored plugin skills. Auto-load by context (e.g., Make.com work loads make-pack).
-- **Agents** (12) — Specialists in `.claude/agents/`, spawned internally by commands (build-orchestrator, implementation-agent, testing-agent, bug-fixer, deployer, api-fetcher, and others).
+- **Agents** (14) — Specialists in `.claude/agents/`, spawned by commands or on request (done-verifier for browser-driven deploy checks, brisken-mail-reader for read-only Brisken mail, sourced-researcher for sourced market research, build-orchestrator, bug-fixer, and others).
 - **Rules** (20) — Always-on constraints in `.claude/rules/` (behaviors, session start, session pressure, plus the hard-constraint standards).
 - **Hooks** (30) — Enforcement scripts in `.claude/hooks/`, wired by `tools/wire-hooks.py` and self-healed at SessionStart.
 - **Patterns** (38) — Declarative regex rules in `.claude/patterns/`, read by `pattern-rules-gate.py`.

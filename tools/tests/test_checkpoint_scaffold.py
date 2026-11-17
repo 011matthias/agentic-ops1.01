@@ -627,11 +627,11 @@ class TestSections:
         assert not (root / "docs" / "sessions" / "2026-07-23.md").exists()
 
     def test_existing_slug_heading_stays_valid_without_a_folder(self, root: Path):
-        # WW checkpoints land in this repo before its client folder does.
+        # A client's checkpoints can land before its client folder does.
         (root / "docs" / "INDEX.md").write_text(
-            "# Session Index\n\n## warme-wimmer\n| Date | Topic | Type | Link |\n"
+            "# Session Index\n\n## acme-heating\n| Date | Topic | Type | Link |\n"
             "|------|-------|------|------|\n", encoding="utf-8")
-        assert run_finalize(root, self._client_payload("warme-wimmer")) == 0
+        assert run_finalize(root, self._client_payload("acme-heating")) == 0
 
 
 class TestPrivateCheckpoint:

@@ -54,7 +54,7 @@ Decided to build software-engineering capability into agentic-ops first (interna
 | tools/INDEX.md | Modified | backfilled 9 missing tool rows (37/37) |
 | .github/workflows/ci.yml | Modified | `hooks` job: ruff + check-index + pytest |
 | platform/package.json | Modified | typecheck + test scripts |
-| tools/{build-hours-tracker,build-warme-wimmer-doc-site,handoff-readiness,make-api,openclaw-sandbox-init,rename-chat}.py | Modified | ruff F-fixes (unused imports, empty f-strings) |
+| tools/{build-hours-tracker,build-ww-doc-site,handoff-readiness,make-api,openclaw-sandbox-init,rename-chat}.py | Modified | ruff F-fixes (unused imports, empty f-strings) |
 
 ---
 

@@ -16,7 +16,7 @@ A multi-day attempt to get Vercel credentials so this machine could deploy `agen
 ### The reframe (the load-bearing finding)
 1. `akkton/unpauseai-web` is a private standalone repo, default branch `main`, actively pushed (commit "stand this up as the standalone website repo", 2026-07-25). Its `docs/publishing.md` (Nico's) is authoritative: merging `main` does NOT deploy; going live is his `vercel --prod`; contributors preview on their OWN free Vercel account (zero production access). Matthias was never meant to have production access — which is why every token/seat/login path dead-ended.
 2. Live production 404s on the three AEO posts and matches unpauseai-web's content, not the monorepo's — strong evidence our week of `platform/` PRs never reached the live site.
-3. `agentic-ops` keeps only a narrow role now: it generates some static gated doc-site pages (`public/docs/warme-wimmer/`) into a sibling checkout of unpauseai-web.
+3. `agentic-ops` keeps only a narrow role now: it generates some static gated doc-site pages (`public/docs/ww/`) into a sibling checkout of unpauseai-web.
 
 ### Delivered
 1. **PR #1 on `akkton/unpauseai-web`** (`content/port-aeo-blog-posts`) — ported the 3 stranded posts (cold-email-no-replies-diagnostic, make-contractor-left-takeover, spf-dkim-dmarc-cold-email-minimum) verbatim from `agentic-ops1` origin/main. `blog.ts` auto-discovers `*.md`, added `domainkey` to cspell. Full CI green in the clean env (type-check/lint/build, spell, Playwright); build generates all 3 as `/blog/<slug>` routes. Not merged — Nico's review + go-live.

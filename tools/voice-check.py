@@ -14,7 +14,7 @@ sufficient. Use alongside adversarial-prereview.py for substance.
 
 Usage:
   uv run tools/voice-check.py path/to/file.md [path/to/another.md ...]
-  uv run tools/voice-check.py --dir workspace/clients/warme-wimmer/context/hero-exports/notion-pages
+  uv run tools/voice-check.py --dir workspace/clients/{client}/context/notion-pages
 
 Exit 0 = no hits. Exit 1 = hits found (non-blocking warning; caller decides).
 Exit 2 = usage error.

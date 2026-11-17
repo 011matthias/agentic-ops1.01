@@ -425,6 +425,18 @@ CANONICAL_HOOKS = {
                     "command": _script_cmd("tools/mcp_config.py", "--ensure --hook"),
                     "timeout": 10000,
                 },
+                {
+                    # Memory-index cap: one line when MEMORY.md reaches 150
+                    # lines (the harness reads only the first 200), telling
+                    # the next memory to join an existing file instead of
+                    # adding an index line. Silent under the cap; fail-open,
+                    # exit 0 always. tools/ script, not part of
+                    # EXPECTED_HOOK_SCRIPTS. Built 2026-11-09 after the index
+                    # hit 195 lines and was merged down to ~100.
+                    "type": "command",
+                    "command": _cmd("tools/memory_audit.py", "--cap-check"),
+                    "timeout": 10000,
+                },
             ],
         }
     ],

@@ -517,6 +517,10 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 |------|-------|------|------|
 | 2026-10-29 | Ad Game Viability Ranker | misc | [Mini-Checkpoint-1](docs/2026-10-29%20-%20Ad%20Game%20Viability%20Ranker/Mini-Checkpoint-1.md) |
 | 2026-10-29 | Remote Control Phone Access | system-infra | [Mini-Checkpoint-1](docs/2026-10-29%20-%20Remote%20Control%20Phone%20Access/Mini-Checkpoint-1.md) |
+| 2026-11-11 | Memory Index Merge And Cap | system-infra | [→](docs/2026-11-11%20-%20Memory%20Index%20Merge%20And%20Cap/Checkpoint.md) |
+| 2026-11-09 | Memory Index Merge And Cap | system-infra | [Mini-Checkpoint-1](docs/2026-11-09%20-%20Memory%20Index%20Merge%20And%20Cap/Mini-Checkpoint-1.md) |
+| 2026-11-09 | WW Out Of The Public Repo | system-infra | [→](docs/2026-11-09%20-%20WW%20Out%20Of%20The%20Public%20Repo/Checkpoint.md) |
+| 2026-10-31 | Repo Layout Execution Batch 8 | system-infra | [Mini-Checkpoint-1](docs/2026-10-31%20-%20Repo%20Layout%20Execution%20Batch%208/Mini-Checkpoint-1.md) |
 | 2026-10-30 | Repo Layout Execution Batch 7 | system-infra | [Mini-Checkpoint-1](docs/2026-10-30%20-%20Repo%20Layout%20Execution%20Batch%207/Mini-Checkpoint-1.md) |
 | 2026-10-30 | Repo Layout Execution Batch 6 | system-infra | [Mini-Checkpoint-1](docs/2026-10-30%20-%20Repo%20Layout%20Execution%20Batch%206/Mini-Checkpoint-1.md) |
 | 2026-10-29 | Repo Layout Execution Batch 5 | system-infra | [Mini-Checkpoint-1](docs/2026-10-29%20-%20Repo%20Layout%20Execution%20Batch%205/Mini-Checkpoint-1.md) |
@@ -526,7 +530,6 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-10-29 | Repo Layout Execution Batch 2 | system-infra | [Mini-Checkpoint-1](docs/2026-10-29%20-%20Repo%20Layout%20Execution%20Batch%202/Mini-Checkpoint-1.md) |
 | 2026-10-28 | Repo Layout Execution Batch 1 | system-infra | [Mini-Checkpoint-1](docs/2026-10-28%20-%20Repo%20Layout%20Execution%20Batch%201/Mini-Checkpoint-1.md) |
 | 2026-10-28 | Repo Layout Audit | system-infra | [→](docs/2026-10-28%20-%20Repo%20Layout%20Audit/Checkpoint.md) |
-| 2026-10-07 | Jotform Warme Wimmer Vault Entry | misc | [Mini-Checkpoint-1](docs/2026-10-07%20-%20Jotform%20Warme%20Wimmer%20Vault%20Entry/Mini-Checkpoint-1.md) |
 | 2026-10-07 | Zapier MCP Connector Setup | system-infra | [→](docs/2026-10-07%20-%20Zapier%20MCP%20Connector%20Setup/Checkpoint.md) |
 | 2026-10-05 | Handyvertrag HIGH Verlaengerung | misc | [→](docs/2026-10-05%20-%20Handyvertrag%20HIGH%20Verlaengerung/Checkpoint.md) |
 | 2026-09-21 | Friction Register Voids Closed | system-infra | [→](docs/2026-09-21%20-%20Friction%20Register%20Voids%20Closed/Checkpoint.md) |
@@ -639,6 +642,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 |------|-------|------|------|
 | 2026-10-30 | Meji Weekly Summary Ed4 and Season Value | client-dev | [→](docs/2026-10-30%20-%20Meji%20Weekly%20Summary%20Ed4%20and%20Season%20Value/Checkpoint.md) |
 | 2026-10-29 | Meji Campaign Check-up and Block List | client-dev | [→](docs/2026-10-29%20-%20Meji%20Campaign%20Check-up%20and%20Block%20List/Checkpoint.md) |
+| 2026-11-09 | Ribit Proposal and Meji Mailbox Cost Answer | comms | [→](docs/2026-11-09%20-%20Ribit%20Proposal%20and%20Meji%20Mailbox%20Cost%20Answer/Checkpoint.md) |
 | 2026-10-21 | Meji Weekly Summary 12 Oct and Outreach Plan | client-dev | [→](docs/2026-10-21%20-%20Meji%20Weekly%20Summary%2012%20Oct%20and%20Outreach%20Plan/Checkpoint.md) |
 | 2026-10-13 | Meji Row 1361 Contact Swap and Campaign Pulse | client-dev | [→](docs/2026-10-13%20-%20Meji%20Row%201361%20Contact%20Swap%20and%20Campaign%20Pulse/Checkpoint.md) |
 | 2026-10-09 | Meji October Corporate Trial and Weekly Summary System | client-dev | [→](docs/2026-10-09%20-%20Meji%20October%20Corporate%20Trial%20and%20Weekly%20Summary%20System/Checkpoint.md) |
@@ -711,6 +715,9 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## platform
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-11-09 | Upwork Email Marketer Call Prep | comms | [→](docs/2026-11-09%20-%20Upwork%20Email%20Marketer%20Call%20Prep/Checkpoint.md) |
+| 2026-11-05 | VossMoos Call Prep and Debrief | comms | [→](docs/2026-11-05%20-%20VossMoos%20Call%20Prep%20and%20Debrief/Checkpoint.md) |
+| 2026-11-04 | Upwork No-Video Proposals | misc | [Mini-Checkpoint-1](docs/2026-11-04%20-%20Upwork%20No-Video%20Proposals/Mini-Checkpoint-1.md) |
 | 2026-08-07 | unpauseai.com About Bio Marketing GDPR Reweight | system-infra | [Mini-Checkpoint-2](docs/2026-08-07%20-%20unpauseai.com%20About%20Bio%20Marketing%20GDPR%20Reweight/Mini-Checkpoint-2.md) |
 | 2026-08-07 | unpauseai.com Publish Session Closeout | system-infra | [Mini-Checkpoint-2](docs/2026-08-07%20-%20unpauseai.com%20Publish%20Session%20Closeout/Mini-Checkpoint-2.md) |
 | 2026-08-07 | unpauseai.com About Publish + Publish-Path Lock | system-infra | [→](docs/2026-08-07%20-%20unpauseai.com%20About%20Publish%20%2B%20Publish-Path%20Lock/Checkpoint.md) |
@@ -789,22 +796,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-09-08 | Vinted Watcher Outage Fix + Knowledge Base | client-dev | [Mini-Checkpoint-2](docs/2026-09-08%20-%20Vinted%20Watcher%20Outage%20Fix%20%2B%20Knowledge%20Base/Mini-Checkpoint-2.md) |
 | 2026-09-08 | Vinted Watcher Outage Fix + Knowledge Base | client-dev | [→](docs/2026-09-08%20-%20Vinted%20Watcher%20Outage%20Fix%20%2B%20Knowledge%20Base/Checkpoint.md) |
 
-## warme-wimmer
+## air-to-sea-shuttles
 | Date | Topic | Type | Link |
 |------|-------|------|------|
-| 2026-10-30 | WW W1 Gap and Jessica Testseite Draft | client-dev | [→](docs/2026-10-30%20-%20WW%20W1%20Gap%20and%20Jessica%20Testseite%20Draft/Checkpoint.md) |
-| 2026-10-28 | WW W2-14 Jessica als Testempfaenger | client-dev | [→](docs/2026-10-28%20-%20WW%20W2-14%20Jessica%20als%20Testempfaenger/Checkpoint.md) |
-| 2026-10-21 | WW Hero Key And Zapier Migration Prep | client-dev | [→](docs/2026-10-21%20-%20WW%20Hero%20Key%20And%20Zapier%20Migration%20Prep/Checkpoint.md) |
-| 2026-10-21 | WW W2-14 Testseite Jetzt pruefen | client-dev | [→](docs/2026-10-21%20-%20WW%20W2-14%20Testseite%20Jetzt%20pruefen/Checkpoint.md) |
-| 2026-10-14 | WW W2-14 Startknopf und Hero-Reiter | client-dev | [→](docs/2026-10-14%20-%20WW%20W2-14%20Startknopf%20und%20Hero-Reiter/Checkpoint.md) |
-| 2026-10-13 | WW W2-14 Kalender-Ortszeit und R20-Titel | client-dev | [→](docs/2026-10-13%20-%20WW%20W2-14%20Kalender-Ortszeit%20und%20R20-Titel/Checkpoint.md) |
-| 2026-10-12 | WW W2-14 Duplicate Test Run | client-dev | [→](docs/2026-10-12%20-%20WW%20W2-14%20Duplicate%20Test%20Run/Checkpoint.md) |
-| 2026-10-11 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-3](docs/2026-10-11%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-3.md) |
-| 2026-10-11 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-2](docs/2026-10-11%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-2.md) |
-| 2026-10-11 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-1](docs/2026-10-11%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-1.md) |
-| 2026-10-09 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-4](docs/2026-10-09%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-4.md) |
-| 2026-10-09 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-3](docs/2026-10-09%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-3.md) |
-| 2026-10-09 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-2](docs/2026-10-09%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-2.md) |
-| 2026-10-09 | WW Sales Process 72627 Build | client-dev | [Mini-Checkpoint-1](docs/2026-10-09%20-%20WW%20Sales%20Process%2072627%20Build/Mini-Checkpoint-1.md) |
-| 2026-10-07 | WW W1-06 Messeformular Zapier to n8n | client-dev | [→](docs/2026-10-07%20-%20WW%20W1-06%20Messeformular%20Zapier%20to%20n8n/Checkpoint.md) |
-| 2026-10-07 | Waerme Wimmer Takeover | client-dev | [→](docs/2026-10-07%20-%20Waerme%20Wimmer%20Takeover/Checkpoint.md) |
+| 2026-11-16 | Air to Sea Shuttles Reply | comms | [→](docs/2026-11-16%20-%20Air%20to%20Sea%20Shuttles%20Reply/Checkpoint.md) |

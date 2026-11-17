@@ -6,7 +6,7 @@
 ---
 
 ## Summary
-Ten-lens, adversarially verified audit of whether the repo layout fits the work ahead (Brisken p1 product loop, the Waerme Wimmer n8n migration, Meji, Upwork independence), delivered as PLAN.md (37 mechanical items, 19 owner decisions, 8 deferrals, 12 verified critic gaps) plus the continuation prompt at the end of this file. Earlier in the same session: README restructure merged (PR #1647) and the owner's decision that WW moves into this repo with code public and data private.
+Ten-lens, adversarially verified audit of whether the repo layout fits the work ahead (Brisken p1 product loop, the WW n8n migration, Meji, Upwork independence), delivered as PLAN.md (37 mechanical items, 19 owner decisions, 8 deferrals, 12 verified critic gaps) plus the continuation prompt at the end of this file. Earlier in the same session: README restructure merged (PR #1647) and the owner's decision that WW moves into this repo with code public and data private.
 
 ---
 
@@ -15,11 +15,11 @@ Ten-lens, adversarially verified audit of whether the repo layout fits the work 
 1. Fact base on origin/main 711961b3: sizes of the always-loaded context (20 rules 174,593 B, CLAUDE.md 6.4 KB, MEMORY.md 23.5 KB), CI job runtimes, a transcript census of command and skill use, worktree, branch and PR state.
 2. Workflow run wf_6956c984-be3: 10 lenses (fit, ctx, harness, ledger, homes, ci, exposure, machine, truth, onboard) produced 123 findings; each got an evidence refuter and a value refuter; a synthesis agent merged them into waves; a completeness critic listed what no lens covered. 36 agents, 9.3M tokens, 1,209 tool calls, 16 h wall-clock. Verdicts: 24 confirmed, 99 partly (claim right, size or fix adjusted), 0 refuted, 0 unverified.
 3. The 12 critic gaps checked live (PLAN.md section G): a live client app whose code is gitignored (Jochen Projekt), the 800 MB Brisken context/ existing only in the primary clone, a 20,332-line service.py, three red scheduled tasks, the status sweep dying with a UnicodeDecodeError and exiting 0, no gitleaks config, dead MCP entries, a dangling plugin enable, doctor.py never run, 843 MB of .scratch and an 18 MB hook log.
-4. Independent spot-checks confirmed the highest-severity findings: the WW customer-mail export tracked under platform/public/docs/warme-wimmer since 2026-07-17 (PR #268, world-readable since the repo went public on 2026-09-16; 0 forks, 0 watchers), tok.txt on two pushed branches, n8n-nodes-hero-software unpushed (9 commits), 44 worktrees with merged PRs, the brisken p1 status pair at 1.5 MB, all 8 open PRs CONFLICTING.
+4. Independent spot-checks confirmed the highest-severity findings: the WW customer-mail export tracked under platform/public/docs/ww since 2026-07-17 (PR #268, world-readable since the repo went public on 2026-09-16; 0 forks, 0 watchers), tok.txt on two pushed branches, n8n-nodes-hero-software unpushed (9 commits), 44 worktrees with merged PRs, the brisken p1 status pair at 1.5 MB, all 8 open PRs CONFLICTING.
 
 ### Earlier in the session
 1. README restructured and merged (PR #1647, squash 711961b3).
-2. WW migration decided (move here, code public, data private) and a WW continuation prompt handed over; recorded in memory project_warme_wimmer_takeover.
+2. WW migration decided (move here, code public, data private) and a WW continuation prompt handed over; recorded in memory project_ww_takeover.
 3. Dead repo 011matthias/agentic-ops1: owner chose delete; blocked on the gh token lacking the delete_repo scope, so the owner runs the command.
 
 ---
@@ -54,7 +54,7 @@ Ten-lens, adversarially verified audit of whether the repo layout fits the work 
 | docs/2026-10-28 - Repo Layout Audit/PLAN.md | created | the plan and queue (rendered from the workflow result, gap verifications and additions written in) |
 | docs/2026-10-28 - Repo Layout Audit/Checkpoint.md | created | this file, continuation prompt appended |
 | docs/INDEX.md, docs/friction-register.md, docs/sessions/2026-10-28.md | scaffold | ledger rows |
-| memory: project_repo_layout_audit_plan.md (new), MEMORY.md, project_warme_wimmer_takeover.md | edited | pointer to the plan and the WW ordering constraint |
+| memory: project_repo_layout_audit_plan.md (new), MEMORY.md, project_ww_takeover.md | edited | pointer to the plan and the WW ordering constraint |
 | README.md | PR #1647 (earlier) | restructure |
 
 ---
@@ -75,7 +75,7 @@ Audit complete; nothing of PLAN.md executed. Ops status: not applicable (system 
 ### Files to Read First
 - docs/2026-10-28 - Repo Layout Audit/PLAN.md
 - this file
-- memory: project_repo_layout_audit_plan.md, project_warme_wimmer_takeover.md, project_repo_public_by_decision.md
+- memory: project_repo_layout_audit_plan.md, project_ww_takeover.md, project_repo_public_by_decision.md
 
 ### Open Questions
 - Does a hook `ask` produce a prompt under the project's bypassPermissions mode (W1-0)? If not, the floor gates have been theater since May.
@@ -124,12 +124,12 @@ The repo layout audit is done and verified; the plan is the queue. Read it first
 
 Shape of the plan: 37 mechanical items (W1-0, W1-1 .. W1-36), 19 owner decisions (D1 .. D19), 8 deferrals (X1 .. X8), each with Action / Why / Verify / Files and a `Status:` line you update. Behind it: 123 findings from 10 lenses, two refuters each (24 confirmed, 99 partly, 0 refuted), and 12 critic gaps checked live on 2026-10-28.
 
-Already done in the audit session: README restructured (PR #1647 merged); the owner decided the Waerme Wimmer (WW) client moves into this repo with code public and data private, and a WW migration continuation prompt was handed over on 2026-10-27. That prompt must not run before the items below that define where WW files land and the gate that keeps personal data out of the public tree.
+Already done in the audit session: README restructured (PR #1647 merged); the owner decided the WW client moves into this repo with code public and data private, and a WW migration continuation prompt was handed over on 2026-10-27. That prompt must not run before the items below that define where WW files land and the gate that keeps personal data out of the public tree.
 
 ## Queue, in order
 
 1. W1-0: the hook-ask-under-bypassPermissions probe (ten minutes). Write the answer into your checkpoint; it decides whether the floor gates are real.
-2. Owner decisions through AskUserQuestion, recommendation as the first option, consequence stated, up to four questions per call. Batch 1: D1 retire the Trigger.dev/Railway lane, D2 client-handoff convention, D3 public-data removals from HEAD (the WW mail export under platform/public/docs/warme-wimmer, lead rosters, personal checkpoint folders, the two root PNGs, the tok.txt branches plus token rotation), D4 supersession deletions. Batch 2: D16 WW import content, D17 Jochen Projekt code tracked, D18 context/ backup mechanism, D5 machine clean-up (show the dry-run table first). Write each answer into the item's Status line. Execute no D item before its yes; D3(g), D5's branch deletions and repo setting, and anything that deletes a remote are Band-3 and need the owner's explicit order in that session.
+2. Owner decisions through AskUserQuestion, recommendation as the first option, consequence stated, up to four questions per call. Batch 1: D1 retire the Trigger.dev/Railway lane, D2 client-handoff convention, D3 public-data removals from HEAD (the WW mail export under platform/public/docs/ww, lead rosters, personal checkpoint folders, the two root PNGs, the tok.txt branches plus token rotation), D4 supersession deletions. Batch 2: D16 WW import content, D17 Jochen Projekt code tracked, D18 context/ backup mechanism, D5 machine clean-up (show the dry-run table first). Write each answer into the item's Status line. Execute no D item before its yes; D3(g), D5's branch deletions and repo setting, and anything that deletes a remote are Band-3 and need the owner's explicit order in that session.
 3. W1-4: re-land the 8 conflicting ledger PRs, `fetch.prune`, remove the 10 husk directories, move the primary clone to main (only when `git status --porcelain` is empty there and `uv run tools/session_registry.py --check` shows no live sibling).
 4. W1-3 (ci_is_green reads mergeability), then W1-1 and W1-2 (CI split and path filters).
 5. W1-13 (sweep placement gate, skip when parked), W1-14 (pii push gate), W1-35 (gitleaks config after the differential probe against commit 57415748), W1-31 (PYTHONUTF8 and subprocess encoding).
@@ -147,7 +147,7 @@ Each item's Verify line is the acceptance criterion; a green suite alone is not.
 - One PR per item on a `sys/layout-<item>` branch; the B6 chain runs without asking: commit, push, `gh pr create`, merge on CI green. Ledger edits (INDEX, register, session logs, checkpoint folders, PLAN.md Status lines) go on `docs/...` branches only. For changes under tools/, .claude/hooks/ or tools/tests/: `uv run tools/preflight-hooks.py` (`--full` when tools/tests change) before the push, and prove each fix with `uv run tools/regress_check.py` so the suite is seen to go red when the fix is unwired.
 - Owner decisions only through AskUserQuestion with the recommendation first; never an open offer.
 - The repo is public by owner decision (2026-09-16); never re-raise it. Never push a file carrying real addresses, rosters or secrets; count PII, never print values. Nothing of WW is pushed until W1-20's scan is clean and the owner has seen the public file list.
-- Hero, n8n and mail writes in any client tenant need a per-action yes; never touch the held R1 test on HUK-106488.
+- Hero, n8n and mail writes in any client tenant need a per-action yes; never touch the held R1 test record (its ID lives in the WW context, not in tracked files).
 - PLAN.md is the only queue: update its Status lines in your checkpoint's docs PR. When an item touches a client's status/ workstream, bump that status file in the same session.
 
 ## SESSION LOOP (copy this whole section verbatim into every continuation prompt you write)

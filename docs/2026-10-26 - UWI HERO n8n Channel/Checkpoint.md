@@ -7,7 +7,7 @@
 
 ## Summary
 
-"How do I scale" became "I need more customers"; with Make ruled out by the owner, the session opened the HERO x n8n channel (uwi u9): an empty n8n slot in HERO's ecosystem, filled by our own node, with Wärme Wimmer as production proof.
+"How do I scale" became "I need more customers"; with Make ruled out by the owner, the session opened the HERO x n8n channel (uwi u9): an empty n8n slot in HERO's ecosystem, filled by our own node, with WW as production proof.
 
 ---
 
@@ -16,7 +16,7 @@
 ### Strategy and channel research
 1. Grounded the scaling answer in `context/monetization-strategy.md`: all 2026 revenue hours-coupled, zero clients ever won from an owned channel, the strategy's sends ledger never built, the 10-05 Karlsruhe walk-ins silent since.
 2. Researched platform partner programs (Make, n8n, Zapier) and, via a subagent, 21 CRM partner ecosystems; spot-checked its top claims against vendor pages (two corrected, see What Did NOT Work).
-3. Wrote application texts: n8n reference client (Wärme Wimmer, Lexware flow excluded as Raphael's) and Make motivation/bio (Make then dropped).
+3. Wrote application texts: n8n reference client (WW, Lexware flow excluded as the WW tech lead's) and Make motivation/bio (Make then dropped).
 
 ### HERO channel
 4. Enumerated before planning (B7 E2): no HERO n8n node on npm (5 candidate names 404, keyword search empty); HERO maintains its own official Make app; HERO's partner page lists 13 software partners and 0 implementers; API key only via HERO support; n8n verification requirements; n8n Cloud pricing; licence reading = client-owned instances.
@@ -48,7 +48,7 @@
 - **Make Solution Partner route:** owner has no Make account and won't grow Make; the texts written for it are dead.
 - **n8n Expert Partner Program as near-term reach:** closed pilot, waitlist only, needs 3 active n8n customers (we have 1), named regions exclude Germany.
 - **CRM partner directories as a lead source:** most offer a listing, not leads; only HubSpot documents referral routing (favouring accredited partners); Pipedrive, Zoho, Odoo, Bitrix24, weclapp are reseller-shaped.
-- **Lexware as top CRM pick:** rested on our research brief claiming the WW Lexware flow as our proof; it is Raphael's, so Lexware's "one successful Public API project" requirement is unmet.
+- **Lexware as top CRM pick:** rested on our research brief claiming the WW Lexware flow as our proof; it is the WW tech lead's, so Lexware's "one successful Public API project" requirement is unmet.
 - **`gh pr merge` chained after `cd`:** blocked by `block-merge-chained-after-any-command`; run the merge alone with `-R`.
 - **Mechanical MEMORY.md trim (first clause of long lines):** reaches 18.5 KB, still above the 17.1 KB target, and drops facts arbitrarily.
 
@@ -74,7 +74,7 @@ u9 active: plan merged, node v1 local and schema-checked, HERO email sent, nothi
 ## Next Steps
 1. Watch for HERO's reply at the address the owner sent from. Test account: run `docs/live-verification.md` in the node repo. Terms answer: settles naming, logo and "official" wording.
 2. 2026-11-09 with no reply: publish without logo, "not affiliated" line, fresh squashed history. Needs first: repo under `UnpauseAI` (gh logged in as UnpauseAI, or 011matthias as collaborator) and an npm account with trusted publishing.
-3. Owner: ask Raphael for WW naming consent (D2); decide package prices (D3).
+3. Owner: ask the WW tech lead for WW naming consent (D2); decide package prices (D3).
 4. Run `npm run dev` once in a real n8n before publishing.
 5. Phase 2: three templates, case study (measured numbers only), landing page on unpauseai.com via `akkton/unpauseai-web`.
 6. Compact `MEMORY.md` by judgment in a window with no sibling sessions (Edit-based, not a whole-file rewrite).

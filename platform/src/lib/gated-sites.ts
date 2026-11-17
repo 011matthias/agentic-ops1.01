@@ -28,14 +28,6 @@ export interface GatedSite {
 
 export const GATED_SITES: GatedSite[] = [
   {
-    id: "wimmer",
-    pathRoot: "/docs/warme-wimmer",
-    pathPrefix: "/docs/warme-wimmer/",
-    cookie: "wimmer-auth",
-    accessCodeEnv: "WIMMER_ACCESS_CODE",
-    label: "Wärme Wimmer Documentation",
-  },
-  {
     id: "meji",
     pathRoot: "/docs/meji-media",
     pathPrefix: "/docs/meji-media/",
@@ -55,9 +47,8 @@ export const GATED_SITES: GatedSite[] = [
 
 /** Env var holding the master password that unlocks every gated site. */
 export const MASTER_ACCESS_CODE_ENV = "MASTER_ACCESS_CODE"
-/** Shared HMAC secret for grant cookies. Falls back to the legacy Wimmer
- *  secret so a deploy that predates GATE_AUTH_SECRET still works. */
-export const GATE_SECRET_ENVS = ["GATE_AUTH_SECRET", "WIMMER_AUTH_SECRET"]
+/** Shared HMAC secret for grant cookies. */
+export const GATE_SECRET_ENVS = ["GATE_AUTH_SECRET"]
 
 export const COOKIE_MAX_AGE_S = 60 * 60 * 24 * 30 // 30 days
 

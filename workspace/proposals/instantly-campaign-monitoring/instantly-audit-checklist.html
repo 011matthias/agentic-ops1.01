@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Instantly audit checklist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=block">
+<style>
+  :root { --ink: #111827; --ink-2: #4b5563; --muted: #6b7280; --rule: #e5e7eb; --accent: #2563eb; --panel: #f8fafc; }
+  @page { size: A4 portrait; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #ffffff; }
+  body { font-family: Geist, -apple-system, "Segoe UI", sans-serif; color: var(--ink); font-size: 8.4pt;
+    line-height: 1.32; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .page { width: 210mm; height: 297mm; padding: 9.5mm 12mm 7mm; display: flex; flex-direction: column; overflow: hidden; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid var(--rule); padding-bottom: 3mm; }
+  h1 { font-size: 15.5pt; line-height: 1.15; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 1.2mm; }
+  .byline { color: var(--muted); font-size: 8.6pt; margin: 0; }
+  .logo { height: 7.5mm; width: auto; }
+  .lede { font-size: 9pt; margin: 2.6mm 0 0; }
+  h2 { font-size: 10pt; font-weight: 600; margin: 2.8mm 0 0.8mm; }
+  h2 .num { color: var(--accent); margin-right: 1.5mm; }
+  table { width: 100%; border-collapse: collapse; }
+  .checks td { vertical-align: top; padding: 1mm 0 1mm; border-top: 1px solid var(--rule); }
+  .checks td.what { width: 35%; padding-right: 5mm; font-weight: 500; }
+  .checks td.why { color: var(--ink-2); }
+  .checks td.why b { color: var(--ink); font-weight: 600; }
+  .report { margin-top: 0.6mm; background: var(--panel); border-radius: 6px; padding: 2.2mm 3.2mm 2mm; }
+  .report table { font-size: 7.6pt; }
+  .report th { text-align: left; font-weight: 600; padding: 0 2mm 1.2mm 0; border-bottom: 1px solid #cbd5e1; vertical-align: bottom; }
+  .report td { color: var(--muted); padding: 1.2mm 2mm 0 0; vertical-align: top; }
+  .report p { margin: 2mm 0 0; color: var(--ink-2); }
+  .rules { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; margin-top: 1mm; }
+  .rules p { margin: 0; border-left: 2px solid var(--accent); padding-left: 3mm; }
+  .rules b { font-weight: 600; }
+  footer { display: flex; justify-content: space-between; font-size: 7.6pt; color: var(--muted);
+    border-top: 1px solid var(--rule); padding-top: 2mm; margin-top: auto; }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div>
+      <h1>Week one in your Instantly account: what I check</h1>
+      <p class="byline">Matthias Neumann &#183; UnpauseAI &#183; November 2026</p>
+    </div>
+    <svg class="logo" viewBox="0 0 800 180" aria-label="UnpauseAI"><g transform="translate(20 38) scale(4.5)" fill="#2563eb"><path d="M8 5.14v13.72a1 1 0 001.5.86l11.04-6.86a1 1 0 000-1.72L9.5 4.28a1 1 0 00-1.5.86z"/></g><text x="155" y="125" font-size="96" letter-spacing="-2" font-family="Geist, sans-serif"><tspan font-weight="700" fill="#111827">Unpause</tspan><tspan font-weight="800" fill="#2563eb">AI</tspan></text></svg>
+  </header>
+
+  <p class="lede">The audit is read-only: nothing in your account changes during it. At the end of the week you get a short
+  report ranked by impact, with the first two or three changes I'd make. Where a check caught something in the
+  campaigns I ran this year, the number is in bold.</p>
+
+  <h2><span class="num">1</span>Deliverability</h2>
+  <table class="checks">
+    <tr><td class="what">Every sending account: warmup on, a daily limit set, account healthy, SPF, DKIM and DMARC published on its domain</td>
+        <td class="why">One weak sender drags down the reputation of the domain it shares with the others.</td></tr>
+    <tr><td class="what">Bounce rate per campaign, split by the recipient's mail server</td>
+        <td class="why">A July batch where every address was NeverBounce "valid" bounced at <b>8.6%</b>; <b>10 of the 11</b> bounces sat behind Mimecast, a security gateway a verifier can't see. With those domains held out, the next two waves bounced at <b>1.5%</b> and <b>0%</b>.</td></tr>
+  </table>
+
+  <h2><span class="num">2</span>Sequence and sending settings</h2>
+  <table class="checks">
+    <tr><td class="what">The delay on each step</td>
+        <td class="why">A step's delay is the wait before the <i>next</i> email. A gap entered on the step it precedes sends the follow-up about 20 minutes after the first email.</td></tr>
+    <tr><td class="what">Gap between emails and daily limits, against list size</td>
+        <td class="why">An 11-minute gap inherited from an older campaign held sends at <b>45 a day</b> against 75 expected. Cutting it to 5 minutes brought it to about <b>72</b>.</td></tr>
+    <tr><td class="what">Campaigns that already hold a finished run</td>
+        <td class="why">A step added to a completed campaign set it active again and put <b>533 of its 556</b> finished leads back in the sequence. A new run goes in a fresh campaign.</td></tr>
+    <tr><td class="what">Stop on reply, sending window, recipients' time zone</td>
+        <td class="why">The window follows the recipients' time zone, not the sender's. North American and European clocks change on different weekends, so cross-Atlantic schedules get rechecked in March and October.</td></tr>
+  </table>
+
+  <h2><span class="num">3</span>Lists</h2>
+  <table class="checks">
+    <tr><td class="what">Verification and mail-server type before every load</td>
+        <td class="why">Domains behind Mimecast, or with no mail server at all, are held out before they can bounce.</td></tr>
+    <tr><td class="what">The same person in two campaigns</td>
+        <td class="why">New leads are deduplicated against the whole workspace, not only the campaign they are going into: the last wave was checked against all <b>10,544</b> leads in the account.</td></tr>
+    <tr><td class="what">Customers, open deals and opt-outs, checked against your own records</td>
+        <td class="why">A re-check just before one launch found <b>28 new bookings in nine days</b>, one of them in the send list. The stop-list is refreshed every week.</td></tr>
+    <tr><td class="what">Merge fields</td>
+        <td class="why">Any lead whose first name, company or custom field is empty gets fixed or pulled before it renders as a blank in the email.</td></tr>
+  </table>
+
+  <h2><span class="num">4</span>Replies and reporting</h2>
+  <table class="checks">
+    <tr><td class="what">Human replies, counted apart from automatic ones</td>
+        <td class="why">Across two cold waves, out-of-office and leave notices outnumbered human replies <b>27&nbsp;to&nbsp;10</b>.</td></tr>
+    <tr><td class="what">Replies flagged interested, against who actually answered them</td>
+        <td class="why">In one audit, <b>seven</b> interested replies had no confirmed answer from anyone; one asked to reserve 10 seats.</td></tr>
+    <tr><td class="what">Lead counts by status</td>
+        <td class="why">Instantly's active status also covers leads that were never emailed: <b>258 of 267</b> counted as in sequence had not had a first email. Progress is read from the last-contact date.</td></tr>
+    <tr><td class="what">Open rates</td>
+        <td class="why">Apple Mail's privacy protection loads tracking pixels on its own, so opens are read as a trend, never as interest.</td></tr>
+  </table>
+
+  <h2><span class="num">5</span>Every week after that</h2>
+  <div class="report">
+    <table>
+      <tr><th>Campaign</th><th>Sent</th><th>Bounced</th><th>Human replies</th><th>Automatic replies</th><th>Interested, not yet answered</th><th>Meetings booked</th><th>Unsubscribed</th><th>Change this week</th></tr>
+      <tr><td>one row per live campaign</td><td>this week</td><td>count and %</td><td>people, not emails</td><td>out of office, leave</td><td>names, for your team</td><td>from your calendar or CRM</td><td>count</td><td>what changed and what it should move</td></tr>
+    </table>
+    <p>Every figure is counted from the campaign data when the report is written, never typed in by hand.</p>
+  </div>
+  <div class="rules" style="margin-top:2.4mm">
+    <p><b>One change at a time.</b> One change per campaign per week, logged with its date and the number it should move, then read again a week later. That way each result traces back to the change that caused it.</p>
+    <p><b>Nothing changes without your yes.</b> I propose a change, with what it touches and whether it can be undone. Anything that sends mail, loads leads or edits a live sequence waits for your approval.</p>
+  </div>
+
+  <footer><span>Figures from campaigns I ran for a UK events company in 2026 (anonymized). Details in the attached case study.</span><span>Matthias Neumann &#183; UnpauseAI</span></footer>
+</div>
+</body>
+</html>

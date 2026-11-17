@@ -70,7 +70,7 @@ Artifact published. No repo files changed by the research. Checkout was 7+ behin
 - Gaps on the page: BNI Karlsruhe seat, walk-in UWG legality, Steuerberater referral yields, Craftnote/openHandwerk partner programs.
 
 ### Working Notes
-Strategies 1, 3, 6 share one audience (trade firms on HERO) and reuse the Waerme Wimmer proof. Demo-first has no published conversion rate anywhere.
+Strategies 1, 3, 6 share one audience (trade firms on HERO) and reuse the WW proof. Demo-first has no published conversion rate anywhere.
 
 ### Reference Materials
 - https://claude.ai/artifact/3WVzzEWh3PZZHPvbzJizzV

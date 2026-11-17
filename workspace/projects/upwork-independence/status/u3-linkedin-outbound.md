@@ -3,8 +3,8 @@ project: upwork-independence
 workstream: u3-linkedin-outbound
 group: uwi
 spec:
-state: not-started
-updated: 2026-07-22
+state: active
+updated: 2026-11-09
 general_ref: status/uwi-general.md
 ---
 
@@ -21,7 +21,7 @@ account-risk). Three from-zero elements below. Starts weeks 3-6.
 
 | Element | State | Status | Next action | Blocker | Detail |
 |---|---|---|---|---|---|
-| Owned identity | not-started | No company page, no profile assets, no LinkedIn link on the platform site | Company-page content + profile positioning | — | recon: zero owned assets |
+| Owned identity | planned | 2026-11-09: personal profile (headline, About, featured), an 8-week founder-content plan (2 posts/week at the owner's 2-3 h/wk, first 4 posts written), GitHub profile + 2 showcase repos, site LinkedIn links and a named Brisken case-study page all drafted. Kept OUT of this public repo in the owner's local plan folder because it names a prospect. Still no company page; the site still has no LinkedIn link | Owner applies the week-1 items (profile, GitHub basics, site links PR) | — | owner's local `Documents\UnpauseAI\plan\` (02-05) |
 | Sales Nav seat | blocked | Brisken's seat is client-scoped, off-limits; model amortizes EUR25/mo | — | purchase gate | `../infrastructure.yaml` |
 | ICP recipes | not-started | Clone the Brisken radar/persona recipe SHAPE; persona + filters now defined in icp.md (DE included — LinkedIn is DE-legal) | Write the Sales Nav recipes off icp.md | — | `../context/icp.md` (landed 2026-07-22) |
 | Message cadences | not-started | Connection-request + DM sequences; no skill home exists (extend cold-email principles) | Draft after recipes | — | — |

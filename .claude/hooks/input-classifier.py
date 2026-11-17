@@ -130,7 +130,7 @@ HEADER_PRIMER = (
 # rule_session-start. Kept to the live clients and the system scopes rather
 # than any capitalised word, so an unrelated prompt stays silent.
 SCOPE_WORDS = re.compile(
-    r"\b(brisken|meji|meji-media|wimmer|warme|volabyg|jochen|vinted|upwork|"
+    r"\b(brisken|meji|meji-media|ww|volabyg|jochen|vinted|upwork|"
     r"unpauseai|platform|local-web|openclaw|recon|lead desk|onepilot)\b",
     re.I,
 )

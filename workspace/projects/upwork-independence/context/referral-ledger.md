@@ -17,8 +17,8 @@ where a name or state is unknown it reads TBD.
 | 2 | Jochen (treasury consultant, One Assessment project; client folder "Jochen Projekt") | Active build partner; his assessment practice references Alfred Ritter, CITTI, Nagarro SE, NextDecade, STAEDTLER | Strong | Position UnpauseAI as the delivery arm for automation findings his assessments surface | Partnership track, not referral fee: subcontract / revenue-share economics, his call; belongs with u7 when it starts |
 | 3 | Gurmej (Meji Media, owner) | Active retainer client (rescue -> retainer ladder) | Strong | Intros to other event-marketing / agency owners in his circle | None upfront; defined thank-you after a conversion |
 | 4 | Jess (Meji Media) | Stakeholder inside the same account | Weak-moderate | Same as row 3 | Same-account overlap with Gurmej: counts as ONE independent source in pool math |
-| 5 | Irina Dragunow (Warme Wimmer, PM) | Won engagement 2026-04 (Make migration -> maintenance), delivered | Moderate-strong | Referral into the Handwerk / renewables Mittelstand network; German-language proof point | None upfront; defined thank-you after a conversion |
-| 6 | Tobias (Warme Wimmer, founder) | Same won engagement | Moderate | Same as row 5 | Same-account overlap with Irina: one independent source |
+| 5 | WW PM | Won engagement 2026-04 (Make migration -> maintenance), delivered | Moderate-strong | Referral into the Handwerk / renewables Mittelstand network; German-language proof point | None upfront; defined thank-you after a conversion |
+| 6 | WW founder | Same won engagement | Moderate | Same as row 5 | Same-account overlap with row 5: one independent source |
 | 7 | Dzmitry Garett (Coolify AI) | Upwork proposal p015, replied 2026-03, never closed | Weak | Nothing yet; a re-open would be a warm re-connect, not a referral ask | None; re-qualify the relationship first |
 
 ## Second-degree rows (reachable only through Dirk; no direct relationship)
@@ -46,7 +46,7 @@ The leadgen-portfolio model assumes a referral pool of 15 with ~4 warm
 intros/month at conv 0.12. The enumerable reality on 2026-07-22:
 
 - **7 named first-degree people, collapsing to 5 independent sources**
-  (Brisken, Jochen, Meji, Wimmer, Coolify; rows 4 and 6 are same-account).
+  (Brisken, Jochen, Meji, WW, Coolify; rows 4 and 6 are same-account).
 - Of those 5, one (Coolify) is a cold-ish past thread, and one (Jochen)
   is really a partnership/subcontract track, not a referral source.
 - 5 second-degree names exist only through one hub (Dirk).

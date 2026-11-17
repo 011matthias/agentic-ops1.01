@@ -882,7 +882,7 @@ three shipped 2026-08-24 (Shipped rows 26 and 27); this entry is now
 history.**
 
 **a. Outside senders get total silence. SHIPPED.** Dirk sends from
-`dirk_.neumann@icloud.com` as well as his work account, and
+`[redacted iCloud address]` as well as his work account, and
 `graph_notify.send_mail` hard-refused any recipient not ending
 `@brisken.com` (the anti-backscatter guard from PR #587), so an iCloud
 send produced no ack and an accepted-but-held mail produced no bounce
@@ -5997,7 +5997,7 @@ the SharePoint folder, so a daily copy of ~140 MB accumulates at roughly
 
 **Audit rank 28 of 40; severity high as merged; verification: checked by hand (default recipients in code; settings key absent live); no reviewer pass.** Held or refused mail, failed reads, re-matches and Criss's feedback notes are reported to one mailbox: the developer's. The alert-recipient setting has never been filled so the built-in default applies, Criss's address for a 'your month is ready' ping was never set, and the outside-address list treated as 'ours' holds only Dirk's iCloud (Criss's Hotmail is not on it, so a forward from it is held without an ack). The event mails come from a scheduled task on the developer's Windows laptop every 15 minutes, logging in with the shared code, from a checkout that was 11 commits behind on 2026-09-11; every mail is sent from his mailbox with failures swallowed. From October he is a licence holder, not the operator.
 
-**Evidence:** web/intake_mail.py:95 (DEFAULT_ALERT_RECIPIENTS = matthias.silva), :277-279, :556-582 (known-sender rule), :1407-1432; live /api/settings intake = {aliases 3, known_senders ['dirk_.neumann@icloud.com'], travel_alias}, no alert_recipients / auto_ack; web/graph_notify.py:43, :47, :67-90 (send silently skipped); tools/brisken-recon-notify.py:6-11, :30, :64, :69-70, :399-405; Windows task BriskenReconNotify LastRun 2026-09-17 08:32; OWNERSHIP-HANDOFF.md:133, :313-317, :325-328; TARGET-ARCHITECTURE.md:263 (P4); memory project_brisken_retainer_600_licence and chris_process (cavalcanticris@hotmail.com). Backlog grep alert_recipients: 0.
+**Evidence:** web/intake_mail.py:95 (DEFAULT_ALERT_RECIPIENTS = matthias.silva), :277-279, :556-582 (known-sender rule), :1407-1432; live /api/settings intake = {aliases 3, known_senders ['[redacted iCloud address]'], travel_alias}, no alert_recipients / auto_ack; web/graph_notify.py:43, :47, :67-90 (send silently skipped); tools/brisken-recon-notify.py:6-11, :30, :64, :69-70, :399-405; Windows task BriskenReconNotify LastRun 2026-09-17 08:32; OWNERSHIP-HANDOFF.md:133, :313-317, :325-328; TARGET-ARCHITECTURE.md:263 (P4); memory project_brisken_retainer_600_licence and chris_process ([redacted Hotmail address]). Backlog grep alert_recipients: 0.
 
 **Already tracked:** Item 58 covers only the developer's re-match ping; OWNERSHIP-HANDOFF step 1(a)/(d) and step 2 and the retainer memory name it. Not in the backlog.
 
@@ -6007,7 +6007,7 @@ the SharePoint folder, so a daily copy of ~140 MB accumulates at roughly
 
 **Reviewer corrections:** none recorded
 
-**Held-mail half shipped 2026-09-17 (PR #1001, Fly v153), owner ruling: "one to matthias and one to the email it was sent by".** The operator alert is unchanged (recipients `intake.alert_recipients`, still unset, so the default matthias.silva). The address a held mail came from now gets one plain-English notice ("Receipt not filed yet", worded per held status), under exactly the ack's guards: `intake.auto_ack` on, not auto-generated, no agent-directed text, and only @brisken.com or `intake.known_senders` (a stranger gets nothing, per rule_untrusted_inbound); stamped once per archive in `held_notice_at`. No settings write was made. Still open from this item: the laptop notifier (feedback notes, re-matches, publish pings) stays Matthias-only, Criss's Hotmail is not a known sender, and the owner is correcting the misspelled known sender `neuamth4@icloud.com` by hand.
+**Held-mail half shipped 2026-09-17 (PR #1001, Fly v153), owner ruling: "one to matthias and one to the email it was sent by".** The operator alert is unchanged (recipients `intake.alert_recipients`, still unset, so the default matthias.silva). The address a held mail came from now gets one plain-English notice ("Receipt not filed yet", worded per held status), under exactly the ack's guards: `intake.auto_ack` on, not auto-generated, no agent-directed text, and only @brisken.com or `intake.known_senders` (a stranger gets nothing, per rule_untrusted_inbound); stamped once per archive in `held_notice_at`. No settings write was made. Still open from this item: the laptop notifier (feedback notes, re-matches, publish pings) stays Matthias-only, Criss's Hotmail is not a known sender, and the owner is correcting the misspelled known sender `[redacted iCloud address]` by hand.
 
 **The notifier no longer runs stale, which is NOT this item (2026-09-21,
 PR #1173).** Item 120's loose end gave the laptop task its own self-updating
@@ -6020,7 +6020,7 @@ notices. Moving the notifier INTO the app remains the fix, and the smaller
 change does not reduce the case for it; it only means the interim
 arrangement fails for fewer reasons.
 
-**Alert recipients set 2026-09-17 ~16:55 UTC, owner ruling "Criss + you".** One `PUT /api/settings` `{intake}` carrying the stored object back with only `alert_recipients` changed to `["cristiane.cavalcanti@brisken.com", "matthias.silva@brisken.com"]` (`applied: ["intake"]`); re-read after: every other intake key identical (aliases, `auto_ack` true, `known_senders` now spelled `neumath4@icloud.com`, `travel_alias`). Held-mail operator alerts now go to both, sent from the matthias.silva mailbox; the alert body is English. Unchanged and still open: the laptop notifier (feedback notes, re-match and publish pings) is Matthias-only, and Criss's Hotmail is not a known sender.
+**Alert recipients set 2026-09-17 ~16:55 UTC, owner ruling "Criss + you".** One `PUT /api/settings` `{intake}` carrying the stored object back with only `alert_recipients` changed to `["cristiane.cavalcanti@brisken.com", "matthias.silva@brisken.com"]` (`applied: ["intake"]`); re-read after: every other intake key identical (aliases, `auto_ack` true, `known_senders` now spelled `[redacted iCloud address]`, `travel_alias`). Held-mail operator alerts now go to both, sent from the matthias.silva mailbox; the alert body is English. Unchanged and still open: the laptop notifier (feedback notes, re-match and publish pings) is Matthias-only, and Criss's Hotmail is not a known sender.
 
 ### 122. The mailbox starts refusing all receipts once the 1 GB disk is half full, and a stranger can fill it in a day (2026-09-17 audit draft #120, unranked; operations) (SHIPPED 2026-09-17, pending PR)
 
@@ -6088,7 +6088,7 @@ reading it later.
 and the owner asked for exactly that (alerts to matthias.silva@brisken.com, not
 the developer's Gmail). Two live 403s, a week's worth of assumption replaced by
 two facts. With BRIEFING_TO set to the Brisken address: `You can only send testing
-emails to your own email address (matneumann07@gmail.com)`. So the recipient is not
+emails to your own email address ([redacted Gmail address])`. So the recipient is not
 the knob. `onboarding@resend.dev` is Resend's shared onboarding sender and is
 owner-only by design; a sender on a verified domain reaches anyone. That address
 was a module constant, so PR #1128 made it settable
@@ -6101,7 +6101,7 @@ configured.
 **2026-09-20, the recipient question is SETTLED and this item is closed.** Told
 that Resend refuses every recipient but the account owner, the owner's answer was
 that the Resend account is their own and the Gmail is theirs to read: "then thats
-fine send it to gmail". So `BRIEFING_TO` stays `matneumann07@gmail.com`, nothing
+fine send it to gmail". So `BRIEFING_TO` stays `[redacted Gmail address]`, nothing
 is verified, no secret is added, and the three options below are the record of
 what was weighed rather than work waiting to be done. **Do not reopen this.** A
 future session reading "the alert cannot reach a Brisken mailbox" should read it
@@ -6110,7 +6110,7 @@ as a decision, not a defect.
 Three redirect attempts were made before the decision, and each was refused by
 Resend with the same message: `matthias.silva@brisken.com` (the first ask),
 `no-reply@unpauseai.com` as the sender (unverified domain), and
-`neumath4@icloud.com` (the second ask). The knob PR #1128 added
+`[redacted iCloud address]` (the second ask). The knob PR #1128 added
 (`RECON_UPTIME_RESEND_FROM`) stays, unset and harmless, because it is what made
 the unpauseai.com hypothesis testable in one run instead of a code change; if a
 domain is ever verified, setting one variable is the whole of the work.
@@ -10255,7 +10255,7 @@ aside as a statement page).
 Anthropic invoices print `Bill to` + an account e-mail (`BRISKEN, LLC /
 cristiane.cavalcanti@brisken.com` on the 9693 API account; `BRISKEN
 CONSULTING, LLC / dirk.neumann@brisken.com` on 1176; `BRISKEN, LLC /
-neumanic2@gmail.com` on Nicolas's 3876 subscription). "BRISKEN, LLC" alone
+[redacted Gmail address]` on Nicolas's 3876 subscription). "BRISKEN, LLC" alone
 does not name a company, and item 40 forbids company without a card, so the
 bill-to text is NOT a lever. Lovable prints `Bill to dirk@neumanns.org`. OpenAI
 reload mails print `Workspace: BRISKEN`, "charged to your saved payment
@@ -12035,7 +12035,7 @@ Publish gate on coverage, and writing "already booked" verdicts from the Zoho
 report (a live write on Criss's months). The three owner decisions are put
 with the round's final reply.
 
-**Owner decisions 2026-09-25 (AskUserQuestion, this session):** (1) Publish warns only on uncovered cards, revisit once the weekly Chase exports are routine; (2) YES, write a reviewer "already booked" verdict on each open charge the Zoho report matched (August 11, September 11), after a read-only readiness check; (3) fill `receipt_requests.holders` from the intake's known senders (Dirk's three card spellings -> dirk.neumann@brisken.com, Nicolas Neumann -> neumann.nicolas@outlook.com); Criss (0340) and the two company-named cards (9693, 1176) stay unmapped. The chase stays disabled and unsendable (item 107).
+**Owner decisions 2026-09-25 (AskUserQuestion, this session):** (1) Publish warns only on uncovered cards, revisit once the weekly Chase exports are routine; (2) YES, write a reviewer "already booked" verdict on each open charge the Zoho report matched (August 11, September 11), after a read-only readiness check; (3) fill `receipt_requests.holders` from the intake's known senders (Dirk's three card spellings -> dirk.neumann@brisken.com, Nicolas Neumann -> [redacted Outlook address]); Criss (0340) and the two company-named cards (9693, 1176) stay unmapped. The chase stays disabled and unsendable (item 107).
 
 **Deployed and verified 2026-09-25** (Fly, commit `f92a2f87`; fresh GETs after): every prediction held row for row. July 24 and August 40 rows `no_receipt_found` -> `closed_recurring`, September 0, no other row moved, every coded row carries `reason_label`; `n_already_posted` 90 / 0 / 1; `n_cards_uncovered` 3 / 4 / 7; chase `date_range` present, 14 (Aug) and 19 (Sep) charges carry another `charge_month`. The SPA (no renderer yet) still renders all three months cold with payload replay: August "Charges with no receipt, to chase (57)", September "(28)", July no panel, no error screen, 0 writes.
 
@@ -13210,7 +13210,7 @@ on 40, FILLS a row with none on 5 (all `waits_for_statement`), CONTRADICTS
 the card or a person's pick on 17, says SPLIT on 5, names no company on 25
 (14 of those are only Criss's signature, "Cristiane Cavalcanti / Finance
 Manager"). Every noted mail came from dirk.neumann@brisken.com,
-dirk_.neumann@icloud.com, cristiane.cavalcanti@brisken.com, ap@brisken.com
+[redacted iCloud address], cristiane.cavalcanti@brisken.com, ap@brisken.com
 or dirk.neumann@gtgroup.com. Where Criss had booked a contradicted one
 (Typora "BCS", Hostinger "BTS"), she kept the card's company and used the
 note for the account ("COGS - Other Infra and IT Costs for Cloud Business").
@@ -13639,7 +13639,7 @@ required" mails, Toast's "Welcome", Toast's "Thank you for your business"
 (a marketing note with no order or amount, so set aside correctly) and a
 GitHub verify-email mail were read as not receipts and set aside (October
 set-aside 6 -> 11, September 4 -> 5, no other expense count moved).
-"Nico - Receipts" (neumann.nicolas@outlook.com, 09-27) failed: its body has
+"Nico - Receipts" ([redacted Outlook address], 09-27) failed: its body has
 no readable text at all, so `render_ingest` refuses it and it stays
 `held_body_only`. Open defect, small: that status reads "Needs one click to
 read", which the per-mail button cannot honour either; a partless mail with

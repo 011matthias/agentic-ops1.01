@@ -73,9 +73,11 @@ EXACTLY these three, asserted in code before the call:
 - `matthias.silva@brisken.com`
 - `cristiane.cavalcanti@brisken.com` (added 2026-09-10, owner directive)
 
-No other mailbox, ever, regardless of input. Criss is allowed HERE but is
-not yet in the policy group, so she still 403s at Exchange; the one
-outstanding command is in `context/graph-access-policy-runbook.md`.
+No other mailbox, ever, regardless of input. Criss is now in the policy group
+as well: app-only reads of her mailbox answered 200 on 2026-11-11 (inbox
+33,312 items, all 35 folders readable, via `tools/brisken-mail-search.py
+probe`). Re-probe rather than trust this line; the group is changed in
+Exchange, not here.
 
 **Why Criss was added (2026-09-10).** She is the receipt collection point
 for Brisken: Dirk forwards receipts to her, and GitHub, Regus and a run of

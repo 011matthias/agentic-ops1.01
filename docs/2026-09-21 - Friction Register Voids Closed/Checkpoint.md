@@ -91,7 +91,7 @@ The primary clone is ~21 commits behind `origin/main`, so **none of the three ha
 ## Next Steps
 
 1. Fast-forward the primary clone so the three harness fixes actually run; do it when sibling sessions are not mid-work, since it changes files under them.
-2. Decide whether `brisken-lead-automation` and `warme-wimmer-make-migration` should be genuinely gated now that their fake gates are gone. Needs a per-site env var on Nico's Vercel.
+2. Decide whether `brisken-lead-automation` and `ww-make-migration` should be genuinely gated now that their fake gates are gone. Needs a per-site env var on Nico's Vercel.
 3. Verify the seven stale register rows by behaviour and flip the ones that hold.
 4. Run `recon-feedback-coverage.py` at the start of the next recon round against a fresh `feedback.jsonl` copy.
 5. Ask Gurmej about unlogged conversations (comms-log 7 days stale).

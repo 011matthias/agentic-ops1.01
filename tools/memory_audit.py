@@ -25,8 +25,17 @@ BUCKETS (candidates for /comd_system-dev; this tool never deletes or edits)
 Under 30 days of read telemetry, no read-based Retire is issued and the output
 says so.
 
+INDEX CAP
+  The harness loads only the first 200 lines of MEMORY.md and warns near 195.
+  On 2026-11-09 the index had reached 195 lines (one per file) and was merged
+  down to ~100 by folding related memories into collection files. From
+  INDEX_WARN_LINES (150) on, the report carries a warning, and `--cap-check`
+  (wired at SessionStart) prints the same one line: the next memory goes into
+  a fitting existing file; only a new topic gets a new index line.
+
 USAGE
   uv run tools/memory_audit.py [--memory-dir DIR] [--format text|json]
+  uv run tools/memory_audit.py --cap-check   # silent under the cap; exit 0 always
   Default store: ~/.claude/projects/<this repo's slug>/memory (override with
   AGENTIC_OPS_MEMORY_DIR).
 """
@@ -49,6 +58,8 @@ MIN_READ_COVERAGE_DAYS = 30
 RETIRE_AGE_DAYS = 90
 STALE_DAYS = 60
 DUP_RATIO = 0.85
+INDEX_WARN_LINES = 150
+INDEX_READ_LIMIT = 200
 _INDEX_LINE = re.compile(r"^\s*-\s*\[(?P<title>[^\]]+)\]\((?P<file>[^)]+\.md)\)")
 _TYPE_PREFIX = re.compile(r"^(feedback|project|reference|user)[_-]", re.IGNORECASE)
 _OPEN_WORK = re.compile(
@@ -88,6 +99,24 @@ def _field(block: str, key: str) -> str:
         return ""
     v = m.group(1).strip()
     return v[1:-1] if len(v) >= 2 and v[0] == v[-1] and v[0] in "'\"" else v
+
+
+def index_line_count(mem_dir: Path) -> int:
+    """All lines of MEMORY.md, blank ones included: the harness cut-off is by line."""
+    index = mem_dir / "MEMORY.md"
+    if not index.is_file():
+        return 0
+    return len(index.read_text(encoding="utf-8", errors="ignore").splitlines())
+
+
+def cap_warning(lines: int) -> str | None:
+    if lines < INDEX_WARN_LINES:
+        return None
+    return (f"[MEMORY-INDEX] MEMORY.md has {lines} lines (warning from {INDEX_WARN_LINES}; "
+            f"the harness reads only the first {INDEX_READ_LIMIT}). Before saving a new memory, "
+            "add it as a section to a fitting existing memory file; only a new topic gets a new "
+            "index line. To shrink the index, merge related memories into one collection file "
+            "(content verbatim, links repointed); `uv run tools/memory_audit.py` maps the store.")
 
 
 def _norm_slug(stem: str) -> str:
@@ -233,6 +262,7 @@ def audit(mem_dir: Path) -> dict:
         "meta": {
             "memory_dir": str(mem_dir), "files": len(files),
             "index_entries": len(index_lines), "index_nonblank_lines": index_total,
+            "index_lines": index_line_count(mem_dir),
             "bytes": sum(f["bytes"] for f in files),
             "read_telemetry_days": round(coverage, 1), "reads_total": len(reads),
             "read_based_retire_enabled": reads_ok,
@@ -251,6 +281,9 @@ def render(result: dict) -> str:
         f"({m['files'] - m['index_entries']:+d} files vs entries)",
         f"read telemetry: {m['reads_total']} read(s) over {m['read_telemetry_days']} day(s)",
     ]
+    warning = cap_warning(m["index_lines"])
+    if warning:
+        out.append("  " + warning)
     if not m["read_based_retire_enabled"]:
         out.append(f"  NOTE: under {MIN_READ_COVERAGE_DAYS} days of read telemetry, so no "
                    "read-based Retire. 'never recorded' means not measured yet, not unused.")
@@ -274,7 +307,18 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--memory-dir", type=Path)
     ap.add_argument("--format", choices=("text", "json"), default="text")
+    ap.add_argument("--cap-check", action="store_true",
+                    help="SessionStart mode: print one line when MEMORY.md reaches "
+                         f"{INDEX_WARN_LINES} lines, else nothing; exit 0 always")
     args = ap.parse_args(argv)
+    if args.cap_check:
+        try:
+            warning = cap_warning(index_line_count(args.memory_dir or default_memory_dir()))
+            if warning:
+                print(warning)
+        except Exception:  # fail-open: a session start must never break on this
+            pass
+        return 0
     mem_dir = args.memory_dir or default_memory_dir()
     if not mem_dir.is_dir():
         print(f"memory store not found: {mem_dir}", file=sys.stderr)

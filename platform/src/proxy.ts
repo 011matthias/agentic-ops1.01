@@ -66,8 +66,6 @@ export async function proxy(req: NextRequest) {
 // registry; the rule_gated_access.md standard documents this two-touch step.
 export const config = {
   matcher: [
-    "/docs/warme-wimmer",
-    "/docs/warme-wimmer/:path*",
     "/docs/meji-media",
     "/docs/meji-media/:path*",
     "/docs/assessment-demo",

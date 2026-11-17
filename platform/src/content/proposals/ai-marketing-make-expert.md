@@ -37,12 +37,12 @@ research:
   location_advantage: "Skip; US client"
   relevant_proof_points:
     - "Meji Media: 10+ production Make.com scenarios, multi-system orchestration"
-    - "Warme Wimmer: Make.com audit and migration, scenario-by-scenario rebuild"
+    - "German heat-pump installer: Make.com audit and migration, scenario-by-scenario rebuild"
     - "Meta-proof: Our proposal pipeline runs on Make.com + Claude API"
   budget_gap: "No gap. Our rate ($35.63/hr) close to client avg paid ($37.23/hr). Also offering per-scenario fixed-price alternative."
   profile_cherry_picks:
     platforms: [Make.com, Claude API, Google Sheets]
-    proof_points: [Meji Media multi-scenario architecture, Warme Wimmer audit methodology]
+    proof_points: [Meji Media multi-scenario architecture, heat-pump installer audit methodology]
     reasoning: "Direct 1:1 match on Make.com + Claude API + multi-system orchestration. Our own pipeline is meta-proof."
 ---
 

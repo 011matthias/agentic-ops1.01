@@ -211,7 +211,7 @@ def test_sweep_finds_stale_across_clients(tmp_path, monkeypatch):
     _seed(clients, "brisken", "p2-rome.md", "2026-04-01")      # stale
     _seed(clients, "brisken", "p1.md", "2026-06-19")           # fresh
     _seed(clients, "meji", "a0.md", "2026-06-18")              # fresh, other client
-    (clients / "wimmer").mkdir(parents=True)                   # no status/ -> skipped
+    (clients / "acme").mkdir(parents=True)                   # no status/ -> skipped
     findings = ps.sweep_stale(TODAY, ps.DEFAULT_MAX_AGE_DAYS)
     assert [(f["client"], f["file"]) for f in findings] == [("brisken", "p2-rome.md")]
 

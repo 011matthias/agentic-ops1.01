@@ -258,7 +258,7 @@ kill is to strengthen the checklist run, not to memorize harder.
 
 The two registers (soft / polite-firm), the "no closing offers"
 discipline, and the "anchor on client's words" rule each surfaced
-from a separate Meji or Wimmer incident in May 2026. Each is a
+from a separate Meji or WW incident in May 2026. Each is a
 load-bearing rule by itself; together they form the same
 standard, but they had been distributed across four feedback
 memories (Layer 3 — depends on agent recall) instead of one

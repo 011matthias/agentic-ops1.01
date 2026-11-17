@@ -1,4 +1,4 @@
-# Synthetic fixture: the SHAPE of the warme-wimmer infrastructure.yaml
+# Synthetic fixture: the SHAPE of the WW (n8n client) infrastructure.yaml
 # (top-level n8n: and make: blocks, workflows nested at several depths),
 # with placeholder values only. No real IDs, URLs or people.
 name: Fixture Client

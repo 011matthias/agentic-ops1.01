@@ -24,7 +24,7 @@ separate go.
 
 | Element | State | Status | Next action | Blocker | Detail |
 |---|---|---|---|---|---|
-| Partner ledger | done | Written 2026-07-22: 7 first-degree names (Dirk, Jochen, Gurmej, Jess, Irina, Tobias, Dzmitry) = 5 independent sources; 5 second-degree SI-ecosystem rows via Dirk; 0 subcontractors. Pool-15 is ~3x the enumerable first-degree reality | Keep current as relationships change | — | `../context/referral-ledger.md` |
+| Partner ledger | done | Written 2026-07-22: 7 first-degree names (Dirk, Jochen, Gurmej, Jess, WW PM, WW founder, Dzmitry) = 5 independent sources; 5 second-degree SI-ecosystem rows via Dirk; 0 subcontractors. Pool-15 is ~3x the enumerable first-degree reality | Keep current as relationships change | — | `../context/referral-ledger.md` |
 | Offer definition | done | Recommendation written: no upfront commission for the client network; defined post-conversion thank-you; Jochen routed to partnership/subcontract track (u7); commission reserved for arm's-length future partners | Owner call on the recommendation | owner | ledger §offer-definition |
 | Asks (10-20, register A) | blocked | Drafting GATED by owner decision; ledger row-count alone already tests pool-15 plausibility | — | drafts gate | `rule_human_communication` §1 |
 | Validation loop | not-started | Track named-referrer count, intro rate, intro->client conv vs pool-15/conv-0.12; falsified pool feeds a SCORER_LOCK_ALLOW re-pin PR + portfolio re-run | Metrics rows once asks begin | asks gate | `rule_optimize_loop` seams |

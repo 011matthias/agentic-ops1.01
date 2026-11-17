@@ -31,7 +31,7 @@ before quoting). Zero clients have ever been won from an owned channel; every
 win came via Upwork or warm intro. The acquisition ledger holds one row ever
 (~4.5h, week 2026-07-20, agent-estimated, owner-uncorrected) against a
 committed 14 h/wk; corpus-wide, 30 of 33 proposals never left status:draft
-(one analyzed batch: 11/12; the June batch: 5/5). Wimmer was delivered but
+(one analyzed batch: 11/12; the June batch: 5/5). WW was delivered but
 produced zero revenue to Matthias (partner engagement); Jochen is a Brisken
 workstream (EUR468, stalled on client input).
 
@@ -76,7 +76,7 @@ gated on the u7 subcontract trial.
 
 ## (c) Target client + offer + price architecture
 
-**Defense phase (weeks 1-12):** DE local SMB, the wimmer-shaped persona
+**Defense phase (weeks 1-12):** DE local SMB, the WW-shaped persona
 (dated or broken web presence plus manual follow-up). Karlsruhe-first because
 five finished demo sites for real named businesses exist (Meinzer Maler,
 Helmle Physio, Beauty Lounge, Praxis Uslu, Pronto Pronto; shipped 2026-06-02/03,
@@ -96,7 +96,7 @@ rung: local care clients have no outbound to rescue).
 process, never greenfield. Led with Core 1850/mo. Honesty about that number:
 1850 is the band NEAREST the observed price signals, and both signals are
 adverse or hourly (Meji refused $1,000-1,500/mo as "seems high" and cut the
-cap the same day, 2026-05-19; Wimmer's ~$2,400/mo was our own $30/hr x 20h
+cap the same day, 2026-05-19; WW's ~$2,400/mo was our own $30/hr x 20h
 proposal projection, never invoiced, EUR0 to Matthias). Selling it is
 assumption g.4, with a two-quote tripwire. Entry rung: the 650/mo tier,
 RECURRING per the locked menu (`pricing-tiers.json`, period monthly,
@@ -154,7 +154,7 @@ acquisition.
   inbound. UK list 1 is unaffected.
 - **Referral:** nothing built, passive-opportunistic per the ledger (3-4
   honest sources, mostly current clients). Case-study CONSENT asks (not
-  referral asks) run in relationship-stress order: Wimmer/Jochen first, Meji
+  referral asks) run in relationship-stress order: WW/Jochen first, Meji
   post-gate, Brisken post-payment.
 - **Purchases** are per-item per the standing order; the 2026-09-05 approvals
   are exactly: Sales Nav seat ~EUR25/mo (spend at rebalance), AEO probe key,
@@ -350,7 +350,7 @@ basis on any owned channel).
 | Collections | EUR0 collected; EUR612.27 invoice (EUR353.50 pending week-approval) + ~EUR503 booked Upwork balance (transfer, not revenue) + ~EUR508 discretionary bonus | Invoice + balance by Sep 30; bonus: one approved polite-firm re-raise, then client's action |
 | Brisken terms | EUR14.00/hr hardcoded, no cap, halted since Aug 23 | Signed >=EUR25/hr with 10-13 h/wk cap, or clean lapse, by Sep 30 |
 | u5 extraction | Tier-scope mapping not-started ("menu unsellable + undelegatable without it"); value report not built; case-study publish consent NOT yet asked | Tier scopes (0.20 audit-shaped + 0.55) drafted + owner-signed by Sep 30 (desk work, Meji-independent); value report live with the restart; case-study DRAFT by Sep 30, publication after the post-gate consent |
-| Paid local wins + care attach | 0 paid local clients ever for Matthias; care attach 0-for-1 (wimmer self-hosted to EUR0) | 2-3 paid builds and >=1 care attach by Nov 30 (drops to 1-2 builds under the both-warm-survive collision rule) |
+| Paid local wins + care attach | 0 paid local clients ever for Matthias; care attach 0-for-1 (WW self-hosted to EUR0) | 2-3 paid builds and >=1 care attach by Nov 30 (drops to 1-2 builds under the both-warm-survive collision rule) |
 | Owned-channel closes, all-time | 0 ever | First qualified conversation by week 4-6; week-8 two-sided milestone; first paid entry weeks 6-10 |
 | Delivery coefficient h/client/mo | 26-35 (Meji, the only measured retainer; never instrumented per-client) | Instrumented from client one; <=10 by client 3; >15 = stop-sell trigger |
 | Concentration | Brisken was 82% of 2026 gross | No client >40% of recurring revenue by m6 without a named backfill row |

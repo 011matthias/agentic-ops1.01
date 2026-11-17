@@ -67,7 +67,7 @@ frontmatter `stage` says where it stands. `/comd_help-system` lists every comman
 3. CI decides the merge. Every PR runs the enforcement-hook test suite, a
    gitleaks secret scan and a personal-data scan; path-filtered suites add the
    platform's type check, lint, build, spell check and Playwright smoke tests,
-   the expense-recon, Lead Desk, deckgen and Wärme Wimmer tests when their paths
+   the expense-recon, Lead Desk and deckgen tests when their paths
    change. A green PR merges automatically; a red one waits.
 4. Anything irreversible or outward-facing needs an explicit yes from the owner:
    deploys, force pushes, and any write to a client's live systems (sending mail,
@@ -94,7 +94,7 @@ turns the patterns there into new hooks and rules.
 
 | Repository | What it holds | Relation to this repo |
 | --- | --- | --- |
-| `akkton/agentic-ops` (private) | Nico's copy of this system, with his clients, including Wärme Wimmer | This repo was copied from it on 2026-05-07; the two have not synced since |
+| `akkton/agentic-ops` (private) | Nico's copy of this system, with his clients | This repo was copied from it on 2026-05-07; the two have not synced since |
 | `011matthias/brisken-expense-review` (private) | The Lovable-built frontend of the Brisken expense app | Lovable keeps its own repo; the backend lives here |
 | `akkton/unpauseai-web` (private) | unpauseai.com | Moved out of `platform/` on 2026-07-25; the site publishes from there |
 | `011matthias/agentic-dev1` | Software products, and the production build for any local-web prospect who signs | Product builds kept apart from client operations |

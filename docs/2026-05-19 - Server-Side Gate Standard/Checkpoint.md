@@ -12,15 +12,15 @@ Established server-side gating as the only sanctioned model for client doc sites
 
 ## What Was Done This Session
 ### Master password (PR #13)
-1. Added master `Natthias07` alongside existing codes — Meji 8 HTML gates (client-side, then) + Wärme Wimmer server-side route.
+1. Added master `Natthias07` alongside existing codes — Meji 8 HTML gates (client-side, then) + WW server-side route.
 2. cspell dictionary extended (Natthias + Inkl/WISMO/Webmail/ecommerce) to keep CI green.
 
 ### Server-side gate standard (PR #15)
 1. New edge-safe generic gate: `lib/gated-sites.ts` (site registry + HMAC cookie bound to site id + constant-time `codeAccepted`), `/api/gate-unlock`, `/gate-login`.
 2. `proxy.ts` generalized — registry-driven, gates every registered site; static literal matcher (Next.js edge constraint).
 3. Meji 8 pages migrated server-side: client-side `auth-gate` overlay + `MEJI_CODE`/`MEJI_MASTER` script removed (theme/sidebar JS preserved) via `scripts/meji_strip_clientside_gate.py`.
-4. Superseded wimmer-auth lib/route deleted; wimmer-login → gate-login (rename).
-5. Master + per-site codes moved to Vercel env vars; gate secret falls back to `WIMMER_AUTH_SECRET`.
+4. Superseded ww-auth lib/route deleted; ww-login → gate-login (rename).
+5. Master + per-site codes moved to Vercel env vars; gate secret falls back to `WW_AUTH_SECRET`.
 6. `.claude/rules/rule_gated_access.md` codifies the standard + the 2-touch path for new gated pages.
 
 ### Infra anneal (PR #16)
@@ -34,8 +34,8 @@ Established server-side gating as the only sanctioned model for client doc sites
 - **Rationale:** User picked it; the client-side gate exposed the master in plaintext page source — leaving it would defeat the security purpose.
 
 ### Master in env var, not hardcoded
-- **Choice:** `MASTER_ACCESS_CODE` / `MEJI_ACCESS_CODE` as Vercel env vars; gate secret reuses `WIMMER_AUTH_SECRET` via fallback.
-- **Rationale:** Rotatable without a code deploy, never committed, consistent with existing `WIMMER_ACCESS_CODE` pattern. Fewer moving parts than a new secret.
+- **Choice:** `MASTER_ACCESS_CODE` / `MEJI_ACCESS_CODE` as Vercel env vars; gate secret reuses `WW_AUTH_SECRET` via fallback.
+- **Rationale:** Rotatable without a code deploy, never committed, consistent with existing `WW_ACCESS_CODE` pattern. Fewer moving parts than a new secret.
 
 ### Context YAML not overwritten
 - **Choice:** Left `docs/sessions/2026-05-19-context.yaml` (parallel Meji comms session) untouched.
@@ -50,8 +50,8 @@ Established server-side gating as the only sanctioned model for client doc sites
 | platform/src/proxy.ts | Modified | Registry-driven gating for all sites |
 | platform/src/app/api/gate-unlock/route.ts | Created | Generic unlock; site code OR master from env |
 | platform/src/app/gate-login/page.tsx | Created (rename) | Generic server-rendered login |
-| platform/src/lib/wimmer-auth.ts | Deleted | Superseded by gated-sites.ts |
-| platform/src/app/api/wimmer-unlock/route.ts | Deleted | Superseded by gate-unlock |
+| platform/src/lib/ww-auth.ts | Deleted | Superseded by gated-sites.ts |
+| platform/src/app/api/ww-unlock/route.ts | Deleted | Superseded by gate-unlock |
 | platform/public/docs/meji-media/*.html (8) | Modified | Client-side gate stripped, theme JS kept |
 | .claude/rules/rule_gated_access.md | Created | Server-side-only standard + master requirement |
 | scripts/meji_strip_clientside_gate.py | Created | One-off gate-strip transform (provenance) |
@@ -63,7 +63,7 @@ Established server-side gating as the only sanctioned model for client doc sites
 ---
 
 ## Current Status
-Server-side-only gating live on unpauseai.com and verified by live curl matrix: Meji + Wimmer gated without cookie (extensionless and `.html`, no bypass), master unlocks both, per-site codes still work (no lockout), wrong/tampered rejected, valid cookie serves clean doc with zero password residue, cookies site-bound. Build/cspell/behavioral all green. Working tree on `main`; no platform section in meji infrastructure.yaml.
+Server-side-only gating live on unpauseai.com and verified by live curl matrix: Meji + WW gated without cookie (extensionless and `.html`, no bypass), master unlocks both, per-site codes still work (no lockout), wrong/tampered rejected, valid cookie serves clean doc with zero password residue, cookies site-bound. Build/cspell/behavioral all green. Working tree on `main`; no platform section in meji infrastructure.yaml.
 
 ---
 
@@ -90,7 +90,7 @@ Server-side-only gating live on unpauseai.com and verified by live curl matrix: 
 
 ### Reference Materials
 - PRs: github.com/011matthias/agentic-ops1.01/pull/13, /15, /16
-- Live: https://unpauseai.com/docs/meji-media/* , /docs/warme-wimmer/*
+- Live: https://unpauseai.com/docs/meji-media/* , /docs/ww/*
 
 ---
 
