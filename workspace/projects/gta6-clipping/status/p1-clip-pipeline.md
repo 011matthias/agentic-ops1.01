@@ -16,7 +16,7 @@ Shorts and Instagram Reels, earning through the platforms' view payouts.
 
 | Element | State | Status | Next action | Blocker | Detail |
 |---|---|---|---|---|---|
-| Format | done | Owner 2026-11-17: streamer clips and VODs, analyzed, auto-assembled and edited (subtitles, hooks, effects); single moments and compilations over a minute | Build per master plan | — | [Master plan](../specs/1-spec/p1-clip-engine.md) |
+| Format | done | Owner 2026-11-17: streamer clips and VODs, analyzed, auto-assembled and edited (subtitles, hooks, effects); single moments and compilations over a minute | Build per master plan | none | [Master plan](../specs/1-spec/p1-clip-engine.md) |
 | Source + highlights | not-started | Twitch API ranks a game's clips by views; no official download endpoint | Prototype on one streamer's stream | Format | [README](../README.md) |
 | Edit | not-started | Plan: local ffmpeg + Whisper, 9:16 facecam over gameplay, captions, hook; commentary layer depends on format | Prototype after source | Format | |
 | Publish | not-started | Aggregator APIs carry the platform audits | Pick aggregator; connect accounts | Owner accounts | [README](../README.md) |
