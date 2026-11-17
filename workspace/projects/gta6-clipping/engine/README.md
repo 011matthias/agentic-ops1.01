@@ -15,8 +15,9 @@ uv run --extra dev pytest -q              tests (offline, against a fake Twitch/
 ```
 
 - **Register:** `config/streamers.yaml` (tracked). Suggestions never enter it on their own.
-- **State:** `data/clipengine.sqlite` (gitignored), schema in `src/clipengine/db.py` as numbered
-  migrations; later phases add tables.
+- **State:** `engine/data/clipengine.sqlite` of the PRIMARY checkout, whichever worktree runs
+  the engine, so every session sees the same history. The folder ignores itself (`.gitignore`
+  with `*`). Schema in `src/clipengine/db.py` as numbered migrations; later phases add tables.
 - **Secrets:** `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` from
   `../context/.env`; in a git worktree the primary checkout's copy is used.
 - **Overrides** for dry runs: `CLIPENGINE_DATA_DIR`, `CLIPENGINE_REGISTER`, `CLIPENGINE_ENV_FILE`.

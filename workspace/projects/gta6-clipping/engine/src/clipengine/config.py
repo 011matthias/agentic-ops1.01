@@ -18,9 +18,40 @@ PROJECT_REL = Path("workspace/projects/gta6-clipping")
 SECRET_KEYS = ("TWITCH_CLIENT_ID", "TWITCH_CLIENT_SECRET")
 
 
+def primary_root() -> Path | None:
+    """The primary checkout of this repo, found through git's common directory.
+
+    Every session works in its own worktree; state and secrets must not
+    depend on which one runs the engine.
+    """
+    try:
+        common = subprocess.run(
+            ["git", "-C", str(ENGINE_DIR), "rev-parse", "--path-format=absolute",
+             "--git-common-dir"],
+            capture_output=True, text=True, check=True, timeout=10,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return Path(common).parent if common else None
+
+
 def data_dir() -> Path:
-    path = Path(os.environ.get("CLIPENGINE_DATA_DIR") or ENGINE_DIR / "data")
+    """engine/data/ of the PRIMARY checkout, so every worktree shares one state.
+
+    The folder carries its own `.gitignore` (`*`): a checkout whose root
+    .gitignore predates the engine still never sees the database (it holds
+    the cached Twitch token) as an untracked file a sweep could commit.
+    """
+    explicit = os.environ.get("CLIPENGINE_DATA_DIR")
+    if explicit:
+        path = Path(explicit)
+    else:
+        root = primary_root()
+        path = (root / PROJECT_REL / "engine" / "data") if root else ENGINE_DIR / "data"
     path.mkdir(parents=True, exist_ok=True)
+    guard = path / ".gitignore"
+    if not guard.exists():
+        guard.write_text("# clip engine state: never commit\n*\n", encoding="utf-8")
     return path
 
 
@@ -51,16 +82,9 @@ def env_file() -> Path | None:
     local = ENGINE_DIR.parent / "context" / ".env"
     if local.exists():
         return local
-    try:
-        common = subprocess.run(
-            ["git", "-C", str(ENGINE_DIR), "rev-parse", "--path-format=absolute",
-             "--git-common-dir"],
-            capture_output=True, text=True, check=True, timeout=10,
-        ).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        return None
-    primary = Path(common).parent / PROJECT_REL / "context" / ".env"
-    return primary if primary.exists() else None
+    root = primary_root()
+    primary = root / PROJECT_REL / "context" / ".env" if root else None
+    return primary if primary and primary.exists() else None
 
 
 def parse_env(text: str) -> dict[str, str]:

@@ -216,6 +216,16 @@ def test_main_reports_missing_credentials(env, monkeypatch, tmp_path, capsys):
     assert "Twitch credentials missing" in capsys.readouterr().err
 
 
+def test_state_lives_in_the_primary_checkout_and_ignores_itself(tmp_path, monkeypatch):
+    """A new worktree per session must not start from an empty database."""
+    monkeypatch.delenv("CLIPENGINE_DATA_DIR", raising=False)
+    monkeypatch.setattr(config, "primary_root", lambda: tmp_path / "primary")
+    path = config.db_path()
+    assert path == tmp_path / "primary" / config.PROJECT_REL / "engine" / "data" / \
+        "clipengine.sqlite"
+    assert (path.parent / ".gitignore").read_text(encoding="utf-8").splitlines()[-1] == "*"
+
+
 def test_env_file_parsing_ignores_comments_and_quotes():
     assert config.parse_env('# c\nTWITCH_CLIENT_ID="abc"\n\nX = y\nnoequals\n') == \
         {"TWITCH_CLIENT_ID": "abc", "X": "y"}
