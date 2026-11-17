@@ -1,16 +1,51 @@
 # GTA6 Clipping
 
-Side project, started 2026-11-17: short GTA6 gameplay clips for TikTok,
-YouTube Shorts and Instagram Reels. Goals, cadence, accounts and
-monetization are not defined yet; the owner is sending details.
+Side project, started 2026-11-17: short clips of OTHER creators' GTA6
+streams and videos for TikTok, YouTube Shorts and Instagram Reels (owner
+decision 2026-11-17; we do not clip our own play). Cadence and accounts are
+not defined yet.
 
 Element-by-element state: [status/p1-clip-pipeline.md](status/p1-clip-pipeline.md).
+
+## Business model: paid clipping campaigns (checked 2026-11-17)
+
+- Clips of other people's content earn almost no platform ad revenue.
+  YouTube's reused-content policy judges added value and applies even with
+  the creator's permission
+  ([YouTube help](https://support.google.com/youtube/answer/1311392)).
+  TikTok Creator Rewards excludes reposts and needs videos over a minute
+  (third-party guides; TikTok's own page not checked).
+- The money is in clipping campaigns: a creator or brand funds a budget
+  and pays per 1,000 views on approved clips, with per-clip caps and
+  first-come budgets. Content Rewards (payouts via Whop) is the largest
+  marketplace: median listed rate $1.00 per 1,000 views across 710 live
+  campaigns on 16 Nov 2026 (YouTube $1.10), 10% fee off CPM payouts
+  ([Content Rewards](https://contentrewards.com/articles/how-much-do-clippers-make)).
+  Streamers also pay clippers directly, usually through Discord.
+- GTA6 on 17 Nov: one campaign open, a song promotion ("Tokyo Girl",
+  $0.70 per 1,000, $2,000 budget, $35 cap per clip, TikTok and Instagram)
+  that asks for own footage over other creators' clips, an ad disclosure,
+  and submission within 30 minutes of posting
+  ([Content Rewards](https://contentrewards.com/articles/gta-6-clipping)).
+  Streamer-funded GTA6 stream campaigns: none confirmed yet; vendors expect
+  them at launch.
+- Submission is manual in the official guide (paste the post link); no API
+  found. Accounts must be public and linked; duplicate clips fail review
+  ([FAQ](https://contentrewards.com/faqs)).
+- **We clip only creators with an active campaign or written permission.**
+  Without it the clips draw copyright takedowns, Meta cuts reach for
+  reposted content, and no campaign pays for them.
+
+**Sources of footage:** Twitch's API lists a game's clips sorted by view
+count, so viewers' own clips mark the strongest moments; there is no
+official clip download endpoint
+([Twitch docs](https://dev.twitch.tv/docs/api/clips/)).
 
 ## Facts checked 2026-11-17
 
 **GTA6 launches 19 Nov 2026 on PS5 and Xbox Series X|S; no PC version
 announced** ([TechRadar](https://www.techradar.com/gaming/grand-theft-auto-6-release-date-confirmed-but-its-been-delayed-heres-why),
-Take-Two statements). Every clip starts as a console recording.
+Take-Two statements).
 
 **Everygen MCP** (`https://everygen.ai/api/mcp`, formerly Viewmax):
 
