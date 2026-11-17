@@ -21,7 +21,9 @@ Shorts and Instagram Reels, earning through the platforms' view payouts.
 | Start streamers | not-started | Pre-launch run works but data is thin and noisy (LIRIK 3.5k English GTA VI clip views in 7 days, bot-like accounts in the top 10) | From 19 Nov: `uv run clipengine suggest --since 24h`, present top 10 to the owner in plain language, then approve / reject | GTA6 launch 19 Nov | [Spec stage 1](../specs/2-build/p1-clip-engine.md) |
 | Source + highlights (p1.2) | not-started | Watch stores `vod_offset`, views and `muted_segments`; Twitch caps each clip query near 1,000, so watch reads 6 h chunks (missed tail had at most 2 views) | Interval selection + section download on one real stream | p1.1 | [Spec stage 2](../specs/2-build/p1-clip-engine.md) |
 | Edit | not-started | Plan: local ffmpeg + Whisper, 9:16 facecam over gameplay, captions, hook; commentary layer depends on format | Prototype after source | Format | |
-| Publish | not-started | Aggregator APIs carry the platform audits | Pick aggregator; connect accounts | Owner accounts | [README](../README.md) |
+| Channels | in-progress | Owner 2026-11-17: creates a YouTube channel and a TikTok account now, posts nothing yet. TikTok as a personal account: third-party guides agree Business accounts are excluded from Creator Rewards (TikTok's own page not checked) | Once created: test analytics access on the empty channels | Owner creates the accounts | |
+| Publish (p2) | not-started | Aggregator APIs carry the platform audits. Owner 2026-11-17: clip any streamer, drop one on complaint, so p2 needs a claim/complaint watch that sets `permission: no` and takes that streamer's videos down | Pick aggregator; connect accounts | p1 first video | [README](../README.md) |
+| Learning loop (p2) | not-started | Plan agreed 2026-11-17: each video's recipe from the cut list (format, length, hook, teaser, category, streamer, style set, post time); metrics at 24 h / 3 d / 7 d; retention curve laid over the cut list to find drop points, weekly rules into a playbook p1.4 follows; winning variants get more of the next videos with a fixed test share; per platform, minimum views before a rule changes, metric fixed in advance. YouTube retention curve via Analytics API (third-party docs, verify on the first video); TikTok watch time via API reportedly only for Creator/Business accounts, fallback TikTok Studio in the browser | Spec as p2 once posting starts | Posting | |
 | Monetization gates | not-started | YouTube 1,000 subs + 10M Shorts views / 90 days; TikTok 10,000 followers; Instagram no per-view payout in DE | Track progress per account once live | Accounts | [README](../README.md) |
 | Everygen MCP | blocked | Registered, not signed in; voiceover useful if the format adds narration | Sign in once the format needs voiceover | Paid plan + owner OAuth | [README](../README.md) |
 
@@ -45,7 +47,16 @@ States: not-started · in-progress · blocked · done · live · paused
   needs one (TikTok audit); transcription, music and voiceover only if the
   local path or the format calls for it; AI clipping tools declined (template
   look, cost per input minute, duplicate our free views signal).
-- Later (owner): posting, accounts, permission from the clipped streamers.
+- Decided 2026-11-17: clip any streamer without asking first and drop one on
+  complaint or claim; owner accepts the strike risk (three YouTube copyright
+  strikes in 90 days end a channel).
+- Decided 2026-11-17: owner creates the YouTube channel and TikTok account
+  now; nothing is posted until p1 delivers approved videos.
+- Autonomy gates (agreed 2026-11-17): production runs alone with per-video
+  approval once p1.2 to p1.7 stand and three hand-started runs pass without
+  intervention; posting after approval comes with p2; posting without
+  approval only after 30 consecutive videos approved unchanged and no
+  copyright claim.
 
 ## Pointers
 
