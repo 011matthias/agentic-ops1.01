@@ -2,16 +2,16 @@
 id: p1
 name: GTA6 Clip-Engine (Masterplan)
 type: project
-stage: spec
+stage: build
 needs_fixes: false
-version: 1.0.0
+version: 1.1.0
 created: 2026-11-17
 updated: 2026-11-17
 orchestrator: none
 trigger: Windows-Aufgabenplanung (Zeitplan) und manueller Start per CLI
 systems:
   - Twitch Helix API
-  - YouTube Data API
+  - YouTube-Kanal-Feed (RSS, ohne API-Key)
   - yt-dlp
   - ffmpeg 8.1 (NVENC)
   - faster-whisper
@@ -29,11 +29,14 @@ last_changes:
   - "2026-11-17: Masterplan angelegt. Owner-Entscheidung: Clips und Videos fremder GTA-Streamer analysieren, automatisch zusammenschneiden und bearbeiten (Untertitel, Hooks, Effekte). Posten, Auswertung und Monetarisierung folgen später."
   - "2026-11-17: Owner: keine API-LLM-Kosten, Urteilsarbeit macht Claude Code über das Abo; wo erkennbar zählen nur die meistgesehenen Intervalle (Twitch-Zuschauer-Clips, YouTube-Kurve über yt-dlp heatmap, geprüft)."
   - "2026-11-17: Owner: Clips auf Englisch; Start-Streamer wählt Claude Code ab Launch nach Clip-Aufrufen. Twitch-App angelegt, App-Token geprüft, GTA-VI-game_id 1867279146."
+  - "2026-11-17: p1.1 gebaut (engine/): Register, SQLite, Twitch/YouTube-Beobachten, Streamer-Vorschläge, approve/reject; live geprüft an LIRIK, KaiCenat, ibragaming_fc. YouTube über den Kanal-Feed statt Data API (kein Key nötig). Twitch-Clips in 6-h-Stücken, weil jede Abfrage bei ~1.000 kappt."
 next_steps:
-  - "p1.1 Fundament + Beobachten bauen (Twitch-App in context/.env, Token geprüft 2026-11-17)"
-  - "Ab Launch 19.11.: Start-Streamer nach englischen Clip-Aufrufen wählen, Owner nickt ab"
+  - "Ab Launch 19.11.: uv run clipengine suggest, Top-Streamer dem Owner vorlegen, approve/reject"
+  - "p1.2 Holen: Intervalle aus Clip-Aufrufen und YouTube-Kurve, Abschnitts-Download"
 stage_history:
   - stage: spec
+    date: 2026-11-17
+  - stage: build
     date: 2026-11-17
 ---
 
@@ -89,7 +92,7 @@ flowchart TD
 
 | Phase | Name | Inhalt | Hängt ab von | Stand |
 |---|---|---|---|---|
-| p1.1 | Fundament + Beobachten | uv-Projekt, SQLite-Schema, Streamer-Register, Twitch/YouTube-Abfrage | Owner: Twitch-App, Streamer-Liste | spec |
+| p1.1 | Fundament + Beobachten | uv-Projekt, SQLite-Schema, Streamer-Register, Twitch/YouTube-Abfrage, Streamer-Vorschläge | Owner: Twitch-App, Streamer-Liste | gebaut 2026-11-17 |
 | p1.2 | Holen | Intervalle nach Aufrufen (Clips, YouTube-Kurve), Abschnitts-Download, Ablage, Aufräumen | p1.1 | spec |
 | p1.3 | Analysieren | Transkript und Schnitt lokal, Prüfpakete, Urteil durch Claude Code, Momente-Tabelle | p1.2 | spec |
 | p1.4 | Zusammenstellen | Formate, Auswahlregeln, Schnittliste | p1.3 | spec |
@@ -115,19 +118,34 @@ mit dem Posten-Plan.
 jedes gültige Token zum Lesen von Clips):
 
 - Login → `broadcaster_id` über Get Users.
-- Neue Stream-Aufzeichnungen über Get Videos (`type=archive`).
+- Neue Stream-Aufzeichnungen über Get Videos (`type=archive`). Eine Aufzeichnung
+  zählt, wenn irgendein Teil davon im Fenster liegt, nicht nur ihr Anfang
+  (KaiCenats 35-Stunden-Marathon begann vor dem Fenster und trägt 1.772 Clips
+  darin). Get Videos liefert auch `muted_segments`, gespeichert für p1.2.
 - Zuschauer-Clips über Get Clips mit `broadcaster_id` und `started_at`/`ended_at`.
-  Laut Doku kommen sie nach Aufrufen absteigend sortiert, und jeder Clip trägt
-  `video_id` und `vod_offset`: den Abstand in Sekunden vom Anfang der
+  Sie kommen nach Aufrufen absteigend sortiert (live geprüft), und jeder Clip
+  trägt `video_id` und `vod_offset`: den Abstand in Sekunden vom Anfang der
   Aufzeichnung bis zum Clip-Start. Damit lässt sich jeder Zuschauer-Clip auf
   seine Stelle im Stream legen. Ist die Aufzeichnung gelöscht, ist `vod_offset`
-  leer.
-- Entdecken neuer Streamer: Get Clips mit der `game_id` von GTA VI (`1867279146`,
-  geprüft 2026-11-17). Neue Namen landen als Vorschlag in einer Liste, nie
-  automatisch im Register.
+  leer. Jede Abfrage bricht bei etwa 1.000 Treffern ab und liefert dabei
+  Doppelte; die Engine fragt deshalb in 6-Stunden-Stücken ab. Gemessen am
+  2026-11-17 an KaiCenat über 7 Tage: eine Abfrage etwa 800 verschiedene Clips,
+  in Stücken 1.914. Ein zweiter Lauf fand noch 426 weitere, alle mit höchstens
+  2 Aufrufen; die 300 meistgesehenen hatte schon der erste Lauf. Jeder Lauf
+  liest das ganze Fenster neu, damit Aufrufe aktuell bleiben.
+- Entdecken neuer Streamer (`clipengine suggest`): Get Clips mit der `game_id`
+  von GTA VI (`1867279146`, geprüft 2026-11-17), in denselben Stücken, nur
+  Clips in der gewählten Sprache. Rangfolge nach der Summe der Clip-Aufrufe
+  pro Streamer; dazu Clip-Zahl, Zahl der verschiedenen Clipper, Follower,
+  Partner/Affiliate und Warnhinweise (klippt sich überwiegend selbst, weniger
+  als drei Clipper, andere Kanalsprache). Neue Namen landen als Vorschlag in
+  einer Liste, nie automatisch im Register; `clipengine approve` trägt nach
+  dem Ja des Owners ein, `clipengine reject` hält einen Namen dauerhaft fern.
 
-**YouTube** (Data API, allgemeiner Kontingent-Topf): neue Uploads über die
-Uploads-Playlist des Kanals.
+**YouTube:** neue Uploads über den öffentlichen Kanal-Feed
+(`youtube.com/feeds/videos.xml?channel_id=...`): ohne API-Key und ohne
+Kontingent, die letzten 15 Uploads mit Datum (geprüft 2026-11-17). Für die
+Data API gibt es keinen Key; Länge und Kurve holt ohnehin yt-dlp in p1.2.
 
 **Kick:** offen, im Plan nicht enthalten. UNVERIFIED, ob eine Clip-Schnittstelle
 existiert.
@@ -296,6 +314,8 @@ Hand; das Posten kommt später.
 | `streamers` | Spiegel des Registers |
 | `videos` | VODs und Uploads: Quelle, ID, Länge, Datum, Status |
 | `crowd_clips` | Zuschauer-Clips: ID, `video_id`, `vod_offset`, Dauer, Aufrufe |
+| `suggestions` | Streamer-Vorschläge mit Kennzahlen und Status offen/angenommen/abgelehnt (p1.1) |
+| `meta` | zwischengespeichertes Twitch-App-Token (p1.1) |
 | `signals` | Zeitreihen pro Video: Clip-Aufrufe, YouTube-Kurve, Lautheit |
 | `reviews` | Antworten von Claude Code pro Prüfpaket |
 | `transcripts` | Wörter mit Zeitstempel pro Video |
@@ -328,7 +348,7 @@ Hand; das Posten kommt später.
 
 ## Erfolgskriterien
 
-- [ ] p1.1: Für drei Streamer listet die Engine die neuen VODs und Zuschauer-Clips der letzten sieben Tage, abgeglichen mit der Twitch-Seite.
+- [x] p1.1: Für drei Streamer listet die Engine die neuen VODs und Zuschauer-Clips der letzten sieben Tage, abgeglichen mit der Twitch-Seite. Erfüllt 2026-11-17 (LIRIK, KaiCenat, ibragaming_fc): LIRIKs 7 Aufzeichnungen = die ersten 7 auf twitch.tv/lirik/videos, KaiCenats Top-5-Clips = die Top 5 auf seiner 7-Tage-Clipseite, beide Seiten ohne Anmeldung gelesen.
 - [ ] p1.2: Für einen Twitch-Stream mit Zuschauer-Clips und ein YouTube-Video mit Kurve decken sich die gewählten Intervalle mit den meistgesehenen Stellen (Abgleich von Hand mit Clip-Liste und YouTube-Kurve).
 - [ ] p1.3: Claude Code beantwortet ein Prüfpaket vollständig (Spoiler, Kategorie, Hooks, Titel), im Gespräch und per `claude -p` aus der Aufgabenplanung.
 - [ ] p1.5: Das fertige Video hat 1080×1920, Lautheit -14 ±1 LUFS, und die Untertitel weichen in der Stichprobe weniger als 0,2 s vom Ton ab.

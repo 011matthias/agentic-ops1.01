@@ -6,7 +6,8 @@ decision 2026-11-17; we do not clip our own play). Cadence and accounts are
 not defined yet.
 
 Element-by-element state: [status/p1-clip-pipeline.md](status/p1-clip-pipeline.md).
-Master plan (workflow, phases, data model): [specs/1-spec/p1-clip-engine.md](specs/1-spec/p1-clip-engine.md).
+Master plan (workflow, phases, data model): [specs/2-build/p1-clip-engine.md](specs/2-build/p1-clip-engine.md).
+Engine code and commands: [engine/README.md](engine/README.md).
 
 ## Business model: platform monetization (owner decision 2026-11-17)
 
@@ -106,4 +107,5 @@ before building):
 ## Layout
 
 - `status/` workstream status, kept current
+- `engine/` the clip engine, its own uv project; `engine/data/` gitignored
 - `context/` gitignored: account logins, tokens, raw exports
