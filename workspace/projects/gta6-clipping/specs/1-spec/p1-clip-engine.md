@@ -15,7 +15,7 @@ systems:
   - yt-dlp
   - ffmpeg 8.1 (NVENC)
   - faster-whisper
-  - Claude API
+  - Claude Code (Abo, kein API-Key)
   - SQLite
 phases:
   - p1.1
@@ -27,6 +27,7 @@ phases:
   - p1.7
 last_changes:
   - "2026-11-17: Masterplan angelegt. Owner-Entscheidung: Clips und Videos fremder GTA-Streamer analysieren, automatisch zusammenschneiden und bearbeiten (Untertitel, Hooks, Effekte). Posten, Auswertung und Monetarisierung folgen später."
+  - "2026-11-17: Owner: keine API-LLM-Kosten, Urteilsarbeit macht Claude Code über das Abo; wo erkennbar zählen nur die meistgesehenen Intervalle (Twitch-Zuschauer-Clips, YouTube-Kurve über yt-dlp heatmap, geprüft)."
 next_steps:
   - "Owner: Twitch-Developer-App anlegen (Client-ID + Secret) und 5 bis 10 Start-Streamer nennen"
   - "p1.1 Fundament + Beobachten bauen"
@@ -54,8 +55,8 @@ installiert, yt-dlp noch nicht.
 Ein Durchlauf hat sieben Stufen:
 
 1. **Beobachten:** neue Streams, Videos und Zuschauer-Clips der Streamer-Liste finden.
-2. **Holen:** zuerst nur die Tonspur, danach nur die Abschnitte, die zählen. Nie ganze Streams in Video.
-3. **Analysieren:** Momente finden und bewerten.
+2. **Holen:** nur die meistgesehenen Stellen laden, bei Twitch über die Zuschauer-Clips, bei YouTube über die Kurve „Meistgesehene Stellen“. Nie ganze Streams.
+3. **Analysieren:** Rangfolge nach Aufrufen, Transkript und Schnitt lokal; Spoiler-Check, Hooks und Titel macht Claude Code. Keine API-Kosten.
 4. **Zusammenstellen:** Momente zu einem Video anordnen, als Einzelclip oder Zusammenschnitt.
 5. **Bearbeiten:** Hochformat, Untertitel, Hook, Zooms, Lautstärke, Rendern.
 6. **Prüfen:** automatische Checks, danach die Freigabe-Liste.
@@ -67,15 +68,15 @@ Ein Durchlauf hat sieben Stufen:
 flowchart TD
     R[Streamer-Register streamers.yaml] --> B[1 Beobachten: Twitch und YouTube APIs]
     B -->|neue VODs und Zuschauer-Clips| DB[(SQLite: Zustand)]
-    DB --> H1[2a Holen: nur Tonspur des VOD]
-    H1 --> A1[3a Billige Signale: Clip-Häufung, Lautheit, Chat-Tempo]
-    H1 --> T[3b Transkript: faster-whisper mit Wortzeiten]
-    A1 --> K[Kandidaten-Fenster]
-    T --> K
-    K --> L[3c Claude bewertet Fenster: Kategorie, Score, Start/Ende, Hook]
-    L --> M[(Momente)]
-    M --> H2[2b Holen: Videoabschnitte der besten Momente]
-    H2 --> Z[4 Zusammenstellen: Schnittliste EDL]
+    DB --> I[2a Intervalle nach Aufrufen: Twitch-Clips oder YouTube-Kurve]
+    I -->|kein Signal| W[warten, dann Lautheit als Ersatz]
+    I --> H[2b Nur diese Abschnitte laden]
+    W --> H
+    H --> T[3a Lokal: Transkript, Schnitt an Satzgrenzen, Lautheit]
+    T --> RP[Prüfpaket: Transkript, Standbilder, Aufrufe]
+    RP --> CC[3b Claude Code: Spoiler, Kategorie, Hooks, Titel]
+    CC --> M[(Momente)]
+    M --> Z[4 Zusammenstellen: Schnittliste EDL]
     Z --> E[5 Bearbeiten: Layout 9:16, Untertitel, Hook, Zooms, Render NVENC]
     E --> P{6 Prüfen}
     P -->|bestanden| F[Freigabe-Liste]
@@ -88,8 +89,8 @@ flowchart TD
 | Phase | Name | Inhalt | Hängt ab von | Stand |
 |---|---|---|---|---|
 | p1.1 | Fundament + Beobachten | uv-Projekt, SQLite-Schema, Streamer-Register, Twitch/YouTube-Abfrage | Owner: Twitch-App, Streamer-Liste | spec |
-| p1.2 | Holen | Tonspur-Download, Abschnitts-Download, Zuschauer-Clips, Ablage, Aufräumen | p1.1 | spec |
-| p1.3 | Analysieren | Signale, Transkript, Claude-Bewertung, Momente-Tabelle | p1.2 | spec |
+| p1.2 | Holen | Intervalle nach Aufrufen (Clips, YouTube-Kurve), Abschnitts-Download, Ablage, Aufräumen | p1.1 | spec |
+| p1.3 | Analysieren | Transkript und Schnitt lokal, Prüfpakete, Urteil durch Claude Code, Momente-Tabelle | p1.2 | spec |
 | p1.4 | Zusammenstellen | Formate, Auswahlregeln, Schnittliste | p1.3 | spec |
 | p1.5 | Bearbeiten + Rendern | Layout-Profile, Untertitel, Hook, Effekte, Lautheit, NVENC | p1.4 | spec |
 | p1.6 | Prüfen | automatische Checks, Freigabe-Liste | p1.5 | spec |
@@ -134,73 +135,79 @@ existiert.
 
 ### 2. Holen (p1.2)
 
-Zwei Durchgänge, damit nie ganze Streams in Video geladen werden:
+**Grundsatz (Owner, 2026-11-17):** Wo erkennbar ist, welche Stellen eines
+Videos am meisten gesehen wurden, zählen nur diese Stellen. Geladen werden nur
+diese Intervalle, nie ein ganzer Stream.
 
-1. **Tonspur** des ganzen VOD (yt-dlp, Audio-Format). Reicht für Transkript,
-   Lautheit und die Bewertung.
-2. **Videoabschnitte** erst nach der Analyse, nur für die besten Momente, mit
-   `yt-dlp --download-sections "*START-ENDE"` (laut yt-dlp-README: Download
-   nur eines Zeitbereichs), mit 5 s Puffer vor und nach dem Moment. In
-   höchster verfügbarer Qualität.
+**Woher die Aufrufe kommen:**
 
-**Zuschauer-Clips** werden direkt geladen. Eine offizielle Download-Schnittstelle
-gibt es nicht (Twitch-Doku); yt-dlp unterstützt Twitch-Clips nach allgemeinem
-Kenntnisstand, im Prototyp prüfen.
+- **Twitch-Streams:** aus den Zuschauer-Clips. Jeder Clip hat Aufrufe
+  (`view_count`), Startsekunde im Stream (`vod_offset`) und Länge; daraus
+  ergibt sich sein Intervall. Überlappende Clips werden zu einem Intervall
+  verschmolzen, dessen Gewicht die Summe ihrer Aufrufe ist.
+- **YouTube-Videos:** aus der Kurve „Meistgesehene Stellen“. yt-dlp liefert
+  sie als Feld `heatmap` mit 100 Abschnitten, jeder mit einem Wert von 0 bis 1,
+  ohne das Video zu laden (geprüft 2026-11-17 mit yt-dlp 2026.10.26). Der
+  Videoanfang ist fast immer am höchsten, weil dort jeder startet; die ersten
+  Abschnitte zählen deshalb nicht. Ein Intervall ist eine zusammenhängende
+  Spitze deutlich über dem Median der Kurve.
+- **Kein Aufruf-Signal** (frischer Stream ohne Clips, Video ohne Kurve): Das
+  Video wartet, weil Clips und Kurve erst mit der Zeit entstehen. Bleibt es
+  leer, greift als Ersatz die Lautheit der Tonspur. Wartezeit und Ersatz sind
+  Annahmen und einstellbar.
 
-**Ablage** (gitignored): `engine/data/{streamer}/{video_id}/` mit `audio.m4a`,
-`sections/`, `crowd/`. Rohdaten werden nach dem Rendern und N Tagen gelöscht.
-Zur Größenordnung: ein 1080p-Stream mit 6 Mbit/s wären 2,7 GB pro Stunde.
-Deshalb wird nur in Abschnitten geladen.
+**Schritte:**
 
-**Offen, im Prototyp prüfen:** abonnentenpflichtige VODs, stummgeschaltete
-Abschnitte (Musik-Takedowns), Verhalten von yt-dlp bei sehr langen VODs.
+1. Intervalle bestimmen, nur aus Metadaten (Twitch-API, `yt-dlp -j --skip-download`).
+2. Die stärksten N nach Gewicht wählen; N und Mindest-Aufrufe sind einstellbar.
+3. Nur diese Abschnitte laden, mit 5 s Puffer davor und danach, in höchster
+   verfügbarer Qualität: `yt-dlp --download-sections "*START-ENDE"` (laut
+   yt-dlp-README: Download nur eines Zeitbereichs).
+4. Von Zuschauer-Clips zählen nur die Zeitangaben; geschnitten wird aus dem
+   VOD in voller Qualität. Ist das VOD weg (gelöscht, nur für Abonnenten),
+   wird der Clip selbst geladen. UNVERIFIED, ob yt-dlp Twitch-Clips lädt.
+
+**Ablage** (gitignored): `engine/data/{streamer}/{video_id}/sections/`.
+Rohdaten werden nach dem Rendern und N Tagen gelöscht.
+
+**Offen, im Prototyp prüfen:** stummgeschaltete Abschnitte (Musik-Takedowns),
+Verhalten von yt-dlp bei sehr langen VODs.
 
 ### 3. Analysieren (p1.3)
 
-**a) Billige Signale** (kostenlos, für den ganzen Stream):
+**Ohne API-Kosten (Owner, 2026-11-17):** Rechnen macht der Laptop, Urteilen
+macht Claude Code über das vorhandene Abo. Es gibt keinen Anthropic-API-Key
+und keine Kosten pro Aufruf.
 
-- **Clip-Häufung:** viele Zuschauer-Clips nah beieinander, gewichtet nach
-  Aufrufen. Das ist das stärkste Signal, denn Zuschauer haben die Stelle
-  bereits selbst ausgewählt.
-- **Lautheit:** Spitzen im Ton (Schreien, Lachen) über ffmpeg, relativ zum
-  Durchschnitt des Streamers.
-- **Chat-Tempo:** Nachrichten pro 10 s und Emote-Art (Lachen gegen Hype).
-  Twitch bietet keine offizielle Chat-Wiederholung über die API. Das
-  inoffizielle Werkzeug TwitchDownloaderCLI ist eine Option. Optional,
-  UNVERIFIED.
+**Rechnerisch, lokal:**
 
-**b) Transkript:** faster-whisper (large-v3, int8) auf der GPU, mit
-Wortzeitstempeln und der Sprache aus dem Register. Ob 6 GB VRAM und die
-Laufzeit reichen, wird im Prototyp gemessen.
+- **Rangfolge** der Intervalle nach Aufrufen (aus Stufe 2).
+- **Transkript** nur für die geladenen Abschnitte: faster-whisper (large-v3,
+  int8) auf der GPU, mit Wortzeiten und der Sprache aus dem Register. Ob 6 GB
+  VRAM und die Laufzeit reichen, misst der Prototyp.
+- **Schnitt an Satzgrenzen:** Start und Ende auf Wortzeiten und Pausen
+  ausrichten, damit kein Satz abgeschnitten wird.
+- **Lautheit-Spitzen** (ffmpeg `ebur128`) für die Zooms in Stufe 5.
 
-**c) Bewertung durch Claude:** Kandidaten-Fenster aus a) und Transkript,
-jeweils etwa ±60 s. Pro Fenster liefert Claude über strukturierte Ausgabe
-(JSON-Schema):
+**Urteil, Claude Code:** Pro gewähltem Moment schreibt die Engine ein
+Prüfpaket nach `engine/data/review/{moment}/`: Transkript, 6 bis 8
+Standbilder, Aufrufe, Streamer. Claude Code liest die Pakete und schreibt pro
+Moment zurück:
 
-- Kategorie: lustig, Chaos, Können, Entdeckung, Fail, Ausraster, Story
-- Score von 0 bis 10 mit einem Satz Begründung
-- Start und Ende an Satzgrenzen
-- Spoiler-Verdacht (Story-Zwischensequenz)
-- zwei bis drei Hook-Vorschläge
+- Spoiler oder Zwischensequenz ja/nein, anhand der Standbilder
+- Kategorie und Thema (lustig, Chaos, Können, Entdeckung, Fail, Ausraster, Story)
+- zwei bis drei Hooks und einen Titel
+- „verwerfen“, wenn der Moment ohne Kontext nicht funktioniert
 
-**Modell:** Standard ist Claude Opus 5.5 (`claude-opus-5-5`, 4 $ / 20 $ pro
-Million Tokens Ein-/Ausgabe). Claude Haiku 5.5 (`claude-haiku-5-5`, 0,10 $ /
-0,50 $) ist die günstige Option für die Massenbewertung. Die Wahl trifft der
-Owner nach einem Vergleich beider Modelle auf denselben echten Streams. Die
-Bewertung ist nicht eilig, deshalb läuft sie über die Batch-Schnittstelle
-(halber Preis).
+Claude Code läuft auf zwei Wegen: im Gespräch („arbeite die Prüfpakete ab“)
+oder automatisch per Windows-Aufgabenplanung mit `claude -p`. Beide zählen
+gegen die Nutzungsgrenzen des Abos. Deshalb bekommt Claude Code nur die schon
+nach Aufrufen gewählten Momente, nie ganze Streams. Ist die Grenze erreicht,
+warten die Pakete bis zum nächsten Lauf. `claude` 2.1.212 ist auf dem Laptop
+installiert (geprüft 2026-11-17).
 
-**Kostenschätzung** (Annahme 150 gesprochene Wörter pro Minute, also etwa
-12.000 Tokens Transkript pro Stream-Stunde; im Prototyp messen): mit Opus 5.5
-etwa 0,10 bis 0,40 $ pro Stream-Stunde, mit Haiku 5.5 etwa 1 Cent. Die
-Batch-Schnittstelle halbiert beides.
-
-**d) Bild (optional, nur Kandidaten):** Einzelbilder des Moments an Claude
-(Vision), um Zwischensequenzen und reine Menü- oder Ladebildschirme zu
-erkennen.
-
-**Ergebnis:** Tabelle `moments` mit Quelle, Start, Ende, Kategorie, Score,
-Signalen, Spoiler-Flag und Hook-Vorschlägen.
+**Ergebnis:** Tabelle `moments` mit Quelle, Intervall, Aufrufen, Kategorie,
+Spoiler-Flag, Hooks und Titel.
 
 ### 4. Zusammenstellen (p1.4)
 
@@ -211,8 +218,8 @@ Signalen, Spoiler-Flag und Hook-Vorschlägen.
   zum Beispiel ein Streamer an einem Tag, eine Kategorie über mehrere Streamer
   oder „die größten Fails gestern“.
 
-**Auswahlregeln:** Momente mit Score ab einer Schwelle (nach dem ersten
-Durchlauf festlegen), keine Spoiler-Momente, jeder Moment höchstens einmal pro
+**Auswahlregeln:** Momente in der Rangfolge ihrer Aufrufe, keine Spoiler,
+nichts, was Claude Code verworfen hat, jeder Moment höchstens einmal pro
 Format. Reihenfolge im Zusammenschnitt: kurzer Anriss des stärksten Augenblicks
 in den ersten ein bis zwei Sekunden, danach Aufbau, das Beste zum Schluss. Diese
 Reihenfolge ist eine Annahme und wird später an Zahlen getestet.
@@ -275,7 +282,7 @@ Hand; das Posten kommt später.
   eingeschaltetem Laptop; Energiesparmodus während Läufen verhindern.
 - **Speicherwächter:** Unter 50 GB frei stoppen neue Downloads. Rohdaten werden
   nach Plan gelöscht.
-- **Geheimnisse** (Twitch-Client-ID und -Secret, Anthropic-Key) in
+- **Geheimnisse** (Twitch-Client-ID und -Secret) in
   `workspace/projects/gta6-clipping/context/.env` (gitignored).
 - **Logs** pro Lauf. Fehler pro Datensatz werden mit Zähler gespeichert; nach
   drei Fehlschlägen fällt der Datensatz aus der Warteschlange und erscheint
@@ -288,7 +295,8 @@ Hand; das Posten kommt später.
 | `streamers` | Spiegel des Registers |
 | `videos` | VODs und Uploads: Quelle, ID, Länge, Datum, Status |
 | `crowd_clips` | Zuschauer-Clips: ID, `video_id`, `vod_offset`, Dauer, Aufrufe |
-| `signals` | Zeitreihen pro Video: Lautheit, Chat-Tempo, Clip-Dichte |
+| `signals` | Zeitreihen pro Video: Clip-Aufrufe, YouTube-Kurve, Lautheit |
+| `reviews` | Antworten von Claude Code pro Prüfpaket |
 | `transcripts` | Wörter mit Zeitstempel pro Video |
 | `moments` | bewertete Momente (Stufe 3) |
 | `compositions` | Schnittlisten (Stufe 4), Format, Stil-Set |
@@ -305,7 +313,10 @@ Hand; das Posten kommt später.
 
 | Fall | Umgang |
 |---|---|
-| VOD gelöscht oder nur für Abonnenten | Zuschauer-Clips bleiben nutzbar (`vod_offset` leer); Video überspringen und vermerken |
+| VOD gelöscht oder nur für Abonnenten | Zuschauer-Clip selbst laden (`vod_offset` ist dann leer) |
+| YouTube-Kurve am Anfang immer hoch | erste Abschnitte nicht werten |
+| Noch keine Clips, keine Kurve | warten, danach Lautheit als Ersatz |
+| Nutzungsgrenze des Claude-Abos erreicht | Prüfpakete warten, der nächste Lauf macht weiter |
 | Stummgeschaltete Abschnitte | aus Kandidaten ausschließen |
 | Streamer ändert Overlay | Facecam-Check pro Render gegen das Profil; Abweichung → Profil neu kalibrieren |
 | Whisper erfindet Text in Musik oder Stille | Lautheit- und Sprach-Wahrscheinlichkeit prüfen, solche Fenster verwerfen |
@@ -317,7 +328,8 @@ Hand; das Posten kommt später.
 ## Erfolgskriterien
 
 - [ ] p1.1: Für drei Streamer listet die Engine die neuen VODs und Zuschauer-Clips der letzten sieben Tage, abgeglichen mit der Twitch-Seite.
-- [ ] p1.3: Trefferquote auf einem echten Stream von mindestens zwei Stunden: Wie viele der zehn meistgesehenen Zuschauer-Clips liegen unter den 20 besten Momenten der Engine? Den Zielwert legen wir nach dem ersten Messlauf fest.
+- [ ] p1.2: Für einen Twitch-Stream mit Zuschauer-Clips und ein YouTube-Video mit Kurve decken sich die gewählten Intervalle mit den meistgesehenen Stellen (Abgleich von Hand mit Clip-Liste und YouTube-Kurve).
+- [ ] p1.3: Claude Code beantwortet ein Prüfpaket vollständig (Spoiler, Kategorie, Hooks, Titel), im Gespräch und per `claude -p` aus der Aufgabenplanung.
 - [ ] p1.5: Das fertige Video hat 1080×1920, Lautheit -14 ±1 LUFS, und die Untertitel weichen in der Stichprobe weniger als 0,2 s vom Ton ab.
 - [ ] Ende-zu-Ende: Aus einem neuen Stream entsteht ohne Handgriff mindestens ein fertiges Video in der Freigabe-Liste.
 
@@ -326,8 +338,15 @@ Hand; das Posten kommt später.
 1. **Twitch-Developer-App** auf dev.twitch.tv mit dem eigenen Twitch-Account
    anlegen; Client-ID und Secret kommen in `context/.env`. Dafür braucht es
    den Login des Owners.
-2. **Start-Liste mit 5 bis 10 GTA-Streamern** (Twitch-Login, Sprache).
-3. **Anthropic-API-Zugang** für die Bewertung (Key oder `ant auth login`).
+2. **Start-Liste mit 5 bis 10 GTA-Streamern** (Twitch-Login, YouTube-Kanal
+   falls vorhanden, Sprache).
+3. **Für die Automatik:** den Laptop an und in Claude Code angemeldet lassen.
+   Die Aufgabenplanung richtet Claude Code selbst ein.
+4. **Freigabe:** fertige Videos in der Freigabe-Liste ansehen und freigeben,
+   bis der Posten-Plan steht.
+
+Alles andere (yt-dlp und faster-whisper installieren, Engine bauen,
+Facecam-Profile kalibrieren, Prüfpakete beurteilen) macht Claude Code.
 
 ## Später (nicht Teil dieses Plans)
 
