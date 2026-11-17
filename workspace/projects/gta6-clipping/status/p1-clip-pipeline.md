@@ -9,28 +9,28 @@ updated: 2026-11-17
 
 # gta6-clipping / p1-clip-pipeline
 
-From console recording to a posted clip on TikTok, YouTube Shorts and
-Instagram Reels.
+Clip other creators' GTA6 streams and videos under paid clipping campaigns,
+post to TikTok, YouTube Shorts and Instagram Reels, submit for per-view payout.
 
 ## Elements
 
 | Element | State | Status | Next action | Blocker | Detail |
 |---|---|---|---|---|---|
-| Everygen MCP | blocked | Registered as `everygen`, not signed in | Owner: Everygen plan, then `/mcp` → everygen → Authenticate | Paid plan + OAuth sign-in (owner only) | [README](../README.md) |
-| Capture | not-started | GTA6 out 19 Nov 2026, PS5 / Xbox only | Pick console and recording path (built-in capture or capture card) | Owner details pending | [README](../README.md) |
-| Edit (cut, captions, voiceover) | not-started | Everygen covers upload, captions, voiceover; cutting itself is untested | One test clip end to end once the MCP is signed in | Everygen MCP | |
-| Publish | not-started | Everygen has no posting scope; aggregator APIs have the platform audits, own TikTok app needs one | Choose aggregator vs own apps | Owner details pending | [README](../README.md) |
+| Campaign intake | not-started | One GTA6 campaign open 17 Nov (song promo, wants own footage); no streamer-funded GTA6 campaign confirmed | Watch Content Rewards and streamer Discords from launch day 19 Nov | Owner: Content Rewards account | [README](../README.md) |
+| Source + highlights | not-started | Twitch API ranks a game's clips by views; no official download endpoint | Prototype on one campaign creator's stream | No campaign picked | [README](../README.md) |
+| Edit | not-started | Plan: local ffmpeg + Whisper, facecam over gameplay in 9:16, captions, hook; each clip re-cut, never duplicated | Prototype after source | Source | |
+| Publish | not-started | Aggregator APIs carry the platform audits | Pick aggregator; connect accounts and link them in Content Rewards | Owner accounts | [README](../README.md) |
+| Submit + track | not-started | Submission is manual (paste post link), some campaigns within 30 min of posting | Browser automation or one tap by owner | No submission API | [README](../README.md) |
+| Everygen MCP | blocked | Registered, not signed in; only voiceover still useful | Sign in only if voiceover is wanted | Paid plan + owner OAuth | [README](../README.md) |
 
 States: not-started · in-progress · blocked · done · live · paused
 
 ## Open decisions / gates
 
-- Owner input pending: accounts (new or existing), niche and clip style,
-  posting cadence, monetization goal.
-- Source material: own console recordings, streamer footage under a clipping
-  deal, or AI generation. Rockstar's policy text ("occasional,
-  non-commercial", no spoilers) sits badly with high-volume monetized
-  clipping; decide before building.
+- Decided 2026-11-17: clip other creators, only under an active campaign or
+  written permission.
+- Owner input pending: Content Rewards account, which platforms, how many
+  accounts, which streamers to target.
 
 ## Pointers
 
