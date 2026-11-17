@@ -174,3 +174,6 @@ docs/optimize/*/logs/
 workspace/projects/vinted-reselling/data/
 workspace/projects/vinted-reselling/context/.env
 .mcp.local.json
+
+# GTA6 clipping: social-account logins, tokens, raw exports (public repo)
+workspace/projects/gta6-clipping/context/
