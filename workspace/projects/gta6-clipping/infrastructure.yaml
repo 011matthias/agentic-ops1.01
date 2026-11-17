@@ -1,0 +1,6 @@
+type: internal
+notes: >
+  GTA6 short-form clips for TikTok, YouTube Shorts, Instagram Reels; started
+  2026-11-17. Everygen MCP (https://everygen.ai/api/mcp, OAuth 2.1, no posting
+  scope) is registered as `everygen` in the machine-local .mcp.local.json,
+  scoped gta6-clipping. Credentials live in the gitignored context/.
