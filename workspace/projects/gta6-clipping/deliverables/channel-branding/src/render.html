@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- deliverable-allow: dark-mode-toggle, copy-clipboard, keyboard-search, state-persistence -->
+<!-- Reason: render template for headless Chrome screenshots (PNG channel art), never viewed as a page. -->
+<title>cl1pmaxxers channel art</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Mr+Dafoe&display=block">
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: transparent; }
+  svg { display: block; }
+</style>
+</head>
+<body>
+<svg id="art" xmlns="http://www.w3.org/2000/svg"></svg>
+<script src="scene.js"></script>
+<script>
+  // ?asset=banner|profile|profile-plain|watermark  &guides=1 draws the crop guides
+  const q = new URLSearchParams(location.search);
+  const asset = q.get('asset') || 'banner';
+  const guides = q.get('guides') === '1';
+  const svg = document.getElementById('art');
+  if (asset === 'banner') ClipArt.banner(svg, { guides });
+  else if (asset === 'profile') ClipArt.profile(svg, { text: true, guides });
+  else if (asset === 'profile-plain') ClipArt.profile(svg, { text: false, guides });
+  else ClipArt.watermark(svg);
+</script>
+</body>
+</html>
