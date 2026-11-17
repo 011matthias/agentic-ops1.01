@@ -32,8 +32,10 @@ States: not-started · in-progress · blocked · done · live · paused
 - Decided 2026-11-17: no API LLM costs (judgment by Claude Code on the
   subscription); where detectable, only the most-viewed intervals count
   (Twitch viewer clips, YouTube heatmap via yt-dlp).
-- To start p1.1 (owner): Twitch developer app (client ID + secret), 5 to 10
-  start streamers.
+- Decided 2026-11-17: clips in English; Claude Code picks the start
+  streamers from launch (19 Nov) by English clip views, owner signs off.
+- Twitch developer app: in primary clone `context/.env`, app token verified
+  2026-11-17; Twitch game_id for GTA VI is 1867279146.
 - Later (owner): posting, accounts, permission from the clipped streamers.
 
 ## Pointers
