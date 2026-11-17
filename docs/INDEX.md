@@ -800,3 +800,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-11-16 | Air to Sea Shuttles Reply | comms | [→](docs/2026-11-16%20-%20Air%20to%20Sea%20Shuttles%20Reply/Checkpoint.md) |
+
+## gta6-clipping
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-11-17 | GTA6 Clipping Project Start | misc | [Mini-Checkpoint-1](docs/2026-11-17%20-%20GTA6%20Clipping%20Project%20Start/Mini-Checkpoint-1.md) |
