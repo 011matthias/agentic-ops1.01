@@ -16,7 +16,7 @@ Shorts and Instagram Reels, earning through the platforms' view payouts.
 
 | Element | State | Status | Next action | Blocker | Detail |
 |---|---|---|---|---|---|
-| Format | blocked | Raw clips of others earn close to nothing on YouTube and TikTok; payout needs added value and, on TikTok, videos over a minute | Owner picks the format | Owner decision | [README](../README.md) |
+| Format | done | Owner 2026-11-17: streamer clips and VODs, analyzed, auto-assembled and edited (subtitles, hooks, effects); single moments and compilations over a minute | Build per master plan | — | [Master plan](../specs/1-spec/p1-clip-engine.md) |
 | Source + highlights | not-started | Twitch API ranks a game's clips by views; no official download endpoint | Prototype on one streamer's stream | Format | [README](../README.md) |
 | Edit | not-started | Plan: local ffmpeg + Whisper, 9:16 facecam over gameplay, captions, hook; commentary layer depends on format | Prototype after source | Format | |
 | Publish | not-started | Aggregator APIs carry the platform audits | Pick aggregator; connect accounts | Owner accounts | [README](../README.md) |
@@ -29,10 +29,12 @@ States: not-started · in-progress · blocked · done · live · paused
 
 - Decided 2026-11-17: clip other creators; earn through platform payouts,
   not clipping campaigns.
-- Open: format (raw clips vs commentary/compilation over a minute),
-  permission from the clipped streamers, accounts and platforms.
+- To start p1.1 (owner): Twitch developer app (client ID + secret), 5 to 10
+  start streamers, Anthropic API access.
+- Later (owner): posting, accounts, permission from the clipped streamers.
 
 ## Pointers
 
+- Master plan: [specs/1-spec/p1-clip-engine.md](../specs/1-spec/p1-clip-engine.md)
 - Project overview and verified facts: [README](../README.md)
 - Context (gitignored): `workspace/projects/gta6-clipping/context/`

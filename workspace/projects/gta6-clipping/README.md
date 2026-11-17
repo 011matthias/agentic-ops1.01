@@ -6,6 +6,7 @@ decision 2026-11-17; we do not clip our own play). Cadence and accounts are
 not defined yet.
 
 Element-by-element state: [status/p1-clip-pipeline.md](status/p1-clip-pipeline.md).
+Master plan (workflow, phases, data model): [specs/1-spec/p1-clip-engine.md](specs/1-spec/p1-clip-engine.md).
 
 ## Business model: platform monetization (owner decision 2026-11-17)
 
