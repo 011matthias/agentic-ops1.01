@@ -29,8 +29,11 @@ States: not-started · in-progress · blocked · done · live · paused
 
 - Decided 2026-11-17: clip other creators; earn through platform payouts,
   not clipping campaigns.
+- Decided 2026-11-17: no API LLM costs (judgment by Claude Code on the
+  subscription); where detectable, only the most-viewed intervals count
+  (Twitch viewer clips, YouTube heatmap via yt-dlp).
 - To start p1.1 (owner): Twitch developer app (client ID + secret), 5 to 10
-  start streamers, Anthropic API access.
+  start streamers.
 - Later (owner): posting, accounts, permission from the clipped streamers.
 
 ## Pointers
