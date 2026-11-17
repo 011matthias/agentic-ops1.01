@@ -28,9 +28,10 @@ phases:
 last_changes:
   - "2026-11-17: Masterplan angelegt. Owner-Entscheidung: Clips und Videos fremder GTA-Streamer analysieren, automatisch zusammenschneiden und bearbeiten (Untertitel, Hooks, Effekte). Posten, Auswertung und Monetarisierung folgen später."
   - "2026-11-17: Owner: keine API-LLM-Kosten, Urteilsarbeit macht Claude Code über das Abo; wo erkennbar zählen nur die meistgesehenen Intervalle (Twitch-Zuschauer-Clips, YouTube-Kurve über yt-dlp heatmap, geprüft)."
+  - "2026-11-17: Owner: Clips auf Englisch; Start-Streamer wählt Claude Code ab Launch nach Clip-Aufrufen. Twitch-App angelegt, App-Token geprüft, GTA-VI-game_id 1867279146."
 next_steps:
-  - "Owner: Twitch-Developer-App anlegen (Client-ID + Secret) und 5 bis 10 Start-Streamer nennen"
-  - "p1.1 Fundament + Beobachten bauen"
+  - "p1.1 Fundament + Beobachten bauen (Twitch-App in context/.env, Token geprüft 2026-11-17)"
+  - "Ab Launch 19.11.: Start-Streamer nach englischen Clip-Aufrufen wählen, Owner nickt ab"
 stage_history:
   - stage: spec
     date: 2026-11-17
@@ -121,8 +122,8 @@ jedes gültige Token zum Lesen von Clips):
   Aufzeichnung bis zum Clip-Start. Damit lässt sich jeder Zuschauer-Clip auf
   seine Stelle im Stream legen. Ist die Aufzeichnung gelöscht, ist `vod_offset`
   leer.
-- Entdecken neuer Streamer: Get Clips mit der `game_id` von GTA VI (über Search
-  Categories ermitteln). Neue Namen landen als Vorschlag in einer Liste, nie
+- Entdecken neuer Streamer: Get Clips mit der `game_id` von GTA VI (`1867279146`,
+  geprüft 2026-11-17). Neue Namen landen als Vorschlag in einer Liste, nie
   automatisch im Register.
 
 **YouTube** (Data API, allgemeiner Kontingent-Topf): neue Uploads über die
@@ -335,11 +336,11 @@ Hand; das Posten kommt später.
 
 ## Was der Owner zum Start liefert
 
-1. **Twitch-Developer-App** auf dev.twitch.tv mit dem eigenen Twitch-Account
-   anlegen; Client-ID und Secret kommen in `context/.env`. Dafür braucht es
-   den Login des Owners.
-2. **Start-Liste mit 5 bis 10 GTA-Streamern** (Twitch-Login, YouTube-Kanal
-   falls vorhanden, Sprache).
+1. **Twitch-Developer-App:** erledigt 2026-11-17. Client-ID und Secret liegen
+   in `context/.env` des Haupt-Checkouts, das App-Token ist geprüft.
+2. **Start-Streamer abnicken:** Claude Code wählt sie ab dem Launch am
+   19.11. nach Clip-Aufrufen in englischer Sprache (Owner-Entscheidung
+   2026-11-17); der Owner streicht oder ergänzt.
 3. **Für die Automatik:** den Laptop an und in Claude Code angemeldet lassen.
    Die Aufgabenplanung richtet Claude Code selbst ein.
 4. **Freigabe:** fertige Videos in der Freigabe-Liste ansehen und freigeben,
