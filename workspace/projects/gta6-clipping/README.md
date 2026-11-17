@@ -28,6 +28,41 @@ Take-Two statements). Every clip starts as a console recording.
   (primary clone), scoped `gta6-clipping`: it renders in the primary clone
   and in any `client/gta6-clipping/...` worktree.
 
+**Posting limits** (checked 2026-11-17, mostly vendor docs; re-check
+before building):
+
+- YouTube: `videos.insert` costs 1 unit from a separate Video Uploads
+  bucket, 100 calls a day, and Google's reference now says uploads from
+  unverified projects are not forced private
+  ([docs](https://developers.google.com/youtube/v3/docs/videos/insert)).
+- TikTok: an unaudited Content Posting API client posts private only, for
+  at most 5 users per 24 h; public posting needs TikTok's audit. About 15
+  posts per creator account per day, per third-party guides quoting
+  TikTok ([TikTok docs](https://developers.tiktok.com/doc/content-posting-api-reference-direct-post)).
+- Instagram: Business account required. Meta's publishing guide says 100
+  API posts per 24 h, its `content_publishing_limit` reference still says
+  50; read the endpoint live per account
+  ([Meta docs](https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-user/content_publishing_limit)).
+- Posting aggregators (Upload-Post, Ayrshare, Late/Zernio, Blotato) carry
+  the platform audits already; their prices are unverified.
+
+**Policy limits:**
+
+- Rockstar's posting policy (January 2025 version, quoted from search
+  results; the page timed out on a direct fetch) covers "occasional,
+  non-commercial" fan use, puts spoilers off-limits and removes isolated
+  cutscene videos
+  ([Rockstar](https://support.rockstargames.com/articles/7bNaeoMFTV0iUDGhStTXvz)).
+- YouTube "inauthentic content" (since 15 July 2025) demonetizes whole
+  channels of template-made, minimally varied videos
+  ([Social Media Today](https://www.socialmediatoday.com/news/youtube-clarifies-monetization-update-inauthentic-repeated-content/752892/)).
+  Its pre-launch gaming update keeps graphic violence in the first 7
+  seconds ineligible for ads
+  ([Dexerto](https://www.dexerto.com/gta/youtube-updates-gaming-violence-monetization-rules-ahead-of-gta-6-launch-3405945/)).
+- Meta (July 2025): accounts that repeatedly repost others' content lose
+  reach and monetization
+  ([TechCrunch](https://techcrunch.com/2025/07/14/following-youtube-meta-announces-crackdown-on-unoriginal-facebook-content)).
+
 ## Layout
 
 - `status/` workstream status, kept current
