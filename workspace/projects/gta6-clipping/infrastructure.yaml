@@ -4,3 +4,6 @@ notes: >
   2026-11-17. Everygen MCP (https://everygen.ai/api/mcp, OAuth 2.1, no posting
   scope) is registered as `everygen` in the machine-local .mcp.local.json,
   scoped gta6-clipping. Credentials live in the gitignored context/.
+  Clip engine (2026-11-17, p1.1): engine/ is its own uv project, state in the
+  gitignored engine/data/clipengine.sqlite, register in engine/config/streamers.yaml.
+  Twitch app token via client credentials; YouTube via the public channel feed.

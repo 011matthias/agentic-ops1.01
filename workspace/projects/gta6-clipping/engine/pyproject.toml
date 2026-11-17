@@ -1,0 +1,32 @@
+[project]
+name = "clipengine"
+version = "0.1.0"
+description = "GTA6 clip engine: watch streamers, pick the most-viewed moments, cut and edit vertical clips"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27",   # Twitch Helix + YouTube feed
+    "pyyaml>=6.0",   # streamer register
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.scripts]
+clipengine = "clipengine.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/clipengine"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E9", "F"]

@@ -1,0 +1,16 @@
+# Streamer-Register der Clip-Engine: wen die Engine beobachtet.
+#
+# Neue Namen kommen nur nach dem Ja des Owners hinein, per
+#   uv run clipengine approve LOGIN
+# oder von Hand. Vorschläge (clipengine suggest) landen nie automatisch hier.
+#
+# Felder pro Eintrag:
+#   name        Anzeigename
+#   twitch      Twitch-Login (Pflicht), wie in twitch.tv/LOGIN
+#   youtube     YouTube-Kanal-ID (beginnt mit UC) oder null
+#   language    Sprache des Streamers, zwei Buchstaben (en)
+#   layout      Layout-Profil für den Hochformat-Schnitt (p1.5) oder null
+#   priority    1 (zuerst) bis 5
+#   permission  unknown | yes | no  (Erlaubnis des Streamers; Regel folgt mit dem Posten-Plan)
+
+streamers: []

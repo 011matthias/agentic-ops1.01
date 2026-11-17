@@ -177,3 +177,5 @@ workspace/projects/vinted-reselling/context/.env
 
 # GTA6 clipping: social-account logins, tokens, raw exports (public repo)
 workspace/projects/gta6-clipping/context/
+# Clip engine state: SQLite, cached app token, downloads, renders, reports
+workspace/projects/gta6-clipping/engine/data/

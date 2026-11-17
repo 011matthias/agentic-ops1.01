@@ -1,0 +1,33 @@
+name: GTA6 clip engine tests
+
+# The clip engine is its own uv project; path-filtered like lead-desk-tests.yml
+# so it runs when the engine or this workflow changes.
+
+on:
+  pull_request:
+    paths:
+      - "workspace/projects/gta6-clipping/engine/**"
+      - ".github/workflows/gta6-engine-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "workspace/projects/gta6-clipping/engine/**"
+      - ".github/workflows/gta6-engine-tests.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  engine:
+    name: Clip engine tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.12'
+      - name: Ruff (real-bug ruleset)
+        run: uv run --directory workspace/projects/gta6-clipping/engine --extra dev ruff check src tests
+      - name: Run engine test suite
+        run: uv run --directory workspace/projects/gta6-clipping/engine --extra dev pytest -q
