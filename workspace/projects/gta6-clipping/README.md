@@ -7,34 +7,38 @@ not defined yet.
 
 Element-by-element state: [status/p1-clip-pipeline.md](status/p1-clip-pipeline.md).
 
-## Business model: paid clipping campaigns (checked 2026-11-17)
+## Business model: platform monetization (owner decision 2026-11-17)
 
-- Clips of other people's content earn almost no platform ad revenue.
-  YouTube's reused-content policy judges added value and applies even with
-  the creator's permission
+Revenue comes from the platforms' own payout programs on views. Figures
+are third-party estimates unless the link is the platform's own; checked
+2026-11-17.
+
+- **YouTube Shorts:** creators share 45% of the Shorts pool. Entry is 1,000
+  subscribers plus 10 million Shorts views in 90 days (or 4,000 watch
+  hours). From 1 Feb 2027 Shorts revenue needs 10 million qualified views in
+  the preceding 90 days; reports differ on grandfathering
+  ([Tubefilter](https://www.tubefilter.com/2026/08/10/youtube-partner-program-ad-eligibility-requirements-shorts/)).
+  Gaming Shorts earn about $0.02 to $0.10 per 1,000 views, so $20 to $100
+  per million ([vidIQ](https://vidiq.com/blog/post/youtube-shorts-monetization/)).
+- **TikTok Creator Rewards:** about $0.40 to $1.00 per 1,000 qualified
+  views, Germany about $0.62. Needs 10,000 followers, a personal account
+  and videos over one minute
+  ([ttcalculator](https://ttcalculator.net/learn/tiktok-pay-germany-earnings/)).
+- **Instagram:** no general per-view payout found for Germany; the Reels
+  bonus is invite-only (third-party guides).
+- **Reused content:** YouTube monetizes clips of other people's content
+  only with significant added value (commentary, editing, narrative),
+  judged for the whole channel and even with the creator's permission
   ([YouTube help](https://support.google.com/youtube/answer/1311392)).
-  TikTok Creator Rewards excludes reposts and needs videos over a minute
-  (third-party guides; TikTok's own page not checked).
-- The money is in clipping campaigns: a creator or brand funds a budget
-  and pays per 1,000 views on approved clips, with per-clip caps and
-  first-come budgets. Content Rewards (payouts via Whop) is the largest
-  marketplace: median listed rate $1.00 per 1,000 views across 710 live
-  campaigns on 16 Nov 2026 (YouTube $1.10), 10% fee off CPM payouts
-  ([Content Rewards](https://contentrewards.com/articles/how-much-do-clippers-make)).
-  Streamers also pay clippers directly, usually through Discord.
-- GTA6 on 17 Nov: one campaign open, a song promotion ("Tokyo Girl",
-  $0.70 per 1,000, $2,000 budget, $35 cap per clip, TikTok and Instagram)
-  that asks for own footage over other creators' clips, an ad disclosure,
-  and submission within 30 minutes of posting
-  ([Content Rewards](https://contentrewards.com/articles/gta-6-clipping)).
-  Streamer-funded GTA6 stream campaigns: none confirmed yet; vendors expect
-  them at launch.
-- Submission is manual in the official guide (paste the post link); no API
-  found. Accounts must be public and linked; duplicate clips fail review
-  ([FAQ](https://contentrewards.com/faqs)).
-- **We clip only creators with an active campaign or written permission.**
-  Without it the clips draw copyright takedowns, Meta cuts reach for
-  reposted content, and no campaign pays for them.
+  TikTok's originality scoring pays reposts little or nothing. Raw clips at
+  volume therefore earn close to nothing on the two platforms that pay; the
+  format has to add value.
+- **Copyright:** clipping without the creator's permission draws takedowns,
+  and three YouTube copyright strikes in 90 days end a channel.
+
+Considered and declined by the owner on 2026-11-17: paid clipping
+campaigns (median $1.00 per 1,000 views across 710 campaigns,
+[Content Rewards](https://contentrewards.com/articles/how-much-do-clippers-make)).
 
 **Sources of footage:** Twitch's API lists a game's clips sorted by view
 count, so viewers' own clips mark the strongest moments; there is no
