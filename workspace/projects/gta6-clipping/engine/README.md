@@ -25,11 +25,19 @@ uv run --extra dev pytest -q              tests (offline, against a fake Twitch/
   `config/layouts.yaml`; ASS captions from the word times (2 to 4 words, spoken word
   highlighted, fillers dropped), the hook boxed on top for ~3 s, `twitch.tv/{name}`
   throughout; two-pass loudnorm to -14 LUFS; style sets rotate per moment.
-- **Encoder:** ffmpeg 8.1 needs NVENC API 13.1 (NVIDIA driver 610+); the laptop's driver
-  560.94 has 12.2, so NVENC cannot open and the renderer falls back to x264 on the CPU
-  (a 22 s clip renders in about 30 s). A driver update switches it back with no code change.
+- **Gameplay window (`follow.py`):** owner 2026-11-19, the gameplay fills the whole band
+  and the main object stays completely visible. A 912x1080 window (the band's aspect)
+  follows the main object: 4 fps samples, YOLOX-m on the CPU (about 0.25 s a frame),
+  hysteresis against other objects, a box the centre line runs through is mirrored about
+  it (the chase camera keeps the vehicle centred, boxes miss a wing), a smoothed path fed
+  to the crop per frame by `sendcmd`. The model is one download, not in git:
+  `data/models/yolox_m.onnx` from the YOLOX release `0.1.1rc0` (sha256 `21ff6cfd...`).
+- **Encoder:** ffmpeg 8.1 needs NVENC API 13.1 (NVIDIA driver 610+); since driver 621.24
+  (2026-11-19) `h264_nvenc` opens. Without it the renderer falls back to x264 on the CPU.
 - **Checks:** 1080x1920, F1 length and cut-list length, -14 +-1 LUFS, no silence over 2 s,
-  no black or frozen stretch, captions within 0.2 s of the render heard again by Whisper.
+  no black or frozen stretch, captions within 0.2 s of the render heard again by Whisper,
+  no bars in the gameplay band, the main object inside the window in every sample (an
+  object wider than the window fails: the owner decides fill vs whole object).
   Failures stay in `data/renders/{id}/` with `check.json`.
 
 - **Analyze (p1.3):** faster-whisper large-v3 (int8_float16, CUDA) transcribes each fetched
