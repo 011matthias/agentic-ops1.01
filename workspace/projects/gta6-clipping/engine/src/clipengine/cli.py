@@ -234,6 +234,35 @@ def cmd_judge(args, con) -> int:
     return 0
 
 
+def cmd_render(args, con, *, renderer=None, measurer=None, listener=None) -> int:
+    from . import produce
+
+    if listener is None and not args.no_caption_check:
+        from . import analyze as analyze_mod
+
+        def listener(video):  # hear the rendered audio again, independent of the cut list
+            lang = "en"
+            return analyze_mod.whisper_transcriber()(video, lang).words
+
+    try:
+        edl, video, result = produce.produce(
+            con, args.moment, data_dir=config.data_dir(),
+            layouts=produce.load_layouts(config.ENGINE_DIR / "config" / "layouts.yaml"),
+            style=args.style, renderer=renderer or produce.render_mod.render,
+            measurer=measurer or produce.measure, listener=listener)
+    except (produce.ProduceError, produce.render_mod.RenderError) as exc:
+        raise UsageError(str(exc)) from exc
+    m = result.measured
+    print(f"{edl['id']}: {edl['title']}")
+    print(f"  {m['width']}x{m['height']} {m['fps']} fps, {m['duration']:.2f} s, {m['lufs']} LUFS, "
+          f"captions drift {m.get('caption_drift_s')} s, style {edl['style']}")
+    print(f"  hooks: {' | '.join(edl['hooks'])}")
+    print(f"  {'READY' if result.passed else 'FAILED'}: {video}")
+    for failure in result.failures:
+        print(f"  ! {failure}")
+    return 0 if result.passed else 1
+
+
 def cmd_reject(args, con) -> int:
     for raw in args.logins:
         login = raw.lower()
@@ -303,12 +332,19 @@ def build_parser() -> argparse.ArgumentParser:
     j.add_argument("moment", type=int)
     j.add_argument("--file", required=True, help="review.json: verdict, spoiler, cutscene, "
                                                  "adult, category, hooks, title, notes")
+
+    rn = sub.add_parser("render", help="cut list, 1080x1920 render and checks for a kept "
+                                       "moment; a pass lands in data/ready/")
+    rn.add_argument("moment", type=int)
+    rn.add_argument("--style", choices=["a", "b", "c"], help="style set (default: rotates)")
+    rn.add_argument("--no-caption-check", action="store_true",
+                    help="skip hearing the render again with Whisper")
     return p
 
 
 COMMANDS = {"watch": cmd_watch, "list": cmd_list, "suggest": cmd_suggest,
             "approve": cmd_approve, "reject": cmd_reject, "fetch": cmd_fetch,
-            "analyze": cmd_analyze, "judge": cmd_judge}
+            "analyze": cmd_analyze, "judge": cmd_judge, "render": cmd_render}
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -16,8 +16,21 @@ uv run clipengine fetch --dry-run         plan the most-viewed stretches of fini
 uv run clipengine fetch --top 3           ... and download only those (yt-dlp, source quality)
 uv run --extra gpu clipengine analyze     transcripts, F1 cuts, review packages in data/review/
 uv run clipengine judge ID --file F.json  store Claude Code's verdict on package ID
+uv run --extra gpu clipengine render ID   cut list, 1080x1920 render, checks; a pass lands in data/ready/
 uv run --extra dev pytest -q              tests (offline, against a fake Twitch/YouTube)
 ```
+
+- **Render (p1.4 to p1.6):** the cut list (`edl.json`) is the only render input. Facecam
+  (1080x640) over gameplay (1080x1280), both cropped by the streamer's profile in
+  `config/layouts.yaml`; ASS captions from the word times (2 to 4 words, spoken word
+  highlighted, fillers dropped), the hook boxed on top for ~3 s, `twitch.tv/{name}`
+  throughout; two-pass loudnorm to -14 LUFS; style sets rotate per moment.
+- **Encoder:** ffmpeg 8.1 needs NVENC API 13.1 (NVIDIA driver 610+); the laptop's driver
+  560.94 has 12.2, so NVENC cannot open and the renderer falls back to x264 on the CPU
+  (a 22 s clip renders in about 30 s). A driver update switches it back with no code change.
+- **Checks:** 1080x1920, F1 length and cut-list length, -14 +-1 LUFS, no silence over 2 s,
+  no black or frozen stretch, captions within 0.2 s of the render heard again by Whisper.
+  Failures stay in `data/renders/{id}/` with `check.json`.
 
 - **Analyze (p1.3):** faster-whisper large-v3 (int8_float16, CUDA) transcribes each fetched
   section with word times; the F1 cut (15 to 60 s) starts at the sentence the top clip begins
