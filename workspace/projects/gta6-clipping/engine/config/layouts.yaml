@@ -31,7 +31,7 @@ xqc:
 kaicenat:
   facecam: [0, 432, 392, 220]      # Rechteck links in der Mitte, Chat direkt darunter
   cam_crop: [10, 432, 372, 220]    # 1080:640 innerhalb, sonst wächst die Cam in den Chat
-  gameplay: [0, 0, 1920, 1080]
+  gameplay: [400, 0, 1520, 1080]   # ohne Cam und Chat links: m30 zeigte beide im Band
   calibrated: "2026-11-19, VOD 2932305259 bei 2:52:40 und 8:35:45"
   earlier:                         # derselbe Stream, bevor die Cam nach unten rückte
     - video: "2932305259"

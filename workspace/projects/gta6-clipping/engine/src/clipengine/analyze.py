@@ -352,7 +352,7 @@ def judge(con: sqlite3.Connection, moment_id: int, answer: dict) -> sqlite3.Row:
         if name.lower() not in title.lower():  # channel promise: every title names the streamer
             raise AnalyzeError(f"title must name the streamer ({name})")
         if not (0 <= in_s < out_s <= m["file_duration_s"] + 0.05
-                and F1_MIN_S <= out_s - in_s <= F1_MAX_S):
+                and F1_MIN_S <= round(out_s - in_s, 3) <= F1_MAX_S):  # 64.51-4.51 > 60
             raise AnalyzeError(f"cut {in_s}-{out_s} must lie in the file and last "
                                f"{F1_MIN_S:.0f} to {F1_MAX_S:.0f} s")
     with con:
