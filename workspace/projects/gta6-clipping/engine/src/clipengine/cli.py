@@ -7,6 +7,8 @@
     uv run clipengine reject LOGIN           owner said no: never suggest again
     uv run clipengine fetch --dry-run        plan the most-viewed stretches of finished VODs
     uv run clipengine fetch                  ... and download only those, via yt-dlp
+    uv run --extra gpu clipengine analyze    transcripts, F1 cuts, review packages
+    uv run clipengine judge ID --file F      store the verdict on review package ID
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ import re
 import sqlite3
 import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import httpx
 
@@ -198,6 +201,39 @@ def cmd_fetch(args, con, *, twitch=None, downloader=None, probe=None) -> int:
     return 1 if failed else 0
 
 
+def cmd_analyze(args, con, *, transcriber=None, stills=None) -> int:
+    from . import analyze as analyze_mod  # keeps faster-whisper out of the other commands
+
+    results = analyze_mod.analyze(
+        con, data_dir=config.data_dir(), transcriber=transcriber or analyze_mod.whisper_transcriber,
+        stills=stills or analyze_mod.extract_stills, section_ids=args.section, redo=args.redo)
+    for r in results:
+        s = r.section
+        text = " ".join(w["w"] for w in r.transcript.words if r.in_s <= w["s"] <= r.out_s)
+        print(f"moment {r.moment_id}: {s['streamer']} {s['views']} views, "
+              f"{r.in_s:.1f}-{r.out_s:.1f}s ({r.out_s - r.in_s:.1f}s), "
+              f"whisper {r.transcript.run_s}s for {r.transcript.audio_s}s audio")
+        print(f"  package {r.package}")
+        print(f"  \"{text[:160]}{'...' if len(text) > 160 else ''}\"")
+    if not results:
+        print("nothing to analyze: every fetched section has a moment (use --redo)")
+    return 0
+
+
+def cmd_judge(args, con) -> int:
+    import json
+
+    from . import analyze as analyze_mod
+
+    try:
+        answer = json.loads(Path(args.file).read_text(encoding="utf-8"))
+        row = analyze_mod.judge(con, args.moment, answer)
+    except (OSError, ValueError, analyze_mod.AnalyzeError) as exc:
+        raise UsageError(f"judge {args.moment}: {exc}") from exc
+    print(f"moment {row['id']}: {row['status']} ({row['category'] or '-'}) {row['title'] or ''}")
+    return 0
+
+
 def cmd_reject(args, con) -> int:
     for raw in args.logins:
         login = raw.lower()
@@ -257,11 +293,22 @@ def build_parser() -> argparse.ArgumentParser:
     f.add_argument("--max-len", type=float, default=120,
                    help="longest section in seconds (default 120)")
     f.add_argument("--dry-run", action="store_true", help="plan and print, download nothing")
+
+    an = sub.add_parser("analyze", help="transcribe fetched sections, cut F1 moments, "
+                                        "write review packages (needs --extra gpu)")
+    an.add_argument("--section", nargs="+", type=int, metavar="ID", help="only these sections")
+    an.add_argument("--redo", action="store_true", help="transcribe and cut again")
+
+    j = sub.add_parser("judge", help="store Claude Code's verdict on a review package")
+    j.add_argument("moment", type=int)
+    j.add_argument("--file", required=True, help="review.json: verdict, spoiler, cutscene, "
+                                                 "adult, category, hooks, title, notes")
     return p
 
 
 COMMANDS = {"watch": cmd_watch, "list": cmd_list, "suggest": cmd_suggest,
-            "approve": cmd_approve, "reject": cmd_reject, "fetch": cmd_fetch}
+            "approve": cmd_approve, "reject": cmd_reject, "fetch": cmd_fetch,
+            "analyze": cmd_analyze, "judge": cmd_judge}
 
 
 def main(argv: list[str] | None = None) -> int:

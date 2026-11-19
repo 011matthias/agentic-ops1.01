@@ -121,6 +121,39 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX sections_by_video ON sections(video_id);
     """,
+    # 3: p1.3 analyze: transcripts, and one judged moment per section
+    """
+    CREATE TABLE transcripts (
+        section_id INTEGER PRIMARY KEY REFERENCES sections(id),
+        model      TEXT NOT NULL,
+        language   TEXT,
+        words      TEXT NOT NULL,     -- JSON [{w, s, e, p}], seconds in the section file
+        segments   TEXT NOT NULL,     -- JSON [{s, e, t}]
+        audio_s    REAL,
+        run_s      REAL,
+        created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE moments (
+        id          INTEGER PRIMARY KEY,
+        section_id  INTEGER NOT NULL UNIQUE REFERENCES sections(id),
+        in_s        REAL NOT NULL,    -- cut in the section file, at sentence ends
+        out_s       REAL NOT NULL,
+        package     TEXT,             -- review package folder, relative to the data dir
+        status      TEXT NOT NULL DEFAULT 'review'
+                    CHECK (status IN ('review', 'keep', 'reject')),
+        spoiler     INTEGER,
+        cutscene    INTEGER,
+        adult       TEXT CHECK (adult IN ('none', 'defuse', 'reject')),
+        category    TEXT,
+        hooks       TEXT,             -- JSON list of 2 to 3
+        title       TEXT,
+        notes       TEXT,
+        reviewed_at TEXT,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL
+    );
+    """,
 ]
 
 

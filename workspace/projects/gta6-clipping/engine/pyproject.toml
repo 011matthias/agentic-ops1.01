@@ -11,6 +11,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.6"]
+gpu = [
+    "faster-whisper>=1.1",
+    "nvidia-cublas-cu12>=12.4,<12.9.3 ; sys_platform == 'win32'",
+    "nvidia-cudnn-cu12>=9.1,<10 ; sys_platform == 'win32'",
+]
 
 [project.scripts]
 clipengine = "clipengine.cli:main"
