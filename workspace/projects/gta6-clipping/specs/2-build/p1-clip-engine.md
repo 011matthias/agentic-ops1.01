@@ -4,7 +4,7 @@ name: GTA6 Clip-Engine (Masterplan)
 type: project
 stage: build
 needs_fixes: false
-version: 1.3.0
+version: 1.4.0
 created: 2026-11-17
 updated: 2026-11-19
 orchestrator: none
@@ -37,8 +37,9 @@ last_changes:
   - "2026-11-19: Owner-Feedback zum ersten Video: Aufteilung, Untertitel, Hook-Stil gut; Länge etwa 1 Minute (F1-Schnitt füllt jetzt mit ganzen Sätzen auf 55 s auf, die Vorgeschichte zuerst); der eingeblendete Hook nennt GTA6 (z. B. 'ohnePixel playing GTA6 for the first time', judge erzwingt es). Grafiktreiber-Update freigegeben."
   - "2026-11-19: Owner-Regel (wörtlich): 'das Video unten, also die Handlung, soll den ganzen Bereich, der dafür auf dem Bildschirm bereitgestellt wird, einnehmen', und das Hauptobjekt bleibt vollständig sichtbar. Umgesetzt: ein 912x1080-Ausschnitt (Seitenverhältnis des Bands) füllt das untere Band 1080x1280 und folgt dem Hauptobjekt (YOLOX-m lokal auf der CPU, 4 Bilder/s, Box an der Bildmitte gespiegelt, geglätteter Pfad, per sendcmd). Neue Checks: Objektbox in jedem abgetasteten Bild ganz im Ausschnitt, keine Balken im Band. Ist das Objekt breiter als der Ausschnitt, fällt der Check durch und der Owner entscheidet. m5-f1 neu gerendert, Flugzeug in jedem Bild ganz sichtbar."
   - "2026-11-19: Owner nach der m5-Vorschau: 'unten den blur weg'. Im Gameplay-Band wird nichts mehr weichgezeichnet, auch nicht die doppelte Facecam (ersetzt die frühere Regel). caseoh_ hat ein Layout-Profil (gerahmte 4:3-Cam, cam_crop schneidet innerhalb des Rahmens); Moment 15 mit GTA6-Hook neu beurteilt und gerendert."
+  - "2026-11-19: Neuer Check im Gameplay-Band (Untertitelzeile ausgenommen): schwarze, stillstehende (Karte, Menü, Titel- oder Ladebild) und Menü-über-verschwommenem-Spiel-Strecken ab 0,75 s fallen durch. Geeicht an 21 Abschnitten (7.260 Proben); Nachtfahrt, Dämmerung, dunkle Innenräume und m15-f1 bestehen, m5-f1 fällt wegen des Waffenrads bei 34,5 s durch. Eine gerade gezoomte Karte fällt nicht auf."
 next_steps:
-  - "Gameplay-Band auf Menüs und dunkle Strecken prüfen (die Pause-Karte am Anfang fiel nur beim Ansehen auf)"
+  - "m5-f1: Waffenrad bei 34,5 s (0,75 s) fällt den neuen Check; Owner entscheidet mit seinem Urteil zum Video"
   - "Weitere Prüfpakete beurteilen (13 offen), Facecam-Profile für die anderen Streamer"
   - "p1.7 Betrieb: Zeitplan, claude -p für das Urteil, Aufräumen"
   - "22.11.: suggest --since 72h, Streamer tauschen, die GTA nicht mehr spielen"
@@ -339,6 +340,11 @@ Werkzeug: Python baut aus der Schnittliste die ffmpeg-Filterkette. Remotion
 - Bild: keine schwarzen oder eingefrorenen Strecken (ffmpeg `blackdetect` / `freezedetect`)
 - Gameplay-Band: keine Balken (Schärfe der Randstreifen gegen die Mitte, nur im Band
   gemessen); das Hauptobjekt liegt in jedem abgetasteten Bild ganz im Ausschnitt
+- Gameplay-Band, ohne die Untertitelzeile: keine Strecke ab 0,75 s (3 Proben bei 4/s), die
+  schwarz ist (95 % der Pixel unter 10), stillsteht (Spiel pausiert: Karte, Menü, Titel- oder
+  Ladebild; Änderung unter 0,25) oder ein Menü über dem verschwommenen Spiel zeigt (hell,
+  unscharf, langsam: Waffenrad). Geeicht an 21 Abschnitten; Nachtfahrt, Dämmerung und dunkle
+  Innenräume bestehen. Lücke: eine Karte, die gerade gezoomt wird, fällt nicht auf
 - Untertitel: Stichprobe der Wortzeiten gegen das Audio
 - Inhalt: kein Spoiler-Flag
 - Duplikat: Wahrnehmungs-Hash gegen alle früheren Renders

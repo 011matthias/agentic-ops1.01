@@ -69,7 +69,7 @@ class FakeFfmpeg:
 
 
 GOOD = {"width": 1080, "height": 1920, "fps": 60.0, "duration": 22.0, "lufs": -13.9,
-        "silences": 0, "black": 0, "frozen": 0, "band_bars": []}
+        "silences": 0, "black": 0, "frozen": 0, "band_bars": [], "band_stretches": []}
 STILL = {"planner": lambda edl, src: follow.static(edl["layout"])}  # window in the middle
 
 
