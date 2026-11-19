@@ -1,13 +1,14 @@
 # Layout-Profile für den Hochformat-Schnitt (p1.5): wo im 1920x1080-Bild des
 # Streamers die Facecam sitzt und welcher Ausschnitt das Gameplay zeigt.
-# Rechtecke als [x, y, Breite, Höhe] in Quell-Pixeln. Der Renderer weitet jedes
-# Rechteck um seine Mitte auf das Seitenverhältnis seines Bandes (Facecam
-# 1080x640 oben, Gameplay 1080x1280 unten).
+# Rechtecke als [x, y, Breite, Höhe] in Quell-Pixeln. Die Facecam wird um ihre
+# Mitte auf 1080x640 geweitet (oben). Das Gameplay-Rechteck wird NICHT beschnitten,
+# sondern ganz auf 1080 Breite skaliert und vor eine unscharfe Vergrößerung gesetzt
+# (unten, 1080x1280), damit das Hauptobjekt vollständig sichtbar bleibt.
 #
 # Kalibrieren: Standbild mit Raster ziehen (ffmpeg drawgrid, 160x120 px),
 # ansehen, Rechtecke eintragen. Ändert ein Streamer sein Overlay, neu kalibrieren.
 
 ohnepixel:
   facecam: [230, 700, 440, 380]    # freigestellt unten links, ohne Rahmen
-  gameplay: [560, 0, 1360, 1080]   # rechts der Facecam, damit kein halbes Gesicht im Gameplay steht
+  gameplay: [0, 0, 1920, 1080]     # ganzes Bild: das Hauptobjekt muss vollständig sichtbar sein (Owner 2026-11-19)
   calibrated: "2026-11-19, VOD 2932275268 bei 4:53:53"

@@ -89,6 +89,10 @@ def test_render_through_the_cli_lands_in_ready(kept, monkeypatch, capsys):
     assert "twitch.tv/ohnePixel" in ass
     (cmd,) = fake.encodes
     assert "libx264" in cmd and "h264_nvenc" not in cmd  # driver 560 cannot open NVENC
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    # owner 2026-11-19: the whole gameplay region is shown (1360x1080 -> 1080x858), not cropped
+    assert "[gfg]scale=1080:858" in graph and "overlay=0:211" in graph
+    assert "boxblur" in graph  # blurred fill behind it, and over the duplicate facecam
     assert "READY" in capsys.readouterr().out
     render.video_encoder.cache_clear()
 
