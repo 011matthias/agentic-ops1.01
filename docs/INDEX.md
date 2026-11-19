@@ -804,6 +804,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## gta6-clipping
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-11-19 | GTA6 Clip Engine Band Check | client-dev | [Mini-Checkpoint-1](docs/2026-11-19%20-%20GTA6%20Clip%20Engine%20Band%20Check/Mini-Checkpoint-1.md) |
 | 2026-11-19 | GTA6 Clip Engine Follow Window | client-dev | [Mini-Checkpoint-1](docs/2026-11-19%20-%20GTA6%20Clip%20Engine%20Follow%20Window/Mini-Checkpoint-1.md) |
 | 2026-11-19 | GTA6 Clip Engine Owner Feedback | client-dev | [Mini-Checkpoint-1](docs/2026-11-19%20-%20GTA6%20Clip%20Engine%20Owner%20Feedback/Mini-Checkpoint-1.md) |
 | 2026-11-19 | GTA6 Clip Engine First Video | client-dev | [Mini-Checkpoint-1](docs/2026-11-19%20-%20GTA6%20Clip%20Engine%20First%20Video/Mini-Checkpoint-1.md) |
