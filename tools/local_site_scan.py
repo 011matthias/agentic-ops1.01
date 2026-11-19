@@ -132,29 +132,37 @@ async def fetch_overpass(query: str, client: httpx.AsyncClient, mirrors=MIRRORS,
                          rounds: int = 4, pause: float = 30, sleep=asyncio.sleep):
     """Return (elements, mirror). Raise OverpassUnavailable rather than return a partial list."""
     errors: list[str] = []
+
+    def note(msg: str) -> None:  # a throttled run can wait ~30 min; say so instead of looking hung
+        errors.append(msg)
+        print(f"overpass: {msg}, trying the next server", file=sys.stderr, flush=True)
+
     for rnd in range(rounds):
         for url in mirrors:
             try:
                 r = await client.post(url, data={"data": query}, timeout=240)
             except httpx.HTTPError as e:
-                errors.append(f"{urlparse(url).hostname}: {type(e).__name__}")
+                note(f"{urlparse(url).hostname}: {type(e).__name__}")
                 continue
             if r.status_code != 200:
-                errors.append(f"{urlparse(url).hostname}: HTTP {r.status_code}")
+                note(f"{urlparse(url).hostname}: HTTP {r.status_code}")
                 continue
             try:
                 data = r.json()
             except ValueError:
-                errors.append(f"{urlparse(url).hostname}: not JSON")
+                note(f"{urlparse(url).hostname}: not JSON")
                 continue
             remark = str(data.get("remark") or "")
             if "error" in remark.lower():
                 # Overpass answers 200 with a remark and a PARTIAL element list on timeout.
-                errors.append(f"{urlparse(url).hostname}: partial answer ({remark[:60]})")
+                note(f"{urlparse(url).hostname}: partial answer ({remark[:60]})")
                 continue
             return data.get("elements", []), url
         if rnd < rounds - 1:
-            await sleep(pause * (rnd + 1))
+            wait = pause * (rnd + 1)
+            print(f"overpass: every server busy, waiting {wait:.0f} s (round {rnd + 1} of {rounds})",
+                  file=sys.stderr, flush=True)
+            await sleep(wait)
     raise OverpassUnavailable("; ".join(errors[-6:]) or "no mirror answered")
 
 
