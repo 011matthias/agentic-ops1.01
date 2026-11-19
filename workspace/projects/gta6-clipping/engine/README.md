@@ -60,7 +60,10 @@ uv run --extra dev pytest -q              tests (offline, against a fake Twitch/
 - **Fetch (p1.2):** viewer clips are laid on their VOD, overlapping clips merge into one
   interval weighted by summed views, intervals touching Twitch `muted_segments` are skipped, and
   only the strongest N are downloaded with 5 s pad (`--download-sections`, max 120 s centred
-  on the most-viewed clip). A VOD still being recorded is skipped. Streamers without public
+  on the most-viewed clip). A VOD still being recorded is planned up to 30 min behind live
+  and never marked fetched, so the next run picks up what was recorded since (launch streams
+  run for days); ffmpeg reads its live playlist from segment 0 (`-live_start_index 0`), from
+  the live edge it hung. A download hung past 600 s fails its section. Streamers without public
   VODs: clips made within 90 s of each other are one moment, its most-viewed clip is
   downloaded. Files land in `data/{streamer}/{vod}/sections/` and `data/{streamer}/clips/`;
   no download under 50 GB free (`CLIPENGINE_MIN_FREE_GB`).

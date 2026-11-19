@@ -105,7 +105,9 @@ def seed(helix, env, con, twitch, http):
         make_clip("d1", "1", "Alpha", 5000, ago(18), video_id="v1", vod_offset=8000,
                   game="other-game"),
         make_clip("e1", "1", "Alpha", 10, ago(18), video_id="v1", vod_offset=9000, duration=10),
+        # Beta is live 2 h into v2: l1 is long recorded, l2 sits in the last 30 min
         make_clip("l1", "2", "Beta", 900, ago(1), video_id="v2", vod_offset=600),
+        make_clip("l2", "2", "Beta", 2000, ago(0.2), video_id="v2", vod_offset=6000),
         # no VOD: g1 and g2 are one moment (made 30 s apart), g3 is too weak alone
         make_clip("g1", "3", "Gamma", 70, db.iso(t), video_id=None, vod_offset=None),
         make_clip("g2", "3", "Gamma", 20, db.iso(t + timedelta(seconds=30)), video_id=None,
@@ -123,18 +125,22 @@ def test_fetch_downloads_only_the_most_viewed_stretches(con, env, helix, twitch,
     assert sorted(dl.calls) == sorted([
         ("section", "https://www.twitch.tv/videos/v1", 3565.0, 3625.0),  # a1+a2, 5 s pad
         ("section", "https://www.twitch.tv/videos/v1", 6985.0, 7005.0),  # c1
+        ("section", "https://www.twitch.tv/videos/v2", 565.0, 605.0),    # l1, recorded part
         ("clip", "https://clips.twitch.tv/g1"),                          # Gamma, no VOD
     ])
     rows = {r["top_clip_id"]: r for r in con.execute("SELECT * FROM sections")}
-    assert set(rows) == {"a1", "c1", "g1"}
+    assert set(rows) == {"a1", "c1", "l1", "g1"}
     assert (rows["a1"]["views"], rows["a1"]["clips"], rows["a1"]["rank"]) == (800, 2, 1)
     assert rows["a1"]["file"] == "alpha/v1/sections/3565-3625.mp4"
     assert (config.data_dir() / rows["a1"]["file"]).exists()
     assert (rows["g1"]["views"], rows["g1"]["file"]) == (90, "gamma/clips/g1.mp4")
     assert all(r["status"] == "fetched" for r in rows.values())
     assert con.execute("SELECT status FROM videos WHERE ext_id = 'v1'").fetchone()[0] == "fetched"
+    # still recording: never marked done, so the next run plans what was recorded since
+    assert con.execute("SELECT status FROM videos WHERE ext_id = 'v2'").fetchone()[0] != "fetched"
     out = capsys.readouterr().out
-    assert "1 muted skipped" in out and "beta v2: still live" in out
+    assert "1 muted skipped" in out
+    assert "beta v2: still live, planned up to 1:30 h of the recording" in out
 
     # idempotent: a second run downloads nothing new
     dl2 = FakeDownloader()
@@ -198,5 +204,23 @@ def test_ytdlp_retries_a_reset_connection_through_the_cli(con, env, helix, twitc
     assert len(calls) == 2 and sleeps == [5.0]
     assert "--download-sections" in calls[1] and "*3565.0-3625.0" in calls[1]
     assert "--force-ipv4" in calls[1]  # IPv6 reset ~40 % of first requests live
+    # a recording VOD's playlist is live: ffmpeg must start at segment 0, not the live edge
+    i = calls[1].index("--downloader-args")
+    assert calls[1][i + 1] == "ffmpeg_i:-live_start_index 0"
     row = con.execute("SELECT status, file FROM sections").fetchone()
     assert tuple(row) == ("fetched", "alpha/v1/sections/3565-3625.mp4")
+
+
+def test_a_hung_download_fails_its_section_not_the_run(con, env, helix, twitch, http, capsys):
+    seed(helix, env, con, twitch, http)
+
+    def hang(args, **kw):
+        raise subprocess.TimeoutExpired(args, kw["timeout"])
+
+    ytdlp = YtDlp(run=hang, sleep=lambda s: None)
+    assert run(["fetch", "--video", "v1", "--top", "1"], con, twitch=twitch, downloader=ytdlp,
+               probe=lambda p: Probe(60.0, 1920, 1080, True, True)) == 1
+    row = con.execute("SELECT status, attempts, last_error FROM sections").fetchone()
+    assert row["status"] == "failed" and row["attempts"] == 1
+    assert "timed out after 600 s" in row["last_error"]
+    assert "timed out" in capsys.readouterr().out

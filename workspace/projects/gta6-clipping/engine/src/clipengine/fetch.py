@@ -3,7 +3,11 @@
 Finished Twitch VODs: the strongest intervals from `intervals.plan`, each
 downloaded as one section with `yt-dlp --download-sections` in source quality.
 A VOD that is still being recorded (its streamer is live with a stream that
-began when the VOD did) is skipped.
+began when the VOD did) is planned only up to 30 min before the live edge:
+GTA6 launch streams run for days (KaiCenat's first one passed 30 h, 2026-11-19),
+and their recorded part downloads like a finished VOD (checked live: 80 s from
+hour 3 of that stream, 1080p60, full length). The VOD stays unfinished, so the
+next run plans what was recorded since.
 
 Streamers without public VODs (caseoh_, IShowSpeed): their clips carry no
 vod_offset, so clips made within 90 s of each other count as one moment and
@@ -34,7 +38,9 @@ from . import config, db, intervals
 from .twitch import Twitch
 
 LIVE_MATCH = timedelta(minutes=15)  # live stream start vs VOD created_at
+LIVE_SETTLE = timedelta(minutes=30)  # a recording VOD is planned up to this far behind live
 MAX_ATTEMPTS = 3
+DOWNLOAD_TIMEOUT_S = 600            # a 120 s section takes about 10 s; 2 h is not progress
 DURATION_SLACK_S = 3.0              # section cuts snap to keyframes (~2 s apart on Twitch)
 
 
@@ -80,8 +86,13 @@ class YtDlp:
         self.attempts, self.sleep, self.run = attempts, sleep, run
 
     def section(self, url: str, start: float, end: float, stem: Path) -> Path:
+        # A VOD still being recorded is a live (EVENT) playlist: ffmpeg would open it at the
+        # live edge, take that segment's time as zero and wait for a start it never reaches
+        # (KaiCenat hour 8:35 of a 30 h stream hung with 0 bytes, 2026-11-19). Starting at
+        # segment 0 seeks like a finished VOD (13 s; the clip sat where planned, corr 0.94).
         return self._download(url, stem, ["-f", "b", "--download-sections",
-                                          f"*{start:.1f}-{end:.1f}"])
+                                          f"*{start:.1f}-{end:.1f}",
+                                          "--downloader-args", "ffmpeg_i:-live_start_index 0"])
 
     def clip(self, url: str, stem: Path) -> Path:
         # Clips also come as Twitch's own auto-cropped "portrait-*" renditions.
@@ -97,8 +108,12 @@ class YtDlp:
                 *extra, "-o", f"{stem}.%(ext)s", url]
         last = ""
         for attempt in range(1, self.attempts + 1):
-            out = self.run(args, capture_output=True, text=True, encoding="utf-8",
-                           errors="replace", timeout=1800)
+            try:
+                out = self.run(args, capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", timeout=DOWNLOAD_TIMEOUT_S)
+            except subprocess.TimeoutExpired:  # a hung download fails its section, not the run
+                out = subprocess.CompletedProcess(args, 1, "",
+                                                  f"timed out after {DOWNLOAD_TIMEOUT_S} s")
             path = (out.stdout or "").strip().splitlines()[-1:] if out.returncode == 0 else []
             if path and Path(path[0]).exists():
                 return Path(path[0])
@@ -125,7 +140,7 @@ class SourceResult:
     sections: list[dict] = field(default_factory=list)
     muted_skipped: int = 0
     chosen: set[str] = field(default_factory=set)  # top_clip_ids picked by this run's plan
-    skipped: bool = False                         # e.g. the VOD is still being recorded
+    recording: bool = False                      # VOD still being recorded: never "fetched"
 
 
 def _ts(text: str) -> datetime:
@@ -170,20 +185,27 @@ def _upsert(con: sqlite3.Connection, row: dict) -> int:
 
 
 def plan_vod(con: sqlite3.Connection, vod: sqlite3.Row, *, top: int, min_views: int, pad: float,
-             max_len: float) -> SourceResult:
-    res = SourceResult(vod["streamer"], vod["ext_id"])
+             max_len: float, until_s: float | None = None) -> SourceResult:
+    """`until_s`: a recording VOD is planned only up to here (clips ending later wait)."""
+    res = SourceResult(vod["streamer"], vod["ext_id"], recording=until_s is not None)
     clips = con.execute(
         "SELECT clip_id, vod_offset, duration_s, view_count FROM crowd_clips "
         "WHERE video_id = ? AND vod_offset IS NOT NULL AND game_id = ?",
         (vod["ext_id"], config.GTA6_GAME_ID)).fetchall()
+    if until_s is not None:  # vod_offset is the clip's END (measured 2026-11-19)
+        clips = [c for c in clips if c["vod_offset"] + pad <= until_s]
+        res.note = (f"still live, planned up to {int(until_s // 3600)}:"
+                    f"{int(until_s % 3600 // 60):02d} h of the recording")
     spans = [intervals.clip_span(c["clip_id"], c["vod_offset"], c["duration_s"], c["view_count"])
              for c in clips]
     muted = json.loads(vod["muted_segments"]) if vod["muted_segments"] else []
-    p = intervals.plan(spans, muted=muted, vod_len=vod["duration_s"], top=top,
+    vod_len = vod["duration_s"] if until_s is None else min(until_s, vod["duration_s"] or until_s)
+    p = intervals.plan(spans, muted=muted, vod_len=vod_len, top=top,
                        min_views=min_views, pad=pad, max_len=max_len)
     res.muted_skipped = len(p.muted)
     if not p.chosen:
-        res.note = f"no interval with {min_views}+ views ({len(clips)} GTA VI clips)"
+        res.note = ", ".join(filter(None, [
+            res.note, f"no interval with {min_views}+ views ({len(clips)} GTA VI clips)"]))
     for rank, iv in enumerate(p.chosen, start=1):
         if _covered(con, vod["ext_id"], iv):
             continue
@@ -283,12 +305,11 @@ def fetch(con: sqlite3.Connection, twitch: Twitch, *, downloader: Downloader,
                 "datetime(created_at, '+' || COALESCE(duration_s, 0) || ' seconds') "
                 ">= datetime(?) ORDER BY created_at", (login, db.iso(since))).fetchall()
         for vod in vods:
+            until_s = None
             if is_recording(vod, live):
-                results.append(SourceResult(login, vod["ext_id"], skipped=True,
-                                            note="still live, recording not finished"))
-                continue
+                until_s = (now - _ts(vod["created_at"]) - LIVE_SETTLE).total_seconds()
             results.append(plan_vod(con, vod, top=top, min_views=min_views, pad=pad,
-                                    max_len=max_len))
+                                    max_len=max_len, until_s=until_s))
         if not video_ids:
             clip_res = plan_clips(con, login, since=since, top=top, min_views=min_views)
             if clip_res:
@@ -303,8 +324,6 @@ def fetch(con: sqlite3.Connection, twitch: Twitch, *, downloader: Downloader,
         where = ("kind = 'clip' AND streamer = ? AND video_id IS NULL" if res.source == "clips"
                  else "kind = 'vod' AND streamer = ? AND video_id = ?")
         params = (res.streamer,) if res.source == "clips" else (res.streamer, res.source)
-        if res.skipped:
-            continue
         for s in con.execute(f"SELECT * FROM sections WHERE {where} ORDER BY views DESC",
                              params).fetchall():
             if s["status"] != "fetched" and s["top_clip_id"] not in res.chosen:
@@ -313,7 +332,7 @@ def fetch(con: sqlite3.Connection, twitch: Twitch, *, downloader: Downloader,
                 s = download(con, s["id"], downloader=downloader, probe=probe, data_dir=data_dir)
             res.sections.append(dict(s))
         if res.sections and all(s["status"] == "fetched" for s in res.sections) \
-                and res.source != "clips":
+                and res.source != "clips" and not res.recording:
             with con:
                 con.execute("UPDATE videos SET status = 'fetched', updated_at = ? "
                             "WHERE source = 'twitch' AND ext_id = ?", (db.utcnow(), res.source))
