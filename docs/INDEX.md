@@ -515,6 +515,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-11-19 | Agents Verifier Mail Research | system-infra | [→](docs/2026-11-19%20-%20Agents%20Verifier%20Mail%20Research/Checkpoint.md) |
 | 2026-10-29 | Ad Game Viability Ranker | misc | [Mini-Checkpoint-1](docs/2026-10-29%20-%20Ad%20Game%20Viability%20Ranker/Mini-Checkpoint-1.md) |
 | 2026-10-29 | Remote Control Phone Access | system-infra | [Mini-Checkpoint-1](docs/2026-10-29%20-%20Remote%20Control%20Phone%20Access/Mini-Checkpoint-1.md) |
 | 2026-11-11 | Memory Index Merge And Cap | system-infra | [→](docs/2026-11-11%20-%20Memory%20Index%20Merge%20And%20Cap/Checkpoint.md) |
