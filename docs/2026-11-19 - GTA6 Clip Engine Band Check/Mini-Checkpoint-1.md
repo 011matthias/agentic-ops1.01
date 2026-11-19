@@ -41,12 +41,12 @@ Nothing posted. Six videos wait for the owner's verdict. Known gap in the band c
 
 ## Continuation prompt
 
-Replaced on 19.11. in the evening after the owner orders: first six Shorts posted, Kai Cenat, TikTok by mail, no Twitch links.
+Replaced on 19.11. in the evening after the owner orders: first six Shorts posted, Kai Cenat, TikTok via iCloud Drive, no Twitch links.
 
 ````
 /comd_resume gta6-clipping
 
-GTA6-Clipping: Kai Cenat clippen, fertige Videos für TikTok an den Owner mailen, Streamer-Tausch am 22.11. (internes Projekt workspace/projects/gta6-clipping/).
+GTA6-Clipping: Kai Cenat clippen, fertige Videos für TikTok in iCloud Drive legen, Streamer-Tausch am 22.11. (internes Projekt workspace/projects/gta6-clipping/).
 
 ## Stand (19.11.2026, abends)
 
@@ -63,12 +63,12 @@ GTA6-Clipping: Kai Cenat clippen, fertige Videos für TikTok an den Owner mailen
 - Der eingeblendete Hook nennt GTA6 (judge erzwingt es). Aufteilung, Untertitel, Hook-Stil abgenommen.
 - Gameplay füllt das untere Band; breiteres Objekt: Band bleibt gefüllt, Ränder abgeschnitten. Kein Blur im Band. Menüs fallen durch, Witz-Menü mit `--accept-band GRUND`.
 - Posten nur auf Owner-Anweisung. Neu (Owner 19.11.): Beschreibungen ab jetzt OHNE Twitch-Link (YouTube und TikTok); der Streamer bleibt im Titel genannt, das Namensschild "twitch.tv/name" im Video bleibt.
-- TikTok postet der Owner selbst vom Handy (Owner 19.11.): jedes fertige Video als Datei an die TikTok-Adresse aus context/accounts.md schicken, dazu Titel und Beschreibung mit Hashtags (#gta6, Streamer-Hashtag, Szenen-Hashtag wie #gta6funny / #gta6fails; 3 bis 5) im Mailtext, kopierfertig, dieselben Texte auch im Chat. Das ist die Anweisung für genau diese Sendungen an genau diese Adresse.
+- TikTok postet der Owner selbst vom iPhone (Owner 19.11.): jedes fertige Video in `C:\Users\neuma_p1qrsic\iCloudDrive\GTA6 TikTok\` kopieren (iCloud Drive synct auf diesem PC), daneben `{id}.txt` mit Titel und Beschreibung mit Hashtags (#gta6, Streamer-Hashtag, Szenen-Hashtag wie #gta6funny / #gta6fails; 3 bis 5, kein Twitch-Link), kopierfertig; dieselben Texte auch im Chat. Kein Mailversand. Auf dem iPhone: Dateien-App, iCloud Drive, GTA6 TikTok, Video teilen, "Video sichern", dann in TikTok hochladen.
 
 ## Aufgabe, in dieser Reihenfolge
 
-1. TikTok-Versand der sechs schon geposteten Videos (m9, m6, m18, m5, m16, m15) an die TikTok-Adresse aus context/accounts.md. Vorher den Versandweg prüfen (iCloud-Mail-Zugang in ~/.icloud-mail.env laut Memory reference_local_machine) und das Anhanglimit der iCloud-Mail per Doku belegen, nicht raten. Die Originale sind 1080x1920 und größer als 20 MB: passt das Limit nicht, pro Mail ein Video und für TikTok auf 1080x1920 unter das Limit neu kodieren (TikTok kodiert ohnehin neu), Qualität am Standbild prüfen. Nach dem Senden im Gesendet-Ordner nachsehen, dass jede Mail mit Anhang raus ist.
-2. Kai Cenat clippen (Owner 19.11.): kaicenat ist freigegebener Start-Streamer. `clipengine fetch` für ihn (VOD-Abschnitte und Zuschauer-Clips), `analyze`, Prüfpakete per Kontaktbogen beurteilen, Layout-Profil anlegen (Standbild mit drawgrid 160x120, Cam-Ausschnitt an echten Bildern prüfen), behaltene Momente rendern, Vorschau schicken, nach Owner-OK auf YouTube posten und für TikTok mailen.
+1. TikTok-Ablage der sechs schon geposteten Videos (m9, m6, m18, m5, m16, m15): Originale (1080x1920) aus engine/data/ready/{id}/ nach `iCloudDrive\GTA6 TikTok\` kopieren, je `{id}.txt` mit Titel und Beschreibung daneben, Texte auch im Chat. Prüfen: Dateigrößen gleich dem Original, und der Upload ist durch (Sync-Status der Dateien abfragen, z. B. Attribute per PowerShell; erst als fertig melden, wenn sie nicht mehr als ausstehend gelten). iCloud-Speicher reicht? Freien Platz nicht raten: wenn nicht abfragbar, den Owner bitten, am iPhone nachzusehen, ob die Videos in der Dateien-App auftauchen.
+2. Kai Cenat clippen (Owner 19.11.): kaicenat ist freigegebener Start-Streamer. `clipengine fetch` für ihn (VOD-Abschnitte und Zuschauer-Clips), `analyze`, Prüfpakete per Kontaktbogen beurteilen, Layout-Profil anlegen (Standbild mit drawgrid 160x120, Cam-Ausschnitt an echten Bildern prüfen), behaltene Momente rendern, Vorschau schicken, nach Owner-OK auf YouTube posten und in den TikTok-Ordner legen.
 3. Am 22.11. (nicht früher): `uv run clipengine suggest --since 72h`, Streamer tauschen, die kein GTA mehr spielen; mit dem Owner klären: LIRIK (keine Cam) und TheBurntPeanut (PNG-Avatar) tauschen oder eigenes Layout.
 4. Upload als `clipengine publish` in die Engine (Beschreibungs-Vorlage ohne Twitch-Link, Ledger in der Datenbank, Tests offline gegen einen gefälschten API-Client, regress_check).
 5. Ab 20.11.: Zahlen der sechs Shorts nach 24 h über YouTube Analytics lesen; Retention-Kurve (elapsedVideoTimeRatio) erstmals testen.
@@ -86,9 +86,9 @@ Entscheidung zu LIRIK und TheBurntPeanut; Screenshot vom Kontostatus des alten T
 - Tests offline gegen Fakes (tests/conftest.py, test_produce.py mit gefälschtem ffmpeg, test_follow.py mit gefälschtem Detektor und MeasuringFfmpeg). Echte Exit-Codes: Ausgabe in eine Datei umleiten statt durch eine Pipe.
 - Pro Fix mindestens ein Test über die CLI; `uv run tools/regress_check.py` mit Test-IDs zeigt, dass er rot wird.
 - Skripte und Texte über 80 Zeilen nie per Heredoc: Write-Werkzeug oder Edit.
-- Ergebnisse gegen eine zweite Quelle prüfen (ffprobe, Kontaktbogen, API zurücklesen, Gesendet-Ordner), nicht gegen die eigene Ausgabe.
+- Ergebnisse gegen eine zweite Quelle prüfen (ffprobe, Kontaktbogen, API zurücklesen), nicht gegen die eigene Ausgabe.
 - Höchstens 3 Versuche pro Fehler, danach AskUserQuestion. Owner-Entscheidungen mit Standbildern (SendUserFile) und AskUserQuestion; mit dem Owner auf Deutsch, in Alltagssprache.
-- Das Repo ist öffentlich: keine Adressen, Tokens, Kontodaten in getrackte Dateien (die Mailadresse gehört nur in den Chat und gitignorierte Dateien).
+- Das Repo ist öffentlich: keine Adressen, Tokens, Kontodaten in getrackte Dateien.
 
 ## SESSION LOOP (copy this whole section verbatim into every continuation prompt you write)
 
