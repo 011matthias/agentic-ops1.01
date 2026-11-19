@@ -215,7 +215,12 @@ diese Intervalle, nie ein ganzer Stream.
   zu dreimal versucht.
 - Lange Ketten überlappender Clips (bis 120 Clips an einem Moment) werden auf
   120 s um den meistgesehenen Clip gekürzt.
-- Eine Aufzeichnung, deren Streamer noch live ist, wird übersprungen.
+- Eine Aufzeichnung, deren Streamer noch live ist, wird bis 30 min vor dem
+  Live-Rand geplant und nie als fertig markiert (2026-11-19: KaiCenats erster
+  GTA6-Stream lief über 30 h). ffmpeg liest deren Live-Liste ab Segment 0
+  (`-live_start_index 0`); vom Live-Rand aus nahm es dessen Zeit als Null und
+  hing bei 8:35 h mit 0 Bytes. Mit der Option 13 s, Clip per Ton an der
+  geplanten Stelle gefunden (Korrelation 0,94).
 
 **Ablage** (gitignored): `engine/data/{streamer}/{video_id}/sections/` und
 `engine/data/{streamer}/clips/`. Rohdaten werden nach dem Rendern und N Tagen
