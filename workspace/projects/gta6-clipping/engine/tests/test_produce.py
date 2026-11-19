@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from clipengine import cli, config, db, register, render
+from clipengine import cli, config, db, follow, register, render
 from clipengine.cli import UsageError
 from clipengine.register import Streamer
 
@@ -24,6 +24,11 @@ def run(argv, con, **inject):
 
 @pytest.fixture
 def kept(con, env, monkeypatch):
+    return make_kept(con, env, monkeypatch)
+
+
+def make_kept(con, env, monkeypatch):
+    """One kept ohnePixel moment (8-30 s of a fetched VOD section) with a layout."""
     register.append(env, Streamer(name="ohnePixel", twitch="ohnepixel", language="en"))
     register.sync(con, register.load(env))
     now = db.utcnow()
@@ -64,7 +69,8 @@ class FakeFfmpeg:
 
 
 GOOD = {"width": 1080, "height": 1920, "fps": 60.0, "duration": 22.0, "lufs": -13.9,
-        "silences": 0, "black": 0, "frozen": 0}
+        "silences": 0, "black": 0, "frozen": 0, "band_bars": []}
+STILL = {"planner": lambda edl, src: follow.static(edl["layout"])}  # window in the middle
 
 
 def heard(edl_words):
@@ -77,7 +83,7 @@ def test_render_through_the_cli_lands_in_ready(kept, monkeypatch, capsys):
     render.video_encoder.cache_clear()
     shifted = [{"w": w["w"], "s": round(w["s"] - 8.0, 2)} for w in WORDS]
     assert run(["render", "1", "--style", "a"], kept, measurer=lambda v: GOOD,
-               listener=heard(shifted)) == 0
+               listener=heard(shifted), **STILL) == 0
     ready = config.data_dir() / "ready" / "m1-f1"
     assert (ready / "m1-f1.mp4").exists() and (ready / "edl.json").exists()
     edl = json.loads((ready / "edl.json").read_text(encoding="utf-8"))
@@ -90,9 +96,11 @@ def test_render_through_the_cli_lands_in_ready(kept, monkeypatch, capsys):
     (cmd,) = fake.encodes
     assert "libx264" in cmd and "h264_nvenc" not in cmd  # driver 560 cannot open NVENC
     graph = cmd[cmd.index("-filter_complex") + 1]
-    # owner 2026-11-19: the whole gameplay region is shown (1360x1080 -> 1080x858), not cropped
-    assert "[gfg]scale=1080:858" in graph and "overlay=0:211" in graph
-    assert "boxblur" in graph  # blurred fill behind it, and over the duplicate facecam
+    # owner 2026-11-19: the gameplay fills the band; a still window sits in the middle of
+    # the 1360x1080 gameplay rect, without a sendcmd script
+    assert "crop@follow=w=912:h=1080:x=784:y=0,scale=1080:1280" in graph
+    assert "sendcmd" not in graph
+    assert "boxblur" in graph  # over the duplicate facecam
     assert "READY" in capsys.readouterr().out
     render.video_encoder.cache_clear()
 
@@ -106,7 +114,7 @@ def test_a_failed_check_keeps_the_video_out_of_ready(kept, monkeypatch, capsys, 
     monkeypatch.setattr(render.subprocess, "run", FakeFfmpeg())
     render.video_encoder.cache_clear()
     assert run(["render", "1", "--no-caption-check"], kept,
-               measurer=lambda v: {**GOOD, **bad}) == 1
+               measurer=lambda v: {**GOOD, **bad}, **STILL) == 1
     assert not (config.data_dir() / "ready" / "m1-f1").exists()
     assert reason in capsys.readouterr().out
     render.video_encoder.cache_clear()
@@ -115,7 +123,8 @@ def test_a_failed_check_keeps_the_video_out_of_ready(kept, monkeypatch, capsys, 
 def test_caption_drift_over_0_2_s_fails(kept, monkeypatch, capsys):
     monkeypatch.setattr(render.subprocess, "run", FakeFfmpeg())
     late = [{"w": w["w"], "s": round(w["s"] - 8.0 + 0.5, 2)} for w in WORDS]
-    assert run(["render", "1"], kept, measurer=lambda v: GOOD, listener=lambda v: late) == 1
+    assert run(["render", "1"], kept, measurer=lambda v: GOOD, listener=lambda v: late,
+               **STILL) == 1
     assert "captions drift 0.5" in capsys.readouterr().out
     render.video_encoder.cache_clear()
 
@@ -124,7 +133,7 @@ def test_only_kept_moments_with_a_layout_render(kept):
     with kept:
         kept.execute("UPDATE moments SET status = 'reject' WHERE id = 1")
     with pytest.raises(UsageError, match="only kept moments"):
-        run(["render", "1", "--no-caption-check"], kept)
+        run(["render", "1", "--no-caption-check"], kept, **STILL)
 
 
 def test_captions_run_two_to_four_words_and_drop_fillers():

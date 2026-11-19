@@ -18,6 +18,7 @@ from typing import Callable
 
 import yaml
 
+from . import follow
 from . import render as render_mod
 
 F1_RANGE = (15.0, 60.0)
@@ -77,8 +78,50 @@ class CheckResult:
     failures: list[str] = field(default_factory=list)
 
 
+# strip sharpness / middle sharpness below this in 90 % of frames = a bar. Calibrated
+# 2026-11-19 on m5-f1: fit layout with blurred bars top 0.096 / bottom 0.082 (p90),
+# filled band top 0.41 / bottom 1.98 / left 1.29 / right 1.39
+BAR_RATIO = 0.2
+BAR_STRIPS = {"top": (slice(0, 48), slice(None)), "bottom": (slice(-48, None), slice(None)),
+              "left": (slice(None), slice(0, 40)), "right": (slice(None), slice(-40, None))}
+
+
+def band_bars(video: Path, *, fps: float = 1.0) -> list[str]:
+    """Edges of the gameplay band that look like a bar in nearly every frame.
+
+    A bar (letterbox black, or the blurred fill of the old fit layout) has almost no
+    fine detail in every frame; real gameplay at an edge (sky, clouds, a wall) has
+    some in most frames. Measured on the band alone (the facecam band above is
+    bright and sharp and would hide it, as it hid the pause map on 2026-11-19):
+    sharpness = mean |Laplacian| of a strip / of the band's middle, per frame at 1 fps,
+    90th percentile over the video, below BAR_RATIO = bar.
+    """
+    import numpy as np
+
+    w, h = render_mod.W // 4, render_mod.GAME_H // 4
+    raw = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(video), "-vf",
+         f"fps={fps},crop={render_mod.W}:{render_mod.GAME_H}:0:{render_mod.CAM_H},"
+         f"scale={w}:{h},format=gray", "-f", "rawvideo", "-"],
+        capture_output=True, timeout=900).stdout
+    n = len(raw) // (w * h)
+    if not n:
+        return []
+    frames = np.frombuffer(raw[:n * w * h], np.uint8).reshape(n, h, w).astype(np.float32)
+    lap = np.abs(4 * frames[:, 1:-1, 1:-1] - frames[:, :-2, 1:-1] - frames[:, 2:, 1:-1]
+                 - frames[:, 1:-1, :-2] - frames[:, 1:-1, 2:])
+    mid = lap[:, h // 4:3 * h // 4, w // 4:3 * w // 4].mean(axis=(1, 2)) + 1e-3
+    bars = []
+    for name, (rows, cols) in BAR_STRIPS.items():
+        ratio = lap[:, rows, cols].mean(axis=(1, 2)) / mid
+        if np.percentile(ratio, 90) < BAR_RATIO:
+            bars.append(name)
+    return bars
+
+
 def measure(video: Path) -> dict:
-    """One ffmpeg pass: loudness, silence, black and frozen stretches; plus ffprobe."""
+    """One ffmpeg pass: loudness, silence, black and frozen stretches; plus ffprobe;
+    plus a look at the gameplay band's edges for bars."""
     probe = json.loads(subprocess.run(
         ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
          "stream=width,height,avg_frame_rate:format=duration", "-of", "json", str(video)],
@@ -99,6 +142,7 @@ def measure(video: Path) -> dict:
         "silences": len(re.findall(r"silence_start", err)),
         "black": len(re.findall(r"black_start", err)),
         "frozen": len(re.findall(r"freeze_start", err)),
+        "band_bars": band_bars(video),
     }
 
 
@@ -139,6 +183,20 @@ def check(edl: dict, video: Path, *, measured: dict,
                        ("frozen", "frozen stretch over 2 s")):
         if measured[key]:
             f.append(f"{measured[key]} x {label}")
+    if measured["band_bars"]:
+        f.append(f"bars in the gameplay band ({', '.join(measured['band_bars'])}), "
+                 f"want it filled")
+    plan = edl.get("follow")
+    if plan:
+        step = 1 / plan["sample_fps"]
+        wide = [round(i * step, 2) for i, w in enumerate(plan["too_wide"]) if w]
+        if wide:
+            f.append(f"main object wider than the window at {len(wide)} samples "
+                     f"(t={wide[:6]} s): owner decides, fill the band or show it whole")
+        out = [m["t"] for m in follow.misses(plan) if not m["too_wide"]]
+        if out:
+            f.append(f"main object not completely in the window at {len(out)} samples "
+                     f"(t={out[:6]} s)")
     drift = caption_drift(edl, heard) if heard is not None else None
     measured = {**measured, "caption_drift_s": drift}
     if heard is not None and (drift is None or drift > CAPTION_MAX_DRIFT_S):
@@ -146,17 +204,31 @@ def check(edl: dict, video: Path, *, measured: dict,
     return CheckResult(not f, measured, f)
 
 
+def follow_planner(data_dir: Path) -> Callable[[dict, Path], dict]:
+    """The real planner: YOLOX on the CPU over the moment's samples (follow.py)."""
+    def plan(edl: dict, src: Path) -> dict:
+        detector = follow.yolox_detector(follow.model_path(data_dir))
+        return follow.plan(src, edl["in_s"], edl["out_s"], layout=edl["layout"],
+                           detector=detector)
+    return plan
+
+
 def produce(con: sqlite3.Connection, moment_id: int, *, data_dir: Path, layouts: dict,
             style: str | None = None,
             renderer: Callable[[dict, Path, Path], Path] = render_mod.render,
             measurer: Callable[[Path], dict] = measure,
-            listener: Callable[[Path], list[dict]] | None = None) -> tuple[dict, Path, CheckResult]:
-    """Compose, render and check one kept moment; a pass is copied to data/ready/."""
+            listener: Callable[[Path], list[dict]] | None = None,
+            planner: Callable[[dict, Path], dict] | None = None,
+            ) -> tuple[dict, Path, CheckResult]:
+    """Compose, plan the gameplay window, render and check one kept moment; a pass is
+    copied to data/ready/."""
     edl = compose(con, moment_id, layouts=layouts, style=style)
+    src = data_dir / edl["source"]["file"]
+    edl["follow"] = (planner or follow_planner(data_dir))(edl, src)
     work = data_dir / "renders" / edl["id"]
     work.mkdir(parents=True, exist_ok=True)
     (work / "edl.json").write_text(json.dumps(edl, indent=2, ensure_ascii=False), encoding="utf-8")
-    video = renderer(edl, data_dir / edl["source"]["file"], work / f"{edl['id']}.mp4")
+    video = renderer(edl, src, work / f"{edl['id']}.mp4")
     result = check(edl, video, measured=measurer(video),
                    heard=listener(video) if listener else None)
     (work / "check.json").write_text(json.dumps(

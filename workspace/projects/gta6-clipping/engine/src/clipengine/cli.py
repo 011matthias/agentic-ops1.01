@@ -235,7 +235,7 @@ def cmd_judge(args, con) -> int:
     return 0
 
 
-def cmd_render(args, con, *, renderer=None, measurer=None, listener=None) -> int:
+def cmd_render(args, con, *, renderer=None, measurer=None, listener=None, planner=None) -> int:
     from . import produce
 
     if listener is None and not args.no_caption_check:
@@ -250,14 +250,19 @@ def cmd_render(args, con, *, renderer=None, measurer=None, listener=None) -> int
             con, args.moment, data_dir=config.data_dir(),
             layouts=produce.load_layouts(config.ENGINE_DIR / "config" / "layouts.yaml"),
             style=args.style, renderer=renderer or produce.render_mod.render,
-            measurer=measurer or produce.measure, listener=listener)
-    except (produce.ProduceError, produce.render_mod.RenderError) as exc:
+            measurer=measurer or produce.measure, listener=listener, planner=planner)
+    except (produce.ProduceError, produce.render_mod.RenderError,
+            produce.follow.FollowError) as exc:
         raise UsageError(str(exc)) from exc
     m = result.measured
     print(f"{edl['id']}: {edl['title']}")
     print(f"  {m['width']}x{m['height']} {m['fps']} fps, {m['duration']:.2f} s, {m['lufs']} LUFS, "
           f"captions drift {m.get('caption_drift_s')} s, style {edl['style']}")
     print(f"  hooks: {' | '.join(edl['hooks'])}")
+    plan = edl["follow"]
+    seen = sum(1 for b in plan["boxes"] if b)
+    print(f"  gameplay window {plan['crop_w']}x{plan['crop_h']} follows the main object: "
+          f"seen in {seen}/{len(plan['boxes'])} samples, x {min(plan['x'])}-{max(plan['x'])}")
     print(f"  {'READY' if result.passed else 'FAILED'}: {video}")
     for failure in result.failures:
         print(f"  ! {failure}")

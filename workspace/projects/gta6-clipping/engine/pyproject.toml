@@ -10,9 +10,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.6"]
+dev = ["pytest>=8.0", "ruff>=0.6", "numpy>=2.0"]
 gpu = [
     "faster-whisper>=1.1",
+    "numpy>=2.0",          # band bar check (stage 6), frame sampling (follow.py)
+    "onnxruntime>=1.20",   # YOLOX-m detector for the gameplay window (follow.py)
     "nvidia-cublas-cu12>=12.4,<12.9.3 ; sys_platform == 'win32'",
     "nvidia-cudnn-cu12>=9.1,<10 ; sys_platform == 'win32'",
 ]

@@ -1,7 +1,8 @@
 """Stage 5, Bearbeiten und Rendern: one cut list (EDL) in, one 1080x1920 video out.
 
 Layout: the streamer's facecam on top (1080x640), gameplay below (1080x1280),
-both cropped from the 1920x1080 source by the streamer's layout profile.
+both cropped from the 1920x1080 source by the streamer's layout profile; the
+gameplay window follows the main object (follow.py).
 Captions come from the Whisper word times as ASS (2 to 4 words per line, the
 spoken word highlighted), the hook sits on top for the first ~3 s, the
 streamer's name is shown throughout. Audio is normalised to -14 LUFS in two
@@ -15,6 +16,8 @@ import re
 import subprocess
 from functools import lru_cache
 from pathlib import Path
+
+from . import follow
 
 W, H = 1080, 1920
 CAM_H = 640                      # facecam band on top
@@ -81,7 +84,7 @@ def chunk(words: list[dict], *, max_words: int = 4, max_gap: float = 0.6) -> lis
 def build_ass(edl: dict) -> str:
     font, size, hi, box = STYLE_SETS[edl.get("style", "a")]
     duration = edl["out_s"] - edl["in_s"]
-    cap_y = CAM_H + 250  # on the blurred strip above a full-width 16:9 picture
+    cap_y = CAM_H + 300  # upper gameplay band, clear of most HUDs (owner-approved spot)
     head = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {W}
@@ -143,29 +146,32 @@ def fit_crop(rect: list[int], aspect: float, src_w: int = 1920, src_h: int = 108
     return _even(w), _even(h), _even(x), _even(y)
 
 
-def filter_graph(edl: dict) -> str:
-    """Facecam band on top; below it the WHOLE gameplay region, scaled to full width
-    and centred on a blurred, darkened zoom of itself.
+FOLLOW_CMD = "follow.cmd"
 
-    Owner 2026-11-19: the main object (the jet) must be completely visible. The
-    first renders cropped gameplay to the band's 0.84 aspect and cut the wings
-    off; fitting instead of cropping keeps every object in the picture. The
+
+def filter_graph(edl: dict) -> str:
+    """Facecam band on top; below it a band-aspect window of the gameplay that fills
+    the whole band and follows the main object.
+
+    Owner 2026-11-19, in two steps: first the main object (the jet) must be completely
+    visible (a fixed centre crop cut its wings off), then the gameplay must fill the
+    whole band (no blurred bars, no letterbox). The window (912x1080 from a 1920x1080
+    source) therefore moves: follow.plan gives its x per sample, render() writes one
+    position per output frame to follow.cmd, sendcmd feeds it to the crop. The
     streamer's own cam inside the gameplay is blurred, he is shown above.
     """
     cam = fit_crop(edl["layout"]["facecam"], W / CAM_H)
-    gx, gy, gw, gh = [_even(v) for v in (edl["layout"].get("gameplay") or [0, 0, 1920, 1080])]
-    fg_h = min(GAME_H, _even(W * gh / gw))
-    fx, fy, fw, fh = edl["layout"]["facecam"]
-    bx, by = _even(max(0, fx - 40)), _even(max(0, fy - 40))
-    bw, bh = _even(min(1920 - bx, fw + 80)), _even(min(1080 - by, fh + 80))
+    plan = edl.get("follow") or follow.static(edl["layout"])
+    # blur only 40 px around the cam (the size the owner saw); the detector blanks wider
+    bx, by, bw, bh = follow.cam_region(edl["layout"]["facecam"], 40, 40)
+    move = f"sendcmd=f={FOLLOW_CMD}," if len(plan["x"]) > 1 else ""
     return (f"[0:v]split=3[a][b][c];"
             f"[a]crop={cam[0]}:{cam[1]}:{cam[2]}:{cam[3]},scale={W}:{CAM_H}:flags=lanczos,"
             f"setsar=1[cam];"
             f"[c]crop={bw}:{bh}:{bx}:{by},boxblur=24:3[camblur];"
-            f"[b][camblur]overlay={bx}:{by},crop={gw}:{gh}:{gx}:{gy},split=2[gfg][gbg];"
-            f"[gbg]scale=-2:{GAME_H},crop={W}:{GAME_H},boxblur=30:3,eq=brightness=-0.12[bg];"
-            f"[gfg]scale={W}:{fg_h}:flags=lanczos,setsar=1[fg];"
-            f"[bg][fg]overlay=0:{(GAME_H - fg_h) // 2},setsar=1[game];"
+            f"[b][camblur]overlay={bx}:{by},{move}"
+            f"crop@follow=w={plan['crop_w']}:h={plan['crop_h']}:x={plan['x'][0]}:y={plan['y']},"
+            f"scale={W}:{GAME_H}:flags=lanczos,setsar=1[game];"
             f"[cam][game]vstack=inputs=2,format=yuv420p,subtitles=edl.ass[v]")
 
 
@@ -204,6 +210,9 @@ def render(edl: dict, src: Path, out: Path) -> Path:
     work.mkdir(parents=True, exist_ok=True)
     (work / "edl.ass").write_text(build_ass(edl), encoding="utf-8")
     a, b = edl["in_s"], edl["out_s"]
+    if edl.get("follow"):
+        (work / FOLLOW_CMD).write_text(
+            follow.sendcmd(edl["follow"], b - a, edl.get("fps", 60)), encoding="utf-8")
     m = measure_loudness(src, a, b)
     audio = (f"loudnorm=I={TARGET_LUFS}:TP=-1.5:LRA=11:measured_I={m['input_i']}:"
              f"measured_TP={m['input_tp']}:measured_LRA={m['input_lra']}:"

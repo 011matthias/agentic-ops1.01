@@ -4,7 +4,7 @@ name: GTA6 Clip-Engine (Masterplan)
 type: project
 stage: build
 needs_fixes: false
-version: 1.2.0
+version: 1.3.0
 created: 2026-11-17
 updated: 2026-11-19
 orchestrator: none
@@ -35,6 +35,7 @@ last_changes:
   - "2026-11-19: p1.3 gebaut (analyze, judge): Whisper lokal auf der GPU, F1-Schnitt an Satzgrenzen, Prüfpakete; 21 Momente, 2 behalten, 6 verworfen."
   - "2026-11-19: p1.4 bis p1.6 gebaut (render): Schnittliste, Facecam-Profil, Render, Checks; erstes Video (ohnePixel, Jet-Absturz) in data/ready/, alle Checks bestanden, nicht gepostet. NVENC geht mit Treiber 560.94 nicht (ffmpeg 8.1 braucht 610+), Render über x264."
   - "2026-11-19: Owner-Feedback zum ersten Video: Aufteilung, Untertitel, Hook-Stil gut; Länge etwa 1 Minute (F1-Schnitt füllt jetzt mit ganzen Sätzen auf 55 s auf, die Vorgeschichte zuerst); der eingeblendete Hook nennt GTA6 (z. B. 'ohnePixel playing GTA6 for the first time', judge erzwingt es). Grafiktreiber-Update freigegeben."
+  - "2026-11-19: Owner-Regel (wörtlich): 'das Video unten, also die Handlung, soll den ganzen Bereich, der dafür auf dem Bildschirm bereitgestellt wird, einnehmen', und das Hauptobjekt bleibt vollständig sichtbar. Umgesetzt: ein 912x1080-Ausschnitt (Seitenverhältnis des Bands) füllt das untere Band 1080x1280 und folgt dem Hauptobjekt (YOLOX-m lokal auf der CPU, 4 Bilder/s, Box an der Bildmitte gespiegelt, geglätteter Pfad, per sendcmd). Neue Checks: Objektbox in jedem abgetasteten Bild ganz im Ausschnitt, keine Balken im Band. Ist das Objekt breiter als der Ausschnitt, fällt der Check durch und der Owner entscheidet. m5-f1 neu gerendert, Flugzeug in jedem Bild ganz sichtbar."
 next_steps:
   - "Gameplay-Band auf Menüs und dunkle Strecken prüfen (die Pause-Karte am Anfang fiel nur beim Ansehen auf)"
   - "Weitere Prüfpakete beurteilen (13 offen), Facecam-Profile für die anderen Streamer"
@@ -294,8 +295,21 @@ ohne neu zu analysieren.
 - **Layout 1080×1920.** Pro Streamer ein Layout-Profil mit dem
   Facecam-Rechteck, einmal festgelegt über ein Kalibrier-Skript, das ein
   Standbild zeigt. Gesichtserkennung dient nur als Ersatz, wenn ein Profil
-  fehlt. Varianten: Facecam oben (1/3) und Gameplay unten (2/3), nur Gameplay
-  vor unscharfem Hintergrund, oder geteiltes Bild.
+  fehlt. Facecam oben (1080×640), Gameplay unten (1080×1280).
+- **Gameplay füllt das Band, das Hauptobjekt bleibt ganz sichtbar** (Owner
+  2026-11-19). Aus dem 1920×1080-Bild wird ein 912×1080-Ausschnitt geschnitten,
+  das Seitenverhältnis des Bands, also ohne Balken und ohne Letterbox. Seine
+  x-Position folgt dem Hauptobjekt: Bilder mit 4 pro Sekunde abtasten (eigene
+  Facecam ausgeblendet), Objekte mit YOLOX-m erkennen (Apache-2.0, ONNX auf der
+  CPU, etwa 0,25 s pro Bild, keine API-Kosten), das Hauptobjekt wählen
+  (Sicherheit × Größe × Nähe zur Bildmitte; ein anderes Objekt übernimmt nur,
+  wenn es mindestens halb so groß ist und zweimal nacheinander gewählt wird).
+  Läuft die Bildmitte durch die Box, wird die Box an ihr gespiegelt: Die
+  Verfolgerkamera hält das Fahrzeug mittig, und die Box verfehlt oft einen
+  Flügel. Der Pfad wird geglättet, an den Bildrand geklemmt und per `sendcmd`
+  Bild für Bild an den Ausschnitt gegeben. Die doppelte Facecam im Spielbild
+  bleibt weichgezeichnet. Ist das Objekt breiter als der Ausschnitt, entscheidet
+  der Owner zwischen füllend und ganz sichtbar; bis dahin fällt der Check durch.
 - **Untertitel** aus den Whisper-Wortzeiten, im ASS-Format über ffmpeg/libass
   eingebrannt. Zwei bis vier Wörter pro Zeile, das gesprochene Wort ist
   hervorgehoben, Füllwörter fallen weg. Sprache wie der Streamer.
@@ -321,6 +335,8 @@ Werkzeug: Python baut aus der Schnittliste die ffmpeg-Filterkette. Remotion
 - Format: 1080×1920, Dauer im Formatrahmen, fps
 - Ton: Lautheit -14 ±1 LUFS, keine Stille über 2 s
 - Bild: keine schwarzen oder eingefrorenen Strecken (ffmpeg `blackdetect` / `freezedetect`)
+- Gameplay-Band: keine Balken (Schärfe der Randstreifen gegen die Mitte, nur im Band
+  gemessen); das Hauptobjekt liegt in jedem abgetasteten Bild ganz im Ausschnitt
 - Untertitel: Stichprobe der Wortzeiten gegen das Audio
 - Inhalt: kein Spoiler-Flag
 - Duplikat: Wahrnehmungs-Hash gegen alle früheren Renders
