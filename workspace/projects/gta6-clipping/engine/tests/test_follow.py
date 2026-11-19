@@ -140,6 +140,21 @@ def test_a_window_that_loses_the_main_object_fails_the_check(kept, monkeypatch, 
     render.video_encoder.cache_clear()
 
 
+def test_an_object_at_the_rect_edge_passes_with_a_written_reason(kept, monkeypatch):
+    # owner 2026-11-19, KaiCenat m30: further left the band would show his cam and chat
+    monkeypatch.setattr(render.subprocess, "run", FakeFfmpeg())
+    render.video_encoder.cache_clear()
+    full = {"crop_w": 912, "crop_h": 1080, "y": 0, "sample_fps": 4,
+            "x": [1008] * 4, "boxes": [JET] * 4, "too_wide": [False] * 4}
+    why = "Jason at the left edge of the rect, cam and chat beyond it (owner)"
+    assert run(["render", "1", "--no-caption-check", "--accept-edge", why], kept,
+               measurer=lambda v: GOOD, planner=lambda edl, src: full) == 0
+    check = json.loads((config.data_dir() / "ready" / "m1-f1" / "check.json").read_text(
+        encoding="utf-8"))
+    assert check["measured"]["edge_accepted"] == why and len(check["measured"]["edge_s"]) == 4
+    render.video_encoder.cache_clear()
+
+
 def test_an_object_wider_than_the_window_keeps_the_band_filled_and_passes(kept, monkeypatch,
                                                                          capsys):
     # owner 2026-11-19 (seaplane stills): keep the band filled, cut the object's edges

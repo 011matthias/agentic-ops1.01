@@ -270,9 +270,13 @@ def caption_drift(edl: dict, heard: list[dict], sample: int = 12) -> float | Non
 
 
 def check(edl: dict, video: Path, *, measured: dict,
-          heard: list[dict] | None, accept_band: str | None = None) -> CheckResult:
+          heard: list[dict] | None, accept_band: str | None = None,
+          accept_edge: str | None = None) -> CheckResult:
     """accept_band: a written reason to let this one video's band stretches through
-    (owner 2026-11-19: a menu that is part of the moment, e.g. the respray shop)."""
+    (owner 2026-11-19: a menu that is part of the moment, e.g. the respray shop).
+    accept_edge: the same for samples where the main object touches the window's edge
+    because the gameplay rect ends there (owner 2026-11-19, KaiCenat m30: further left
+    the band would show his own cam and chat again)."""
     f = []
     want = edl["out_s"] - edl["in_s"]
     if (measured["width"], measured["height"]) != (render_mod.W, render_mod.H):
@@ -306,7 +310,9 @@ def check(edl: dict, video: Path, *, measured: dict,
         measured = {**measured, "object_wider_s": [
             round(i * step, 2) for i, w in enumerate(plan["too_wide"]) if w]}
         out = [m["t"] for m in follow.misses(plan) if not m["too_wide"]]
-        if out:
+        if out and accept_edge:
+            measured = {**measured, "edge_accepted": accept_edge, "edge_s": out}
+        elif out:
             f.append(f"main object not completely in the window at {len(out)} samples "
                      f"(t={out[:6]} s)")
     drift = caption_drift(edl, heard) if heard is not None else None
@@ -331,7 +337,7 @@ def produce(con: sqlite3.Connection, moment_id: int, *, data_dir: Path, layouts:
             measurer: Callable[[Path], dict] = measure,
             listener: Callable[[Path], list[dict]] | None = None,
             planner: Callable[[dict, Path], dict] | None = None,
-            accept_band: str | None = None,
+            accept_band: str | None = None, accept_edge: str | None = None,
             ) -> tuple[dict, Path, CheckResult]:
     """Compose, plan the gameplay window, render and check one kept moment; a pass is
     copied to data/ready/."""
@@ -343,7 +349,8 @@ def produce(con: sqlite3.Connection, moment_id: int, *, data_dir: Path, layouts:
     (work / "edl.json").write_text(json.dumps(edl, indent=2, ensure_ascii=False), encoding="utf-8")
     video = renderer(edl, src, work / f"{edl['id']}.mp4")
     result = check(edl, video, measured=measurer(video),
-                   heard=listener(video) if listener else None, accept_band=accept_band)
+                   heard=listener(video) if listener else None, accept_band=accept_band,
+                   accept_edge=accept_edge)
     (work / "check.json").write_text(json.dumps(
         {"passed": result.passed, "failures": result.failures, "measured": result.measured},
         indent=2), encoding="utf-8")

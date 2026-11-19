@@ -42,7 +42,9 @@ uv run --extra dev pytest -q              tests (offline, against a fake Twitch/
   is black, paused (map, menu, title or load screen) or a menu over the blurred game
   (weapon wheel). Thresholds and their calibration are in `produce.py` above
   `band_stretches`. A menu that is part of the moment passes with
-  `render ID --accept-band REASON`; the reason lands in `check.json`.
+  `render ID --accept-band REASON`; the reason lands in `check.json`. A main object at the
+  edge of a gameplay rect that stops short of an overlay (KaiCenat's cam and chat) passes
+  with `--accept-edge REASON` (owner 2026-11-19).
   Failures stay in `data/renders/{id}/` with `check.json`.
 
 - **Analyze (p1.3):** faster-whisper large-v3 (int8_float16, CUDA) transcribes each fetched

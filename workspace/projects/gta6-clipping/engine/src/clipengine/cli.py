@@ -251,7 +251,7 @@ def cmd_render(args, con, *, renderer=None, measurer=None, listener=None, planne
             layouts=produce.load_layouts(config.ENGINE_DIR / "config" / "layouts.yaml"),
             style=args.style, renderer=renderer or produce.render_mod.render,
             measurer=measurer or produce.measure, listener=listener, planner=planner,
-            accept_band=args.accept_band)
+            accept_band=args.accept_band, accept_edge=args.accept_edge)
     except (produce.ProduceError, produce.render_mod.RenderError,
             produce.follow.FollowError) as exc:
         raise UsageError(str(exc)) from exc
@@ -357,6 +357,9 @@ def build_parser() -> argparse.ArgumentParser:
     rn.add_argument("--accept-band", metavar="REASON",
                     help="let this video's black / paused / menu stretches in the band "
                          "through, with the reason (a menu that is part of the joke)")
+    rn.add_argument("--accept-edge", metavar="REASON",
+                    help="let samples where the main object touches the edge of the "
+                         "gameplay rect through, with the reason (overlay beyond it)")
     return p
 
 
