@@ -160,7 +160,9 @@ def filter_graph(edl: dict) -> str:
     position per output frame to follow.cmd, sendcmd feeds it to the crop. The
     streamer's own cam inside the gameplay is blurred, he is shown above.
     """
-    cam = fit_crop(edl["layout"]["facecam"], W / CAM_H)
+    # a framed 4:3 cam (caseoh_) would grow into the gameplay beside it: cam_crop cuts
+    # inside the frame at the band's aspect; a keyed cam (ohnePixel) grows the facecam rect
+    cam = fit_crop(edl["layout"].get("cam_crop") or edl["layout"]["facecam"], W / CAM_H)
     plan = edl.get("follow") or follow.static(edl["layout"])
     # blur only 40 px around the cam (the size the owner saw); the detector blanks wider
     bx, by, bw, bh = follow.cam_region(edl["layout"]["facecam"], 40, 40)
