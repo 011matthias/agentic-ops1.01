@@ -181,6 +181,21 @@ def test_fetch_marks_a_short_file_failed(con, env, helix, twitch, http, capsys):
     assert row["attempts"] == 1
 
 
+@pytest.mark.parametrize("got, status, win_start", [
+    (66.9, "fetched", 3625.0 - 66.9),  # 6.9 s lead-in from a live playlist: window moves back
+    (72.0, "failed", 3565.0),          # more than one 10 s segment: something else is wrong
+])
+def test_a_section_with_lead_in_is_kept_and_its_window_moved(con, env, helix, twitch, http,
+                                                             got, status, win_start):
+    seed(helix, env, con, twitch, http)
+    dl = FakeDownloader()
+    assert run(["fetch", "--video", "v1", "--top", "1"], con, twitch=twitch, downloader=dl,
+               probe=lambda path: Probe(got, 1920, 1080, True, True)) == (status == "failed")
+    row = con.execute("SELECT * FROM sections WHERE top_clip_id = 'a1'").fetchone()
+    assert row["status"] == status
+    assert row["win_start_s"] == pytest.approx(win_start) and row["win_end_s"] == 3625.0
+
+
 def test_ytdlp_retries_a_reset_connection_through_the_cli(con, env, helix, twitch, http):
     seed(helix, env, con, twitch, http)
     calls, sleeps = [], []
