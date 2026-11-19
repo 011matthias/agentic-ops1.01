@@ -157,6 +157,23 @@ def test_bars_in_the_band_fail_the_check(kept, monkeypatch, capsys):
     render.video_encoder.cache_clear()
 
 
+def test_a_framed_cam_is_cut_inside_its_frame_and_blurred_whole(kept, monkeypatch):
+    # caseoh_ 2026-11-19: a 4:3 cam frame; growing it to 1080:640 took in gameplay beside it
+    monkeypatch.setattr("clipengine.produce.load_layouts", lambda path: {"ohnepixel": {
+        "facecam": [0, 134, 402, 302], "cam_crop": [0, 182, 402, 238],
+        "gameplay": [0, 0, 1920, 1080]}})
+    fake = FakeFfmpeg()
+    monkeypatch.setattr(render.subprocess, "run", fake)
+    render.video_encoder.cache_clear()
+    assert run(["render", "1", "--no-caption-check"], kept, measurer=lambda v: GOOD,
+               planner=lambda edl, src: follow.static(edl["layout"])) == 0
+    (cmd,) = fake.encodes
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    assert "[a]crop=402:238:0:182,scale=1080:640" in graph       # top band: inside the frame
+    assert "[c]crop=442:382:0:94,boxblur" in graph                # whole frame +40 px blurred
+    render.video_encoder.cache_clear()
+
+
 # --- the bar measurement itself, on synthetic band frames ------------------------------
 
 def band_frames(np, *, bars: bool, n: int = 10):
