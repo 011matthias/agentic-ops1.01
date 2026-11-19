@@ -206,7 +206,8 @@ def cmd_analyze(args, con, *, transcriber=None, stills=None) -> int:
 
     results = analyze_mod.analyze(
         con, data_dir=config.data_dir(), transcriber=transcriber or analyze_mod.whisper_transcriber,
-        stills=stills or analyze_mod.extract_stills, section_ids=args.section, redo=args.redo)
+        stills=stills or analyze_mod.extract_stills, section_ids=args.section, redo=args.redo,
+        target_s=args.length)
     for r in results:
         s = r.section
         text = " ".join(w["w"] for w in r.transcript.words if r.in_s <= w["s"] <= r.out_s)
@@ -326,7 +327,9 @@ def build_parser() -> argparse.ArgumentParser:
     an = sub.add_parser("analyze", help="transcribe fetched sections, cut F1 moments, "
                                         "write review packages (needs --extra gpu)")
     an.add_argument("--section", nargs="+", type=int, metavar="ID", help="only these sections")
-    an.add_argument("--redo", action="store_true", help="transcribe and cut again")
+    an.add_argument("--redo", action="store_true", help="cut again (Whisper runs once)")
+    an.add_argument("--length", type=float, default=55,
+                    help="target length in seconds, filled with whole sentences (default 55)")
 
     j = sub.add_parser("judge", help="store Claude Code's verdict on a review package")
     j.add_argument("moment", type=int)
