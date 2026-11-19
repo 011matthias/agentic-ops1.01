@@ -122,10 +122,15 @@ def http(helix) -> httpx.Client:
 
 @pytest.fixture
 def env(tmp_path, monkeypatch) -> Path:
-    """Isolated data dir and a copy of the shipped (empty) register."""
+    """Isolated data dir and an empty register with the shipped header comments.
+
+    The shipped register holds the real start streamers, so tests build their
+    own empty one from its header instead of copying it.
+    """
+    shipped = (ENGINE / "config" / "streamers.yaml").read_text(encoding="utf-8")
+    header = shipped.split("\nstreamers:", 1)[0].rstrip("\n")
     reg = tmp_path / "streamers.yaml"
-    reg.write_text((ENGINE / "config" / "streamers.yaml").read_text(encoding="utf-8"),
-                   encoding="utf-8")
+    reg.write_text(header + "\n\nstreamers: []\n", encoding="utf-8")
     monkeypatch.setenv("CLIPENGINE_REGISTER", str(reg))
     monkeypatch.setenv("CLIPENGINE_DATA_DIR", str(tmp_path / "data"))
     return reg
