@@ -13,4 +13,74 @@
 #   priority    1 (zuerst) bis 5
 #   permission  unknown | yes | no  (Erlaubnis des Streamers; Regel folgt mit dem Posten-Plan)
 
-streamers: []
+streamers:
+  - name: "ohnePixel"
+    twitch: ohnepixel
+    youtube: null
+    language: en
+    layout: null
+    priority: 3
+    permission: unknown
+  - name: "xQc"
+    twitch: xqc
+    youtube: null
+    language: en
+    layout: null
+    priority: 3
+    permission: unknown
+  - name: "Lacy"
+    twitch: lacy
+    youtube: null
+    language: en
+    layout: null
+    priority: 3
+    permission: unknown
+  - name: "jasontheween"
+    twitch: jasontheween
+    youtube: null
+    language: en
+    layout: null
+    priority: 3
+    permission: unknown
+  - name: "IShowSpeed"
+    twitch: ishowspeed
+    youtube: null
+    language: en
+    layout: null
+    priority: 3
+    permission: unknown
+  - name: "KaiCenat"
+    twitch: kaicenat
+    youtube: null
+    language: en
+    layout: null
+    priority: 3
+    permission: unknown
+  - name: "TheBurntPeanut"
+    twitch: theburntpeanut
+    youtube: null
+    language: en
+    layout: null
+    priority: 3
+    permission: unknown
+  - name: "LIRIK"
+    twitch: lirik
+    youtube: null
+    language: en
+    layout: null
+    priority: 3
+    permission: unknown
+  - name: "caseoh_"
+    twitch: caseoh_
+    youtube: null
+    language: en
+    layout: null
+    priority: 3
+    permission: unknown
+  - name: "stableronaldo"
+    twitch: stableronaldo
+    youtube: null
+    language: en
+    layout: null
+    priority: 3
+    permission: unknown

@@ -6,7 +6,7 @@ stage: build
 needs_fixes: false
 version: 1.1.0
 created: 2026-11-17
-updated: 2026-11-17
+updated: 2026-11-19
 orchestrator: none
 trigger: Windows-Aufgabenplanung (Zeitplan) und manueller Start per CLI
 systems:
@@ -30,8 +30,9 @@ last_changes:
   - "2026-11-17: Owner: keine API-LLM-Kosten, Urteilsarbeit macht Claude Code über das Abo; wo erkennbar zählen nur die meistgesehenen Intervalle (Twitch-Zuschauer-Clips, YouTube-Kurve über yt-dlp heatmap, geprüft)."
   - "2026-11-17: Owner: Clips auf Englisch; Start-Streamer wählt Claude Code ab Launch nach Clip-Aufrufen. Twitch-App angelegt, App-Token geprüft, GTA-VI-game_id 1867279146."
   - "2026-11-17: p1.1 gebaut (engine/): Register, SQLite, Twitch/YouTube-Beobachten, Streamer-Vorschläge, approve/reject; live geprüft an LIRIK, KaiCenat, ibragaming_fc. YouTube über den Kanal-Feed statt Data API (kein Key nötig). Twitch-Clips in 6-h-Stücken, weil jede Abfrage bei ~1.000 kappt."
+  - "2026-11-19: Start-Streamer abgenickt (Owner): ohnePixel, xQc, Lacy, jasontheween, IShowSpeed, KaiCenat, TheBurntPeanut, LIRIK, caseoh_, stableronaldo, aus `suggest --since 24h` am Launch-Tag. Erster watch über 1 Tag: caseoh_ und IShowSpeed haben keine öffentlichen VODs (1.193 von 1.318 und 2.225 von 2.236 Clips ohne vod_offset), ihre Momente kommen also aus dem Clip selbst."
 next_steps:
-  - "Ab Launch 19.11.: uv run clipengine suggest, Top-Streamer dem Owner vorlegen, approve/reject"
+  - "22.11.: suggest --since 72h, Streamer tauschen, die GTA nicht mehr spielen"
   - "p1.2 Holen: Intervalle aus Clip-Aufrufen und YouTube-Kurve, Abschnitts-Download"
 stage_history:
   - stage: spec
@@ -217,6 +218,11 @@ Moment zurück:
 - Kategorie und Thema (lustig, Chaos, Können, Entdeckung, Fail, Ausraster, Story)
 - zwei bis drei Hooks und einen Titel
 - „verwerfen“, wenn der Moment ohne Kontext nicht funktioniert
+- Ab-18-Risiko: drastische Gewalt oder sexuelle Inhalte (Strip-Club) verwerfen
+  oder entschärfen. YouTube stuft drastische Spielgewalt seit den Regeln vor
+  GTA 6 ab 18 ein, wenn sie nicht unkenntlich ist; ab 18 sehen nur angemeldete
+  Volljährige das Video (PC Gamer, Dexerto, 2026-09; YouTube-Hilfe
+  „Altersbeschränkte Inhalte“).
 
 Claude Code läuft auf zwei Wegen: im Gespräch („arbeite die Prüfpakete ab“)
 oder automatisch per Windows-Aufgabenplanung mit `claude -p`. Beide zählen
