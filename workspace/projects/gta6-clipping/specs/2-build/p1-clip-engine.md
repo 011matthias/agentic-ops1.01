@@ -32,8 +32,9 @@ last_changes:
   - "2026-11-17: p1.1 gebaut (engine/): Register, SQLite, Twitch/YouTube-Beobachten, Streamer-Vorschläge, approve/reject; live geprüft an LIRIK, KaiCenat, ibragaming_fc. YouTube über den Kanal-Feed statt Data API (kein Key nötig). Twitch-Clips in 6-h-Stücken, weil jede Abfrage bei ~1.000 kappt."
   - "2026-11-19: Start-Streamer abgenickt (Owner): ohnePixel, xQc, Lacy, jasontheween, IShowSpeed, KaiCenat, TheBurntPeanut, LIRIK, caseoh_, stableronaldo, aus `suggest --since 24h` am Launch-Tag. Erster watch über 1 Tag: caseoh_ und IShowSpeed haben keine öffentlichen VODs (1.193 von 1.318 und 2.225 von 2.236 Clips ohne vod_offset), ihre Momente kommen also aus dem Clip selbst."
   - "2026-11-19: p1.2 Twitch gebaut (clipengine fetch): Intervalle aus Zuschauer-Clips, stumme Stellen ausgeschlossen, laufende Aufzeichnungen übersprungen, Abschnitte per yt-dlp, Clip-Download für Streamer ohne VOD. Live gemessen: vod_offset ist das Clip-Ende, nicht der Anfang."
+  - "2026-11-19: p1.3 gebaut (analyze, judge): Whisper lokal auf der GPU, F1-Schnitt an Satzgrenzen, Prüfpakete; 21 Momente, 2 behalten, 6 verworfen."
 next_steps:
-  - "p1.3 bis p1.6 für ein F1-Video: Transkript, Prüfpaket, Urteil, Schnitt, Render, Checks"
+  - "p1.4 bis p1.6 für ein F1-Video: Schnittliste, Facecam-Profil, Render, Checks"
   - "22.11.: suggest --since 72h, Streamer tauschen, die GTA nicht mehr spielen"
   - "p1.2 YouTube-Kurve nach dem ersten Video"
 stage_history:
@@ -97,7 +98,7 @@ flowchart TD
 |---|---|---|---|---|
 | p1.1 | Fundament + Beobachten | uv-Projekt, SQLite-Schema, Streamer-Register, Twitch/YouTube-Abfrage, Streamer-Vorschläge | Owner: Twitch-App, Streamer-Liste | gebaut 2026-11-17 |
 | p1.2 | Holen | Intervalle nach Aufrufen (Clips, YouTube-Kurve), Abschnitts-Download, Ablage, Aufräumen | p1.1 | Twitch gebaut 2026-11-19; YouTube-Kurve offen |
-| p1.3 | Analysieren | Transkript und Schnitt lokal, Prüfpakete, Urteil durch Claude Code, Momente-Tabelle | p1.2 | spec |
+| p1.3 | Analysieren | Transkript und Schnitt lokal, Prüfpakete, Urteil durch Claude Code, Momente-Tabelle | p1.2 | gebaut 2026-11-19; `claude -p` offen |
 | p1.4 | Zusammenstellen | Formate, Auswahlregeln, Schnittliste | p1.3 | spec |
 | p1.5 | Bearbeiten + Rendern | Layout-Profile, Untertitel, Hook, Effekte, Lautheit, NVENC | p1.4 | spec |
 | p1.6 | Prüfen | automatische Checks, Freigabe-Liste | p1.5 | spec |
@@ -255,6 +256,14 @@ installiert (geprüft 2026-11-17).
 
 **Ergebnis:** Tabelle `moments` mit Quelle, Intervall, Aufrufen, Kategorie,
 Spoiler-Flag, Hooks und Titel.
+
+**Gebaut 2026-11-19 (`clipengine analyze` / `judge`), live gemessen:** 21
+Abschnitte in 3 min 19 s; Whisper large-v3 (int8_float16) braucht für 120 s
+Ton 4 bis 8 s (bis 32 s bei Musik), Spitze 2,5 von 6 GB VRAM. Erstes Urteil:
+2 behalten (ohnePixel Jet-Absturz, caseoh_ Rollstuhl-Verfolgung), 6 verworfen
+(Strip-Club, vier Story-Zwischensequenzen, ein Radio-Song), 13 offen. Die
+Hälfte der meistgesehenen Momente am Launch-Tag waren Zwischensequenzen; der
+Spoiler-Check ist also kein Randfall.
 
 ### 4. Zusammenstellen (p1.4)
 

@@ -14,8 +14,22 @@ uv run clipengine watch                   new VODs, YouTube uploads and viewer c
 uv run clipengine list                    what the database holds per streamer
 uv run clipengine fetch --dry-run         plan the most-viewed stretches of finished VODs
 uv run clipengine fetch --top 3           ... and download only those (yt-dlp, source quality)
+uv run --extra gpu clipengine analyze     transcripts, F1 cuts, review packages in data/review/
+uv run clipengine judge ID --file F.json  store Claude Code's verdict on package ID
 uv run --extra dev pytest -q              tests (offline, against a fake Twitch/YouTube)
 ```
+
+- **Analyze (p1.3):** faster-whisper large-v3 (int8_float16, CUDA) transcribes each fetched
+  section with word times; the F1 cut (15 to 60 s) starts at the sentence the top clip begins
+  in and ends at the sentence end after it. Measured 2026-11-19 on the RTX 3060 Laptop:
+  120 s of audio in 4 to 8 s (up to 32 s on music), model load 14 s, peak VRAM 2.5 of 6 GB.
+  The `gpu` extra carries the Windows cuBLAS / cuDNN wheels; audio is decoded with ffmpeg
+  because faster-whisper's PyAV decoder breaks on the current `av`. Hugging Face is reached
+  over IPv4 (same IPv6 resets as yt-dlp).
+- **Judge:** `review.json` with `verdict` (keep / reject), `spoiler`, `cutscene`, `adult`
+  (none / defuse / reject), `category`, 2 to 3 `hooks`, `title`, optional `in_s` / `out_s`.
+  A keep is refused with a spoiler, a cutscene, an adult reject, or a title that does not
+  name the streamer (the channel description promises that).
 
 - **Fetch (p1.2):** viewer clips are laid on their VOD, overlapping clips merge into one
   interval weighted by summed views, intervals touching Twitch `muted_segments` are skipped, and
