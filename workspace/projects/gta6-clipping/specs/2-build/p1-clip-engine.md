@@ -4,7 +4,7 @@ name: GTA6 Clip-Engine (Masterplan)
 type: project
 stage: build
 needs_fixes: false
-version: 1.1.0
+version: 1.2.0
 created: 2026-11-17
 updated: 2026-11-19
 orchestrator: none
@@ -31,9 +31,11 @@ last_changes:
   - "2026-11-17: Owner: Clips auf Englisch; Start-Streamer wählt Claude Code ab Launch nach Clip-Aufrufen. Twitch-App angelegt, App-Token geprüft, GTA-VI-game_id 1867279146."
   - "2026-11-17: p1.1 gebaut (engine/): Register, SQLite, Twitch/YouTube-Beobachten, Streamer-Vorschläge, approve/reject; live geprüft an LIRIK, KaiCenat, ibragaming_fc. YouTube über den Kanal-Feed statt Data API (kein Key nötig). Twitch-Clips in 6-h-Stücken, weil jede Abfrage bei ~1.000 kappt."
   - "2026-11-19: Start-Streamer abgenickt (Owner): ohnePixel, xQc, Lacy, jasontheween, IShowSpeed, KaiCenat, TheBurntPeanut, LIRIK, caseoh_, stableronaldo, aus `suggest --since 24h` am Launch-Tag. Erster watch über 1 Tag: caseoh_ und IShowSpeed haben keine öffentlichen VODs (1.193 von 1.318 und 2.225 von 2.236 Clips ohne vod_offset), ihre Momente kommen also aus dem Clip selbst."
+  - "2026-11-19: p1.2 Twitch gebaut (clipengine fetch): Intervalle aus Zuschauer-Clips, stumme Stellen ausgeschlossen, laufende Aufzeichnungen übersprungen, Abschnitte per yt-dlp, Clip-Download für Streamer ohne VOD. Live gemessen: vod_offset ist das Clip-Ende, nicht der Anfang."
 next_steps:
+  - "p1.3 bis p1.6 für ein F1-Video: Transkript, Prüfpaket, Urteil, Schnitt, Render, Checks"
   - "22.11.: suggest --since 72h, Streamer tauschen, die GTA nicht mehr spielen"
-  - "p1.2 Holen: Intervalle aus Clip-Aufrufen und YouTube-Kurve, Abschnitts-Download"
+  - "p1.2 YouTube-Kurve nach dem ersten Video"
 stage_history:
   - stage: spec
     date: 2026-11-17
@@ -94,7 +96,7 @@ flowchart TD
 | Phase | Name | Inhalt | Hängt ab von | Stand |
 |---|---|---|---|---|
 | p1.1 | Fundament + Beobachten | uv-Projekt, SQLite-Schema, Streamer-Register, Twitch/YouTube-Abfrage, Streamer-Vorschläge | Owner: Twitch-App, Streamer-Liste | gebaut 2026-11-17 |
-| p1.2 | Holen | Intervalle nach Aufrufen (Clips, YouTube-Kurve), Abschnitts-Download, Ablage, Aufräumen | p1.1 | spec |
+| p1.2 | Holen | Intervalle nach Aufrufen (Clips, YouTube-Kurve), Abschnitts-Download, Ablage, Aufräumen | p1.1 | Twitch gebaut 2026-11-19; YouTube-Kurve offen |
 | p1.3 | Analysieren | Transkript und Schnitt lokal, Prüfpakete, Urteil durch Claude Code, Momente-Tabelle | p1.2 | spec |
 | p1.4 | Zusammenstellen | Formate, Auswahlregeln, Schnittliste | p1.3 | spec |
 | p1.5 | Bearbeiten + Rendern | Layout-Profile, Untertitel, Hook, Effekte, Lautheit, NVENC | p1.4 | spec |
@@ -185,13 +187,33 @@ diese Intervalle, nie ein ganzer Stream.
    yt-dlp-README: Download nur eines Zeitbereichs).
 4. Von Zuschauer-Clips zählen nur die Zeitangaben; geschnitten wird aus dem
    VOD in voller Qualität. Ist das VOD weg (gelöscht, nur für Abonnenten),
-   wird der Clip selbst geladen. UNVERIFIED, ob yt-dlp Twitch-Clips lädt.
+   wird der Clip selbst geladen: Clips ohne VOD, die innerhalb von 90 s
+   entstanden, gelten als ein Moment, geladen wird dessen meistgesehener Clip.
 
-**Ablage** (gitignored): `engine/data/{streamer}/{video_id}/sections/`.
-Rohdaten werden nach dem Rendern und N Tagen gelöscht.
+**Gebaut 2026-11-19 (`clipengine fetch`), live geprüft:**
 
-**Offen, im Prototyp prüfen:** stummgeschaltete Abschnitte (Musik-Takedowns),
-Verhalten von yt-dlp bei sehr langen VODs.
+- **`vod_offset` ist das Ende des Clips, nicht der Anfang**, anders als die
+  Twitch-Doku sagt. Gemessen über den Ton: drei Clips (6,4 / 17,6 / 33,7 s
+  lang, zwei VODs) per Kreuzkorrelation im VOD gesucht; jeder beginnt bei
+  `vod_offset - Dauer`, auf etwa 1 s genau.
+- yt-dlp 2026.10.26 lädt Abschnitte aus Twitch-VODs sauber, auch aus der
+  23. Stunde eines 23-Stunden-VODs: 44 s in 1080p60 in etwa 7 s.
+- yt-dlp lädt Twitch-Clips (auch als „portrait“-Varianten, die die Engine
+  meidet).
+- Über IPv6 bricht die Leitung des Laptops rund 40 % der ersten Anfragen ab
+  (WinError 10054, bei Twitch wie bei Hugging Face), über IPv4 keine von 15.
+  yt-dlp läuft deshalb mit `--force-ipv4`, jeder Download wird trotzdem bis
+  zu dreimal versucht.
+- Lange Ketten überlappender Clips (bis 120 Clips an einem Moment) werden auf
+  120 s um den meistgesehenen Clip gekürzt.
+- Eine Aufzeichnung, deren Streamer noch live ist, wird übersprungen.
+
+**Ablage** (gitignored): `engine/data/{streamer}/{video_id}/sections/` und
+`engine/data/{streamer}/clips/`. Rohdaten werden nach dem Rendern und N Tagen
+gelöscht (p1.7).
+
+**Offen:** stummgeschaltete Abschnitte sind ausgeschlossen, aber an keinem der
+ersten VODs vorgekommen; die YouTube-Kurve folgt nach dem ersten Video.
 
 ### 3. Analysieren (p1.3)
 
@@ -322,7 +344,8 @@ Hand; das Posten kommt später.
 | `crowd_clips` | Zuschauer-Clips: ID, `video_id`, `vod_offset`, Dauer, Aufrufe |
 | `suggestions` | Streamer-Vorschläge mit Kennzahlen und Status offen/angenommen/abgelehnt (p1.1) |
 | `meta` | zwischengespeichertes Twitch-App-Token (p1.1) |
-| `signals` | Zeitreihen pro Video: Clip-Aufrufe, YouTube-Kurve, Lautheit |
+| `sections` | gewählte Intervalle und geladene Abschnitte: Fenster, Aufrufe, Datei, Status (p1.2) |
+| `signals` | Zeitreihen pro Video: YouTube-Kurve, Lautheit |
 | `reviews` | Antworten von Claude Code pro Prüfpaket |
 | `transcripts` | Wörter mit Zeitstempel pro Video |
 | `moments` | bewertete Momente (Stufe 3) |
@@ -355,7 +378,7 @@ Hand; das Posten kommt später.
 ## Erfolgskriterien
 
 - [x] p1.1: Für drei Streamer listet die Engine die neuen VODs und Zuschauer-Clips der letzten sieben Tage, abgeglichen mit der Twitch-Seite. Erfüllt 2026-11-17 (LIRIK, KaiCenat, ibragaming_fc): LIRIKs 7 Aufzeichnungen = die ersten 7 auf twitch.tv/lirik/videos, KaiCenats Top-5-Clips = die Top 5 auf seiner 7-Tage-Clipseite, beide Seiten ohne Anmeldung gelesen.
-- [ ] p1.2: Für einen Twitch-Stream mit Zuschauer-Clips und ein YouTube-Video mit Kurve decken sich die gewählten Intervalle mit den meistgesehenen Stellen (Abgleich von Hand mit Clip-Liste und YouTube-Kurve).
+- [ ] p1.2: Für einen Twitch-Stream mit Zuschauer-Clips und ein YouTube-Video mit Kurve decken sich die gewählten Intervalle mit den meistgesehenen Stellen (Abgleich von Hand mit Clip-Liste und YouTube-Kurve). Twitch-Hälfte erfüllt 2026-11-19: die meistgesehenen Clips von xQc und jasontheween per Ton in ihren geladenen Abschnitten gefunden, 0,6 und 0,8 s neben der berechneten Stelle. YouTube offen.
 - [ ] p1.3: Claude Code beantwortet ein Prüfpaket vollständig (Spoiler, Kategorie, Hooks, Titel), im Gespräch und per `claude -p` aus der Aufgabenplanung.
 - [ ] p1.5: Das fertige Video hat 1080×1920, Lautheit -14 ±1 LUFS, und die Untertitel weichen in der Stichprobe weniger als 0,2 s vom Ton ab.
 - [ ] Ende-zu-Ende: Aus einem neuen Stream entsteht ohne Handgriff mindestens ein fertiges Video in der Freigabe-Liste.

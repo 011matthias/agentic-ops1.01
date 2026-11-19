@@ -163,6 +163,15 @@ class Twitch:
     def follower_total(self, broadcaster_id: str) -> int | None:
         return self.get("/channels/followers", {"broadcaster_id": broadcaster_id}).get("total")
 
+    def live_streams(self, logins: Iterable[str]) -> dict[str, str]:
+        """login -> started_at for those of `logins` that are live right now."""
+        out: dict[str, str] = {}
+        for batch in _chunks(list(logins), 100):
+            params = [("user_login", x) for x in batch] + [("first", "100")]
+            for s in self.get("/streams", params).get("data", []):
+                out[s["user_login"].lower()] = s["started_at"]
+        return out
+
     def archive_videos(self, user_id: str, *, max_pages: int = 1) -> list[dict]:
         return list(self.paged("/videos", {"user_id": user_id, "type": "archive"},
                                max_pages=max_pages))
