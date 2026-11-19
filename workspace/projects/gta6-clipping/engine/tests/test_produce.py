@@ -129,6 +129,33 @@ def test_caption_drift_over_0_2_s_fails(kept, monkeypatch, capsys):
     render.video_encoder.cache_clear()
 
 
+def test_game_dialogue_heard_before_the_captions_does_not_shift_the_match(kept, monkeypatch,
+                                                                          capsys):
+    # m16 2026-11-19: Whisper heard the game's own lines first ("Hands up ... no ..."),
+    # which the section transcript never had; the old 6-word lookahead paired a caption
+    # with a game word seconds away and reported 27 s of drift on synced captions
+    monkeypatch.setattr(render.subprocess, "run", FakeFfmpeg())
+    render.video_encoder.cache_clear()
+    game = [{"w": w, "s": 0.1 + i * 0.15} for i, w in
+            enumerate("no Hands up it's a stick up we got this Lucia".split())]
+    synced = [{"w": w["w"], "s": round(w["s"] - 8.0 + 0.03, 2)} for w in WORDS]
+    assert run(["render", "1", "--style", "a"], kept, measurer=lambda v: GOOD,
+               listener=lambda v: game + synced, **STILL) == 0
+    out = capsys.readouterr().out
+    assert "captions drift 0.03 s" in out and "READY" in out
+    render.video_encoder.cache_clear()
+
+
+def test_captions_off_by_more_than_the_match_window_still_fail(kept, monkeypatch, capsys):
+    monkeypatch.setattr(render.subprocess, "run", FakeFfmpeg())
+    render.video_encoder.cache_clear()
+    late = [{"w": w["w"], "s": round(w["s"] - 8.0 + 5.0, 2)} for w in WORDS]
+    assert run(["render", "1"], kept, measurer=lambda v: GOOD, listener=lambda v: late,
+               **STILL) == 1
+    assert "captions drift None s" in capsys.readouterr().out
+    render.video_encoder.cache_clear()
+
+
 def test_only_kept_moments_with_a_layout_render(kept):
     with kept:
         kept.execute("UPDATE moments SET status = 'reject' WHERE id = 1")

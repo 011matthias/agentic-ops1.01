@@ -224,16 +224,28 @@ def measure(video: Path) -> dict:
     }
 
 
+CAPTION_MATCH_S = 2.0  # a heard word pairs with a caption word only this close in time
+
+
 def caption_drift(edl: dict, heard: list[dict], sample: int = 12) -> float | None:
     """Median gap between caption word starts and the same words heard again in
-    the rendered audio (matched in order on normalised text)."""
+    the rendered audio (matched in order on normalised text, within CAPTION_MATCH_S).
+
+    Matched by time, not by a fixed number of heard words ahead: on 2026-11-19 Whisper
+    heard 11 words of game dialogue at the start of m16 that the section transcript
+    never had, and the in-order lookahead paired the caption "fucking" at 27.9 s with
+    the game's at 0.9 s: drift 27 s on captions that were in sync. A drift larger than
+    the window matches nothing and still fails (drift None)."""
     def norm(w: str) -> str:
         return re.sub(r"[^a-z0-9']", "", w.lower())
     gaps, j = [], 0
     for w in render_mod.caption_words(edl["words"]):
         key = norm(w["w"])
-        for k in range(j, min(j + 6, len(heard))):
-            if key and norm(heard[k]["w"]) == key:
+        for k in range(j, len(heard)):
+            if heard[k]["s"] > w["s"] + CAPTION_MATCH_S:
+                break
+            if (key and norm(heard[k]["w"]) == key
+                    and abs(heard[k]["s"] - w["s"]) <= CAPTION_MATCH_S):
                 gaps.append(abs(heard[k]["s"] - w["s"]))
                 j = k + 1
                 break

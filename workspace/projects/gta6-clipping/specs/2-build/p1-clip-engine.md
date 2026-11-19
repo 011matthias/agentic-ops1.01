@@ -4,7 +4,7 @@ name: GTA6 Clip-Engine (Masterplan)
 type: project
 stage: build
 needs_fixes: false
-version: 1.5.0
+version: 1.6.0
 created: 2026-11-17
 updated: 2026-11-19
 orchestrator: none
@@ -39,8 +39,8 @@ last_changes:
   - "2026-11-19: Owner nach der m5-Vorschau: 'unten den blur weg'. Im Gameplay-Band wird nichts mehr weichgezeichnet, auch nicht die doppelte Facecam (ersetzt die frühere Regel). caseoh_ hat ein Layout-Profil (gerahmte 4:3-Cam, cam_crop schneidet innerhalb des Rahmens); Moment 15 mit GTA6-Hook neu beurteilt und gerendert."
   - "2026-11-19: Neuer Check im Gameplay-Band (Untertitelzeile ausgenommen): schwarze, stillstehende (Karte, Menü, Titel- oder Ladebild) und Menü-über-verschwommenem-Spiel-Strecken ab 0,75 s fallen durch. Geeicht an 21 Abschnitten (7.260 Proben); Nachtfahrt, Dämmerung, dunkle Innenräume und m15-f1 bestehen, m5-f1 fällt wegen des Waffenrads bei 34,5 s durch. Eine gerade gezoomte Karte fällt nicht auf."
   - "2026-11-19: Owner-Entscheidungen an Standbildern: (1) Objekt breiter als der Ausschnitt: Band bleibt gefüllt, Ränder abgeschnitten, kein Durchfallen mehr; (2) Menüs, die zum Moment gehören, dürfen pro Video mit Grund durch (render --accept-band). 13 Prüfpakete beurteilt: 4 behalten (xQc NPC, caseoh_ Wasserflugzeug, jasontheween Überfall, caseoh_ Lackiererei), 9 verworfen (Zwischensequenz, Nacktheit, Stripclub, Radio, Pause-Karte, PS5-Startbild, LIRIK ohne Cam, schwache Momente). Layout-Profile für xqc und jasontheween."
+  - "2026-11-19: caption_drift ordnet Wörter nach Zeit zu (gleiches Wort innerhalb 2 s), nicht mehr 6 Wörter voraus: in m16 hörte Whisper 11 Wörter Spieldialog, die das Abschnitts-Transkript nicht hatte, und meldete 27 s Versatz bei synchronen Untertiteln (am echten Audio nachgestellt; neu 0,03 s)."
 next_steps:
-  - "caption_drift: ein verirrtes erstes Wort zieht die Zuordnung in Reihenfolge um Sekunden weg (m16: 29 s); Wörter nach Zeitnähe zuordnen statt nur in Reihenfolge"
   - "Owner: LIRIK (keine Cam) und TheBurntPeanut (PNG-Avatar) passen nicht ins Cam-oben-Format: tauschen oder eigenes Layout"
   - "p1.7 Betrieb: Zeitplan, claude -p für das Urteil, Aufräumen"
   - "22.11.: suggest --since 72h, Streamer tauschen, die GTA nicht mehr spielen"
