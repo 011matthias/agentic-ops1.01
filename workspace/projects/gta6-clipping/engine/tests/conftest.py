@@ -40,6 +40,7 @@ class FakeHelix:
         self.followers: dict[str, int] = {}
         self.channels: dict[str, dict] = {}
         self.feeds: dict[str, str] = {}
+        self.live: list[dict] = []  # Get Streams rows: user_login, started_at
         self.fail_next: list[int] = []
         self.clip_cap: int | None = None  # live Twitch stops each clip query near 1,000
         self.token_calls = 0
@@ -81,6 +82,11 @@ class FakeHelix:
             pool = [c for c in pool if q["started_at"] <= c["created_at"] < q["ended_at"]]
             pool = sorted(pool, key=lambda c: -c["view_count"])[:self.clip_cap]
             return self._page(pool, q)
+        if path == "/streams":
+            logins = q.get_list("user_login")
+            return httpx.Response(200, json={"data": [s for s in self.live
+                                                      if s["user_login"] in logins],
+                                             "pagination": {}})
         if path == "/channels/followers":
             return httpx.Response(200, json={"total": self.followers.get(q["broadcaster_id"], 0),
                                              "data": [], "pagination": {}})

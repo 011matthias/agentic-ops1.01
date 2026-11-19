@@ -92,6 +92,35 @@ MIGRATIONS: list[str] = [
 
     CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     """,
+    # 2: p1.2 fetch: the most-viewed stretches and the files cut from them
+    """
+    CREATE TABLE sections (
+        id              INTEGER PRIMARY KEY,
+        streamer        TEXT NOT NULL REFERENCES streamers(login),
+        kind            TEXT NOT NULL CHECK (kind IN ('vod', 'clip')),
+        video_id        TEXT,             -- Twitch VOD id; NULL for kind 'clip'
+        top_clip_id     TEXT NOT NULL,    -- most-viewed clip inside; the clip itself for 'clip'
+        start_s         REAL NOT NULL,    -- merged clip span on the VOD timeline, unpadded
+        end_s           REAL NOT NULL,
+        win_start_s     REAL NOT NULL,    -- what yt-dlp was asked for: span + pad, muted-free
+        win_end_s       REAL NOT NULL,
+        views           INTEGER NOT NULL, -- sum over the merged clips
+        clips           INTEGER NOT NULL,
+        rank            INTEGER,          -- 1 = most views within its source at planning time
+        status          TEXT NOT NULL DEFAULT 'planned'
+                        CHECK (status IN ('planned', 'fetched', 'failed')),
+        file            TEXT,             -- relative to the data dir
+        file_duration_s REAL,
+        width           INTEGER,
+        height          INTEGER,
+        attempts        INTEGER NOT NULL DEFAULT 0,
+        last_error      TEXT,
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT NOT NULL,
+        UNIQUE (kind, top_clip_id)
+    );
+    CREATE INDEX sections_by_video ON sections(video_id);
+    """,
 ]
 
 

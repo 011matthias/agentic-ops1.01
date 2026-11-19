@@ -5,6 +5,8 @@
     uv run clipengine suggest --since 48h    top streamers by English GTA VI clip views
     uv run clipengine approve LOGIN          owner said yes: add to the register
     uv run clipengine reject LOGIN           owner said no: never suggest again
+    uv run clipengine fetch --dry-run        plan the most-viewed stretches of finished VODs
+    uv run clipengine fetch                  ... and download only those, via yt-dlp
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 
 from . import config, db, register, suggest as suggest_mod, watch as watch_mod
+from . import fetch as fetch_mod
 from .twitch import TokenStore, Twitch, TwitchError
 
 
@@ -163,6 +166,38 @@ def cmd_approve(args, con, *, twitch=None) -> int:
     return 0
 
 
+def hms(seconds: float) -> str:
+    s = int(seconds)
+    return f"{s // 3600}:{s % 3600 // 60:02d}:{s % 60:02d}"
+
+
+def cmd_fetch(args, con, *, twitch=None, downloader=None, probe=None) -> int:
+    load_and_sync(con)
+    twitch = twitch or make_twitch(con)
+    results = fetch_mod.fetch(
+        con, twitch, downloader=downloader or fetch_mod.YtDlp(), probe=probe or fetch_mod.ffprobe,
+        streamers=[x.lower() for x in args.streamer] if args.streamer else None,
+        video_ids=args.video, days=args.days, top=args.top, min_views=args.min_views,
+        pad=args.pad, max_len=args.max_len, dry_run=args.dry_run)
+    failed = 0
+    for res in results:
+        muted = f", {res.muted_skipped} muted skipped" if res.muted_skipped else ""
+        print(f"== {res.streamer} {res.source}{muted}{': ' + res.note if res.note else ''}")
+        for s in res.sections:
+            where = (f"{hms(s['win_start_s'])}-{hms(s['win_end_s'])}" if s["kind"] == "vod"
+                     else f"clip {s['top_clip_id'][:28]}")
+            state = s["status"] if s["status"] != "fetched" else (
+                f"{s['file']} {s['file_duration_s']:.1f}s {s['width']}x{s['height']}")
+            if s["status"] == "failed":
+                failed += 1
+                state += f" ({s['last_error']})"
+            print(f"  #{s['rank'] or '-'} {where:<20} {s['views']:>8} views "
+                  f"{s['clips']:>3} clips  {state}")
+    if args.dry_run:
+        print("dry run: nothing downloaded")
+    return 1 if failed else 0
+
+
 def cmd_reject(args, con) -> int:
     for raw in args.logins:
         login = raw.lower()
@@ -211,11 +246,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     r = sub.add_parser("reject", help="keep streamers out of future suggestions")
     r.add_argument("logins", nargs="+", metavar="LOGIN")
+
+    f = sub.add_parser("fetch", help="download only the most-viewed stretches of finished VODs")
+    f.add_argument("--streamer", nargs="+", metavar="LOGIN", help="only these logins")
+    f.add_argument("--video", nargs="+", metavar="VOD_ID", help="only these Twitch VODs")
+    f.add_argument("--days", type=float, default=2, help="VODs and clips of the last N days")
+    f.add_argument("--top", type=int, default=5, help="strongest intervals per VOD (default 5)")
+    f.add_argument("--min-views", type=int, default=50, help="summed clip views (default 50)")
+    f.add_argument("--pad", type=float, default=5, help="seconds before and after (default 5)")
+    f.add_argument("--max-len", type=float, default=120,
+                   help="longest section in seconds (default 120)")
+    f.add_argument("--dry-run", action="store_true", help="plan and print, download nothing")
     return p
 
 
 COMMANDS = {"watch": cmd_watch, "list": cmd_list, "suggest": cmd_suggest,
-            "approve": cmd_approve, "reject": cmd_reject}
+            "approve": cmd_approve, "reject": cmd_reject, "fetch": cmd_fetch}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -227,7 +273,7 @@ def main(argv: list[str] | None = None) -> int:
     con = open_db()
     try:
         return COMMANDS[args.command](args, con)
-    except (UsageError, register.RegisterError, TwitchError) as exc:
+    except (UsageError, register.RegisterError, TwitchError, fetch_mod.FetchError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     finally:
