@@ -151,3 +151,14 @@ def test_judge_stores_a_keep_and_refuses_unsafe_ones(seeded, tmp_path):
         "keep", "fail", ["ohnePixel playing GTA6 for the first time", "b"])
     assert judged(seeded, tmp_path, 1, verdict="reject", adult="reject") == 0
     assert seeded.execute("SELECT status FROM moments WHERE id = 1").fetchone()[0] == "reject"
+
+
+def test_judge_takes_a_60_s_cut_despite_float_rounding(seeded, tmp_path):
+    # KaiCenat m30 2026-11-19: analyze's own 60 s cut 4.51-64.51 measured 60.00000000000001
+    fake = FakeWhisper(SPEECH)
+    run(["analyze"], seeded, transcriber=fake.factory, stills=fake_stills)
+    with seeded:
+        seeded.execute("UPDATE sections SET file_duration_s = 70")
+    assert judged(seeded, tmp_path, 1, **KEEP, in_s=4.51, out_s=64.51) == 0
+    with pytest.raises(UsageError, match="last 15 to 60 s"):
+        judged(seeded, tmp_path, 1, **KEEP, in_s=4.5, out_s=64.6)
