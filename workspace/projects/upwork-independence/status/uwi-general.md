@@ -4,7 +4,7 @@ workstream: uwi-general
 group: uwi
 spec:
 state: active
-updated: 2026-10-26
+updated: 2026-11-19
 ---
 
 # Upwork Independence (group general reference)
@@ -23,6 +23,7 @@ the weekly hours ledger. It is a roll-up, not a copy.
 | Two-routes framing | memory `project_upwork_independence_two_routes` | Route 1 local SMB / Route 2 B2B lead-gen; UWG §7 fence |
 | ICP | `../context/icp.md` | Shared prerequisite for u2 (buyer-intent queries), u3 (recipes) |
 | Accounts roster | `../infrastructure.yaml` | absent -> live as purchased |
+| Demo-target finder | `tools/local_site_scan.py` | Demo-first feeder (2026-11-19, owner choice after the Sellbird trial, which was not adopted): a town's businesses from OpenStreetMap, ranked dead/broken site first; output gitignored |
 
 ## Decisions taken (owner)
 
