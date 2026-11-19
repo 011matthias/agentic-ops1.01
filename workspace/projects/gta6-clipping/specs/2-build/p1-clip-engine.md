@@ -4,7 +4,7 @@ name: GTA6 Clip-Engine (Masterplan)
 type: project
 stage: build
 needs_fixes: false
-version: 1.4.0
+version: 1.5.0
 created: 2026-11-17
 updated: 2026-11-19
 orchestrator: none
@@ -38,9 +38,10 @@ last_changes:
   - "2026-11-19: Owner-Regel (wörtlich): 'das Video unten, also die Handlung, soll den ganzen Bereich, der dafür auf dem Bildschirm bereitgestellt wird, einnehmen', und das Hauptobjekt bleibt vollständig sichtbar. Umgesetzt: ein 912x1080-Ausschnitt (Seitenverhältnis des Bands) füllt das untere Band 1080x1280 und folgt dem Hauptobjekt (YOLOX-m lokal auf der CPU, 4 Bilder/s, Box an der Bildmitte gespiegelt, geglätteter Pfad, per sendcmd). Neue Checks: Objektbox in jedem abgetasteten Bild ganz im Ausschnitt, keine Balken im Band. Ist das Objekt breiter als der Ausschnitt, fällt der Check durch und der Owner entscheidet. m5-f1 neu gerendert, Flugzeug in jedem Bild ganz sichtbar."
   - "2026-11-19: Owner nach der m5-Vorschau: 'unten den blur weg'. Im Gameplay-Band wird nichts mehr weichgezeichnet, auch nicht die doppelte Facecam (ersetzt die frühere Regel). caseoh_ hat ein Layout-Profil (gerahmte 4:3-Cam, cam_crop schneidet innerhalb des Rahmens); Moment 15 mit GTA6-Hook neu beurteilt und gerendert."
   - "2026-11-19: Neuer Check im Gameplay-Band (Untertitelzeile ausgenommen): schwarze, stillstehende (Karte, Menü, Titel- oder Ladebild) und Menü-über-verschwommenem-Spiel-Strecken ab 0,75 s fallen durch. Geeicht an 21 Abschnitten (7.260 Proben); Nachtfahrt, Dämmerung, dunkle Innenräume und m15-f1 bestehen, m5-f1 fällt wegen des Waffenrads bei 34,5 s durch. Eine gerade gezoomte Karte fällt nicht auf."
+  - "2026-11-19: Owner-Entscheidungen an Standbildern: (1) Objekt breiter als der Ausschnitt: Band bleibt gefüllt, Ränder abgeschnitten, kein Durchfallen mehr; (2) Menüs, die zum Moment gehören, dürfen pro Video mit Grund durch (render --accept-band). 13 Prüfpakete beurteilt: 4 behalten (xQc NPC, caseoh_ Wasserflugzeug, jasontheween Überfall, caseoh_ Lackiererei), 9 verworfen (Zwischensequenz, Nacktheit, Stripclub, Radio, Pause-Karte, PS5-Startbild, LIRIK ohne Cam, schwache Momente). Layout-Profile für xqc und jasontheween."
 next_steps:
-  - "m5-f1: Waffenrad bei 34,5 s (0,75 s) fällt den neuen Check; Owner entscheidet mit seinem Urteil zum Video"
-  - "Weitere Prüfpakete beurteilen (13 offen), Facecam-Profile für die anderen Streamer"
+  - "caption_drift: ein verirrtes erstes Wort zieht die Zuordnung in Reihenfolge um Sekunden weg (m16: 29 s); Wörter nach Zeitnähe zuordnen statt nur in Reihenfolge"
+  - "Owner: LIRIK (keine Cam) und TheBurntPeanut (PNG-Avatar) passen nicht ins Cam-oben-Format: tauschen oder eigenes Layout"
   - "p1.7 Betrieb: Zeitplan, claude -p für das Urteil, Aufräumen"
   - "22.11.: suggest --since 72h, Streamer tauschen, die GTA nicht mehr spielen"
   - "p1.2 YouTube-Kurve nach dem ersten Video"
@@ -339,12 +340,16 @@ Werkzeug: Python baut aus der Schnittliste die ffmpeg-Filterkette. Remotion
 - Ton: Lautheit -14 ±1 LUFS, keine Stille über 2 s
 - Bild: keine schwarzen oder eingefrorenen Strecken (ffmpeg `blackdetect` / `freezedetect`)
 - Gameplay-Band: keine Balken (Schärfe der Randstreifen gegen die Mitte, nur im Band
-  gemessen); das Hauptobjekt liegt in jedem abgetasteten Bild ganz im Ausschnitt
+  gemessen); das Hauptobjekt liegt in jedem abgetasteten Bild ganz im Ausschnitt. Ist es
+  breiter als der Ausschnitt, bleibt das Band gefüllt und die Ränder des Objekts werden
+  für diese Sekunden abgeschnitten; vermerkt, kein Durchfallen (Owner 2026-11-19)
 - Gameplay-Band, ohne die Untertitelzeile: keine Strecke ab 0,75 s (3 Proben bei 4/s), die
   schwarz ist (95 % der Pixel unter 10), stillsteht (Spiel pausiert: Karte, Menü, Titel- oder
   Ladebild; Änderung unter 0,25) oder ein Menü über dem verschwommenen Spiel zeigt (hell,
   unscharf, langsam: Waffenrad). Geeicht an 21 Abschnitten; Nachtfahrt, Dämmerung und dunkle
-  Innenräume bestehen. Lücke: eine Karte, die gerade gezoomt wird, fällt nicht auf
+  Innenräume bestehen. Lücke: eine Karte, die gerade gezoomt wird, fällt nicht auf. Ein
+  Menü, das zum Moment gehört (Lackiererei als Aufbau des Witzes, kurzes Waffenrad), darf
+  pro Video mit schriftlichem Grund durch: `render ID --accept-band GRUND` (Owner 2026-11-19)
 - Untertitel: Stichprobe der Wortzeiten gegen das Audio
 - Inhalt: kein Spoiler-Flag
 - Duplikat: Wahrnehmungs-Hash gegen alle früheren Renders

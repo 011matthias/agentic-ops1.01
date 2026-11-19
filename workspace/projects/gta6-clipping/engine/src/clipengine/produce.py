@@ -246,7 +246,9 @@ def caption_drift(edl: dict, heard: list[dict], sample: int = 12) -> float | Non
 
 
 def check(edl: dict, video: Path, *, measured: dict,
-          heard: list[dict] | None) -> CheckResult:
+          heard: list[dict] | None, accept_band: str | None = None) -> CheckResult:
+    """accept_band: a written reason to let this one video's band stretches through
+    (owner 2026-11-19: a menu that is part of the moment, e.g. the respray shop)."""
     f = []
     want = edl["out_s"] - edl["in_s"]
     if (measured["width"], measured["height"]) != (render_mod.W, render_mod.H):
@@ -264,18 +266,21 @@ def check(edl: dict, video: Path, *, measured: dict,
     if measured["band_bars"]:
         f.append(f"bars in the gameplay band ({', '.join(measured['band_bars'])}), "
                  f"want it filled")
-    for s in measured.get("band_stretches") or []:
+    stretches = measured.get("band_stretches") or []
+    if stretches and accept_band:
+        measured = {**measured, "band_accepted": accept_band}
+    for s in stretches if not accept_band else []:
         what = {"dark": "black", "frozen": "game paused (map, menu or loading screen)",
                 "menu": "menu over the game"}[s["kind"]]
-        f.append(f"{what} in the gameplay band at t={s['t']} s for {s['s']} s: "
-                 f"move the cut or drop the moment")
+        f.append(f"{what} in the gameplay band at t={s['t']} s for {s['s']} s: move the "
+                 f"cut, drop the moment, or --accept-band REASON if it is part of the joke")
     plan = edl.get("follow")
     if plan:
         step = 1 / plan["sample_fps"]
-        wide = [round(i * step, 2) for i, w in enumerate(plan["too_wide"]) if w]
-        if wide:
-            f.append(f"main object wider than the window at {len(wide)} samples "
-                     f"(t={wide[:6]} s): owner decides, fill the band or show it whole")
+        # owner 2026-11-19: an object wider than the window keeps the band filled (its
+        # edges are cut for those samples); recorded, not a failure
+        measured = {**measured, "object_wider_s": [
+            round(i * step, 2) for i, w in enumerate(plan["too_wide"]) if w]}
         out = [m["t"] for m in follow.misses(plan) if not m["too_wide"]]
         if out:
             f.append(f"main object not completely in the window at {len(out)} samples "
@@ -302,6 +307,7 @@ def produce(con: sqlite3.Connection, moment_id: int, *, data_dir: Path, layouts:
             measurer: Callable[[Path], dict] = measure,
             listener: Callable[[Path], list[dict]] | None = None,
             planner: Callable[[dict, Path], dict] | None = None,
+            accept_band: str | None = None,
             ) -> tuple[dict, Path, CheckResult]:
     """Compose, plan the gameplay window, render and check one kept moment; a pass is
     copied to data/ready/."""
@@ -313,7 +319,7 @@ def produce(con: sqlite3.Connection, moment_id: int, *, data_dir: Path, layouts:
     (work / "edl.json").write_text(json.dumps(edl, indent=2, ensure_ascii=False), encoding="utf-8")
     video = renderer(edl, src, work / f"{edl['id']}.mp4")
     result = check(edl, video, measured=measurer(video),
-                   heard=listener(video) if listener else None)
+                   heard=listener(video) if listener else None, accept_band=accept_band)
     (work / "check.json").write_text(json.dumps(
         {"passed": result.passed, "failures": result.failures, "measured": result.measured},
         indent=2), encoding="utf-8")
