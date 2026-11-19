@@ -157,21 +157,20 @@ def filter_graph(edl: dict) -> str:
     visible (a fixed centre crop cut its wings off), then the gameplay must fill the
     whole band (no blurred bars, no letterbox). The window (912x1080 from a 1920x1080
     source) therefore moves: follow.plan gives its x per sample, render() writes one
-    position per output frame to follow.cmd, sendcmd feeds it to the crop. The
-    streamer's own cam inside the gameplay is blurred, he is shown above.
+    position per output frame to follow.cmd, sendcmd feeds it to the crop.
+
+    Owner 2026-11-19 ("unten den blur weg"): nothing in the band is blurred, not even
+    the streamer's own cam inside the gameplay; where the window reaches it, it shows.
     """
     # a framed 4:3 cam (caseoh_) would grow into the gameplay beside it: cam_crop cuts
     # inside the frame at the band's aspect; a keyed cam (ohnePixel) grows the facecam rect
     cam = fit_crop(edl["layout"].get("cam_crop") or edl["layout"]["facecam"], W / CAM_H)
     plan = edl.get("follow") or follow.static(edl["layout"])
-    # blur only 40 px around the cam (the size the owner saw); the detector blanks wider
-    bx, by, bw, bh = follow.cam_region(edl["layout"]["facecam"], 40, 40)
     move = f"sendcmd=f={FOLLOW_CMD}," if len(plan["x"]) > 1 else ""
-    return (f"[0:v]split=3[a][b][c];"
+    return (f"[0:v]split=2[a][b];"
             f"[a]crop={cam[0]}:{cam[1]}:{cam[2]}:{cam[3]},scale={W}:{CAM_H}:flags=lanczos,"
             f"setsar=1[cam];"
-            f"[c]crop={bw}:{bh}:{bx}:{by},boxblur=24:3[camblur];"
-            f"[b][camblur]overlay={bx}:{by},{move}"
+            f"[b]{move}"
             f"crop@follow=w={plan['crop_w']}:h={plan['crop_h']}:x={plan['x'][0]}:y={plan['y']},"
             f"scale={W}:{GAME_H}:flags=lanczos,setsar=1[game];"
             f"[cam][game]vstack=inputs=2,format=yuv420p,subtitles=edl.ass[v]")
