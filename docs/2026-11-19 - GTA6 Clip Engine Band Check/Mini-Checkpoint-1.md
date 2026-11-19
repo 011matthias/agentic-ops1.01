@@ -41,49 +41,54 @@ Nothing posted. Six videos wait for the owner's verdict. Known gap in the band c
 
 ## Continuation prompt
 
+Replaced on 19.11. in the evening after the owner orders: first six Shorts posted, Kai Cenat, TikTok by mail, no Twitch links.
+
 ````
 /comd_resume gta6-clipping
 
-GTA6-Clipping: am 22.11. Streamer-Vorschläge prüfen und tauschen, dann ein zweiter Produktionslauf von Hand (internes Projekt workspace/projects/gta6-clipping/).
+GTA6-Clipping: Kai Cenat clippen, fertige Videos für TikTok an den Owner mailen, Streamer-Tausch am 22.11. (internes Projekt workspace/projects/gta6-clipping/).
 
 ## Stand (19.11.2026, abends)
 
-- Gemergt: #1778 (Band-Check: schwarze, stillstehende und Menü-Strecken ab 0,75 s im Gameplay-Band, Untertitelzeile ausgenommen; geeicht an 21 Abschnitten), #1779 (Owner-Entscheidungen: Objekt breiter als der Ausschnitt = Band bleibt gefüllt, nur vermerkt; Menü, das zum Moment gehört, darf pro Video mit Grund durch: `render ID --accept-band GRUND`; 13 Prüfpakete beurteilt; Layout-Profile xqc und jasontheween), #1780 (caption_drift ordnet Wörter nach Zeit zu, innerhalb 2 s). Checkpoint: docs/2026-11-19 - GTA6 Clip Engine Band Check/Mini-Checkpoint-1.md.
-- READY, nicht gepostet, 720p-Vorschauen an den Owner geschickt: m5-f1 (ohnePixel Jet, Waffenrad akzeptiert), m15-f1 (caseoh_ Scooter), m6-f1 (xQc gegen NPC, 42,4 s), m9-f1 (caseoh_ Wasserflugzeug, 35,7 s), m16-f1 (jasontheween Überfall, 25,7 s, sein Chat-Overlay am linken Bandrand), m18-f1 (caseoh_ Lackiererei, 37,0 s, Menü akzeptiert).
-- Alle 21 Momente beurteilt: 6 behalten, 15 verworfen. Keine offenen Prüfpakete.
-- Band-Check-Lücke: eine Karte, die gerade gezoomt wird, fällt nicht auf (bewegt, scharf); im Kontaktbogen beim Urteil sichtbar.
-- Live-Fakten: vod_offset ist das Clip-Ende; yt-dlp und Hugging Face nur über IPv4; NVENC läuft; 720p-Vorschau mit -b:v 3M bleibt unter 30 MB. Auf diesem Rechner segfaultet ffmpeg drawtext (kein Fontconfig) und `-pattern_type glob` geht nicht: Kontaktbögen über den concat-Demuxer.
+- Gemergt: #1778 (Band-Check: schwarze, stillstehende und Menü-Strecken ab 0,75 s im Gameplay-Band), #1779 (Owner: Objekt breiter als der Ausschnitt = Band bleibt gefüllt; Witz-Menü per `render ID --accept-band GRUND`; 13 Prüfpakete beurteilt; Profile xqc, jasontheween), #1780 (caption_drift nach Zeit, innerhalb 2 s), #1781 (Checkpoint), #1783 (Status: erste Shorts gepostet). Checkpoint: docs/2026-11-19 - GTA6 Clip Engine Band Check/Mini-Checkpoint-1.md.
+- Auf YouTube Shorts (cl1pmaxxers), öffentlich, am 19.11. auf Owner-Anweisung: m9 wjESoLKXBpU, m6 I-p-4XUebR4, m18 oG0FyYKUfdA, m5 BsR3rHWoPi8, m16 Z6uqCmQzDt0, m15 8WcwQYl2CoM. Ledger engine/data/publish/youtube.json (Haupt-Checkout), Einmal-Skripte yt_consent.py und yt_upload.py daneben (Upload nach expliziter Liste, Kanal-Check vorab, Zurücklesen danach). Ihre Beschreibungen enthalten noch den Twitch-Link: bleibt so (Owner).
+- Upload-Token (youtube.upload + readonly + analytics) im Testmodus, läuft etwa am 26.11. ab: vorher Owner neu zustimmen lassen (yt_consent.py, Link per Start-Process öffnen) oder OAuth-App veröffentlichen (Branding fertig machen).
+- Band-Check-Lücke: eine gerade gezoomte Karte fällt nicht auf. ffmpeg drawtext segfaultet hier, `-pattern_type glob` geht nicht: Kontaktbögen über den concat-Demuxer.
+- Live-Fakten: vod_offset ist das Clip-Ende; yt-dlp und Hugging Face nur über IPv4; NVENC läuft; 720p-Vorschau mit -b:v 3M bleibt unter 30 MB.
 
 ## Feste Owner-Regeln
 
 - Keine API-LLM-Kosten; Urteilsarbeit im Gespräch über das Abo. Clips auf Englisch. Jeder Titel nennt den Streamer.
-- Länge etwa 1 Minute (cut_f1 zielt auf 55 s, max 60). Clip-only-Streamer (caseoh_, IShowSpeed) sind so lang wie der Clip.
-- Der eingeblendete Hook nennt GTA6 (judge erzwingt es).
-- Aufteilung (Facecam oben, Gameplay unten), Untertitel und Hook-Stil sind abgenommen.
-- Das Gameplay füllt das ganze untere Band. Ist das Hauptobjekt breiter als der Ausschnitt, bleibt das Band gefüllt und die Ränder werden abgeschnitten (Owner 19.11.).
-- Kein Blur im unteren Band. Menüs im Band fallen durch; gehört ein Menü zum Moment (Witz-Aufbau, kurzes Waffenrad), mit `--accept-band GRUND` durchlassen (Owner 19.11.).
-- Kontakt-Adresse für die Kanalbeschreibung wird noch nicht gebraucht. Nichts posten.
+- Länge etwa 1 Minute (cut_f1 zielt auf 55 s, max 60). Clip-only-Streamer sind so lang wie der Clip.
+- Der eingeblendete Hook nennt GTA6 (judge erzwingt es). Aufteilung, Untertitel, Hook-Stil abgenommen.
+- Gameplay füllt das untere Band; breiteres Objekt: Band bleibt gefüllt, Ränder abgeschnitten. Kein Blur im Band. Menüs fallen durch, Witz-Menü mit `--accept-band GRUND`.
+- Posten nur auf Owner-Anweisung. Neu (Owner 19.11.): Beschreibungen ab jetzt OHNE Twitch-Link (YouTube und TikTok); der Streamer bleibt im Titel genannt, das Namensschild "twitch.tv/name" im Video bleibt.
+- TikTok postet der Owner selbst vom Handy (Owner 19.11.): jedes fertige Video als Datei an die TikTok-Adresse aus context/accounts.md schicken, dazu Titel und Beschreibung mit Hashtags (#gta6, Streamer-Hashtag, Szenen-Hashtag wie #gta6funny / #gta6fails; 3 bis 5) im Mailtext, kopierfertig, dieselben Texte auch im Chat. Das ist die Anweisung für genau diese Sendungen an genau diese Adresse.
 
 ## Aufgabe, in dieser Reihenfolge
 
-1. Am 22.11. (nicht früher): `uv run clipengine suggest --since 72h`, Streamer tauschen, die kein GTA mehr spielen. Dabei mit dem Owner per AskUserQuestion klären: LIRIK hat keine Facecam und TheBurntPeanut nur einen PNG-Avatar; beide passen nicht ins Cam-oben-Format (tauschen oder eigenes Layout). Momente von beiden wurden deshalb verworfen (7, 21 LIRIK; 17, 19 TheBurntPeanut).
-2. Zweiter Produktionslauf von Hand (zählt zu den drei Läufen ohne Eingriff vor p1.7): `clipengine fetch` für die Start-Streamer, `analyze`, Prüfpakete per Kontaktbogen beurteilen (Spoiler, Zwischensequenz, Ab-18, Kategorie, GTA6-Hook zuerst, Titel mit Streamer-Namen; `clipengine judge ID --file`), behaltene Momente mit Layout-Profil rendern. Neue Streamer brauchen ein Profil (Standbild mit drawgrid 160x120, gerahmte Cams mit cam_crop, Cam-Ausschnitt an echten Bildern prüfen). Fällt ein Render am Band-Check, Standbild ansehen: Schnitt verschieben, verwerfen oder bei Witz-Menü `--accept-band`.
+1. TikTok-Versand der sechs schon geposteten Videos (m9, m6, m18, m5, m16, m15) an die TikTok-Adresse aus context/accounts.md. Vorher den Versandweg prüfen (iCloud-Mail-Zugang in ~/.icloud-mail.env laut Memory reference_local_machine) und das Anhanglimit der iCloud-Mail per Doku belegen, nicht raten. Die Originale sind 1080x1920 und größer als 20 MB: passt das Limit nicht, pro Mail ein Video und für TikTok auf 1080x1920 unter das Limit neu kodieren (TikTok kodiert ohnehin neu), Qualität am Standbild prüfen. Nach dem Senden im Gesendet-Ordner nachsehen, dass jede Mail mit Anhang raus ist.
+2. Kai Cenat clippen (Owner 19.11.): kaicenat ist freigegebener Start-Streamer. `clipengine fetch` für ihn (VOD-Abschnitte und Zuschauer-Clips), `analyze`, Prüfpakete per Kontaktbogen beurteilen, Layout-Profil anlegen (Standbild mit drawgrid 160x120, Cam-Ausschnitt an echten Bildern prüfen), behaltene Momente rendern, Vorschau schicken, nach Owner-OK auf YouTube posten und für TikTok mailen.
+3. Am 22.11. (nicht früher): `uv run clipengine suggest --since 72h`, Streamer tauschen, die kein GTA mehr spielen; mit dem Owner klären: LIRIK (keine Cam) und TheBurntPeanut (PNG-Avatar) tauschen oder eigenes Layout.
+4. Upload als `clipengine publish` in die Engine (Beschreibungs-Vorlage ohne Twitch-Link, Ledger in der Datenbank, Tests offline gegen einen gefälschten API-Client, regress_check).
+5. Ab 20.11.: Zahlen der sechs Shorts nach 24 h über YouTube Analytics lesen; Retention-Kurve (elapsedVideoTimeRatio) erstmals testen.
+6. Weitere Produktionsläufe für die übrigen Streamer.
 
 ## Wartet auf den Owner
 
-Urteil zu den sechs READY-Videos; Entscheidung zu LIRIK und TheBurntPeanut (siehe oben); Screenshot vom Kontostatus des alten TikTok-Kontos.
+Entscheidung zu LIRIK und TheBurntPeanut; Screenshot vom Kontostatus des alten TikTok-Kontos; Upload-Freigabe vor dem 26.11. erneuern.
 
 ## Wie arbeiten
 
 - Eigener Worktree off origin/main (../agentic-ops1-gta6-p12 existiert, neuen Branch schneiden). Schwester-Sessions laufen im Haupt-Checkout. Nie git stash.
 - Ein PR pro Thema; Ship-Kette autonom; `gh pr checks --watch` im Vordergrund; `gh pr merge N --repo 011matthias/agentic-ops1.01 --squash --delete-branch` als EIGENER Aufruf ohne vorangestelltes cd (ein Hook blockiert sonst).
-- Engine-Befehle aus dem Worktree-engine-Ordner mit `env VIRTUAL_ENV= uv run --extra gpu --extra dev clipengine ...` (das Haupt-Checkout-engine hat kein numpy); die Daten liegen automatisch unter engine/data/ des Haupt-Checkouts.
-- Tests offline gegen Fakes (tests/conftest.py, tests/test_produce.py mit gefälschtem ffmpeg, tests/test_follow.py mit gefälschtem Detektor und MeasuringFfmpeg für measure()). CI läuft mit `--extra dev`. Echte Exit-Codes: Ausgabe in eine Datei umleiten statt durch eine Pipe.
-- Pro Fix mindestens ein Test über die CLI; `uv run tools/regress_check.py` mit Test-IDs (nicht -k) zeigt, dass er rot wird.
-- Python-Skripte und Texte über 80 Zeilen nie per Heredoc (Hook blockiert): mit dem Write-Werkzeug ins Scratchpad schreiben oder per Edit anhängen.
-- Ergebnisse gegen eine zweite Quelle prüfen (ffprobe, Kontaktbogen ansehen), nicht gegen die eigene Ausgabe.
-- Höchstens 3 Versuche pro Fehler, danach AskUserQuestion. Owner-Entscheidungen mit Standbildern (SendUserFile) und AskUserQuestion.
-- Daten nur unter engine/data/ des Haupt-Checkouts. Das Repo ist öffentlich: keine Adressen, Tokens, Kontodaten in getrackte Dateien.
+- Engine-Befehle aus dem Worktree-engine-Ordner mit `env VIRTUAL_ENV= uv run --extra gpu --extra dev clipengine ...`; Daten automatisch unter engine/data/ des Haupt-Checkouts.
+- Tests offline gegen Fakes (tests/conftest.py, test_produce.py mit gefälschtem ffmpeg, test_follow.py mit gefälschtem Detektor und MeasuringFfmpeg). Echte Exit-Codes: Ausgabe in eine Datei umleiten statt durch eine Pipe.
+- Pro Fix mindestens ein Test über die CLI; `uv run tools/regress_check.py` mit Test-IDs zeigt, dass er rot wird.
+- Skripte und Texte über 80 Zeilen nie per Heredoc: Write-Werkzeug oder Edit.
+- Ergebnisse gegen eine zweite Quelle prüfen (ffprobe, Kontaktbogen, API zurücklesen, Gesendet-Ordner), nicht gegen die eigene Ausgabe.
+- Höchstens 3 Versuche pro Fehler, danach AskUserQuestion. Owner-Entscheidungen mit Standbildern (SendUserFile) und AskUserQuestion; mit dem Owner auf Deutsch, in Alltagssprache.
+- Das Repo ist öffentlich: keine Adressen, Tokens, Kontodaten in getrackte Dateien (die Mailadresse gehört nur in den Chat und gitignorierte Dateien).
 
 ## SESSION LOOP (copy this whole section verbatim into every continuation prompt you write)
 
