@@ -42,6 +42,7 @@ LIVE_SETTLE = timedelta(minutes=30)  # a recording VOD is planned up to this far
 MAX_ATTEMPTS = 3
 DOWNLOAD_TIMEOUT_S = 600            # a 120 s section takes about 10 s; 2 h is not progress
 DURATION_SLACK_S = 3.0              # section cuts snap to keyframes (~2 s apart on Twitch)
+SEGMENT_LEAD_S = 10.5               # one Twitch HLS segment (10 s) of lead-in, end exact
 
 
 class FetchError(Exception):
@@ -262,15 +263,22 @@ def download(con: sqlite3.Connection, section_id: int, *, downloader: Downloader
         want = s["win_end_s"] - s["win_start_s"]
         if not (info.has_video and info.has_audio):
             raise FetchError(f"{path.name}: missing {'video' if not info.has_video else 'audio'}")
-        if abs(info.duration - want) > DURATION_SLACK_S:
+        lead = info.duration - want
+        win_start = s["win_start_s"]
+        if s["kind"] == "vod" and DURATION_SLACK_S < lead <= SEGMENT_LEAD_S:
+            # From a live playlist ffmpeg starts at the HLS segment holding the start: the
+            # end is exact, the extra seconds come first (KaiCenat 2026-11-19: a 126.9 s
+            # file for 120 s, its clip 7.7 s later than planned). The window moves back.
+            win_start = s["win_end_s"] - info.duration
+        elif abs(lead) > DURATION_SLACK_S:
             raise FetchError(f"{path.name}: {info.duration:.1f} s, asked for {want:.1f} s")
         with con:
             con.execute(
                 "UPDATE sections SET status = 'fetched', file = ?, file_duration_s = ?, "
-                "width = ?, height = ?, attempts = attempts + 1, last_error = NULL, "
-                "updated_at = ? WHERE id = ?",
+                "width = ?, height = ?, win_start_s = ?, attempts = attempts + 1, "
+                "last_error = NULL, updated_at = ? WHERE id = ?",
                 (path.relative_to(data_dir).as_posix(), info.duration, info.width, info.height,
-                 db.utcnow(), section_id))
+                 win_start, db.utcnow(), section_id))
     except FetchError as exc:
         with con:
             con.execute("UPDATE sections SET status = 'failed', attempts = attempts + 1, "
