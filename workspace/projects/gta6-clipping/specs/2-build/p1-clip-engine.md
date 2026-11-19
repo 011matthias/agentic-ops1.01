@@ -33,8 +33,11 @@ last_changes:
   - "2026-11-19: Start-Streamer abgenickt (Owner): ohnePixel, xQc, Lacy, jasontheween, IShowSpeed, KaiCenat, TheBurntPeanut, LIRIK, caseoh_, stableronaldo, aus `suggest --since 24h` am Launch-Tag. Erster watch über 1 Tag: caseoh_ und IShowSpeed haben keine öffentlichen VODs (1.193 von 1.318 und 2.225 von 2.236 Clips ohne vod_offset), ihre Momente kommen also aus dem Clip selbst."
   - "2026-11-19: p1.2 Twitch gebaut (clipengine fetch): Intervalle aus Zuschauer-Clips, stumme Stellen ausgeschlossen, laufende Aufzeichnungen übersprungen, Abschnitte per yt-dlp, Clip-Download für Streamer ohne VOD. Live gemessen: vod_offset ist das Clip-Ende, nicht der Anfang."
   - "2026-11-19: p1.3 gebaut (analyze, judge): Whisper lokal auf der GPU, F1-Schnitt an Satzgrenzen, Prüfpakete; 21 Momente, 2 behalten, 6 verworfen."
+  - "2026-11-19: p1.4 bis p1.6 gebaut (render): Schnittliste, Facecam-Profil, Render, Checks; erstes Video (ohnePixel, Jet-Absturz) in data/ready/, alle Checks bestanden, nicht gepostet. NVENC geht mit Treiber 560.94 nicht (ffmpeg 8.1 braucht 610+), Render über x264."
 next_steps:
-  - "p1.4 bis p1.6 für ein F1-Video: Schnittliste, Facecam-Profil, Render, Checks"
+  - "Owner-Feedback zum ersten Video einarbeiten"
+  - "Weitere Prüfpakete beurteilen (13 offen), Facecam-Profile für die anderen Streamer"
+  - "p1.7 Betrieb: Zeitplan, claude -p für das Urteil, Aufräumen"
   - "22.11.: suggest --since 72h, Streamer tauschen, die GTA nicht mehr spielen"
   - "p1.2 YouTube-Kurve nach dem ersten Video"
 stage_history:
@@ -389,7 +392,7 @@ Hand; das Posten kommt später.
 - [x] p1.1: Für drei Streamer listet die Engine die neuen VODs und Zuschauer-Clips der letzten sieben Tage, abgeglichen mit der Twitch-Seite. Erfüllt 2026-11-17 (LIRIK, KaiCenat, ibragaming_fc): LIRIKs 7 Aufzeichnungen = die ersten 7 auf twitch.tv/lirik/videos, KaiCenats Top-5-Clips = die Top 5 auf seiner 7-Tage-Clipseite, beide Seiten ohne Anmeldung gelesen.
 - [ ] p1.2: Für einen Twitch-Stream mit Zuschauer-Clips und ein YouTube-Video mit Kurve decken sich die gewählten Intervalle mit den meistgesehenen Stellen (Abgleich von Hand mit Clip-Liste und YouTube-Kurve). Twitch-Hälfte erfüllt 2026-11-19: die meistgesehenen Clips von xQc und jasontheween per Ton in ihren geladenen Abschnitten gefunden, 0,6 und 0,8 s neben der berechneten Stelle. YouTube offen.
 - [ ] p1.3: Claude Code beantwortet ein Prüfpaket vollständig (Spoiler, Kategorie, Hooks, Titel), im Gespräch und per `claude -p` aus der Aufgabenplanung.
-- [ ] p1.5: Das fertige Video hat 1080×1920, Lautheit -14 ±1 LUFS, und die Untertitel weichen in der Stichprobe weniger als 0,2 s vom Ton ab.
+- [x] p1.5: Das fertige Video hat 1080×1920, Lautheit -14 ±1 LUFS, und die Untertitel weichen in der Stichprobe weniger als 0,2 s vom Ton ab. Erfüllt 2026-11-19 mit dem ersten Video (ohnePixel, Jet-Absturz): 1080×1920, 60 fps, 21,7 s, -13,9 LUFS, Untertitel 0,02 s neben dem neu gehörten Ton.
 - [ ] Ende-zu-Ende: Aus einem neuen Stream entsteht ohne Handgriff mindestens ein fertiges Video in der Freigabe-Liste.
 
 ## Was der Owner zum Start liefert
