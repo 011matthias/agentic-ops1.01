@@ -804,5 +804,6 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## gta6-clipping
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-11-19 | GTA6 Start Streamers | client-dev | [Mini-Checkpoint-1](docs/2026-11-19%20-%20GTA6%20Start%20Streamers/Mini-Checkpoint-1.md) |
 | 2026-11-19 | GTA6 Clip Engine P1.1 And Channels | client-dev | [Mini-Checkpoint-1](docs/2026-11-19%20-%20GTA6%20Clip%20Engine%20P1.1%20And%20Channels/Mini-Checkpoint-1.md) |
 | 2026-11-17 | GTA6 Clipping Project Start | misc | [Mini-Checkpoint-1](docs/2026-11-17%20-%20GTA6%20Clipping%20Project%20Start/Mini-Checkpoint-1.md) |
