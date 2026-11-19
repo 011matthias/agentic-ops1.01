@@ -26,6 +26,7 @@ from . import db
 
 MODEL = "large-v3"
 F1_MIN_S, F1_MAX_S = 15.0, 60.0
+F1_TARGET_S = 55.0  # owner 2026-11-19: about one minute
 SENTENCE_END = (".", "?", "!")
 STILLS = 8
 
@@ -119,13 +120,14 @@ def whisper_transcriber(model_name: str = MODEL, device: str = "cuda",
 # --- cutting -------------------------------------------------------------------
 
 def cut_f1(words: list[dict], core: tuple[float, float], length: float, *,
-           min_s: float = F1_MIN_S, max_s: float = F1_MAX_S) -> tuple[float, float]:
+           min_s: float = F1_MIN_S, max_s: float = F1_MAX_S,
+           target_s: float = F1_TARGET_S) -> tuple[float, float]:
     """In and out point for one F1 moment around `core` (file seconds).
 
-    Start: the first word after the last sentence end before the core.
-    End: the first sentence end at or after the core's end. Then the moment is
-    stretched to min_s (whole sentences after it) or cut back to max_s (at a
-    sentence end inside the limit). Without speech the core is used as is.
+    Start: the sentence the core starts in. End: the first sentence end at or
+    after the core's end. Then whole sentences are added, earlier ones first,
+    until the moment reaches target_s, and it is cut back to max_s at a
+    sentence end. Without speech the core is used, padded to min_s.
     """
     lo, hi = max(0.0, core[0]), min(length, core[1])
     if not words:
@@ -143,11 +145,21 @@ def cut_f1(words: list[dict], core: tuple[float, float], length: float, *,
     after = [i for i in ends if words[i]["e"] >= hi - 0.5]
     b = max(hi, words[after[0]]["e"] + 0.3) if after else hi
 
-    if b - a < min_s:  # take whole following sentences until long enough
-        for i in ends:
-            if words[i]["e"] + 0.3 - a >= min_s:
-                b = max(b, words[i]["e"] + 0.3)
-                break
+    # grow toward target_s with whole sentences, the build-up before the moment first
+    # (owner 2026-11-19: the first video at 21.7 s should have been ~1 min)
+    sentences = [(max(0.0, words[s]["s"] - 0.15),
+                  words[next((i for i in ends if i >= s), len(words) - 1)]["e"] + 0.3)
+                 for s in starts]
+    goal = max(min_s, min(target_s, max_s))
+    while b - a < goal:
+        before = [st for st, en in sentences if en <= a + 0.35]
+        after_ = [en for st, en in sentences if st >= b - 0.35 and en <= length]
+        if before and b - before[-1] <= max_s:
+            a = before[-1]
+        elif after_ and after_[0] - a <= max_s:
+            b = after_[0]
+        else:
+            break
     if b - a > max_s:  # cut back to the last sentence end that fits
         fits = [words[i]["e"] + 0.3 for i in ends if a + min_s <= words[i]["e"] + 0.3 <= a + max_s]
         b = fits[-1] if fits else a + max_s
@@ -248,7 +260,8 @@ class AnalyzeResult:
 def analyze(con: sqlite3.Connection, *, data_dir: Path,
             transcriber: Callable[[], Callable[[Path, str], Transcript]],
             stills: Callable[[Path, Path, float, float], list[Path]] = extract_stills,
-            section_ids: list[int] | None = None, redo: bool = False) -> list[AnalyzeResult]:
+            section_ids: list[int] | None = None, redo: bool = False,
+            target_s: float = F1_TARGET_S) -> list[AnalyzeResult]:
     """Transcribe, cut and package every fetched section without a moment.
 
     `transcriber` is a factory, so the Whisper model loads only when a section
@@ -274,7 +287,7 @@ def analyze(con: sqlite3.Connection, *, data_dir: Path,
                                (s["streamer"],)).fetchone()
             t = model(data_dir / s["file"], lang["language"] if lang else "en")
             store_transcript(con, s["id"], t)
-        a, b = cut_f1(t.words, core_of(con, s), float(s["file_duration_s"]))
+        a, b = cut_f1(t.words, core_of(con, s), float(s["file_duration_s"]), target_s=target_s)
         now = db.utcnow()
         with con:
             con.execute(
@@ -331,6 +344,9 @@ def judge(con: sqlite3.Connection, moment_id: int, answer: dict) -> sqlite3.Row:
             raise AnalyzeError(f"category must be one of {', '.join(CATEGORIES)}")
         if not 2 <= len(hooks) <= 3:
             raise AnalyzeError("keep needs 2 to 3 hooks")
+        if "gta" not in hooks[0].lower():  # owner 2026-11-19: the shown hook leads with GTA6
+            raise AnalyzeError("the first hook (the one shown) must name GTA6, "
+                               "e.g. 'ohnePixel playing GTA6 for the first time'")
         name = con.execute("SELECT display_name FROM streamers WHERE login = ?",
                            (m["streamer"],)).fetchone()["display_name"]
         if name.lower() not in title.lower():  # channel promise: every title names the streamer

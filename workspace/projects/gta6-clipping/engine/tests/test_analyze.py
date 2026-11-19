@@ -29,19 +29,23 @@ SPEECH = (words("Okay we go now. Look at that plane.", 0.0)
 
 def test_cut_starts_and_ends_at_sentence_boundaries():
     # core starts inside "Ready to engage?" and ends inside "Oh no no no!"
-    a, b = analyze.cut_f1(SPEECH, (11.2, 14.0), 40.0, min_s=5, max_s=60)
+    a, b = analyze.cut_f1(SPEECH, (11.2, 14.0), 40.0, min_s=5, max_s=60, target_s=5)
     assert a == pytest.approx(10.0 - 0.15) and b == pytest.approx(SPEECH[18]["e"] + 0.3)
 
 
 def test_cut_skips_a_sentence_that_ended_before_the_core():
     # core starts in the pause after "plane." (ends 3.9): begin at "Ready", not at "Look"
-    a, _ = analyze.cut_f1(SPEECH, (6.0, 14.0), 40.0, min_s=5, max_s=60)
+    a, _ = analyze.cut_f1(SPEECH, (6.0, 14.0), 40.0, min_s=5, max_s=60, target_s=5)
     assert a == pytest.approx(6.0)  # min(core start, "Ready" at 10.0 - 0.15)
 
 
-def test_cut_stretches_to_the_minimum_with_whole_sentences():
-    a, b = analyze.cut_f1(SPEECH, (11.2, 14.0), 40.0, min_s=15, max_s=60)
-    assert a == pytest.approx(9.85) and b == pytest.approx(SPEECH[-1]["e"] + 0.3)
+def test_cut_grows_toward_the_target_build_up_first():
+    # 9.85-15.7 around the core; earlier sentences come first ("Look", then "Okay" at 0.0)
+    a, b = analyze.cut_f1(SPEECH, (11.2, 14.0), 40.0, min_s=15, max_s=60, target_s=15)
+    assert (a, b) == (0.0, pytest.approx(SPEECH[18]["e"] + 0.3))
+    # a longer target then takes the sentence after the moment too
+    a, b = analyze.cut_f1(SPEECH, (11.2, 14.0), 40.0, min_s=15, max_s=60, target_s=55)
+    assert (a, b) == (0.0, pytest.approx(SPEECH[-1]["e"] + 0.3))
 
 
 def test_cut_without_speech_keeps_the_core_and_minimum():
@@ -93,7 +97,8 @@ def test_analyze_cuts_around_the_top_clip_and_writes_a_package(seeded, capsys):
     # it starts inside "Ready to engage?" (9.0-10.4), so the cut goes back to "Ready"
     speech = words("Hello there. Ready to engage? Oh no.", 8.0) + words("Wasted again.", 39.5)
     fake = FakeWhisper(speech)
-    assert run(["analyze"], seeded, transcriber=fake.factory, stills=fake_stills) == 0
+    assert run(["analyze", "--length", "20"], seeded, transcriber=fake.factory,
+               stills=fake_stills) == 0
     m = seeded.execute("SELECT * FROM moments").fetchone()
     assert (m["in_s"], m["status"]) == (pytest.approx(8.85), "review")
     assert m["out_s"] == pytest.approx(speech[-1]["e"] + 0.3)
@@ -108,6 +113,16 @@ def test_analyze_cuts_around_the_top_clip_and_writes_a_package(seeded, capsys):
     assert fake.loads == 1
 
 
+def test_analyze_fills_toward_a_minute_with_the_build_up(seeded):
+    # owner 2026-11-19: ~1 min; the sentences before the top clip (10-40 s) come in first
+    speech = (words("Look out. We fly now.", 2.0) + words("Ready to engage? Oh no.", 9.0)
+              + words("Wasted.", 39.5))
+    fake = FakeWhisper(speech)
+    assert run(["analyze"], seeded, transcriber=fake.factory, stills=fake_stills) == 0
+    m = seeded.execute("SELECT in_s, out_s FROM moments").fetchone()
+    assert m["in_s"] == pytest.approx(1.85) and m["out_s"] == pytest.approx(40.2)
+
+
 def judged(con, tmp_path, moment, **answer):
     path = tmp_path / "review.json"
     path.write_text(json.dumps(answer), encoding="utf-8")
@@ -115,7 +130,7 @@ def judged(con, tmp_path, moment, **answer):
 
 
 KEEP = {"verdict": "keep", "spoiler": False, "cutscene": False, "adult": "none",
-        "category": "fail", "hooks": ["a", "b"],
+        "category": "fail", "hooks": ["ohnePixel playing GTA6 for the first time", "b"],
         "title": "ohnePixel tries to fly a jet in GTA 6"}
 
 
@@ -128,9 +143,11 @@ def test_judge_stores_a_keep_and_refuses_unsafe_ones(seeded, tmp_path):
         judged(seeded, tmp_path, 1, **{**KEEP, "title": "Guy flies a jet"})
     with pytest.raises(UsageError, match="2 to 3 hooks"):
         judged(seeded, tmp_path, 1, **{**KEEP, "hooks": ["a"]})
+    with pytest.raises(UsageError, match="must name GTA6"):  # owner 2026-11-19
+        judged(seeded, tmp_path, 1, **{**KEEP, "hooks": ["He flew a jet", "b"]})
     assert judged(seeded, tmp_path, 1, **KEEP) == 0
     row = seeded.execute("SELECT * FROM moments WHERE id = 1").fetchone()
-    assert (row["status"], row["category"], json.loads(row["hooks"])) == ("keep", "fail",
-                                                                         ["a", "b"])
+    assert (row["status"], row["category"], json.loads(row["hooks"])) == (
+        "keep", "fail", ["ohnePixel playing GTA6 for the first time", "b"])
     assert judged(seeded, tmp_path, 1, verdict="reject", adult="reject") == 0
     assert seeded.execute("SELECT status FROM moments WHERE id = 1").fetchone()[0] == "reject"

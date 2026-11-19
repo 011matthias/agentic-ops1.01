@@ -34,8 +34,9 @@ last_changes:
   - "2026-11-19: p1.2 Twitch gebaut (clipengine fetch): Intervalle aus Zuschauer-Clips, stumme Stellen ausgeschlossen, laufende Aufzeichnungen übersprungen, Abschnitte per yt-dlp, Clip-Download für Streamer ohne VOD. Live gemessen: vod_offset ist das Clip-Ende, nicht der Anfang."
   - "2026-11-19: p1.3 gebaut (analyze, judge): Whisper lokal auf der GPU, F1-Schnitt an Satzgrenzen, Prüfpakete; 21 Momente, 2 behalten, 6 verworfen."
   - "2026-11-19: p1.4 bis p1.6 gebaut (render): Schnittliste, Facecam-Profil, Render, Checks; erstes Video (ohnePixel, Jet-Absturz) in data/ready/, alle Checks bestanden, nicht gepostet. NVENC geht mit Treiber 560.94 nicht (ffmpeg 8.1 braucht 610+), Render über x264."
+  - "2026-11-19: Owner-Feedback zum ersten Video: Aufteilung, Untertitel, Hook-Stil gut; Länge etwa 1 Minute (F1-Schnitt füllt jetzt mit ganzen Sätzen auf 55 s auf, die Vorgeschichte zuerst); der eingeblendete Hook nennt GTA6 (z. B. 'ohnePixel playing GTA6 for the first time', judge erzwingt es). Grafiktreiber-Update freigegeben."
 next_steps:
-  - "Owner-Feedback zum ersten Video einarbeiten"
+  - "Gameplay-Band auf Menüs und dunkle Strecken prüfen (die Pause-Karte am Anfang fiel nur beim Ansehen auf)"
   - "Weitere Prüfpakete beurteilen (13 offen), Facecam-Profile für die anderen Streamer"
   - "p1.7 Betrieb: Zeitplan, claude -p für das Urteil, Aufräumen"
   - "22.11.: suggest --since 72h, Streamer tauschen, die GTA nicht mehr spielen"
