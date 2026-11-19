@@ -156,6 +156,30 @@ def test_captions_off_by_more_than_the_match_window_still_fail(kept, monkeypatch
     render.video_encoder.cache_clear()
 
 
+@pytest.mark.parametrize("until_s, cam", [
+    (2000, [10, 350, 372, 220]),   # the moment (1228 s into v1) lies before the move
+    (1000, [10, 432, 372, 220]),   # after it: the profile's own cam
+])
+def test_a_cam_that_moved_mid_stream_is_cut_where_it_sat_then(kept, monkeypatch, until_s, cam):
+    # KaiCenat 2026-11-19: one 30 h stream, cam at y 350 until ~1:26 h, then at y 432 with
+    # the chat right under it; one fixed rect would show chat instead of his face
+    layouts = {"ohnepixel": {"facecam": [0, 432, 392, 220], "cam_crop": [10, 432, 372, 220],
+                             "gameplay": [560, 0, 1360, 1080],
+                             "earlier": [{"video": "v1", "until_s": until_s,
+                                          "facecam": [0, 350, 392, 220],
+                                          "cam_crop": [10, 350, 372, 220]}]}}
+    monkeypatch.setattr("clipengine.produce.load_layouts", lambda path: layouts)
+    fake = FakeFfmpeg()
+    monkeypatch.setattr(render.subprocess, "run", fake)
+    render.video_encoder.cache_clear()
+    assert run(["render", "1", "--no-caption-check"], kept, measurer=lambda v: GOOD,
+               **STILL) == 0
+    graph = fake.encodes[0][fake.encodes[0].index("-filter_complex") + 1]
+    w, h, x, y = render.fit_crop(cam, render.W / render.CAM_H)
+    assert f"[a]crop={w}:{h}:{x}:{y}," in graph
+    render.video_encoder.cache_clear()
+
+
 def test_only_kept_moments_with_a_layout_render(kept):
     with kept:
         kept.execute("UPDATE moments SET status = 'reject' WHERE id = 1")

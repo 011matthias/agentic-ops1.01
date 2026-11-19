@@ -34,6 +34,16 @@ def load_layouts(path: Path) -> dict:
     return (yaml.safe_load(path.read_text(encoding="utf-8")) or {}) if path.exists() else {}
 
 
+def layout_at(layout: dict, video_id: str | None, vod_start_s: float | None) -> dict:
+    """The profile at this point of the stream: an `earlier` entry for the same VOD wins
+    while the moment starts before its `until_s` (KaiCenat's cam moved down ~1:26 h in)."""
+    for e in layout.get("earlier") or []:
+        if video_id and vod_start_s is not None and str(e["video"]) == str(video_id) \
+                and vod_start_s < e["until_s"]:
+            return {**layout, **{k: e[k] for k in ("facecam", "cam_crop", "gameplay") if k in e}}
+    return layout
+
+
 def compose(con: sqlite3.Connection, moment_id: int, *, layouts: dict,
             style: str | None = None) -> dict:
     m = con.execute(
@@ -54,12 +64,14 @@ def compose(con: sqlite3.Connection, moment_id: int, *, layouts: dict,
              for w in (json.loads(t["words"]) if t else []) if a <= w["s"] < b]
     hooks = json.loads(m["hooks"] or "[]")
     sets = sorted(render_mod.STYLE_SETS)
+    vod_start = (m["win_start_s"] + a) if m["kind"] == "vod" else None
+    layout = layout_at(layout, m["video_id"], vod_start)
     return {
         "id": f"m{moment_id}-f1", "format": "F1", "moment": moment_id,
         "streamer": m["streamer"], "display_name": m["display_name"],
         "source": {"file": m["file"], "kind": m["kind"], "video_id": m["video_id"],
                    "top_clip_id": m["top_clip_id"],
-                   "vod_start_s": (m["win_start_s"] + a) if m["kind"] == "vod" else None},
+                   "vod_start_s": vod_start},
         "in_s": a, "out_s": b, "words": words,
         "layout": {"facecam": layout["facecam"], "gameplay": layout.get("gameplay"),
                    "cam_crop": layout.get("cam_crop")},

@@ -8,6 +8,8 @@
 #
 # Kalibrieren: Standbild mit Raster ziehen (ffmpeg drawgrid, 160x120 px),
 # ansehen, Rechtecke eintragen. Ändert ein Streamer sein Overlay, neu kalibrieren.
+# Rückt die Cam mitten im Stream, gilt bis `until_s` (Sekunden im VOD) ein Eintrag
+# unter `earlier` für diesen VOD (produce.layout_at).
 
 ohnepixel:
   facecam: [230, 700, 440, 380]    # freigestellt unten links, ohne Rahmen
@@ -25,6 +27,17 @@ xqc:
   cam_crop: [0, 548, 368, 218]     # innerhalb des Rechtecks, Kopf ganz drin, 1080:640
   gameplay: [0, 0, 1920, 1080]
   calibrated: "2026-11-19, VOD 2932113307 bei 5:56:17"
+
+kaicenat:
+  facecam: [0, 432, 392, 220]      # Rechteck links in der Mitte, Chat direkt darunter
+  cam_crop: [10, 432, 372, 220]    # 1080:640 innerhalb, sonst wächst die Cam in den Chat
+  gameplay: [0, 0, 1920, 1080]
+  calibrated: "2026-11-19, VOD 2932305259 bei 2:52:40 und 8:35:45"
+  earlier:                         # derselbe Stream, bevor die Cam nach unten rückte
+    - video: "2932305259"
+      until_s: 5175                # zwischen 5100 s (oben) und 5250 s (unten) gemessen
+      facecam: [0, 350, 392, 220]
+      cam_crop: [10, 350, 372, 220]
 
 jasontheween:
   facecam: [1605, 0, 315, 285]     # Rechteck oben rechts, Chat oben links bleibt im Spiel
