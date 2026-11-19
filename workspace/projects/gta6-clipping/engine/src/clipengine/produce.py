@@ -87,16 +87,13 @@ BAR_STRIPS = {"top": (slice(0, 48), slice(None)), "bottom": (slice(-48, None), s
               "left": (slice(None), slice(0, 40)), "right": (slice(None), slice(-40, None))}
 
 
-def band_bars(video: Path, *, fps: float = 1.0) -> list[str]:
-    """Edges of the gameplay band that look like a bar in nearly every frame.
+BAND_FPS = 4.0
 
-    A bar (letterbox black, or the blurred fill of the old fit layout) has almost no
-    fine detail in every frame; real gameplay at an edge (sky, clouds, a wall) has
-    some in most frames. Measured on the band alone (the facecam band above is
-    bright and sharp and would hide it, as it hid the pause map on 2026-11-19):
-    sharpness = mean |Laplacian| of a strip / of the band's middle, per frame at 1 fps,
-    90th percentile over the video, below BAR_RATIO = bar.
-    """
+
+def band_frames(video: Path, *, fps: float = BAND_FPS):
+    """The gameplay band alone, gray, quarter size, `fps` frames a second (numpy array
+    n x 320 x 270). Measured without the facecam band above: it is bright and sharp and
+    hid the pause map and the dark bush from whole-frame checks on 2026-11-19."""
     import numpy as np
 
     w, h = render_mod.W // 4, render_mod.GAME_H // 4
@@ -106,11 +103,30 @@ def band_bars(video: Path, *, fps: float = 1.0) -> list[str]:
          f"scale={w}:{h},format=gray", "-f", "rawvideo", "-"],
         capture_output=True, timeout=900).stdout
     n = len(raw) // (w * h)
-    if not n:
+    return np.frombuffer(raw[:n * w * h], np.uint8).reshape(n, h, w).astype(np.float32)
+
+
+def _laplacian(frames):
+    import numpy as np
+
+    return np.abs(4 * frames[:, 1:-1, 1:-1] - frames[:, :-2, 1:-1] - frames[:, 2:, 1:-1]
+                  - frames[:, 1:-1, :-2] - frames[:, 1:-1, 2:])
+
+
+def band_bars(frames) -> list[str]:
+    """Edges of the gameplay band that look like a bar in nearly every frame.
+
+    A bar (letterbox black, or the blurred fill of the old fit layout) has almost no
+    fine detail in every frame; real gameplay at an edge (sky, clouds, a wall) has
+    some in most frames. sharpness = mean |Laplacian| of a strip / of the band's
+    middle, per frame, 90th percentile over the video, below BAR_RATIO = bar.
+    """
+    import numpy as np
+
+    if not len(frames):
         return []
-    frames = np.frombuffer(raw[:n * w * h], np.uint8).reshape(n, h, w).astype(np.float32)
-    lap = np.abs(4 * frames[:, 1:-1, 1:-1] - frames[:, :-2, 1:-1] - frames[:, 2:, 1:-1]
-                 - frames[:, 1:-1, :-2] - frames[:, 1:-1, 2:])
+    h, w = frames.shape[1:]
+    lap = _laplacian(frames)
     mid = lap[:, h // 4:3 * h // 4, w // 4:3 * w // 4].mean(axis=(1, 2)) + 1e-3
     bars = []
     for name, (rows, cols) in BAR_STRIPS.items():
@@ -120,9 +136,68 @@ def band_bars(video: Path, *, fps: float = 1.0) -> list[str]:
     return bars
 
 
+# Stretches where the band shows no playable picture. Per sample at 4 fps, gray 0-255,
+# quarter size. Calibrated 2026-11-19 on 21 fetched sections and clips (7,260 samples):
+# fades and black screens, PS5 / title / load screens, pause and save menus, two maps and
+# a shop menu, the m5 weapon wheel; against night and dusk driving, dim red interiors and
+# the clean parts of m5-f1 and m15-f1.
+DARK_P95 = 10.0       # 95 % of the pixels darker than this = black. Fades measure 0; the
+                      # darkest night-driving sample 14.6 (mean brightness could not
+                      # separate them: night 8-29, a dim red club 11-18, the bush 5-12)
+FROZEN_DIFF = 0.25    # mean change from the sample before below this = the game stands
+                      # still: paused map, pause / save / load menu, title or shop screen.
+                      # Paused screens 0-0.1; night driving 0.30 at its stillest
+MENU_LUMA, MENU_SHARP, MENU_DIFF = 60.0, 6.0, 4.0
+                      # bright, blurred and slow = a menu over the blurred game (weapon
+                      # wheel: brightness 99, sharpness 5.2, change 2.6; driving in daylight
+                      # never under sharpness 7.4). Dark scenes stay out by brightness
+MIN_SAMPLES = 3       # 3 samples in a row (0.75 s): a stretch under 0.5 s never holds 3
+CAPTION_ROWS = slice((300 - 100) // 4, (300 + 100) // 4)  # captions sit at band y 300;
+                      # their word-by-word highlight would make a paused map look moving
+
+
+def band_stretches(frames, *, fps: float = BAND_FPS) -> list[dict]:
+    """Stretches of at least MIN_SAMPLES where the band shows no playable picture:
+    "dark" (fade to black, black screen), "frozen" (the game paused: map, menu, title or
+    load screen), "menu" (a menu over the blurred game: weapon wheel, pause menu).
+
+    A short flash passes: m15's camera crossed a bush for 0.45 s (measured at 30 fps).
+    Not caught: a map the streamer is zooming or scrolling (moving, sharp, mid-bright,
+    like ohnePixel's at the start of section 17573); the contact sheet shows it in judge.
+    """
+    import numpy as np
+
+    n = len(frames)
+    if not n:
+        return []
+    keep = np.ones(frames.shape[1], bool)
+    keep[CAPTION_ROWS] = False
+    picture = frames[:, keep]
+    luma = picture.mean(axis=(1, 2))
+    p95 = np.percentile(picture.reshape(n, -1), 95, axis=1)
+    sharp = _laplacian(frames)[:, keep[1:-1]].mean(axis=(1, 2))
+    diff = np.r_[np.inf, np.abs(np.diff(picture, axis=0)).mean(axis=(1, 2))]
+    kinds = ["dark" if p95[i] < DARK_P95
+             else "frozen" if diff[i] < FROZEN_DIFF
+             else "menu" if (luma[i] > MENU_LUMA and sharp[i] < MENU_SHARP
+                             and diff[i] < MENU_DIFF)
+             else None for i in range(n)]
+    found, i = [], 0
+    while i < n:
+        j = i
+        while j < n and kinds[j]:
+            j += 1
+        if j - i >= MIN_SAMPLES:
+            run = kinds[i:j]
+            found.append({"kind": max(set(run), key=run.count), "t": round(i / fps, 2),
+                          "s": round((j - i) / fps, 2)})
+        i = max(j, i + 1)
+    return found
+
+
 def measure(video: Path) -> dict:
     """One ffmpeg pass: loudness, silence, black and frozen stretches; plus ffprobe;
-    plus a look at the gameplay band's edges for bars."""
+    plus one look at the gameplay band: bars at its edges, dark or menu stretches."""
     probe = json.loads(subprocess.run(
         ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
          "stream=width,height,avg_frame_rate:format=duration", "-of", "json", str(video)],
@@ -135,6 +210,7 @@ def measure(video: Path) -> dict:
     lufs = re.findall(r"I:\s+(-?[\d.]+) LUFS", err)
     stream = probe["streams"][0]
     num, den = (stream.get("avg_frame_rate") or "0/1").split("/")
+    band = band_frames(video)
     return {
         "width": stream["width"], "height": stream["height"],
         "fps": round(float(num) / float(den or 1), 2),
@@ -143,7 +219,8 @@ def measure(video: Path) -> dict:
         "silences": len(re.findall(r"silence_start", err)),
         "black": len(re.findall(r"black_start", err)),
         "frozen": len(re.findall(r"freeze_start", err)),
-        "band_bars": band_bars(video),
+        "band_bars": band_bars(band),
+        "band_stretches": band_stretches(band),
     }
 
 
@@ -187,6 +264,11 @@ def check(edl: dict, video: Path, *, measured: dict,
     if measured["band_bars"]:
         f.append(f"bars in the gameplay band ({', '.join(measured['band_bars'])}), "
                  f"want it filled")
+    for s in measured.get("band_stretches") or []:
+        what = {"dark": "black", "frozen": "game paused (map, menu or loading screen)",
+                "menu": "menu over the game"}[s["kind"]]
+        f.append(f"{what} in the gameplay band at t={s['t']} s for {s['s']} s: "
+                 f"move the cut or drop the moment")
     plan = edl.get("follow")
     if plan:
         step = 1 / plan["sample_fps"]

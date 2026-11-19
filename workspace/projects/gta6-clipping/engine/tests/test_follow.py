@@ -194,4 +194,94 @@ def test_band_bars_finds_flat_strips_only(monkeypatch, bars, want):
     raw = band_frames(np, bars=bars)
     monkeypatch.setattr(produce.subprocess, "run",
                         lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, raw, b""))
-    assert produce.band_bars("video.mp4") == want
+    assert produce.band_bars(produce.band_frames("video.mp4")) == want
+
+
+# --- black, paused and menu stretches inside the band (stage 6) -------------------------
+
+def stretch_frames(np, middle: str, *, n_mid: int = 4):
+    """4 samples of moving gameplay, n_mid samples of `middle`, 4 more of gameplay, at the
+    band's quarter size. A paused frame repeats the last gameplay sample exactly."""
+    rng = np.random.default_rng(2)
+    h, w = render.GAME_H // 4, render.W // 4
+    play = [rng.integers(40, 200, size=(h, w)) for _ in range(8)]
+    mid = {
+        "black": lambda i: np.zeros((h, w)),
+        "paused": lambda i: play[3],
+        "menu": lambda i: np.full((h, w), 100 + 2 * i),       # bright, smooth, slow
+        "night": lambda i: rng.integers(0, 40, size=(h, w)),  # dark, but a picture
+    }[middle]
+    frames = play[:4] + [mid(i) for i in range(n_mid)] + play[4:]
+    return np.array(frames, dtype=np.float32)
+
+
+@pytest.mark.parametrize("middle, want", [
+    ("black", [{"kind": "dark", "t": 1.0, "s": 1.0}]),
+    ("paused", [{"kind": "frozen", "t": 1.0, "s": 1.0}]),
+    ("menu", [{"kind": "menu", "t": 1.25, "s": 0.75}]),  # its first sample still changed a lot
+    ("night", []),
+])
+def test_band_stretches_find_black_paused_and_menu_but_not_night(middle, want):
+    np = pytest.importorskip("numpy")
+    assert produce.band_stretches(stretch_frames(np, middle)) == want
+
+
+def test_a_flash_under_half_a_second_passes():
+    # m15-f1 at 8.4 s: the camera crossed a bush, 0.45 s of black; 2 samples at 4 fps
+    np = pytest.importorskip("numpy")
+    assert produce.band_stretches(stretch_frames(np, "black", n_mid=2)) == []
+
+
+def test_changing_captions_do_not_hide_a_paused_map():
+    np = pytest.importorskip("numpy")
+    frames = stretch_frames(np, "paused")
+    for i in range(4, 8):  # the word highlight moves over the paused picture
+        frames[i, produce.CAPTION_ROWS] = 30 * i
+    assert produce.band_stretches(frames) == [{"kind": "frozen", "t": 1.0, "s": 1.0}]
+
+
+class MeasuringFfmpeg(FakeFfmpeg):
+    """FakeFfmpeg for the render, plus the three reads of measure(): ffprobe, the
+    loudness / blackdetect pass over the whole frame, and the band's raw frames."""
+
+    def __init__(self, band: bytes):
+        super().__init__()
+        self.band = band
+
+    def __call__(self, cmd, **kw):
+        if cmd[0] == "ffprobe":
+            return subprocess.CompletedProcess(cmd, 0, json.dumps({
+                "streams": [{"width": 1080, "height": 1920, "avg_frame_rate": "60/1"}],
+                "format": {"duration": "22.0"}}), "")
+        if "rawvideo" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, self.band, b"")
+        if any("ebur128" in str(c) for c in cmd):  # whole-frame checks: the bright
+            # facecam band hides the black gameplay band from blackdetect
+            return subprocess.CompletedProcess(cmd, 0, "", "I: -14.0 LUFS\n")
+        return super().__call__(cmd, **kw)
+
+
+def test_a_black_stretch_in_the_band_keeps_the_render_out_of_ready(kept, monkeypatch, capsys):
+    np = pytest.importorskip("numpy")
+    band = stretch_frames(np, "black").astype(np.uint8).tobytes()
+    monkeypatch.setattr(render.subprocess, "run", MeasuringFfmpeg(band))
+    render.video_encoder.cache_clear()
+    assert run(["render", "1", "--no-caption-check"], kept,
+               planner=lambda edl, src: follow.static(edl["layout"])) == 1
+    assert "black in the gameplay band at t=1.0 s for 1.0 s" in capsys.readouterr().out
+    assert not (config.data_dir() / "ready" / "m1-f1").exists()
+    check = json.loads((config.data_dir() / "renders" / "m1-f1" / "check.json")
+                       .read_text(encoding="utf-8"))
+    assert check["measured"]["band_stretches"] == [{"kind": "dark", "t": 1.0, "s": 1.0}]
+    render.video_encoder.cache_clear()
+
+
+def test_a_menu_stretch_in_the_band_fails_through_the_cli(kept, monkeypatch, capsys):
+    monkeypatch.setattr(render.subprocess, "run", FakeFfmpeg())
+    render.video_encoder.cache_clear()
+    menu = [{"kind": "menu", "t": 34.5, "s": 0.75}]  # m5-f1's weapon wheel, measured
+    assert run(["render", "1", "--no-caption-check"], kept,
+               measurer=lambda v: {**GOOD, "band_stretches": menu},
+               planner=lambda edl, src: follow.static(edl["layout"])) == 1
+    assert "menu over the game in the gameplay band at t=34.5 s" in capsys.readouterr().out
+    render.video_encoder.cache_clear()

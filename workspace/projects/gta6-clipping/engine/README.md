@@ -37,7 +37,10 @@ uv run --extra dev pytest -q              tests (offline, against a fake Twitch/
 - **Checks:** 1080x1920, F1 length and cut-list length, -14 +-1 LUFS, no silence over 2 s,
   no black or frozen stretch, captions within 0.2 s of the render heard again by Whisper,
   no bars in the gameplay band, the main object inside the window in every sample (an
-  object wider than the window fails: the owner decides fill vs whole object).
+  object wider than the window fails: the owner decides fill vs whole object), and no
+  stretch of 0.75 s or more in the band (caption line left out) that is black, paused
+  (map, menu, title or load screen) or a menu over the blurred game (weapon wheel).
+  Thresholds and their calibration are in `produce.py` above `band_stretches`.
   Failures stay in `data/renders/{id}/` with `check.json`.
 
 - **Analyze (p1.3):** faster-whisper large-v3 (int8_float16, CUDA) transcribes each fetched
