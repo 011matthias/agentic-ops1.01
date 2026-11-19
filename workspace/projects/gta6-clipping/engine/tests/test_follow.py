@@ -157,7 +157,7 @@ def test_bars_in_the_band_fail_the_check(kept, monkeypatch, capsys):
     render.video_encoder.cache_clear()
 
 
-def test_a_framed_cam_is_cut_inside_its_frame_and_blurred_whole(kept, monkeypatch):
+def test_a_framed_cam_is_cut_inside_its_frame(kept, monkeypatch):
     # caseoh_ 2026-11-19: a 4:3 cam frame; growing it to 1080:640 took in gameplay beside it
     monkeypatch.setattr("clipengine.produce.load_layouts", lambda path: {"ohnepixel": {
         "facecam": [0, 134, 402, 302], "cam_crop": [0, 182, 402, 238],
@@ -170,7 +170,7 @@ def test_a_framed_cam_is_cut_inside_its_frame_and_blurred_whole(kept, monkeypatc
     (cmd,) = fake.encodes
     graph = cmd[cmd.index("-filter_complex") + 1]
     assert "[a]crop=402:238:0:182,scale=1080:640" in graph       # top band: inside the frame
-    assert "[c]crop=442:382:0:94,boxblur" in graph                # whole frame +40 px blurred
+    assert "blur" not in graph   # owner 2026-11-19: "unten den blur weg"
     render.video_encoder.cache_clear()
 
 

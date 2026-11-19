@@ -247,7 +247,7 @@ def plan_path(boxes: list[list[int] | None], *, crop_w: int = CROP_W, left: int 
 def cam_region(facecam: list[int], pad_x: int = 120, pad_y: int = 40) -> list[int]:
     """The streamer's own cam inside the gameplay, padded: a keyed cam spills (ohnePixel's
     arm reached 120 px left of the calibrated rect, 2026-11-19, and the detector took it
-    for a person). Blanked this wide for the detector; the render blurs a 40 px pad."""
+    for a person). Blanked this wide for the detector only; the render blurs nothing."""
     x, y, w, h = facecam
     x0, y0 = max(0, x - pad_x), max(0, y - pad_y)
     x1, y1 = min(SRC_W, x + w + pad_x), min(SRC_H, y + h + pad_y)

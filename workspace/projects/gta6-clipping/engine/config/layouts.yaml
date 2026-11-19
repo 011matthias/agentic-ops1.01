@@ -15,7 +15,7 @@ ohnepixel:
   calibrated: "2026-11-19, VOD 2932275268 bei 4:53:53"
 
 caseoh_:
-  facecam: [0, 134, 402, 302]      # gerahmte 4:3-Cam oben links (im Spielbild weichgezeichnet)
+  facecam: [0, 134, 402, 302]      # gerahmte 4:3-Cam oben links
   cam_crop: [0, 182, 402, 238]     # Ausschnitt fürs obere Band, innerhalb des Rahmens, 1080:640
   gameplay: [0, 0, 1920, 1080]
   calibrated: "2026-11-19, Clip BeautifulModernTermiteYouWHY bei 0:09 (kein VOD)"

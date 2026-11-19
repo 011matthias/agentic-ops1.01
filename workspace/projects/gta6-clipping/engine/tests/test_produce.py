@@ -100,7 +100,7 @@ def test_render_through_the_cli_lands_in_ready(kept, monkeypatch, capsys):
     # the 1360x1080 gameplay rect, without a sendcmd script
     assert "crop@follow=w=912:h=1080:x=784:y=0,scale=1080:1280" in graph
     assert "sendcmd" not in graph
-    assert "boxblur" in graph  # over the duplicate facecam
+    assert "blur" not in graph  # owner 2026-11-19: no blur in the band, not even on the cam
     assert "READY" in capsys.readouterr().out
     render.video_encoder.cache_clear()
 

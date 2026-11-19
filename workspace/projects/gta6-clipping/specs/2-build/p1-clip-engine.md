@@ -36,6 +36,7 @@ last_changes:
   - "2026-11-19: p1.4 bis p1.6 gebaut (render): Schnittliste, Facecam-Profil, Render, Checks; erstes Video (ohnePixel, Jet-Absturz) in data/ready/, alle Checks bestanden, nicht gepostet. NVENC geht mit Treiber 560.94 nicht (ffmpeg 8.1 braucht 610+), Render über x264."
   - "2026-11-19: Owner-Feedback zum ersten Video: Aufteilung, Untertitel, Hook-Stil gut; Länge etwa 1 Minute (F1-Schnitt füllt jetzt mit ganzen Sätzen auf 55 s auf, die Vorgeschichte zuerst); der eingeblendete Hook nennt GTA6 (z. B. 'ohnePixel playing GTA6 for the first time', judge erzwingt es). Grafiktreiber-Update freigegeben."
   - "2026-11-19: Owner-Regel (wörtlich): 'das Video unten, also die Handlung, soll den ganzen Bereich, der dafür auf dem Bildschirm bereitgestellt wird, einnehmen', und das Hauptobjekt bleibt vollständig sichtbar. Umgesetzt: ein 912x1080-Ausschnitt (Seitenverhältnis des Bands) füllt das untere Band 1080x1280 und folgt dem Hauptobjekt (YOLOX-m lokal auf der CPU, 4 Bilder/s, Box an der Bildmitte gespiegelt, geglätteter Pfad, per sendcmd). Neue Checks: Objektbox in jedem abgetasteten Bild ganz im Ausschnitt, keine Balken im Band. Ist das Objekt breiter als der Ausschnitt, fällt der Check durch und der Owner entscheidet. m5-f1 neu gerendert, Flugzeug in jedem Bild ganz sichtbar."
+  - "2026-11-19: Owner nach der m5-Vorschau: 'unten den blur weg'. Im Gameplay-Band wird nichts mehr weichgezeichnet, auch nicht die doppelte Facecam (ersetzt die frühere Regel). caseoh_ hat ein Layout-Profil (gerahmte 4:3-Cam, cam_crop schneidet innerhalb des Rahmens); Moment 15 mit GTA6-Hook neu beurteilt und gerendert."
 next_steps:
   - "Gameplay-Band auf Menüs und dunkle Strecken prüfen (die Pause-Karte am Anfang fiel nur beim Ansehen auf)"
   - "Weitere Prüfpakete beurteilen (13 offen), Facecam-Profile für die anderen Streamer"
@@ -307,8 +308,9 @@ ohne neu zu analysieren.
   Läuft die Bildmitte durch die Box, wird die Box an ihr gespiegelt: Die
   Verfolgerkamera hält das Fahrzeug mittig, und die Box verfehlt oft einen
   Flügel. Der Pfad wird geglättet, an den Bildrand geklemmt und per `sendcmd`
-  Bild für Bild an den Ausschnitt gegeben. Die doppelte Facecam im Spielbild
-  bleibt weichgezeichnet. Ist das Objekt breiter als der Ausschnitt, entscheidet
+  Bild für Bild an den Ausschnitt gegeben. Im unteren Band wird nichts
+  weichgezeichnet, auch nicht die doppelte Facecam im Spielbild (Owner
+  2026-11-19: "unten den blur weg"). Ist das Objekt breiter als der Ausschnitt, entscheidet
   der Owner zwischen füllend und ganz sichtbar; bis dahin fällt der Check durch.
 - **Untertitel** aus den Whisper-Wortzeiten, im ASS-Format über ffmpeg/libass
   eingebrannt. Zwei bis vier Wörter pro Zeile, das gesprochene Wort ist
