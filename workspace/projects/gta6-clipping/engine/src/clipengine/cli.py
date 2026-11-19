@@ -250,7 +250,8 @@ def cmd_render(args, con, *, renderer=None, measurer=None, listener=None, planne
             con, args.moment, data_dir=config.data_dir(),
             layouts=produce.load_layouts(config.ENGINE_DIR / "config" / "layouts.yaml"),
             style=args.style, renderer=renderer or produce.render_mod.render,
-            measurer=measurer or produce.measure, listener=listener, planner=planner)
+            measurer=measurer or produce.measure, listener=listener, planner=planner,
+            accept_band=args.accept_band)
     except (produce.ProduceError, produce.render_mod.RenderError,
             produce.follow.FollowError) as exc:
         raise UsageError(str(exc)) from exc
@@ -263,6 +264,12 @@ def cmd_render(args, con, *, renderer=None, measurer=None, listener=None, planne
     seen = sum(1 for b in plan["boxes"] if b)
     print(f"  gameplay window {plan['crop_w']}x{plan['crop_h']} follows the main object: "
           f"seen in {seen}/{len(plan['boxes'])} samples, x {min(plan['x'])}-{max(plan['x'])}")
+    if m.get("object_wider_s"):
+        print(f"  note: main object wider than the window at {len(m['object_wider_s'])} "
+              f"samples, band kept filled (owner 2026-11-19)")
+    if m.get("band_accepted"):
+        print(f"  note: {len(m['band_stretches'])} band stretch(es) accepted: "
+              f"{m['band_accepted']}")
     print(f"  {'READY' if result.passed else 'FAILED'}: {video}")
     for failure in result.failures:
         print(f"  ! {failure}")
@@ -347,6 +354,9 @@ def build_parser() -> argparse.ArgumentParser:
     rn.add_argument("--style", choices=["a", "b", "c"], help="style set (default: rotates)")
     rn.add_argument("--no-caption-check", action="store_true",
                     help="skip hearing the render again with Whisper")
+    rn.add_argument("--accept-band", metavar="REASON",
+                    help="let this video's black / paused / menu stretches in the band "
+                         "through, with the reason (a menu that is part of the joke)")
     return p
 
 

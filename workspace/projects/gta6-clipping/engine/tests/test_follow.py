@@ -128,21 +128,31 @@ def test_the_band_is_filled_no_blurred_fill_behind_it(kept, monkeypatch):
     render.video_encoder.cache_clear()
 
 
-@pytest.mark.parametrize("plan, reason", [
-    ({"x": [1008] * 4, "boxes": [JET] * 4, "too_wide": [False] * 4},
-     "main object not completely in the window at 4 samples"),
-    ({"x": [400] * 4, "boxes": [[300, 500, 1400, 700]] * 4, "too_wide": [True] * 4},
-     "main object wider than the window at 4 samples"),
-])
-def test_a_window_that_loses_the_main_object_fails_the_check(kept, monkeypatch, capsys,
-                                                             plan, reason):
+def test_a_window_that_loses_the_main_object_fails_the_check(kept, monkeypatch, capsys):
     monkeypatch.setattr(render.subprocess, "run", FakeFfmpeg())
     render.video_encoder.cache_clear()
-    full = {"crop_w": 912, "crop_h": 1080, "y": 0, "sample_fps": 4, **plan}
+    full = {"crop_w": 912, "crop_h": 1080, "y": 0, "sample_fps": 4,
+            "x": [1008] * 4, "boxes": [JET] * 4, "too_wide": [False] * 4}
     assert run(["render", "1", "--no-caption-check"], kept, measurer=lambda v: GOOD,
                planner=lambda edl, src: full) == 1
     assert not (config.data_dir() / "ready" / "m1-f1").exists()
-    assert reason in capsys.readouterr().out
+    assert "main object not completely in the window at 4 samples" in capsys.readouterr().out
+    render.video_encoder.cache_clear()
+
+
+def test_an_object_wider_than_the_window_keeps_the_band_filled_and_passes(kept, monkeypatch,
+                                                                         capsys):
+    # owner 2026-11-19 (seaplane stills): keep the band filled, cut the object's edges
+    monkeypatch.setattr(render.subprocess, "run", FakeFfmpeg())
+    render.video_encoder.cache_clear()
+    full = {"crop_w": 912, "crop_h": 1080, "y": 0, "sample_fps": 4, "x": [400] * 4,
+            "boxes": [[300, 500, 1400, 700]] * 4, "too_wide": [True] * 4}
+    assert run(["render", "1", "--no-caption-check"], kept, measurer=lambda v: GOOD,
+               planner=lambda edl, src: full) == 0
+    assert "wider than the window at 4 samples, band kept filled" in capsys.readouterr().out
+    check = json.loads((config.data_dir() / "ready" / "m1-f1" / "check.json")
+                       .read_text(encoding="utf-8"))
+    assert check["measured"]["object_wider_s"] == [0.0, 0.25, 0.5, 0.75]
     render.video_encoder.cache_clear()
 
 
@@ -284,4 +294,20 @@ def test_a_menu_stretch_in_the_band_fails_through_the_cli(kept, monkeypatch, cap
                measurer=lambda v: {**GOOD, "band_stretches": menu},
                planner=lambda edl, src: follow.static(edl["layout"])) == 1
     assert "menu over the game in the gameplay band at t=34.5 s" in capsys.readouterr().out
+    render.video_encoder.cache_clear()
+
+
+def test_an_accepted_menu_passes_with_its_reason_on_record(kept, monkeypatch, capsys):
+    # owner 2026-11-19: a menu that is part of the joke may pass, per video, with a reason
+    monkeypatch.setattr(render.subprocess, "run", FakeFfmpeg())
+    render.video_encoder.cache_clear()
+    menu = [{"kind": "frozen", "t": 21.0, "s": 3.0}]
+    assert run(["render", "1", "--no-caption-check", "--accept-band", "respray shop is the setup"],
+               kept, measurer=lambda v: {**GOOD, "band_stretches": menu},
+               planner=lambda edl, src: follow.static(edl["layout"])) == 0
+    assert "1 band stretch(es) accepted: respray shop is the setup" in capsys.readouterr().out
+    check = json.loads((config.data_dir() / "ready" / "m1-f1" / "check.json")
+                       .read_text(encoding="utf-8"))
+    assert check["measured"]["band_accepted"] == "respray shop is the setup"
+    assert check["measured"]["band_stretches"] == menu
     render.video_encoder.cache_clear()

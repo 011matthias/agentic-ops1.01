@@ -19,3 +19,15 @@ caseoh_:
   cam_crop: [0, 182, 402, 238]     # Ausschnitt fürs obere Band, innerhalb des Rahmens, 1080:640
   gameplay: [0, 0, 1920, 1080]
   calibrated: "2026-11-19, Clip BeautifulModernTermiteYouWHY bei 0:09 (kein VOD)"
+
+xqc:
+  facecam: [0, 540, 368, 292]      # Rechteck links in der Mitte, über der Minikarte
+  cam_crop: [0, 548, 368, 218]     # innerhalb des Rechtecks, Kopf ganz drin, 1080:640
+  gameplay: [0, 0, 1920, 1080]
+  calibrated: "2026-11-19, VOD 2932113307 bei 5:56:17"
+
+jasontheween:
+  facecam: [1605, 0, 315, 285]     # Rechteck oben rechts, Chat oben links bleibt im Spiel
+  cam_crop: [1612, 30, 308, 182]   # 7 px vom linken Rand weg (dunkler Streifen), 1080:640
+  gameplay: [0, 0, 1920, 1080]
+  calibrated: "2026-11-19, VOD 2932190650 bei 1:12:11"
