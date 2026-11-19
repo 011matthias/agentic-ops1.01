@@ -24,6 +24,7 @@ from . import render as render_mod
 F1_RANGE = (15.0, 60.0)
 LUFS_TOLERANCE = 1.0
 CAPTION_MAX_DRIFT_S = 0.2
+SILENT_MAX_HEARD = 3  # a caption-free cut may hold a stray word (game radio, a shout)
 
 
 class ProduceError(Exception):
@@ -315,6 +316,14 @@ def check(edl: dict, video: Path, *, measured: dict,
         elif out:
             f.append(f"main object not completely in the window at {len(out)} samples "
                      f"(t={out[:6]} s)")
+    if not render_mod.caption_words(edl["words"]):
+        # owner 2026-11-19: a clip without spoken words runs without captions (KaiCenat
+        # m23, a chase where he only screams); it fails only if the render holds speech
+        heard_n = len(heard) if heard is not None else 0
+        measured = {**measured, "caption_drift_s": None, "captions": 0, "heard_words": heard_n}
+        if heard_n > SILENT_MAX_HEARD:
+            f.append(f"no captions, but {heard_n} words heard in the render")
+        return CheckResult(not f, measured, f)
     drift = caption_drift(edl, heard) if heard is not None else None
     measured = {**measured, "caption_drift_s": drift}
     if heard is not None and (drift is None or drift > CAPTION_MAX_DRIFT_S):

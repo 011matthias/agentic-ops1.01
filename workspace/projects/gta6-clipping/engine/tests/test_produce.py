@@ -180,6 +180,25 @@ def test_a_cam_that_moved_mid_stream_is_cut_where_it_sat_then(kept, monkeypatch,
     render.video_encoder.cache_clear()
 
 
+@pytest.mark.parametrize("heard, code, said", [
+    ([], 0, "READY"),                                              # nothing spoken: no captions
+    ([{"w": w, "s": 1.0 + i} for i, w in enumerate("run run go now".split())], 1,
+     "no captions, but 4 words heard in the render"),              # speech without captions
+])
+def test_a_cut_without_words_runs_without_captions(kept, monkeypatch, capsys, heard, code,
+                                                   said):
+    # owner 2026-11-19 (KaiCenat m23, he only screams): before, a cut without words always
+    # failed as "captions drift None"
+    with kept:
+        kept.execute("UPDATE moments SET in_s = 16.0, out_s = 31.0 WHERE id = 1")
+    monkeypatch.setattr(render.subprocess, "run", FakeFfmpeg())
+    render.video_encoder.cache_clear()
+    assert run(["render", "1"], kept, measurer=lambda v: {**GOOD, "duration": 15.0},
+               listener=lambda v: heard, **STILL) == code
+    assert said in capsys.readouterr().out
+    render.video_encoder.cache_clear()
+
+
 def test_only_kept_moments_with_a_layout_render(kept):
     with kept:
         kept.execute("UPDATE moments SET status = 'reject' WHERE id = 1")
