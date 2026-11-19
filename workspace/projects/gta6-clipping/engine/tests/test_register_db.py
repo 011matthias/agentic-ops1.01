@@ -8,8 +8,10 @@ from clipengine.register import RegisterError, Streamer
 from conftest import ENGINE
 
 
-def test_shipped_register_loads_empty():
-    assert register.load(ENGINE / "config" / "streamers.yaml") == []
+def test_shipped_register_loads_without_duplicates():
+    shipped = register.load(ENGINE / "config" / "streamers.yaml")
+    logins = [s.twitch for s in shipped]
+    assert logins and len(set(logins)) == len(logins)
 
 
 def test_append_turns_empty_list_into_entries_and_keeps_comments(env):
