@@ -800,6 +800,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## air-to-sea-shuttles
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-11-20 | Air to Sea Shuttles First Call and Access Plan | client-dev | [→](docs/2026-11-20%20-%20Air%20to%20Sea%20Shuttles%20First%20Call%20and%20Access%20Plan/Checkpoint.md) |
 | 2026-11-16 | Air to Sea Shuttles Reply | comms | [→](docs/2026-11-16%20-%20Air%20to%20Sea%20Shuttles%20Reply/Checkpoint.md) |
 
 ## gta6-clipping
