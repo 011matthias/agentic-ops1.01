@@ -7,13 +7,15 @@ small files and report the duration that was asked for.
 from __future__ import annotations
 
 import subprocess
+import sys
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
 from clipengine import cli, config, db, intervals, register
-from clipengine.fetch import FetchError, Probe, YtDlp
+from clipengine.fetch import FetchError, Probe, YtDlp, run_killing_tree
 from clipengine.register import Streamer
 
 from conftest import ago, make_clip
@@ -239,3 +241,20 @@ def test_a_hung_download_fails_its_section_not_the_run(con, env, helix, twitch, 
     assert row["status"] == "failed" and row["attempts"] == 1
     assert "timed out after 600 s" in row["last_error"]
     assert "timed out" in capsys.readouterr().out
+
+
+def test_a_timeout_kills_the_child_that_holds_the_pipes():
+    # 2026-11-20: subprocess.run killed yt-dlp after 600 s, its ffmpeg child kept the output
+    # pipes open, and the fetch waited 28 min until the child was killed by hand
+    parent = ("import subprocess, sys, time; "
+              "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+              "time.sleep(60)")
+    start = time.monotonic()
+    with pytest.raises(subprocess.TimeoutExpired):
+        run_killing_tree([sys.executable, "-c", parent], timeout=3, capture_output=True,
+                         text=True)
+    assert time.monotonic() - start < 25
+
+
+def test_yt_dlp_downloads_through_the_tree_killing_runner():
+    assert YtDlp().run is run_killing_tree
