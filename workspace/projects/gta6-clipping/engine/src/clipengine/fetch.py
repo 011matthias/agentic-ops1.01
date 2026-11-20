@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -79,12 +80,38 @@ class Downloader(Protocol):
     def clip(self, url: str, stem: Path) -> Path: ...
 
 
+def kill_tree(pid: int) -> None:
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True)
+    else:
+        os.killpg(pid, signal.SIGKILL)
+
+
+def run_killing_tree(args, *, timeout: float, **kw) -> subprocess.CompletedProcess:
+    """subprocess.run, except that a timeout kills the whole process tree.
+
+    subprocess.run kills only yt-dlp: its ffmpeg child lives on, holds the output pipes
+    open, and run() waits on them for good (2026-11-20: the fetch stood 28 min on a
+    0-byte section after the 600 s timeout had fired).
+    """
+    kw.pop("capture_output", None)
+    with subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          start_new_session=os.name != "nt", **kw) as proc:
+        try:
+            out, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            kill_tree(proc.pid)
+            proc.communicate()  # the pipes close once the whole tree is gone
+            raise
+    return subprocess.CompletedProcess(args, proc.returncode, out, err)
+
+
 class YtDlp:
     """yt-dlp from the engine's own environment, retried on transient failures."""
 
     def __init__(self, *, attempts: int = MAX_ATTEMPTS, sleep: Callable[[float], None] = time.sleep,
-                 run: Callable[..., subprocess.CompletedProcess] = subprocess.run) -> None:
-        self.attempts, self.sleep, self.run = attempts, sleep, run
+                 run: Callable[..., subprocess.CompletedProcess] | None = None) -> None:
+        self.attempts, self.sleep, self.run = attempts, sleep, run or run_killing_tree
 
     def section(self, url: str, start: float, end: float, stem: Path) -> Path:
         # A VOD still being recorded is a live (EVENT) playlist: ffmpeg would open it at the
