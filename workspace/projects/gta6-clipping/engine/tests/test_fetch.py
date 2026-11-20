@@ -150,6 +150,25 @@ def test_fetch_downloads_only_the_most_viewed_stretches(con, env, helix, twitch,
     assert dl2.calls == []
 
 
+def test_clips_past_the_stream_clock_wrap_are_left_out(con, env, helix, twitch, http, capsys):
+    # KaiCenat 2026-11-20: a 47.6 h VOD; sections at 26:49 h and 29:03 h hung at 0 bytes
+    # because the MPEG-TS clock wraps at 26:30 h
+    register.append(env, Streamer(name="Delta", twitch="delta", language="en"))
+    helix.add_user("4", "delta", "Delta")
+    helix.videos["4"] = [{"id": "v9", "created_at": ago(40), "duration": "47h0m0s",
+                          "title": "GTA", "url": "https://www.twitch.tv/videos/v9"}]
+    helix.clips = [
+        make_clip("w1", "4", "Delta", 5000, ago(12), video_id="v9", vod_offset=96600),
+        make_clip("w2", "4", "Delta", 300, ago(30), video_id="v9", vod_offset=5000),
+    ]
+    assert run(["watch", "--days", "2"], con, twitch=twitch, http=http) == 0
+    dl = FakeDownloader()
+    assert run(["fetch", "--streamer", "Delta"], con, twitch=twitch, downloader=dl,
+               probe=dl.probe) == 0
+    assert dl.calls == [("section", "https://www.twitch.tv/videos/v9", 4965.0, 5005.0)]
+    assert "1 clips past 26:25 h left out" in capsys.readouterr().out
+
+
 def test_fetch_dry_run_plans_without_downloading(con, env, helix, twitch, http, capsys):
     seed(helix, env, con, twitch, http)
     dl = FakeDownloader()
