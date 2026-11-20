@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from clipengine import cli, config
+from clipengine import cli, config, db
 from clipengine.cli import UsageError
 
 NOW = datetime(2026, 11, 20, 15, 0, tzinfo=timezone.utc)  # 16:00 German time, a Friday
@@ -19,12 +19,20 @@ def run(argv, con, **inject):
     return cli.COMMANDS[args.command](args, con, **inject)
 
 
-def make_ready(vid, *, title="KaiCenat runs from the cops in GTA 6", category="chaos"):
+def make_ready(vid, *, title="KaiCenat runs from the cops in GTA 6", category="chaos",
+               source=None, in_s=2.0, out_s=42.0):
     folder = config.data_dir() / "ready" / vid
     folder.mkdir(parents=True)
     (folder / f"{vid}.mp4").write_bytes(b"\0" * 64)
-    (folder / "edl.json").write_text(json.dumps({"id": vid, "title": title, "category": category,
-                                                 "display_name": "KaiCenat"}), encoding="utf-8")
+    source = source or {"kind": "clip", "video_id": None, "top_clip_id": f"clip-{vid}",
+                        "vod_start_s": None}
+    (folder / "edl.json").write_text(json.dumps({
+        "id": vid, "title": title, "category": category, "display_name": "KaiCenat",
+        "source": source, "in_s": in_s, "out_s": out_s}), encoding="utf-8")
+
+
+def vod_source(top, start, vod="v1"):
+    return {"kind": "vod", "video_id": vod, "top_clip_id": top, "vod_start_s": start}
 
 
 class FakeYouTube:
@@ -112,6 +120,43 @@ def test_uploads_made_before_this_command_count_as_posted(pub):
                       encoding="utf-8")
     with pytest.raises(UsageError, match="already on YouTube \\(old\\)"):
         run(["publish", "m1-f1", "--go"], pub, youtube=FakeYouTube(), now=NOW)
+
+
+def test_a_moment_already_posted_from_the_same_source_is_refused(pub, capsys):
+    # caseoh_ 2026-11-20: m9 went up from a clip; once his VOD was public the same moment came
+    # back from the VOD as m40 (same top clip) and could have been posted twice
+    pub.execute("INSERT INTO streamers (login, display_name, language, updated_at) "
+                "VALUES ('kaicenat', 'KaiCenat', 'en', 'now')")
+    db.upsert_clip(pub, {"clip_id": "c9", "streamer": "kaicenat", "video_id": "v1",
+                         "vod_offset": 25089, "duration_s": 35.6, "view_count": 29023,
+                         "game_id": "g", "language": "en", "title": "t", "creator_id": "x",
+                         "url": "u", "created_at": "2026-11-19T20:00:00Z"})
+    make_ready("m9-f1", source={"kind": "clip", "video_id": None, "top_clip_id": "c9",
+                                "vod_start_s": None}, in_s=1.0, out_s=30.0)  # VOD 25054-25083
+    yt = FakeYouTube()
+    assert run(["publish", "m9-f1", "--go"], pub, youtube=yt, now=NOW) == 0
+    make_ready("m40-f1", source=vod_source("c9", 25040.0))
+    make_ready("m41-f1", source=vod_source("other", 25070.0))  # another top clip, same stretch
+    make_ready("m42-f1", source=vod_source("c42", 26000.0))    # elsewhere on the VOD
+    make_ready("m43-f1", source=vod_source("c43", 26010.0))    # overlaps m42
+    for vid in ("m40-f1", "m41-f1"):
+        with pytest.raises(UsageError, match=f"{vid} shows the same moment as m9-f1, "
+                                             f"already posted"):
+            run(["publish", vid], pub, youtube=yt, now=NOW)
+    with pytest.raises(UsageError, match="m43-f1 shows the same moment as m42-f1, in this run"):
+        run(["publish", "m42-f1", "m43-f1"], pub, youtube=yt, now=NOW)
+    capsys.readouterr()
+    assert run(["publish", "m42-f1", "--go"], pub, youtube=yt, now=NOW) == 0
+    assert [name for name, _ in yt.uploads] == ["m9-f1.mp4", "m42-f1.mp4"]
+
+
+def test_a_posted_video_without_its_edl_blocks_publishing(pub):
+    make_ready("m1-f1")
+    run(["publish", "m1-f1", "--go"], pub, youtube=FakeYouTube(), now=NOW)
+    (config.data_dir() / "ready" / "m1-f1" / "edl.json").unlink()
+    make_ready("m2-f1")
+    with pytest.raises(UsageError, match="m1-f1 is posted but ready/m1-f1/edl.json is gone"):
+        run(["publish", "m2-f1"], pub, youtube=FakeYouTube(), now=NOW)
 
 
 def test_a_token_for_another_channel_uploads_nothing(pub):

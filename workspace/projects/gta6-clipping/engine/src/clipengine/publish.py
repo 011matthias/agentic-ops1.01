@@ -115,22 +115,77 @@ def import_ledger(con: sqlite3.Connection, path: Path) -> int:
     return added
 
 
+@dataclass(frozen=True)
+class Source:
+    """Where a video's cut comes from: its top clip, and its stretch of the VOD if known."""
+    top_clip_id: str
+    vod: str | None
+    start: float
+    end: float
+
+    def same_moment(self, other: Source) -> bool:
+        return self.top_clip_id == other.top_clip_id or bool(
+            self.vod and self.vod == other.vod
+            and self.start < other.end and other.start < self.end)
+
+
+def source_of(con: sqlite3.Connection, edl: dict) -> Source:
+    """A clip-path cut is placed on its VOD once the VOD is public (watch fills vod_offset):
+    caseoh_'s clips came back from his VOD as new moments, 2026-11-20 (m40 = m9)."""
+    src = edl.get("source") or {}
+    if not src.get("top_clip_id"):
+        raise PublishError(f"{edl['id']}: edl.json names no source, the double check needs one")
+    length = edl["out_s"] - edl["in_s"]
+    if src.get("kind") == "vod":
+        return Source(src["top_clip_id"], src["video_id"], src["vod_start_s"],
+                      src["vod_start_s"] + length)
+    clip = con.execute("SELECT video_id, vod_offset, duration_s FROM crowd_clips "
+                       "WHERE clip_id = ?", (src["top_clip_id"],)).fetchone()
+    if clip is None or clip["video_id"] is None or clip["vod_offset"] is None:
+        return Source(src["top_clip_id"], None, 0.0, 0.0)
+    start = clip["vod_offset"] - clip["duration_s"] + edl["in_s"]  # vod_offset = clip end
+    return Source(src["top_clip_id"], clip["video_id"], start, start + length)
+
+
+def _edl(data_dir: Path, video: str) -> dict | None:
+    path = data_dir / "ready" / video / "edl.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+
+
+def posted_sources(con: sqlite3.Connection, data_dir: Path) -> dict[str, Source]:
+    out = {}
+    for r in con.execute("SELECT DISTINCT video FROM posts ORDER BY video"):
+        edl = _edl(data_dir, r["video"])
+        if edl is None:
+            raise PublishError(f"{r['video']} is posted but ready/{r['video']}/edl.json is "
+                               f"gone, so new videos cannot be checked against it")
+        out[r["video"]] = source_of(con, edl)
+    return out
+
+
 def plan(con: sqlite3.Connection, videos: list[str], *, data_dir: Path, now: datetime,
          slot: str | None = None) -> list[Plan]:
     if slot and len(videos) != 1:
         raise PublishError("--slot takes exactly one video")
     taken, plans = taken_slots(con), []
     free = (s for s in slot_times(now) if db.iso(s) not in taken)
+    seen = posted_sources(con, data_dir)
     for video in videos:
         posted = con.execute("SELECT remote_id FROM posts WHERE video = ? AND platform = "
                              "'youtube'", (video,)).fetchone()
         if posted:
             raise PublishError(f"{video} is already on YouTube ({posted['remote_id']})")
         folder = data_dir / "ready" / video
-        file, edl_path = folder / f"{video}.mp4", folder / "edl.json"
-        if not file.exists() or not edl_path.exists():
+        file, edl = folder / f"{video}.mp4", _edl(data_dir, video)
+        if not file.exists() or edl is None:
             raise PublishError(f"{video} is not READY (no {file.name} or edl.json)")
-        title, description, tags = texts(json.loads(edl_path.read_text(encoding="utf-8")))
+        source = source_of(con, edl)
+        twin = next((v for v, s in seen.items() if s.same_moment(source)), None)
+        if twin:
+            raise PublishError(f"{video} shows the same moment as {twin}, "
+                               f"{'already posted' if twin not in videos else 'in this run'}")
+        seen[video] = source
+        title, description, tags = texts(edl)
         when = parse_slot(slot, now) if slot else next(free)
         if db.iso(when) in taken:
             raise PublishError(f"slot {when:%Y-%m-%d %H:%M} is already booked")

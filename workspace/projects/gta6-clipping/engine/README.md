@@ -58,7 +58,10 @@ uv run --extra dev pytest -q              tests (offline, against a fake Twitch/
   iPhone at that time), records both in the `posts` table, and reads every upload back.
   Title names the streamer, the description is title plus four hashtags and never a Twitch
   link. A video goes up once; uploads from before the command (`data/publish/youtube.json`)
-  count as posted. Needs `YOUTUBE_CHANNEL_ID` in the project's `context/.env` and the
+  count as posted. A video showing the same moment as a posted one (same top clip, or an
+  overlapping stretch of the same VOD; a clip-path cut is placed on its VOD once the VOD
+  is public) is refused, and `fetch` skips VOD intervals whose clips a clip-path section
+  already holds (caseoh_ 2026-11-20: m40 = m9, m47 = m15, m53 = m18). Needs `YOUTUBE_CHANNEL_ID` in the project's `context/.env` and the
   owner's token from `data/publish/yt_consent.py` beside it (test-mode OAuth app: renew
   every 7 days).
 

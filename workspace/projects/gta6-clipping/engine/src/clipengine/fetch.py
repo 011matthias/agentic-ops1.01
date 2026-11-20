@@ -195,6 +195,20 @@ def _covered(con: sqlite3.Connection, video_id: str, iv: intervals.Interval) -> 
     ).fetchone() is not None
 
 
+def _held_by_clips(con: sqlite3.Connection, video_id: str) -> list[tuple[float, float]]:
+    """Where on this VOD the clips sit that a fetched clip-path section already holds.
+
+    A streamer without public VODs gets moments from clips alone (kind 'clip'). Once the
+    VOD turns public, watch gives those clips a vod_offset and the VOD plan picked the
+    same moments again (caseoh_ 2026-11-20: m40 = m9, m47 = m15, m53 = m18).
+    """
+    return [(r["vod_offset"] - r["duration_s"], float(r["vod_offset"])) for r in con.execute(
+        "SELECT c.vod_offset, c.duration_s FROM sections s "
+        "JOIN crowd_clips c ON c.clip_id = s.top_clip_id "
+        "WHERE s.kind = 'clip' AND s.status = 'fetched' AND c.video_id = ? "
+        "AND c.vod_offset IS NOT NULL", (video_id,))]
+
+
 def _upsert(con: sqlite3.Connection, row: dict) -> int:
     now = db.utcnow()
     with con:
@@ -246,14 +260,22 @@ def plan_vod(con: sqlite3.Connection, vod: sqlite3.Row, *, top: int, min_views: 
     if not p.chosen:
         res.note = ", ".join(filter(None, [
             res.note, f"no interval with {min_views}+ views ({len(clips)} GTA VI clips)"]))
+    held = _held_by_clips(con, vod["ext_id"])
+    dupes = 0
     for rank, iv in enumerate(p.chosen, start=1):
         if _covered(con, vod["ext_id"], iv):
+            continue
+        if any(a <= iv.end and iv.start <= b for a, b in held):
+            dupes += 1
             continue
         res.chosen.add(iv.top_clip_id)
         _upsert(con, {"streamer": vod["streamer"], "kind": "vod", "video_id": vod["ext_id"],
                       "top_clip_id": iv.top_clip_id, "start_s": iv.start, "end_s": iv.end,
                       "win_start_s": iv.win_start, "win_end_s": iv.win_end, "views": iv.views,
                       "clips": iv.clips, "rank": rank})
+    if dupes:
+        res.note = ", ".join(filter(None, [
+            res.note, f"{dupes} already fetched as clips before the VOD was public"]))
     return res
 
 
