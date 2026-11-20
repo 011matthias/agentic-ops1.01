@@ -9,6 +9,8 @@
     uv run clipengine fetch                  ... and download only those, via yt-dlp
     uv run --extra gpu clipengine analyze    transcripts, F1 cuts, review packages
     uv run clipengine judge ID --file F      store the verdict on review package ID
+    uv run --extra publish clipengine publish m23-f1 [--go]
+                                             next free fixed slot on YouTube + TikTok folder
 """
 
 from __future__ import annotations
@@ -276,6 +278,42 @@ def cmd_render(args, con, *, renderer=None, measurer=None, listener=None, planne
     return 0 if result.passed else 1
 
 
+def cmd_publish(args, con, *, youtube=None, now: datetime | None = None) -> int:
+    from . import publish as pub
+
+    data = config.data_dir()
+    now = now or pub.now_utc()
+    try:
+        added = pub.import_ledger(con, data / "publish" / "youtube.json")
+        if added:
+            print(f"ledger: {added} earlier upload(s) recorded as posted")
+        plans = pub.plan(con, args.videos, data_dir=data, now=now, slot=args.slot)
+        for p in plans:
+            print(f"{p.video}: {p.slot:%a %Y-%m-%d %H:%M} German time ({p.slot_utc}) "
+                  f"| {p.title}")
+            print(f"  YouTube private until the slot; TikTok folder: {p.tiktok_name}.mp4")
+        if not args.go:
+            print("dry run: add --go to upload and drop")
+            return 0
+        channel = config.env_value("YOUTUBE_CHANNEL_ID")
+        if not channel:
+            raise UsageError("YOUTUBE_CHANNEL_ID missing in the project's context/.env")
+        if youtube is None:
+            token = config.youtube_token()
+            if not token or not token.exists():
+                raise UsageError("no YouTube token: run engine/data/publish/yt_consent.py")
+            youtube = pub.GoogleYouTube(token)
+        tiktok = Path(args.tiktok_dir) if args.tiktok_dir else config.tiktok_dir()
+        problems = pub.publish(con, plans, youtube=youtube, channel=channel, tiktok_dir=tiktok)
+    except pub.PublishError as exc:
+        raise UsageError(str(exc)) from exc
+    for p in plans:
+        print(f"  scheduled {p.video} for {p.slot:%Y-%m-%d %H:%M}, dropped {p.tiktok_name}.mp4")
+    for problem in problems:
+        print(f"  ! {problem}")
+    return 1 if problems else 0
+
+
 def cmd_reject(args, con) -> int:
     for raw in args.logins:
         login = raw.lower()
@@ -360,12 +398,21 @@ def build_parser() -> argparse.ArgumentParser:
     rn.add_argument("--accept-edge", metavar="REASON",
                     help="let samples where the main object touches the edge of the "
                          "gameplay rect through, with the reason (overlay beyond it)")
+
+    pb = sub.add_parser("publish", help="schedule READY videos on YouTube for the next free "
+                                        "fixed slot and drop them into the TikTok folder")
+    pb.add_argument("videos", nargs="+", help="ready ids, e.g. m23-f1, in slot order")
+    pb.add_argument("--slot", help="'YYYY-MM-DD HH:MM' German time, one of the fixed slots "
+                                   "(default: the next free one)")
+    pb.add_argument("--tiktok-dir", help="default: ~/iCloudDrive/GTA6 TikTok")
+    pb.add_argument("--go", action="store_true", help="upload and drop (default: dry run)")
     return p
 
 
 COMMANDS = {"watch": cmd_watch, "list": cmd_list, "suggest": cmd_suggest,
             "approve": cmd_approve, "reject": cmd_reject, "fetch": cmd_fetch,
-            "analyze": cmd_analyze, "judge": cmd_judge, "render": cmd_render}
+            "analyze": cmd_analyze, "judge": cmd_judge, "render": cmd_render,
+            "publish": cmd_publish}
 
 
 def main(argv: list[str] | None = None) -> int:

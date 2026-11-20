@@ -154,6 +154,19 @@ MIGRATIONS: list[str] = [
         updated_at  TEXT NOT NULL
     );
     """,
+    # p2 publish: one row per video and platform, so nothing goes up twice
+    """
+    CREATE TABLE posts (
+        id          INTEGER PRIMARY KEY,
+        video       TEXT NOT NULL,    -- ready id, e.g. m23-f1
+        platform    TEXT NOT NULL CHECK (platform IN ('youtube', 'tiktok')),
+        remote_id   TEXT,             -- YouTube video id; the file name in the TikTok folder
+        slot_utc    TEXT,             -- publishAt; NULL for uploads before fixed slots
+        title       TEXT NOT NULL,
+        created_at  TEXT NOT NULL,
+        UNIQUE (video, platform)
+    );
+    """,
 ]
 
 

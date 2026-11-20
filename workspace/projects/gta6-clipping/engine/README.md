@@ -17,6 +17,8 @@ uv run clipengine fetch --top 3           ... and download only those (yt-dlp, s
 uv run --extra gpu clipengine analyze     transcripts, F1 cuts, review packages in data/review/
 uv run clipengine judge ID --file F.json  store Claude Code's verdict on package ID
 uv run --extra gpu clipengine render ID   cut list, 1080x1920 render, checks; a pass lands in data/ready/
+uv run --extra publish clipengine publish m23-f1   next free slot on YouTube + TikTok folder (dry run)
+uv run --extra publish clipengine publish m23-f1 --go   ... upload, drop, read back
 uv run --extra dev pytest -q              tests (offline, against a fake Twitch/YouTube)
 ```
 
@@ -46,6 +48,19 @@ uv run --extra dev pytest -q              tests (offline, against a fake Twitch/
   edge of a gameplay rect that stops short of an overlay (KaiCenat's cam and chat) passes
   with `--accept-edge REASON` (owner 2026-11-19).
   Failures stay in `data/renders/{id}/` with `check.json`.
+
+- **Publish (p2, owner order per video):** fixed slots 20:00, 00:00 and 02:00 German time
+  (14, 18 and 20 h US Eastern; owner 2026-11-20: three a day at the best times, TikTok and
+  YouTube in sync). `publish` takes only named READY ids and gives each the next free slot
+  at least 20 min out (`--slot "YYYY-MM-DD HH:MM"` picks one). With `--go` it uploads to
+  YouTube as private with `publishAt` on the slot, copies the same file with a caption into
+  `~/iCloudDrive/GTA6 TikTok/` named `{slot} {id}.mp4` (the owner posts TikTok from the
+  iPhone at that time), records both in the `posts` table, and reads every upload back.
+  Title names the streamer, the description is title plus four hashtags and never a Twitch
+  link. A video goes up once; uploads from before the command (`data/publish/youtube.json`)
+  count as posted. Needs `YOUTUBE_CHANNEL_ID` in the project's `context/.env` and the
+  owner's token from `data/publish/yt_consent.py` beside it (test-mode OAuth app: renew
+  every 7 days).
 
 - **Analyze (p1.3):** faster-whisper large-v3 (int8_float16, CUDA) transcribes each fetched
   section with word times; the F1 cut (15 to 60 s) starts at the sentence the top clip begins

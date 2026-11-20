@@ -87,6 +87,29 @@ def env_file() -> Path | None:
     return primary if primary and primary.exists() else None
 
 
+def env_value(key: str) -> str | None:
+    """One value from the process environment or context/.env (process wins)."""
+    if os.environ.get(key):
+        return os.environ[key]
+    path = env_file()
+    return parse_env(path.read_text(encoding="utf-8")).get(key) if path else None
+
+
+def youtube_token() -> Path | None:
+    """The owner's OAuth token, kept beside context/.env (yt_consent.py writes it)."""
+    explicit = os.environ.get("CLIPENGINE_YOUTUBE_TOKEN")
+    if explicit:
+        return Path(explicit)
+    path = env_file()
+    return path.parent / "youtube-oauth-token.json" if path else None
+
+
+def tiktok_dir() -> Path:
+    """The iCloud Drive folder the owner posts TikTok from on the iPhone (owner 2026-11-19)."""
+    return Path(os.environ.get("CLIPENGINE_TIKTOK_DIR")
+                or Path.home() / "iCloudDrive" / "GTA6 TikTok")
+
+
 def parse_env(text: str) -> dict[str, str]:
     values: dict[str, str] = {}
     for raw in text.splitlines():
