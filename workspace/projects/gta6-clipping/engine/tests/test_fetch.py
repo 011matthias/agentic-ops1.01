@@ -169,6 +169,40 @@ def test_clips_past_the_stream_clock_wrap_are_left_out(con, env, helix, twitch, 
     assert "1 clips past 26:25 h left out" in capsys.readouterr().out
 
 
+def test_a_vod_gone_public_skips_moments_already_fetched_as_clips(con, env, helix, twitch, http,
+                                                                  capsys):
+    # caseoh_ 2026-11-20: moments taken from clips while he had no public VODs came back from
+    # the VOD plan once it went public (m40 = m9, m47 = m15, m53 = m18)
+    register.append(env, Streamer(name="Echo", twitch="echo", language="en"))
+    helix.add_user("5", "echo", "Echo")
+    helix.clips = [make_clip("k1", "5", "Echo", 900, ago(10), video_id=None, vod_offset=None),
+                   make_clip("k2", "5", "Echo", 300, ago(9), video_id=None, vod_offset=None)]
+    assert run(["watch", "--days", "2"], con, twitch=twitch, http=http) == 0
+    dl = FakeDownloader()
+    assert run(["fetch", "--streamer", "Echo"], con, twitch=twitch, downloader=dl,
+               probe=dl.probe) == 0
+    assert [c[1] for c in dl.calls] == ["https://clips.twitch.tv/k1",
+                                        "https://clips.twitch.tv/k2"]
+
+    # the VOD goes public: the clips gain a place on it, k1b (now the top clip of k1's
+    # moment) was made later, and a new moment k3 sits elsewhere
+    helix.videos["5"] = [{"id": "v5", "created_at": ago(12), "duration": "6h0m0s",
+                          "title": "GTA", "url": "https://www.twitch.tv/videos/v5"}]
+    helix.clips = [make_clip("k1", "5", "Echo", 950, ago(10), video_id="v5", vod_offset=7200),
+                   make_clip("k1b", "5", "Echo", 1200, ago(10), video_id="v5", vod_offset=7210),
+                   make_clip("k2", "5", "Echo", 300, ago(9), video_id="v5", vod_offset=10800),
+                   make_clip("k3", "5", "Echo", 200, ago(8), video_id="v5", vod_offset=14400)]
+    assert run(["watch", "--days", "2"], con, twitch=twitch, http=http) == 0
+    capsys.readouterr()
+    dl2 = FakeDownloader()
+    assert run(["fetch", "--streamer", "Echo"], con, twitch=twitch, downloader=dl2,
+               probe=dl2.probe) == 0
+    assert dl2.calls == [("section", "https://www.twitch.tv/videos/v5", 14365.0, 14405.0)]
+    assert "2 already fetched as clips before the VOD was public" in capsys.readouterr().out
+    assert {r[0] for r in con.execute("SELECT top_clip_id FROM sections WHERE kind = 'vod'")} \
+        == {"k3"}
+
+
 def test_fetch_dry_run_plans_without_downloading(con, env, helix, twitch, http, capsys):
     seed(helix, env, con, twitch, http)
     dl = FakeDownloader()
