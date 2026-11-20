@@ -7,10 +7,15 @@ dependencies = [
     "httpx>=0.27",   # Twitch Helix + YouTube feed
     "pyyaml>=6.0",   # streamer register
     "yt-dlp>=2026.10",
+    "tzdata>=2024.1",  # publish slots in German time; Windows has no system tz database
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.6", "numpy>=2.0"]
+publish = [  # YouTube Data API upload with the owner's OAuth token
+    "google-auth-oauthlib>=1.2",
+    "google-api-python-client>=2.130",
+]
 gpu = [
     "faster-whisper>=1.1",
     "numpy>=2.0",          # band bar check (stage 6), frame sampling (follow.py)
