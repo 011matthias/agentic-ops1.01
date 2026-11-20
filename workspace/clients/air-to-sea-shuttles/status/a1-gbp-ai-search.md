@@ -4,7 +4,7 @@ workstream: a1-gbp-ai-search
 group: ""
 spec: ""
 state: active
-updated: 2026-11-18
+updated: 2026-11-20
 ---
 
 # Air to Sea Shuttles / Business Profile + AI search presence (a1)
@@ -39,11 +39,11 @@ elements below double as the billing basis.
 
 | Element | State | Status | Next action | Blocker | Detail |
 |---|---|---|---|---|---|
-| Access + business facts | blocked | list compiled, not yet sent | Matthias sends the access list to Harold | Harold | Access, Facts below |
+| Access + business facts | blocked | self-serve checklist email drafted 2026-11-20 (`context/drafts/2026-11-20-access-checklist.md`), not yet sent | Matthias fills in his invite address (needs a Google account on it) and sends; then log it verbatim | Matthias, then Harold | Harold's checklist is only GBP, Zaui, WordPress, Hostinger, logo/photos and the questions only he can answer; the rest below follows from those |
 | Baseline | not started | | Pull 12 months of Zaui bookings by source and value; run the AI-answer baseline | Zaui login | Baseline below |
 | Google Business Profile | not started | none exists | Harold creates it on the business Google account and adds Matthias as manager; Harold does the verification | Business Google account, verification | Service-area business, address hidden; primary category picked from Google's list (airport shuttle service) |
 | Review flow | not started | | QR card in the vans + review request after each ride + one ask to past customers from Zaui | GBP live | No incentives, no asking only happy customers (Google policy) |
-| Measurement | not started | | Search Console, Bing Webmaster Tools, GA4 + Tag Manager on site and in Zaui (Settings > Marketplace), tagged GBP booking link, tracking phone number on GBP | WordPress, Zaui, DNS access | Also the billing basis for the performance deal |
+| Measurement | not started | | Search Console, Bing Webmaster Tools, GA4 + Tag Manager on site and in Zaui (Settings > Marketplace), tagged GBP booking link, tracking phone number on GBP | WordPress, Zaui, DNS access | Also the billing basis for the performance deal. Live BEFORE the profile goes live (use the verification wait), or the first uplift can't be attributed |
 | Site SEO basics | not started | | SEO plugin, titles and descriptions, LocalBusiness + FAQ structured data, fix the fare conflict | WordPress admin | |
 | Answer content | not started | | One page per route (IAH, Hobby, return after the cruise) + FAQ with short direct answers | WordPress admin, Harold's answers | What AI assistants quote |
 | Listings | not started | | Bing Places, Apple Business Connect, Yelp, TripAdvisor, Facebook, Visit Galveston directory; identical name and phone everywhere | GBP verified first | Visit Galveston listing cost TBD |
@@ -59,10 +59,10 @@ login or a delegated role, never Harold's passwords.
 | 1 | Business Google account (create one on the sales@ address if none) | none; Harold owns it | Owner of the Business Profile, Search Console, GA4 and Tag Manager |
 | 2 | Google Business Profile | Manager | Build and run the profile, reply to reviews, see calls and clicks |
 | 3 | WordPress | Administrator, own user | SEO plugin, titles, structured data, route and FAQ pages, Tag Manager, quote form |
-| 4 | Hostinger | DNS access, or Harold adds records on request | Domain verification for Search Console and Bing, backups before site changes, later mail-sending records |
+| 4 | Hostinger | Account sharing, role Collaborator (Admin can buy on his saved card) | Domain verification for Search Console and Bing, backups before site changes, later mail-sending records |
 | 5 | Zaui | Staff login with Reports and Settings > Marketplace | Bookings by source and value, Tag Manager in the booking engine, later automation |
-| 6 | Google Search Console | Full user | Search queries and indexing |
-| 7 | GA4 + Google Tag Manager | Admin | Visitors, bookings and quote requests by source |
+| 6 | Google Search Console | Matthias sets it up (DNS via Hostinger), Harold's business account added as owner | Search queries and indexing |
+| 7 | GA4 + Google Tag Manager | Matthias sets them up, Harold's business account added as admin | Visitors, bookings and quote requests by source |
 | 8 | Bing Webmaster Tools + Bing Places | set up by Matthias, verified by Harold | Bing feeds Microsoft Copilot and is one of ChatGPT search's sources |
 | 9 | Apple Business Connect | added by Harold | Apple Maps and Siri |
 | 10 | Phone provider for the 832 and 844 numbers | provider name + call log | Count phone bookings; later a tracking number and missed-call text-back |
