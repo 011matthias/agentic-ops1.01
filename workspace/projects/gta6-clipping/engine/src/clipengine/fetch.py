@@ -44,6 +44,12 @@ MAX_ATTEMPTS = 3
 DOWNLOAD_TIMEOUT_S = 600            # a 120 s section takes about 10 s; 2 h is not progress
 DURATION_SLACK_S = 3.0              # section cuts snap to keyframes (~2 s apart on Twitch)
 SEGMENT_LEAD_S = 10.5               # one Twitch HLS segment (10 s) of lead-in, end exact
+# MPEG-TS timestamps are 33 bits at 90 kHz: they wrap after 2**33 / 90000 = 95443.7 s
+# (26:30:43 h). Past that, ffmpeg opens the right segment but reads wrapped timestamps,
+# waits for the target time that never comes and reads to the VOD's end (KaiCenat's 47.6 h
+# VOD, 2026-11-20: 0 bytes at 26:49 h). 5 min margin for the stream's first timestamp
+# (62 s there).
+SEEKABLE_UNTIL_S = 2**33 / 90000 - 300
 
 
 class FetchError(Exception):
@@ -224,6 +230,12 @@ def plan_vod(con: sqlite3.Connection, vod: sqlite3.Row, *, top: int, min_views: 
         clips = [c for c in clips if c["vod_offset"] + pad <= until_s]
         res.note = (f"still live, planned up to {int(until_s // 3600)}:"
                     f"{int(until_s % 3600 // 60):02d} h of the recording")
+    beyond = [c for c in clips if c["vod_offset"] + pad > SEEKABLE_UNTIL_S]
+    if beyond:
+        clips = [c for c in clips if c["vod_offset"] + pad <= SEEKABLE_UNTIL_S]
+        res.note = ", ".join(filter(None, [
+            res.note, f"{len(beyond)} clips past 26:25 h left out (the stream clock wraps "
+                      f"at 26:30 h, ffmpeg's seek never arrives)"]))
     spans = [intervals.clip_span(c["clip_id"], c["vod_offset"], c["duration_s"], c["view_count"])
              for c in clips]
     muted = json.loads(vod["muted_segments"]) if vod["muted_segments"] else []
