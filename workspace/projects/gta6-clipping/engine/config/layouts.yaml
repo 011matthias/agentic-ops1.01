@@ -13,8 +13,8 @@
 
 ohnepixel:
   facecam: [230, 700, 440, 380]    # freigestellt unten links, ohne Rahmen
-  gameplay: [0, 0, 1920, 1080]     # ganzes Bild: der Ausschnitt darf überall hin folgen
-  calibrated: "2026-11-19, VOD 2932275268 bei 4:53:53"
+  gameplay: [680, 0, 1240, 1080]   # rechts der Cam: m76 (Rennen, Fahrer links) zeigte sie im Band
+  calibrated: "2026-11-19, VOD 2932275268 bei 4:53:53; gameplay 2026-11-20, VOD 2934862154"
 
 caseoh_:
   facecam: [0, 134, 402, 302]      # gerahmte 4:3-Cam oben links
@@ -44,3 +44,9 @@ jasontheween:
   cam_crop: [1612, 30, 308, 182]   # 7 px vom linken Rand weg (dunkler Streifen), 1080:640
   gameplay: [0, 0, 1920, 1080]
   calibrated: "2026-11-19, VOD 2932190650 bei 1:12:11"
+
+lacy:
+  facecam: [0, 0, 494, 278]        # 16:9-Cam oben links ohne Rahmen, Chat oben rechts
+  cam_crop: [12, 0, 469, 278]      # 1080:640 innerhalb, Kopf mittig
+  gameplay: [0, 0, 1920, 1080]
+  calibrated: "2026-11-20, VOD 2932194507 bei 2:02:23"
