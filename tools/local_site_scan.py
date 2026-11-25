@@ -12,8 +12,19 @@ the practice or salon book online (Doctolib, Treatwell, Shore, ...), and who
 runs it according to the Impressum.
 
     uv run tools/local_site_scan.py --area Karlsruhe
+    uv run tools/local_site_scan.py --area Karlsruhe --lens automation
     uv run tools/local_site_scan.py --around 49.0094,8.4044,8 --trades arzt,zahnarzt
     uv run tools/local_site_scan.py --area Ettlingen --admin-level 8 --limit 50
+
+Two lenses. ``website`` (default) ranks by site weakness, for the EUR1,225 build
+offer. ``automation`` ranks by what the site shows about manual back-office
+work: appointments by phone only, a fax number, printable PDF forms, job ads
+for office roles, callback requests, form/chat tools whose data gets copied by
+hand, and the software a business already runs (HERO first: our n8n node and
+the WW case). It scans admin-heavy trades (Hausverwaltung, Makler, Kanzleien,
+Steuerberater, Praxen, Handwerk, Fahrschulen, Werkstätten ...) and reads the
+careers and forms pages too. These are clues to how a business works, not
+proof of need; every row says which clue put it there.
 
 Output: a CSV in .scratch/local-site-scan/ (gitignored: it holds owner names),
 dead or broken sites first. No email addresses are collected: cold email is
@@ -57,6 +68,9 @@ MIRRORS = (
 )
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/131.0 Safari/537.36")
+# overpass-api.de answers a browser-looking agent with 406 (seen 2026-11-25) and
+# serves one that names the tool, as its usage policy asks.
+OVERPASS_UA = "local-site-scan/1.1 (demo-target finder; python-httpx)"
 
 # German trade key -> (label, OpenStreetMap tags). Order decides ties.
 TRADES: dict[str, tuple[str, list[tuple[str, str]]]] = {
@@ -74,8 +88,30 @@ TRADES: dict[str, tuple[str, list[tuple[str, str]]]] = {
     "elektriker": ("Elektriker", [("craft", "electrician")]),
     "sanitaer": ("Sanitär/Heizung", [("craft", "plumber"), ("craft", "hvac")]),
     "dachdecker": ("Dachdecker", [("craft", "roofer")]),
+    # Added for the automation lens; each tag counted live in Karlsruhe 2026-11-25.
+    "hausverwaltung": ("Hausverwaltung", [("office", "property_management")]),
+    "makler": ("Immobilienmakler", [("office", "estate_agent")]),
+    "versicherung": ("Versicherungsagentur", [("office", "insurance")]),
+    "fahrschule": ("Fahrschule", [("amenity", "driving_school")]),
+    "kfz": ("Kfz-Werkstatt", [("shop", "car_repair")]),
+    "tierarzt": ("Tierarzt", [("amenity", "veterinary")]),
+    "pflege": ("Pflege-/Sozialdienst", [("social_facility", "outreach")]),
+    "logistik": ("Logistik", [("office", "logistics")]),
+    "buchhaltung": ("Buchhaltung", [("office", "accountant")]),
 }
 BOOKING_TRADES = {"physio", "zahnarzt", "arzt", "kosmetik", "friseur"}
+LENS_TRADES = {
+    "website": ["maler", "physio", "zahnarzt", "arzt", "anwalt", "steinmetz", "kosmetik", "friseur",
+                "steuerberater", "architekt", "schreiner", "elektriker", "sanitaer", "dachdecker"],
+    # Admin-heavy owner-run trades (ICP: a manual back-office process, 5-50 people).
+    # Arzt, Zahnarzt and Physio are left out on purpose: their intake is patient data
+    # (DSGVO Art. 9, § 203 StGB) and the uwi voice-line verdict keeps them website-only
+    # until a compliant route exists. Name them with --trades to scan them anyway.
+    "automation": ["sanitaer", "elektriker", "dachdecker", "maler", "schreiner", "steuerberater",
+                   "buchhaltung", "anwalt", "hausverwaltung", "makler", "versicherung", "tierarzt",
+                   "fahrschule", "kfz", "pflege", "logistik", "architekt"],
+}
+AUTO_BOOKING_TRADES = BOOKING_TRADES | {"tierarzt", "fahrschule", "kfz"}
 
 # The tools German practices and salons book through. Sellbird knew only US
 # ones and flagged 10-21 of 50 sampled Karlsruhe sites "no online booking" wrongly.
@@ -99,6 +135,36 @@ PLATFORMS = {
     "IONOS MyWebsite": r"mywebsite-editor|ionos", "WordPress": r"wp-content|wordpress",
     "TYPO3": r"typo3", "Joomla": r"joomla", "Webflow": r"webflow",
 }
+
+# Automation lens: what a site shows about how the business runs.
+FAX = re.compile(r"\b(?:tele)?fax\b\.?\s*:?\s*(?:\+|0)[\d\s/().\-]{6,}", re.I)
+PDF_FORM = re.compile(r"formular|antrag|anmeld|auftrag|vollmacht|fragebogen|anamnese|mandat|"
+                      r"aufnahme|selbstauskunft|checkliste|einwilligung|schadenmeldung", re.I)
+CAREERS = re.compile(r"karriere|stellenangebot|stellen\b|jobs?\b|wir[- ]suchen|bewerb", re.I)
+FORMS_PAGE = re.compile(r"formulare|downloads?\b|patienteninfo|mandanteninfo|unterlagen", re.I)
+OFFICE_ROLES = {
+    "Büro/Verwaltung": r"bürokauf|büromanagement|bürokraft|büroassist|büromitarbeit|verwaltungs"
+                       r"(?:kraft|mitarbeit|angestellt|fachangestellt)|sachbearbeit|teamassist|sekretär",
+    "Empfang": r"rezeption|empfangs(?:kraft|mitarbeit|dame|bereich)",
+    "Fachangestellte": r"(?:zahn|tier)?medizinische[rn]?\s+fachangestellt|"
+                       r"(?:rechtsanwalts|steuer|notar)fachangestellt|\b(?:mfa|zfa|tfa|refa)\b",
+    "Buchhaltung": r"buchhalt",
+    "Disposition": r"disponent|disposition",
+}
+# A role only counts as hiring next to a job-ad marker: practices name their MFA on
+# team pages, which is not a vacancy (first live run: 132 of 576 sites without this).
+JOB_AD = re.compile(r"\(\s*[mwdxf]\s*/\s*[mwdxf](?:\s*/\s*[mwdxf])?\s*\)|gesucht|wir suchen|"
+                    r"verstärkung|stellenangebot|ausbildungsplatz|jetzt bewerben|bewerben sie sich", re.I)
+INTEGRATIONS = {
+    "HERO": r"hero-software|herosoftware", "Craftnote": r"craftnote", "openHandwerk": r"openhandwerk",
+    "Plancraft": r"plancraft", "ToolTime": r"tooltime", "Taifun": r"taifun-software",
+    "DATEV": r"datev", "sevDesk": r"sevdesk", "lexoffice": r"lexoffice|lexware",
+    "WhatsApp": r"wa\.me/|api\.whatsapp\.com", "Google Forms": r"docs\.google\.com/forms|forms\.gle/",
+    "Microsoft Forms": r"forms\.office\.com", "Jotform": r"jotform\.com", "Typeform": r"typeform\.com",
+    "HubSpot": r"hs-scripts\.com|hubspot", "Calendly": r"calendly\.com",
+}
+TRADE_SOFTWARE = {"Craftnote", "openHandwerk", "Plancraft", "ToolTime", "Taifun"}
+GLUE = {"WhatsApp", "Google Forms", "Microsoft Forms", "Jotform", "Typeform"}
 
 DEAD = {"domain_gone", "parked", "placeholder", "not_found", "server_error",
         "no_answer", "ssl_broken", "spam_injected", "http_error"}
@@ -138,9 +204,11 @@ async def fetch_overpass(query: str, client: httpx.AsyncClient, mirrors=MIRRORS,
         print(f"overpass: {msg}, trying the next server", file=sys.stderr, flush=True)
 
     for rnd in range(rounds):
+        empties = 0
         for url in mirrors:
             try:
-                r = await client.post(url, data={"data": query}, timeout=240)
+                r = await client.post(url, data={"data": query}, timeout=240,
+                                      headers={"User-Agent": OVERPASS_UA})
             except httpx.HTTPError as e:
                 note(f"{urlparse(url).hostname}: {type(e).__name__}")
                 continue
@@ -157,7 +225,17 @@ async def fetch_overpass(query: str, client: httpx.AsyncClient, mirrors=MIRRORS,
                 # Overpass answers 200 with a remark and a PARTIAL element list on timeout.
                 note(f"{urlparse(url).hostname}: partial answer ({remark[:60]})")
                 continue
-            return data.get("elements", []), url
+            elements = data.get("elements", [])
+            if not elements:
+                # kumi.systems answered 200 with zero for every tag on 2026-11-25 (area
+                # not resolved) while overpass-api.de counted 14-83. One empty answer is a
+                # server's failure; two servers agreeing is an empty town.
+                empties += 1
+                if empties >= 2:
+                    return [], url
+                note(f"{urlparse(url).hostname}: empty answer")
+                continue
+            return elements, url
         if rnd < rounds - 1:
             wait = pause * (rnd + 1)
             print(f"overpass: every server busy, waiting {wait:.0f} s (round {rnd + 1} of {rounds})",
@@ -180,15 +258,21 @@ def businesses(elements: list[dict], trades: list[str]) -> list[dict]:
         name, trade = (tags.get("name") or "").strip(), classify(tags, trades)
         if not name or not trade:
             continue
+        website = (tags.get("website") or tags.get("contact:website") or tags.get("url") or "").strip()
         key = (name.lower(), tags.get("addr:street", ""), tags.get("addr:housenumber", ""))
-        if key in seen:
+        site_key = (name.lower(), website.lower().rstrip("/")) if website else None
+        if key in seen or (site_key and site_key in seen):
             continue
         seen.add(key)
+        if site_key:
+            seen.add(site_key)
         out.append({
             "name": name, "trade": trade,
             "street": " ".join(x for x in (tags.get("addr:street", ""), tags.get("addr:housenumber", "")) if x),
             "postcode": tags.get("addr:postcode", ""), "city": tags.get("addr:city", ""),
-            "website": (tags.get("website") or tags.get("contact:website") or tags.get("url") or "").strip(),
+            "website": website,
+            # OSM tags chain locations with a brand; those are not owner-run prospects.
+            "chain": bool(tags.get("brand") or tags.get("brand:wikidata") or tags.get("operator:wikidata")),
             "osm": f"{e.get('type', '')}/{e.get('id', '')}",
         })
     return out
@@ -226,13 +310,85 @@ def platform(page: str) -> str:
     return next((p for p, pat in PLATFORMS.items() if re.search(pat, hay)), "")
 
 
-def impressum_link(page: str, base: str) -> str:
+def _links(page: str, base: str) -> list[tuple[str, str]]:
+    """(absolute href, visible label) for every ordinary link on the page."""
+    out = []
     for href, label in re.findall(r'(?is)<a\b[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', page):
-        if "impressum" in href.lower() or "impressum" in label.lower():
-            if href.startswith(("mailto:", "tel:", "javascript:")):
-                continue
-            return urljoin(base, href)
+        if href.startswith(("mailto:", "tel:", "javascript:", "#")):
+            continue
+        out.append((urljoin(base, href), re.sub(r"<[^>]+>", " ", label)))
+    return out
+
+
+def _first_link(page: str, base: str, pat: re.Pattern, skip_pdf: bool = True) -> str:
+    for href, label in _links(page, base):
+        if skip_pdf and urlparse(href).path.lower().endswith(".pdf"):
+            continue
+        if pat.search(urlparse(href).path) or pat.search(label):
+            return href
     return ""
+
+
+def impressum_link(page: str, base: str) -> str:
+    return _first_link(page, base, re.compile("impressum", re.I))
+
+
+def pdf_forms(page: str, base: str) -> list[str]:
+    """Printable forms (Anmeldebogen, Vollmacht, Schadenmeldung ...), not price lists or menus."""
+    seen = []
+    for href, label in _links(page, base):
+        path = urlparse(href).path
+        if path.lower().endswith(".pdf") and (PDF_FORM.search(path) or PDF_FORM.search(label)):
+            if href not in seen:
+                seen.append(href)
+    return seen
+
+
+def automation_signals(pages: list[tuple[str, str]], trade: str) -> dict:
+    """Score what the site shows about manual work. ``pages`` = [(html, url)], homepage first. Pure."""
+    html_all = " ".join(p for p, _ in pages)
+    low = html_all.lower()
+    text = "\n".join(html_to_text(p) for p, _ in pages)
+    forms = []
+    for p, u in pages:
+        forms += [f for f in pdf_forms(p, u) if f not in forms]
+    roles: list[str] = []
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if not JOB_AD.search(" ".join(lines[max(0, i - 1):i + 2])):
+            continue
+        roles += [r for r, pat in OFFICE_ROLES.items() if r not in roles and re.search(pat, line, re.I)]
+    tools = [t for t, pat in INTEGRATIONS.items() if re.search(pat, low)]
+    booking = booking_tools(pages[0][0]) if pages else []
+    score, why = 0, []
+    if trade in AUTO_BOOKING_TRADES and not booking:
+        score += 2
+        why.append("appointments by phone or email only (booking + reminder flow)")
+    if FAX.search(text):
+        score += 1
+        why.append("fax number listed (paper intake)")
+    if forms:
+        score += 2
+        why.append(f"{len(forms)} printable PDF form(s) (online form + auto-filing)")
+    if roles:
+        score += 2
+        why.append(f"hiring for office work: {', '.join(roles)} (automation offsets admin hours)")
+    if "HERO" in tools:
+        score += 2
+        why.append("runs HERO (our n8n node + the WW case)")
+    soft = [t for t in tools if t in TRADE_SOFTWARE]
+    if soft:
+        score += 1
+        why.append(f"runs {', '.join(soft)} (integration point)")
+    glue = [t for t in tools if t in GLUE]
+    if glue:
+        score += 1
+        why.append(f"{', '.join(glue)} intake (data copied by hand)")
+    if re.search(r"rückruf", text, re.I):
+        score += 1
+        why.append("callback requests (handled by hand)")
+    return {"auto_score": score, "auto_reasons": why, "tools": ", ".join(tools + booking),
+            "office_hiring": ", ".join(roles), "pdf_forms": str(len(forms)) if forms else ""}
 
 
 _LABEL = re.compile(r"\b(inhaber(?:in)?|inh\.|praxisinhaber(?:in)?|geschäftsführer(?:in)?|"
@@ -298,7 +454,9 @@ def read_home(page: str, final_url: str, trade: str, this_year: int) -> dict:
     """Judge a homepage that loaded. Pure: no network."""
     low, text = page.lower(), html_to_text(page)
     res = {"status": "ok", "reasons": [], "score": 0, "platform": platform(page),
-           "booking": "", "copyright_year": "", "impressum": impressum_link(page, final_url)}
+           "booking": "", "copyright_year": "", "impressum": impressum_link(page, final_url),
+           "careers": _first_link(page, final_url, CAREERS),
+           "forms_page": _first_link(page, final_url, FORMS_PAGE)}
     if any(p in low for p in PARKED):
         res.update(status="parked", reasons=["domain is parked or for sale"])
         return res
@@ -350,12 +508,14 @@ async def dns_resolves(host: str, attempts: int = 2) -> bool:
     return False
 
 
-async def check_site(biz: dict, client, insecure, resolver, this_year: int, timeout: float = 20) -> dict:
+async def check_site(biz: dict, client, insecure, resolver, this_year: int, timeout: float = 20,
+                     lens: str = "website") -> dict:
     url = biz["website"]
     url = url if re.match(r"(?i)https?://", url) else "http://" + url
     host = urlparse(url).hostname or ""
     base = {"status": "", "reasons": [], "score": 0, "final_url": "", "platform": "",
-            "booking": "", "copyright_year": "", "owner": ""}
+            "booking": "", "copyright_year": "", "owner": "", "tools": "", "office_hiring": "",
+            "pdf_forms": "", "auto_score": 0, "auto_reasons": []}
     if not host:
         return {**base, "status": "http_error", "reasons": ["website tag is not a URL"]}
     if not await resolver(host):
@@ -386,21 +546,46 @@ async def check_site(biz: dict, client, insecure, resolver, this_year: int, time
     if r.status_code >= 400:
         return {**base, "status": "http_error", "final_url": final, "reasons": [f"homepage gives HTTP {r.status_code}"]}
     home = read_home(r.text, final, biz["trade"], this_year)
-    out = {**base, **{k: v for k, v in home.items() if k != "impressum"}, "final_url": final}
+    out = {**base, **{k: v for k, v in home.items() if k not in ("impressum", "careers", "forms_page")},
+           "final_url": final}
+    if home["status"] != "ok":
+        return out
     # Only a real site's Impressum names the owner; a parked page's names the parking company.
-    if home["status"] == "ok" and home["impressum"]:
+    if home["impressum"]:
         try:
             imp = await client.get(home["impressum"])
             if imp.status_code == 200:
                 out["owner"] = owner_from_impressum(html_to_text(imp.text))
         except httpx.HTTPError:
             pass
+    if lens == "automation":
+        pages = [(r.text, final)]
+        for extra in dict.fromkeys(x for x in (home["careers"], home["forms_page"]) if x):
+            try:
+                pg = await client.get(extra)
+                if pg.status_code == 200 and "html" in pg.headers.get("content-type", "html"):
+                    pages.append((pg.text, str(pg.url)))
+            except httpx.HTTPError:
+                pass
+        out.update(automation_signals(pages, biz["trade"]))
     return out
 
 
 # ---------------------------------------------------------------- orchestration
 
-def priority(row: dict) -> int:
+AUTO_STRONG, AUTO_SOME = 4, 2
+
+
+def priority(row: dict, lens: str = "website") -> int:
+    if lens == "automation":
+        s = row["status"]
+        if row.get("chain"):
+            return 8
+        if s == "ok":
+            return 1 if row["score"] >= AUTO_STRONG else 2 if row["score"] >= AUTO_SOME else 3
+        if s in DEAD:
+            return 4
+        return {"no_website_listed": 5, "blocked": 6}.get(s, 7)
     if row["status"] in DEAD:
         return 1
     if row["status"] == "ok" and row["score"] >= WEAK_AT:
@@ -414,13 +599,20 @@ def priority(row: dict) -> int:
     return 6
 
 
-PRIORITY_LABEL = {1: "1 dead or broken", 2: "2 weak site", 3: "3 no website listed (unverified)",
-                  4: "4 site fine", 5: "5 unknown (blocked our check)", 6: "6 not checked (--limit)"}
+PRIORITY_LABEL = {
+    "website": {1: "1 dead or broken", 2: "2 weak site", 3: "3 no website listed (unverified)",
+                4: "4 site fine", 5: "5 unknown (blocked our check)", 6: "6 not checked (--limit)"},
+    "automation": {1: "1 strong automation fit", 2: "2 some automation signals", 3: "3 few signals",
+                   4: "4 site gone or broken", 5: "5 no website listed (unverified)",
+                   6: "6 unknown (blocked our check)", 7: "7 not checked (--limit)",
+                   8: "8 chain or brand location (not owner-run)"},
+}
 
 
 async def scan(query: str, trades: list[str], *, limit: int = 0, concurrency: int = 8,
                transport=None, insecure_transport=None, resolver=dns_resolves,
-               sleep=asyncio.sleep, this_year: int | None = None, overpass_pause: float = 30):
+               sleep=asyncio.sleep, this_year: int | None = None, overpass_pause: float = 30,
+               lens: str = "website"):
     this_year = this_year or date.today().year
     if not await resolver("www.openstreetmap.org"):
         raise OverpassUnavailable("DNS does not resolve a known domain here; every site would read as gone")
@@ -448,22 +640,28 @@ async def scan(query: str, trades: list[str], *, limit: int = 0, concurrency: in
                         "booking": "", "copyright_year": "", "owner": "", "reasons": ["over --limit"]}
             checked += 1
             async with sem:
-                return {**biz, **await check_site(biz, client, insecure, resolver, this_year)}
+                return {**biz, **await check_site(biz, client, insecure, resolver, this_year, lens=lens)}
 
         rows = await asyncio.gather(*(one(b) for b in found))
         # A busy server times out under parallel load; give every "no answer" one
         # slow, sequential retry before calling it dead (live run 2026-11-19: 1 of 5 recovered).
         for i, biz in enumerate(found):
             if rows[i]["status"] == "no_answer":
-                rows[i] = {**biz, **await check_site(biz, client, insecure, resolver, this_year, timeout=45)}
+                rows[i] = {**biz, **await check_site(biz, client, insecure, resolver, this_year,
+                                                     timeout=45, lens=lens)}
     for row in rows:
-        row["priority"] = PRIORITY_LABEL[priority(row)]
+        if lens == "automation" and row["status"] == "ok":
+            row["score"], row["reasons"] = row["auto_score"], row["auto_reasons"]
+        if lens == "automation" and row.get("chain"):
+            row["reasons"] = ["chain or brand location (not owner-run)"] + list(row["reasons"])
+        row["priority"] = PRIORITY_LABEL[lens][priority(row, lens)]
     rows.sort(key=lambda r: (r["priority"], -r["score"], r["trade"], r["name"].lower()))
     return rows, mirror
 
 
 COLUMNS = ["priority", "status", "score", "reasons", "trade", "name", "owner", "street", "postcode",
-           "city", "website", "final_url", "platform", "booking", "copyright_year", "osm"]
+           "city", "website", "final_url", "platform", "booking", "tools", "office_hiring", "pdf_forms",
+           "copyright_year", "osm"]
 
 
 def write_csv(rows: list[dict], path: Path) -> None:
@@ -475,12 +673,12 @@ def write_csv(rows: list[dict], path: Path) -> None:
             w.writerow({**r, "reasons": "; ".join(r["reasons"]), "trade": TRADES[r["trade"]][0]})
 
 
-def summary(rows: list[dict], mirror: str) -> str:
+def summary(rows: list[dict], mirror: str, lens: str = "website") -> str:
     from collections import Counter
     by_p = Counter(r["priority"] for r in rows)
     by_s = Counter(r["status"] for r in rows)
-    lines = [f"{len(rows)} businesses from {urlparse(mirror).hostname}"]
-    lines += [f"  {by_p[label]:>4}  {label}" for label in PRIORITY_LABEL.values() if by_p[label]]
+    lines = [f"{len(rows)} businesses from {urlparse(mirror).hostname} ({lens} lens)"]
+    lines += [f"  {by_p[label]:>4}  {label}" for label in PRIORITY_LABEL[lens].values() if by_p[label]]
     lines.append("  status: " + ", ".join(f"{s} {n}" for s, n in by_s.most_common()))
     return "\n".join(lines)
 
@@ -491,13 +689,22 @@ def main(argv=None) -> int:
     where.add_argument("--area", help="town name as OpenStreetMap spells it, e.g. Karlsruhe")
     where.add_argument("--around", help="lat,lng,km, e.g. 49.0094,8.4044,8")
     ap.add_argument("--admin-level", default="6|8", help="OSM admin level(s) for --area (default 6|8)")
-    ap.add_argument("--trades", default="all", help="comma list of: " + ", ".join(TRADES))
+    ap.add_argument("--lens", choices=list(LENS_TRADES), default="website",
+                    help="website: rank by site weakness (build offer); automation: rank by manual "
+                         "back-office signals (automation offer)")
+    ap.add_argument("--trades", default="", help="comma list (default: the lens's trades; 'all' = every "
+                                                 "trade) of: " + ", ".join(TRADES))
     ap.add_argument("--limit", type=int, default=0, help="check at most N websites (0 = all)")
     ap.add_argument("--concurrency", type=int, default=8)
-    ap.add_argument("--out", help="CSV path (default .scratch/local-site-scan/<area>-<date>.csv)")
+    ap.add_argument("--out", help="CSV path (default .scratch/local-site-scan/<area>-<lens>-<date>.csv)")
     a = ap.parse_args(argv)
 
-    trades = list(TRADES) if a.trades == "all" else [t.strip() for t in a.trades.split(",") if t.strip()]
+    if a.trades in ("", "lens"):
+        trades = list(LENS_TRADES[a.lens])
+    elif a.trades == "all":
+        trades = list(TRADES)
+    else:
+        trades = [t.strip() for t in a.trades.split(",") if t.strip()]
     bad = [t for t in trades if t not in TRADES]
     if bad:
         ap.error(f"unknown trade(s): {', '.join(bad)}")
@@ -506,15 +713,16 @@ def main(argv=None) -> int:
         ap.error("--around needs lat,lng,km")
     query = build_query(trades, area=a.area, admin_level=a.admin_level, around=around)
     slug = re.sub(r"[^a-z0-9]+", "-", (a.area or a.around).lower()).strip("-")
-    out = Path(a.out) if a.out else OUT_DIR / f"{slug}-{date.today():%Y-%m-%d}.csv"
+    out = Path(a.out) if a.out else OUT_DIR / f"{slug}-{a.lens}-{date.today():%Y-%m-%d}.csv"
     try:
-        rows, mirror = asyncio.run(scan(query, trades, limit=a.limit, concurrency=a.concurrency))
+        rows, mirror = asyncio.run(scan(query, trades, limit=a.limit, concurrency=a.concurrency,
+                                        lens=a.lens))
     except OverpassUnavailable as e:
         print(f"STOPPED, no list written: {e}", file=sys.stderr)
         return 2
     write_csv(rows, out)
     sys.stdout.reconfigure(encoding="utf-8")
-    print(summary(rows, mirror))
+    print(summary(rows, mirror, a.lens))
     print(f"-> {out}")
     return 0
 
