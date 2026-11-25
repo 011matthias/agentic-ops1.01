@@ -807,6 +807,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## gta6-clipping
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-11-25 | GTA6 Kai Refill Reach Swap | client-dev | [Mini-Checkpoint-1](docs/2026-11-25%20-%20GTA6%20Kai%20Refill%20Reach%20Swap/Mini-Checkpoint-1.md) |
 | 2026-11-22 | GTA6 Dedupe Slots Layouts | client-dev | [Mini-Checkpoint-1](docs/2026-11-22%20-%20GTA6%20Dedupe%20Slots%20Layouts/Mini-Checkpoint-1.md) |
 | 2026-11-20 | GTA6 Publish Fixed Slots | client-dev | [Mini-Checkpoint-1](docs/2026-11-20%20-%20GTA6%20Publish%20Fixed%20Slots/Mini-Checkpoint-1.md) |
 | 2026-11-19 | GTA6 KaiCenat Production | client-dev | [Mini-Checkpoint-1](docs/2026-11-19%20-%20GTA6%20KaiCenat%20Production/Mini-Checkpoint-1.md) |
