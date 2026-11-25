@@ -35,13 +35,6 @@ streamers:
     layout: null
     priority: 3
     permission: unknown
-  - name: "jasontheween"
-    twitch: jasontheween
-    youtube: null
-    language: en
-    layout: null
-    priority: 3
-    permission: unknown
   - name: "IShowSpeed"
     twitch: ishowspeed
     youtube: null
@@ -51,13 +44,6 @@ streamers:
     permission: unknown
   - name: "KaiCenat"
     twitch: kaicenat
-    youtube: null
-    language: en
-    layout: null
-    priority: 3
-    permission: unknown
-  - name: "TheBurntPeanut"
-    twitch: theburntpeanut
     youtube: null
     language: en
     layout: null
@@ -77,8 +63,29 @@ streamers:
     layout: null
     priority: 3
     permission: unknown
-  - name: "stableronaldo"
-    twitch: stableronaldo
+  - name: "Jerma985"
+    twitch: jerma985
+    youtube: null
+    language: en
+    layout: null
+    priority: 3
+    permission: unknown
+  - name: "CohhCarnage"
+    twitch: cohhcarnage
+    youtube: null
+    language: en
+    layout: null
+    priority: 3
+    permission: unknown
+  - name: "AvoidingThePuddle"
+    twitch: avoidingthepuddle
+    youtube: null
+    language: en
+    layout: null
+    priority: 3
+    permission: unknown
+  - name: "NickEh30"
+    twitch: nickeh30
     youtube: null
     language: en
     layout: null
