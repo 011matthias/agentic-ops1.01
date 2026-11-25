@@ -31,8 +31,9 @@ xqc:
 kaicenat:
   facecam: [0, 432, 392, 220]      # Rechteck links in der Mitte, Chat direkt darunter
   cam_crop: [10, 432, 372, 220]    # 1080:640 innerhalb, sonst wächst die Cam in den Chat
-  gameplay: [400, 0, 1520, 1080]   # ohne Cam und Chat links: m30 zeigte beide im Band
-  calibrated: "2026-11-19, VOD 2932305259 bei 2:52:40 und 8:35:45"
+  gameplay: [400, 0, 1320, 1080]   # ohne Cam und Chat links: m30 zeigte beide im Band;
+                                   # ab x 1720 Subathon-Timer (y 130-180) und Zähler (y 535-600)
+  calibrated: "2026-11-19, VOD 2932305259 bei 2:52:40 und 8:35:45; rechter Rand 2026-11-25, VOD 2934866208 bei 6:30, VOD 2935613960 bei 0:02 und 3:24"
   earlier:                         # derselbe Stream, bevor die Cam nach unten rückte
     - video: "2932305259"
       until_s: 5175                # zwischen 5100 s (oben) und 5250 s (unten) gemessen
