@@ -776,6 +776,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## upwork-independence
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-11-25 | Local Site Scanner and Automation Lens | client-dev | [→](docs/2026-11-25%20-%20Local%20Site%20Scanner%20and%20Automation%20Lens/Checkpoint.md) |
 | 2026-10-30 | Air to Sea Shuttles Enquiry | comms | [→](docs/2026-10-30%20-%20Air%20to%20Sea%20Shuttles%20Enquiry/Checkpoint.md) |
 | 2026-10-29 | UWI Marketing Evidence Research | misc | [→](docs/2026-10-29%20-%20UWI%20Marketing%20Evidence%20Research/Checkpoint.md) |
 | 2026-10-26 | UWI HERO n8n Channel | misc | [→](docs/2026-10-26%20-%20UWI%20HERO%20n8n%20Channel/Checkpoint.md) |
