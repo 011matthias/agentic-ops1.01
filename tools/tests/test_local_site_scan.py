@@ -264,6 +264,138 @@ def test_scan_stops_when_dns_is_blind():
         _scan(resolver=blind)
 
 
+# ------------------------------------------------------------ Overpass server quirks (2026-11-25)
+
+def test_overpass_requests_name_the_tool():
+    """overpass-api.de answers a browser-looking agent with 406; it must get the tool's own."""
+    seen = []
+
+    def handler(req):
+        seen.append(req.headers["user-agent"])
+        return httpx.Response(200, json={"elements": [{"id": 1}]})
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler), headers={"User-Agent": lss.UA}) as c:
+            return await lss.fetch_overpass("q", c, sleep=_no_sleep)
+    asyncio.run(go())
+    assert seen == [lss.OVERPASS_UA]
+
+
+def test_one_empty_answer_is_a_server_failure_not_an_empty_town():
+    calls = []
+
+    def handler(req):
+        calls.append(req.url.host)
+        if len(calls) == 1:  # kumi.systems shape: 200, zero elements, area not resolved
+            return httpx.Response(200, json={"elements": []})
+        return httpx.Response(200, json={"elements": [{"id": 1}, {"id": 2}]})
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
+            return await lss.fetch_overpass("q", c, sleep=_no_sleep)
+    elements, mirror = asyncio.run(go())
+    assert len(elements) == 2 and mirror == lss.MIRRORS[1]
+
+
+# ------------------------------------------------------------ automation lens
+
+HV_HOME = """<html><body><h1>Hausverwaltung Muster</h1>
+<p>Telefon 0721 123456 · Telefax: 0721 123457</p>
+<a href="/karriere">Karriere</a> <a href="/downloads">Formulare</a>
+<a href="https://wa.me/49721123456">WhatsApp</a>
+<p>Rückruf vereinbaren</p><a href="/impressum">Impressum</a></body></html>"""
+HV_CAREERS = "<h2>Wir suchen</h2><p>Immobilienkaufmann und Bürokauffrau (m/w/d)</p><p>Buchhalter (m/w/d)</p>"
+HV_DOWNLOADS = """<a href="/files/Selbstauskunft.pdf">Mieterselbstauskunft</a>
+<a href="/files/Schadenmeldung.pdf">Schaden melden</a><a href="/files/Preisliste.pdf">Preise</a>"""
+
+
+def test_automation_signals_read_a_paper_heavy_office():
+    s = lss.automation_signals([(HV_HOME, "https://hv.example/"), (HV_CAREERS, "https://hv.example/karriere"),
+                                (HV_DOWNLOADS, "https://hv.example/downloads")], "hausverwaltung")
+    assert s["pdf_forms"] == "2"                      # the price list is not a form
+    assert s["office_hiring"] == "Büro/Verwaltung, Buchhaltung"
+    assert "WhatsApp" in s["tools"]
+    # fax 1 + forms 2 + hiring 2 + WhatsApp intake 1 + callback 1; Hausverwaltung is not a booking trade
+    assert s["auto_score"] == 7
+    assert not any("appointments" in r for r in s["auto_reasons"])
+
+
+def test_automation_signals_quiet_on_a_digital_practice():
+    s = lss.automation_signals([(MODERN_SITE, "https://neu.example/")], "zahnarzt")
+    assert (s["auto_score"], s["auto_reasons"]) == (0, [])
+    assert "Doctolib" in s["tools"]
+
+
+def test_hero_on_a_trade_site_is_the_strongest_software_signal():
+    page = '<p>Anfrage</p><script src="https://app.hero-software.de/widget.js"></script>'
+    s = lss.automation_signals([(page, "https://sanitaer.example/")], "sanitaer")
+    assert "HERO" in s["tools"] and s["auto_score"] == 2
+
+
+def test_a_team_page_is_not_a_job_ad():
+    team = "<h2>Unser Team</h2><p>Anna Muster, Medizinische Fachangestellte</p><p>Bürokauffrau Eva Beispiel</p>"
+    ad = "<h2>Stellenangebote</h2><p>Medizinische Fachangestellte (m/w/d) in Teilzeit</p>"
+    assert lss.automation_signals([(team, "https://x.example/")], "tierarzt")["office_hiring"] == ""
+    assert lss.automation_signals([(ad, "https://x.example/")], "tierarzt")["office_hiring"] == "Fachangestellte"
+
+
+def test_patient_trades_are_not_automation_defaults():
+    assert not {"arzt", "zahnarzt", "physio"} & set(lss.LENS_TRADES["automation"])
+    assert {"arzt", "zahnarzt", "physio"} <= set(lss.LENS_TRADES["website"])
+
+
+@pytest.mark.parametrize("text,hit", [
+    ("Telefax: 0721 / 12 34 56", True), ("Fax +49 721 123456", True),
+    ("Wir haben keine Faxe mehr", False), ("Fax: -", False),
+])
+def test_fax_pattern(text, hit):
+    assert bool(lss.FAX.search(text)) is hit
+
+
+def test_automation_lens_end_to_end():
+    def handler(req):
+        if req.method == "POST":
+            return httpx.Response(200, json={"elements": [
+                _el(1, "Hausverwaltung Muster", "https://hv.example", office="property_management"),
+                _el(2, "Zahnarzt Digital", "https://neu.example", amenity="dentist"),
+                _el(3, "Kfz Weg", "https://gone.example", shop="car_repair"),
+                _el(4, "Hausverwaltung Muster", "https://hv.example", office="property_management",
+                    **{"addr:street": "Zweitstraße"}),                       # same office, second map entry
+                _el(5, "Versicherung Kette", "https://kette.example", office="insurance",
+                    **{"brand:wikidata": "Q123"})]})
+        page = {("hv.example", "/"): HV_HOME, ("hv.example", "/karriere"): HV_CAREERS,
+                ("hv.example", "/downloads"): HV_DOWNLOADS,
+                ("hv.example", "/impressum"): "<p>Geschäftsführer: Max Mustermann</p>",
+                ("neu.example", "/"): MODERN_SITE, ("kette.example", "/"): HV_HOME,
+                ("kette.example", "/karriere"): HV_CAREERS, ("kette.example", "/downloads"): HV_DOWNLOADS,
+                ("kette.example", "/impressum"): "<p>Vorstand</p>"}.get((req.url.host, req.url.path))
+        if page is None:
+            raise AssertionError(f"unexpected request {req.url}")
+        return httpx.Response(200, text=page, headers={"content-type": "text/html"})
+
+    rows, _ = asyncio.run(lss.scan(
+        "q", list(lss.TRADES), transport=httpx.MockTransport(handler),
+        insecure_transport=httpx.MockTransport(_insecure_handler),
+        resolver=_resolver_gone({"gone.example"}), sleep=_no_sleep, this_year=2026, lens="automation"))
+    by = {r["name"]: r for r in rows}
+    hv = by["Hausverwaltung Muster"]
+    assert hv["priority"] == "1 strong automation fit" and hv["score"] == 7
+    assert hv["owner"] == "Max Mustermann" and hv["office_hiring"] == "Büro/Verwaltung, Buchhaltung"
+    assert by["Zahnarzt Digital"]["priority"] == "3 few signals"
+    assert by["Kfz Weg"]["priority"] == "4 site gone or broken"
+    assert rows[0]["name"] == "Hausverwaltung Muster"
+    assert [r["name"] for r in rows].count("Hausverwaltung Muster") == 1
+    # same paper-heavy site, but a brand location: not an owner-run prospect
+    assert by["Versicherung Kette"]["priority"] == "8 chain or brand location (not owner-run)"
+    assert by["Versicherung Kette"]["reasons"][0].startswith("chain or brand")
+
+
+def _resolver_gone(gone):
+    async def resolve(host):
+        return host not in gone
+    return resolve
+
+
 def test_cli_rejects_unknown_trade():
     with pytest.raises(SystemExit):
         lss.main(["--area", "Karlsruhe", "--trades", "baecker"])
