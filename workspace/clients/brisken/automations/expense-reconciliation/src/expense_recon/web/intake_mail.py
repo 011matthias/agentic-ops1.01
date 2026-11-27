@@ -105,8 +105,14 @@ MAX_ATTACHMENTS_PER_MAIL = 30
 # our own people mail from, not a second allowlist for submission (that
 # one is gone). A ceiling keeps it that way.
 MAX_KNOWN_SENDERS = 25
-# `rendered_by` on mail the arrival path rendered without a human.
+# `rendered_by` on mail the arrival path rendered without a human, and
+# `dismissed_by` on mail it set aside without one (item 268).
 AUTO_RENDER_OPERATOR = "auto"
+# `dismissed_reason` on a body-only mail set aside at arrival because it is
+# bulk mail whose text names no price (item 268). It is what tells this
+# dismissal apart from an operator's: it reads differently on the intake
+# page, and it stays renderable, because no human judged it.
+AUTO_SET_ASIDE_REASON = "bulk_no_price"
 MAX_INFLIGHT_ROUTES = 8
 # Free-disk floor (backlog item 122). It used to be a flat 500 MiB, which
 # on the 1 GB volume meant the mailbox turned EVERY receipt away once the
@@ -1050,6 +1056,9 @@ def read_log(data_root: Path, limit: int = 100, overlay: bool = True) -> list[di
                 row["not_added"] = meta["not_added"]
             if meta.get("error"):
                 row["error"] = meta["error"]
+            # Item 268: a dismissal the arrival path made, not an operator.
+            if meta.get("dismissed_reason"):
+                row["dismissed_reason"] = meta["dismissed_reason"]
             if row.get("status") == STATUS_INGESTED:
                 # An ingested mail has no current error. A failed first try
                 # (the 2026-09-24 429 on a render) leaves its text on the
@@ -2105,6 +2114,14 @@ def annotate_status_view(rows: list[dict]) -> None:
                 f'Already have this, from "{subject}"' if subject
                 else "Already have this"
             )
+        elif (
+            status == STATUS_DISMISSED
+            and row.get("dismissed_reason") == AUTO_SET_ASIDE_REASON
+        ):
+            # Item 268: same status and kind as an operator's dismissal (no
+            # new enum value, rule 5), but the label must not claim a person
+            # judged it.
+            label = "Marketing email with no price, set aside automatically"
         elif mail_added_nothing(row):
             # Item 106: finished, but no expense came of it. Same status
             # and kind (the held count keys on status; a sixth kind value
@@ -2694,8 +2711,7 @@ def _auto_render(
     db_path: Path, learning_db_path: Path | None, data_root: Path,
     arch: Path, person: dict,
 ) -> dict:
-    """Read a known submitter's body-only mail on arrival instead of
-    holding it for a click.
+    """Read a body-only mail on arrival instead of holding it for a click.
 
     A forwarded vendor receipt IS the email body far more often than it is
     an attachment: every one of the six mails held on 2026-08-24 (AWS,
@@ -2707,10 +2723,10 @@ def _auto_render(
     auto-rendered receipt still reaches a month only through the review
     every other receipt passes.
 
-    Known senders only: the mailbox takes mail from anyone, and paying a
-    vision call to render every stranger's newsletter is exactly the spend
-    the click was holding back. A stranger's body-only mail still holds,
-    and still alerts.
+    Who gets this is `body_only_verdict`'s call (item 268): a known sender
+    always, anyone else when the text names a price. A stranger's priced
+    mail costs the same one vision call a stranger's PDF attachment always
+    has, under the same day budget, and it never opens a month.
     """
     try:
         result = render_ingest(
@@ -2742,6 +2758,125 @@ def _auto_render(
     return {
         **result, "status": status, "archive": arch.name,
         "person": person, "auto_rendered": True,
+    }
+
+
+# ------------------------------------ who reads a body-only mail (item 268) --
+# Until 2026-11-27 the answer was keyed on WHO sent the mail: a known
+# sender's body-only mail was read on arrival, everyone else's was held for
+# a click and alerted the operators. Live that day all three held mails were
+# wrong in one of two ways. Two Toast promotions ("you signed up for
+# marketing communications", no order, no price) alerted Criss and Matthias
+# for nothing; and a forwarded Hostinger receipt (invoice H_52366413, "Total
+# paid 10.99 USD") had sat held for four weeks because it was forwarded from
+# an address nobody had listed. Neither question is about the sender. It is
+# about the mail: does it name a price?
+#
+# - a price anywhere in the text: read it, whoever sent it. A stranger's PDF
+#   attachment has always been read on arrival under the same day budget, so
+#   this adds no new class of spend, and month creation stays known-only.
+# - bulk mail (list headers or an unsubscribe line) that names no price: set
+#   it aside as dismissed, with its own reason and label, and alert nobody.
+#   Without a price it cannot become an expense, so a vision call on it buys
+#   nothing (10-29: Toast's "Welcome" and "Thank you for your business" were
+#   both read at a cost and both set aside).
+# - anything else (a link-only receipt, an account notice): held and alerted
+#   exactly as before, because those are what a person should look at.
+
+VERDICT_READ = "read"
+VERDICT_SET_ASIDE = "set_aside"
+VERDICT_HOLD = "hold"
+
+# Currencies a Brisken receipt has actually been in, plus the neighbours a
+# traveller meets. A code counts only as a whole token: "USD10.99" and
+# "10.99 USD" are prices, "TXUSD" is not.
+_PRICE_CODES = (
+    "USD|EUR|GBP|CHF|BRL|CAD|AUD|NZD|JPY|CNY|INR|SEK|NOK|DKK|PLN|CZK|HUF|"
+    "MXN|SGD|HKD|AED|ZAR|ILS"
+)
+_PRICE_CCY = rf"(?:R\$|[€$£¥₹]|(?<![A-Za-z])(?:{_PRICE_CODES})(?![A-Za-z]))"
+_PRICE_NUM = r"\d(?:[\d.,']*\d)?"
+_PRICE_RE = re.compile(
+    rf"{_PRICE_CCY}\s?{_PRICE_NUM}|{_PRICE_NUM}\s?{_PRICE_CCY}"
+)
+# A receipt that prints its total with no currency marker at all ("Total
+# 27.90") still names a price; the word in front of it is what says so.
+_TOTAL_LINE_RE = re.compile(
+    r"(?i)\b(?:total|subtotal|amount|paid|charged|balance due)\b"
+    r"[^\n\d]{0,30}\d[\d.,']*[.,]\d{2}\b"
+)
+# Invisible padding marketing HTML is full of (the Hostinger mail carries
+# hundreds of U+034F / U+200C); stripped so it cannot split a number.
+_INVISIBLE = re.compile("[­͏​-‏⁠﻿]")
+_BULK_TEXT = re.compile(r"(?i)\bunsubscribe\b")
+
+
+def body_names_a_price(text: str) -> bool:
+    """True when a mail's readable text carries a money amount."""
+    clean = _INVISIBLE.sub("", text or "")
+    return bool(_PRICE_RE.search(clean) or _TOTAL_LINE_RE.search(clean))
+
+
+def _looks_like_bulk_mail(arch: Path, text: str) -> bool:
+    """List mail by its headers, or by an unsubscribe line in the text (a
+    forwarded promotion loses the headers but keeps its footer)."""
+    try:
+        msg = BytesParser(policy=policy.default).parsebytes(
+            (arch / "message.eml").read_bytes(), headersonly=True
+        )
+    except Exception:  # noqa: BLE001 - unreadable headers: judge the text
+        msg = None
+    if msg is not None:
+        if msg.get("List-Unsubscribe") or msg.get("List-Id"):
+            return True
+        if str(msg.get("Precedence", "")).strip().lower() in (
+            "bulk", "list", "junk",
+        ):
+            return True
+    return bool(_BULK_TEXT.search(text or ""))
+
+
+def body_only_verdict(arch: Path, from_addr: str, cfg: IntakeConfig) -> str:
+    """What happens to a body-only mail with readable text: read it, set it
+    aside, or hold it for a person. See the block comment above."""
+    if is_known_sender(from_addr, cfg):
+        return VERDICT_READ
+    from .body_render import extract_body_text
+
+    try:
+        text = extract_body_text((arch / "message.eml").read_bytes())
+    except OSError:
+        return VERDICT_HOLD
+    if body_names_a_price(text):
+        return VERDICT_READ
+    if _looks_like_bulk_mail(arch, text):
+        return VERDICT_SET_ASIDE
+    return VERDICT_HOLD
+
+
+def _auto_set_aside(arch: Path, person: dict) -> dict:
+    """Dismiss a priceless bulk mail without a human, and say so.
+
+    Same terminal status an operator's dismissal writes, so every count and
+    every SPA that knows `dismissed` treats it the same; `dismissed_reason`
+    is what keeps it distinguishable (its own label, and `render_ingest`
+    still accepts it, because nobody judged this one). The custody archive
+    is untouched. No alert and no sender notice: the operators asked not to
+    be told about promotions, and the sender is a mailing list."""
+    _transition_meta(
+        arch,
+        lambda m: str(m.get("status", "")) == HELD_BODY_ONLY,
+        {
+            "status": STATUS_DISMISSED,
+            "dismissed_at": _now_iso(),
+            "dismissed_by": AUTO_RENDER_OPERATOR,
+            "dismissed_reason": AUTO_SET_ASIDE_REASON,
+        },
+    )
+    return {
+        "status": str(_read_meta(arch).get("status", "")),
+        "archive": arch.name, "person": person,
+        "set_aside": AUTO_SET_ASIDE_REASON,
     }
 
 
@@ -3085,12 +3220,17 @@ def route_archived(
                 # to read" would promise a click that refuses it.
                 held = HELD_NO_VALID_FILES
             _update_meta(arch, {"status": held})
-            if held == HELD_BODY_ONLY and is_known_sender(
-                parsed.from_addr, cfg
-            ):
-                return _auto_render(
-                    db_path, learning_db_path, data_root, arch, person,
-                )
+            if held == HELD_BODY_ONLY:
+                # Item 268: decided by what the mail SAYS, not only by who
+                # sent it. A price means a receipt worth one reading; bulk
+                # mail with no price is set aside without an alert.
+                verdict = body_only_verdict(arch, parsed.from_addr, cfg)
+                if verdict == VERDICT_READ:
+                    return _auto_render(
+                        db_path, learning_db_path, data_root, arch, person,
+                    )
+                if verdict == VERDICT_SET_ASIDE:
+                    return _auto_set_aside(arch, person)
             _maybe_alert(db_path, arch, held)
             return {"status": held, "archive": arch.name, "person": person}
 
@@ -3808,16 +3948,17 @@ def replay_held(
     authorization as the per-mail render button, so up to that many held
     body-only mails are rendered and ingested through `render_ingest`, the
     path that button runs. The cap bounds the vision spend of one press;
-    the rest stay held and are counted in `still_held`. Arrival never does
-    this for a stranger, and neither does a caller that leaves the budget
-    at 0. An archive counts as replayed ONLY when its ingest job reported
+    the rest stay held and are counted in `still_held`. Priceless bulk mail
+    is set aside first and costs nothing (item 268, `set_aside`). A caller
+    that leaves the budget at 0 leaves body-only mail alone entirely.
+    An archive counts as replayed ONLY when its ingest job reported
     done. Held mail that predates the month stamps is extracted lazily here
     — in the sweep an operator asked for, never at boot."""
     root = inbound_root(data_root)
     if not root.exists():
         return {"replayed": 0, "pooled": 0, "still_held": 0, "failed": 0}
     now = datetime.now(timezone.utc)
-    replayed = pooled = still_held = failed = rendered = 0
+    replayed = pooled = still_held = failed = rendered = set_aside = 0
     render_budget = max(0, int(render_body_only))
     settings: dict | None = None
     client = _UNSET
@@ -3826,6 +3967,19 @@ def replay_held(
             continue
         meta = _read_meta(arch)
         if render_body_only and str(meta.get("status", "")) == HELD_BODY_ONLY:
+            # Item 268: the press applies arrival's rule before it spends.
+            # Priceless bulk mail held by an older build is set aside for
+            # free instead of read at a cost and set aside anyway.
+            if settings is None:
+                with RunStore(db_path) as store:
+                    settings = store.get_settings()
+            if body_only_verdict(
+                arch, str(meta.get("from") or ""),
+                IntakeConfig.from_settings(settings),
+            ) == VERDICT_SET_ASIDE:
+                _auto_set_aside(arch, _archive_person(meta))
+                set_aside += 1
+                continue
             if render_budget <= 0:
                 still_held += 1
                 continue
@@ -3981,6 +4135,7 @@ def replay_held(
     }
     if render_body_only:
         out["rendered"] = rendered
+        out["set_aside"] = set_aside
     return out
 
 
@@ -4199,10 +4354,15 @@ def render_ingest(
         # Body-only held mail, plus RETRY after a failed render ingest
         # (the failure flipped it to held_failed; a replay pass with no
         # parts/ flips that to held_no_valid_files — the `rendered` stamp
-        # marks both as render history, not a delivery state).
+        # marks both as render history, not a delivery state). Item 268:
+        # plus mail the ARRIVAL path set aside as priceless bulk mail; no
+        # person judged it, so a person can still ask for it to be read.
         return status == HELD_BODY_ONLY or (
             bool(meta.get("rendered"))
             and status in {HELD_FAILED, HELD_NO_VALID_FILES}
+        ) or (
+            status == STATUS_DISMISSED
+            and meta.get("dismissed_reason") == AUTO_SET_ASIDE_REASON
         )
 
     # CAS to the transient "rendering" status: a concurrent second render,

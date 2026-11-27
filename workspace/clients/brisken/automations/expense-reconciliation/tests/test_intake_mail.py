@@ -71,10 +71,11 @@ from expense_recon.web.store import RunStore  # noqa: E402
 JPG = b"\xff\xd8\xff\xe0" + b"x" * 5000  # big enough to not read as a logo
 DOMAIN = "expenses.brisken.com"
 # A submitter we do not recognise. Since 2026-08-24 a KNOWN sender's
-# body-only mail renders itself on arrival, so every fixture that wants a
-# mail sitting in held_body_only has to come from outside: that is now the
-# only way body-only mail waits for a click. Tests of the auto-render path
-# use an @brisken.com sender or a listed address instead.
+# body-only mail renders itself on arrival, and since item 268 (2026-11-27)
+# so does ANYONE's whose text names a price. So every fixture that wants a
+# mail sitting in held_body_only comes from outside AND names no price
+# (`_html_mail(OUTSIDE, priced=False)`): that is now the only way body-only
+# mail waits for a click.
 OUTSIDE = "guest@example.org"
 
 # Fixture dates are relative to today, not literals, so the plausibility
@@ -1104,20 +1105,35 @@ def test_ingest_refuses_deleted_batch(client, monkeypatch, tmp_path):
 
 # --------------------------------------------- body-only handling (C2) --
 
-def _html_mail(from_addr: str, subject: str = "Uber forward") -> bytes:
+def _html_mail(
+    from_addr: str, subject: str = "Uber forward", *, priced: bool = True,
+) -> bytes:
+    """An HTML body-only mail. `priced=False` is the shape a stranger's mail
+    must have to still sit in held_body_only since item 268: no price in
+    the text (a link-style receipt) and no unsubscribe line."""
     msg = EmailMessage()
     msg["From"] = from_addr
     msg["To"] = f"receipts@{DOMAIN}"
     msg["Subject"] = subject
     msg["Message-ID"] = "<html-test@brisken.com>"
-    msg.set_content("Total: 27,90 € — Uber trip")
-    msg.add_alternative(
-        "<html><head><style>p{color:red}</style>"
-        "<script>alert('x')</script></head><body>"
-        "<p>Your Uber trip</p><table><tr><td>Total</td>"
-        "<td>27,90&nbsp;&euro;</td></tr></table></body></html>",
-        subtype="html",
-    )
+    if priced:
+        msg.set_content("Total: 27,90 € — Uber trip")
+        msg.add_alternative(
+            "<html><head><style>p{color:red}</style>"
+            "<script>alert('x')</script></head><body>"
+            "<p>Your Uber trip</p><table><tr><td>Total</td>"
+            "<td>27,90&nbsp;&euro;</td></tr></table></body></html>",
+            subtype="html",
+        )
+    else:
+        msg.set_content("Your Uber trip receipt is ready in the app")
+        msg.add_alternative(
+            "<html><head><style>p{color:red}</style>"
+            "<script>alert('x')</script></head><body>"
+            "<p>Your Uber trip</p><p>Your receipt is ready in the app"
+            "</p></body></html>",
+            subtype="html",
+        )
     return msg.as_bytes()
 
 
@@ -1125,7 +1141,7 @@ def test_body_view_returns_sanitized_text(client):
     state = client.app.state
     res = process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _html_mail(OUTSIDE), synchronous=True,
+        _html_mail(OUTSIDE, priced=False), synchronous=True,
     )
     assert res["status"] == HELD_BODY_ONLY
     entries = client.get("/api/inbound/log").json()["entries"]
@@ -1135,7 +1151,7 @@ def test_body_view_returns_sanitized_text(client):
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["subject"] == "Uber forward"
-    assert "27,90" in body["text"]
+    assert "receipt is ready" in body["text"]
     assert "<" not in body["text"] and "script" not in body["text"].lower()
 
     assert client.get("/api/inbound/nope/body").status_code == 404
@@ -1146,7 +1162,7 @@ def test_render_ingest_creates_expense_via_normal_path(client, monkeypatch):
     state = client.app.state
     res = process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _html_mail(OUTSIDE, subject="render me"),
+        _html_mail(OUTSIDE, subject="render me", priced=False),
         synchronous=True,
     )
     assert res["status"] == HELD_BODY_ONLY
@@ -1193,7 +1209,7 @@ def test_render_ingest_guards(client, monkeypatch):
     # operator with nothing to show for the click.
     process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _html_mail(OUTSIDE, subject="no batch yet"),
+        _html_mail(OUTSIDE, subject="no batch yet", priced=False),
         synchronous=True,
     )
     archive = [
@@ -1233,7 +1249,7 @@ def test_dismiss_held_mail(client, monkeypatch):
     state = client.app.state
     process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _html_mail(OUTSIDE, subject="junk forward"),
+        _html_mail(OUTSIDE, subject="junk forward", priced=False),
         synchronous=True,
     )
     log1 = client.get("/api/inbound/log").json()
@@ -1329,7 +1345,7 @@ def test_render_ingest_retry_after_failure(client, monkeypatch):
     state = client.app.state
     process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _html_mail(OUTSIDE, subject="retry me"),
+        _html_mail(OUTSIDE, subject="retry me", priced=False),
         synchronous=True,
     )
     archive = [
@@ -1386,7 +1402,7 @@ def test_render_retry_after_commit_failure_does_not_duplicate(
     state = client.app.state
     process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _html_mail(OUTSIDE, subject="commit then fail"),
+        _html_mail(OUTSIDE, subject="commit then fail", priced=False),
         synchronous=True,
     )
     archive = [
@@ -1434,7 +1450,7 @@ def test_dismiss_refused_while_render_in_flight(client, monkeypatch):
     state = client.app.state
     process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _html_mail(OUTSIDE, subject="race me"),
+        _html_mail(OUTSIDE, subject="race me", priced=False),
         synchronous=True,
     )
     archive = [
@@ -1470,7 +1486,7 @@ def test_replay_rescues_stranded_body_only(client, monkeypatch):
 
     _create_batch(client, monkeypatch, MONTH_LABEL)
     state = client.app.state
-    raw = _html_mail(OUTSIDE, subject="stranded")
+    raw = _html_mail(OUTSIDE, subject="stranded", priced=False)
     parsed = parse_inbound(raw, DOMAIN)
     arch = archive_incoming(state.data_root, raw, parsed)
     meta_path = arch / "meta.json"
@@ -1491,13 +1507,18 @@ def test_replay_rescues_stranded_body_only(client, monkeypatch):
 
 def _body_receipt_mail(n: int) -> bytes:
     """A vendor's own receipt mail, distinct content per `n` (so the
-    arrival dedupe keeps both) and no attachment."""
+    arrival dedupe keeps both) and no attachment. It names no price (the
+    order sits behind the vendor's app), which is what keeps a stranger's
+    body-only mail held since item 268: a priced one is read on arrival."""
     msg = EmailMessage()
     msg["From"] = OUTSIDE
     msg["To"] = f"receipts@{DOMAIN}"
     msg["Subject"] = f"Receipt for order #{n}"
     msg["Message-ID"] = f"<body-receipt-{n}@vendor.example>"
-    msg.set_content(f"Order #{n}\nTotal: {10 + n},00 EUR\nThank you for your business")
+    msg.set_content(
+        f"Order #{n}\nYour receipt is ready in the app\n"
+        "Thank you for your business"
+    )
     return msg.as_bytes()
 
 
@@ -1621,7 +1642,7 @@ def test_reconcile_flips_interrupted_render(client):
     )
 
     state = client.app.state
-    raw = _html_mail(OUTSIDE, subject="killed mid-render")
+    raw = _html_mail(OUTSIDE, subject="killed mid-render", priced=False)
     parsed = parse_inbound(raw, DOMAIN)
     arch = archive_incoming(state.data_root, raw, parsed)
     meta_path = arch / "meta.json"
@@ -2550,14 +2571,15 @@ def test_a_listed_senders_body_only_mail_renders_itself(client, monkeypatch):
 def test_a_strangers_body_only_mail_still_waits_for_a_click(
     client, monkeypatch,
 ):
-    """The gate is on the RENDER, not on the submission: anyone may still
-    mail us, but we do not pay a vision call to read every stranger's
-    newsletter. An unrecognised body-only mail stays held, and alerts."""
+    """Since item 268 a stranger's mail waits only when its text names no
+    price AND it is not bulk mail: a link-style receipt or an account
+    notice, which is what a person should look at. It stays held, and
+    alerts. (A priced one is read; a priceless promotion is set aside.)"""
     calls = _patch_notify(monkeypatch)
     state = client.app.state
     res = process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _html_mail(OUTSIDE, subject="stranger forward"),
+        _html_mail(OUTSIDE, subject="stranger forward", priced=False),
         synchronous=True,
     )
     assert res["status"] == HELD_BODY_ONLY
@@ -3154,7 +3176,7 @@ def test_a_held_row_says_what_it_needs(client, monkeypatch):
     state = client.app.state
     res = process_message(
         state.db_path, state.learning_db_path, state.data_root,
-        _html_mail(OUTSIDE, subject="one click please"),
+        _html_mail(OUTSIDE, subject="one click please", priced=False),
         synchronous=True,
     )
     assert res["status"] == HELD_BODY_ONLY
@@ -4312,3 +4334,238 @@ def test_the_operator_note_above_a_forward_is_kept():
     # cut at and keeps nothing: the note reaches a receipt through the
     # ordinary quoted forward, which is the shape all 30 live notes have.
     assert operator_note(extract_body_text(raw)) == ""
+
+
+# --------------------------- item 268: decided by what the mail says ----
+# Live 2026-11-27, all three held mails were wrong one of two ways: two
+# Toast promotions alerted the operators for nothing, and a forwarded
+# Hostinger receipt ("Total paid 10.99 USD") sat held four weeks because the
+# address that forwarded it was not listed. Every test below goes through
+# the real router or the real route, not through the helpers alone.
+
+TOAST = "no-reply+f1055647@toast-restaurants.com"
+# The padding the live Hostinger mail carries between every line.
+_PAD = "͏‌     ﻿" * 20
+
+
+def _promo_mail(*, list_headers: bool = True, text: str | None = None) -> bytes:
+    """Shaped on the live 2026-11-26 Toast promotion."""
+    msg = EmailMessage()
+    msg["From"] = TOAST
+    msg["To"] = f"receipts@{DOMAIN}"
+    msg["Subject"] = "Noe's Cafe, Charm Thai and The noodle are open for Thanksgiving."
+    msg["Message-ID"] = "<promo@toast-restaurants.com>"
+    if list_headers:
+        msg["List-Unsubscribe"] = "<https://xrr4w.mjt.lu/unsub2?m=EAAA>"
+    msg.set_content(text or (
+        "Open this Thanksgiving, join us for a delicious meal\n"
+        "View online version\n"
+        "Charm Thai Bistro\n"
+        "2203 Spring Stuebner Rd Ste 100, Spring, TX 77389\n"
+        "You are receiving this email because you signed up for marketing "
+        "communications.\nUnsubscribe\n"
+    ))
+    return msg.as_bytes()
+
+
+def _forwarded_hostinger(from_addr: str = OUTSIDE) -> bytes:
+    """Shaped on the live 2026-10-29 forward that sat held four weeks."""
+    msg = EmailMessage()
+    msg["From"] = from_addr
+    msg["To"] = f"receipts@{DOMAIN}"
+    msg["Subject"] = "Fwd: Time to build your online success"
+    msg["Message-ID"] = "<hostinger-fwd@gmail.example>"
+    msg.set_content(
+        "---------- Forwarded message ---------\n"
+        "From: Hostinger <team@info.hostinger.com>\n"
+        f"We got your payment. Thanks!\n{_PAD}\n"
+        "Your order summary\nInvoice: H_52366413\n"
+        f"AI automation apps (1 month)\n10.99 USD\n{_PAD}\n"
+        "Total paid\n10.99 USD\n"
+    )
+    return msg.as_bytes()
+
+
+def _no_reading_allowed(monkeypatch) -> list[int]:
+    """Fail loudly if anything builds a vision client: a set-aside promotion
+    must cost nothing."""
+    built: list[int] = []
+
+    def _refuse(cfg):  # noqa: ARG001 - signature match
+        built.append(1)
+        raise AssertionError("a priceless promotion was sent to be read")
+
+    monkeypatch.setattr("expense_recon.cli._build_llm_client", _refuse)
+    return built
+
+
+def test_a_strangers_priced_body_mail_is_read_on_arrival(client, monkeypatch):
+    """The Hostinger forward: an address nobody listed, a real receipt in
+    the body. It is read on arrival like a stranger's PDF always was, and
+    nobody is alerted about a mail that needs nothing from them."""
+    calls = _patch_notify(monkeypatch)
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction(vendor="Hostinger", total="10.99",
+                                        currency="USD"))
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _forwarded_hostinger(), synchronous=True,
+    )
+    assert res["auto_rendered"] is True, res
+    assert res["status"] == STATUS_POOLED
+    arch = state.data_root / "inbound" / res["archive"]
+    assert (arch / "rendered-body.pdf").exists()
+    assert _operator_alerts(calls) == []
+    assert client.get("/api/inbound/log").json()["n_held"] == 0
+
+
+def test_a_priceless_promotion_is_set_aside_without_an_alert(client, monkeypatch):
+    """The Toast promotion: dismissed on arrival, no vision call, no alert,
+    no sender notice, and the intake page says it was the tool, not a
+    person, that set it aside."""
+    calls = _patch_notify(monkeypatch)
+    built = _no_reading_allowed(monkeypatch)
+    state = client.app.state
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _promo_mail(), synchronous=True,
+    )
+    assert res["status"] == STATUS_DISMISSED, res
+    assert res["set_aside"] == "bulk_no_price"
+    assert calls == [] and built == []
+    arch = state.data_root / "inbound" / res["archive"]
+    meta = json.loads((arch / "meta.json").read_text(encoding="utf-8"))
+    assert meta["dismissed_by"] == "auto"
+    assert meta["dismissed_reason"] == "bulk_no_price"
+    assert (arch / "message.eml").exists()  # custody untouched
+    assert not (arch / "rendered-body.pdf").exists()
+    log = client.get("/api/inbound/log").json()
+    assert log["n_held"] == 0
+    row = [e for e in log["entries"] if e["archive"] == res["archive"]][-1]
+    assert row["status_kind"] == "done"
+    assert row["status_label"] == (
+        "Marketing email with no price, set aside automatically"
+    )
+
+
+def test_a_forwarded_promotion_is_known_by_its_footer(client, monkeypatch):
+    """A forward loses the list headers but keeps the unsubscribe line."""
+    _patch_notify(monkeypatch)
+    _no_reading_allowed(monkeypatch)
+    state = client.app.state
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _promo_mail(list_headers=False), synchronous=True,
+    )
+    assert res["status"] == STATUS_DISMISSED, res
+
+
+def test_a_promotion_that_names_a_price_is_still_read(client, monkeypatch):
+    """A price outranks the unsubscribe line: a vendor's receipt carries
+    one too, and reading a priced promotion costs one call that the
+    document-type check sets aside, where dismissing a receipt would lose
+    it."""
+    _patch_notify(monkeypatch)
+    state = client.app.state
+    _patch_ocr(monkeypatch, _extraction())
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _promo_mail(text="Your order #21\nTotal $107.19\nUnsubscribe\n"),
+        synchronous=True,
+    )
+    assert res.get("auto_rendered") is True, res
+
+
+def test_retry_held_sets_aside_held_promotions_without_reading_them(
+    client, monkeypatch,
+):
+    """Mail an older build held (the two live Toast promotions) is cleared
+    by the next "Retry held emails" press for free, while a priced held
+    mail beside it is still read."""
+    import expense_recon.web.intake_mail as im
+
+    _patch_notify(monkeypatch)
+    state = client.app.state
+    with monkeypatch.context() as mp:
+        mp.setattr(im, "body_only_verdict", lambda *a, **k: im.VERDICT_HOLD)
+        promo = process_message(
+            state.db_path, state.learning_db_path, state.data_root,
+            _promo_mail(), synchronous=True,
+        )
+        receipt = process_message(
+            state.db_path, state.learning_db_path, state.data_root,
+            _forwarded_hostinger(), synchronous=True,
+        )
+    assert promo["status"] == receipt["status"] == HELD_BODY_ONLY
+    _patch_ocr(monkeypatch, _extraction(vendor="Hostinger", total="10.99",
+                                        currency="USD"))
+    out = client.post("/api/inbound/replay-held").json()
+    assert out["set_aside"] == 1, out
+    assert out["rendered"] == 1, out
+    log = client.get("/api/inbound/log").json()
+    assert log["n_held"] == 0
+    status = {e["archive"]: e["status"] for e in log["entries"]}
+    assert status[promo["archive"]] == STATUS_DISMISSED
+    assert status[receipt["archive"]] == STATUS_POOLED
+
+
+def test_a_set_aside_promotion_can_still_be_read_by_hand(client, monkeypatch):
+    """No person judged it, so a person can still ask for it to be read."""
+    _patch_notify(monkeypatch)
+    state = client.app.state
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _promo_mail(), synchronous=True,
+    )
+    assert res["status"] == STATUS_DISMISSED
+    _patch_ocr(monkeypatch, _extraction())
+    resp = client.post(f"/api/inbound/{res['archive']}/render-ingest")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == STATUS_POOLED
+
+
+def test_an_operators_dismissal_stays_terminal(client, monkeypatch):
+    """The render route opens only for the tool's own set-aside."""
+    _patch_notify(monkeypatch)
+    state = client.app.state
+    res = process_message(
+        state.db_path, state.learning_db_path, state.data_root,
+        _html_mail(OUTSIDE, subject="junk", priced=False), synchronous=True,
+    )
+    assert res["status"] == HELD_BODY_ONLY
+    assert client.post(
+        f"/api/inbound/{res['archive']}/dismiss"
+    ).status_code == 200
+    resp = client.post(f"/api/inbound/{res['archive']}/render-ingest")
+    assert resp.status_code == 409, resp.text
+
+
+@pytest.mark.parametrize("text", [
+    "Total paid\n10.99 USD",
+    "Total 27,90 €",
+    "Order #21 $107.19",
+    "USD10.99",
+    "R$ 45,00",
+    "EUR 23.50",
+    "Total: 27.90",
+    "Amount charged 1.234,56",
+    "10.​99 USD",
+])
+def test_a_price_is_seen(text):
+    from expense_recon.web.intake_mail import body_names_a_price
+
+    assert body_names_a_price(text)
+
+
+@pytest.mark.parametrize("text", [
+    "2203 Spring Stuebner Rd Ste 100, Spring, TX 77389",
+    "Order #21 is ready in the app",
+    "It's been a while, let's catch up. Order now",
+    "Action required for your Google Account",
+    "Copyright 2004-2026 Hostinger International Ltd.",
+    "",
+])
+def test_no_price_is_seen(text):
+    from expense_recon.web.intake_mail import body_names_a_price
+
+    assert not body_names_a_price(text)
