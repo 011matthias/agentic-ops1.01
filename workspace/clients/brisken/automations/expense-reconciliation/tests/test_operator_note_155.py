@@ -33,10 +33,8 @@ from expense_recon.web.app import create_app  # noqa: E402
 from expense_recon.web.body_render import extract_body_text, operator_note  # noqa: E402
 from expense_recon.web.store import RunStore  # noqa: E402
 from expense_recon.web.intake_mail import (  # noqa: E402
-    HELD_BODY_ONLY,
     STATUS_INGESTED,
     process_message,
-    render_ingest,
 )
 
 DOMAIN = "expenses.brisken.com"
@@ -369,19 +367,15 @@ def test_a_rendered_body_only_mail_carries_the_note_too(client, monkeypatch):
     """
     batch_id = _create_batch(client, monkeypatch)
     state = client.app.state
-    _patch_ocr(monkeypatch)
-    arrival = process_message(
+    # The forwarded receipt names its price ("$15.00"), so since item 268
+    # arrival reads it itself, whoever forwarded it.
+    _patch_ocr(monkeypatch, _extraction(), _extraction())
+    rendered = process_message(
         state.db_path, state.learning_db_path, state.data_root,
         _mail(LOVABLE, None, from_addr="dirk_.neumann@icloud.com"),
         synchronous=True,
     )
-    assert arrival["status"] == HELD_BODY_ONLY, arrival
-
-    _patch_ocr(monkeypatch, _extraction(), _extraction())
-    rendered = render_ingest(
-        state.db_path, state.learning_db_path, state.data_root,
-        arrival["archive"], operator="criss",
-    )
+    assert rendered.get("auto_rendered") is True, rendered
     assert rendered.get("batch_id") == batch_id, rendered
     assert _provenance(client, batch_id).keys() == {"0000__rendered-body.pdf"}
     row = _rows(client, batch_id)["Lovable"]

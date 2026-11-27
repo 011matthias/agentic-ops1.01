@@ -3,7 +3,7 @@ project: brisken
 workstream: p1-expense-reconciliation
 kind: improvement-backlog
 state: active
-updated: 2026-10-29
+updated: 2026-11-27
 ---
 
 # Expense tool: improvement backlog (the one list)
@@ -13808,6 +13808,51 @@ the list checks ok. Listed in `SETTINGS_DERIVED_KEYS`, so the SPA's
 whole-object PUT accepts it back and ignores it (without that it would be
 refused as an unknown key; regress_check bites). Tests in
 `tests/test_card_account_check_item_172.py`.
+
+### 268. A body-only mail is read or set aside by what it says, not by who sent it (owner 2026-11-27, "solve this email holding problem"; licence: defect, covered) (BACKEND SHIPPED 2026-11-27)
+
+Owner forwarded the operator alert for a Toast promotion ("Noe's Cafe, Charm
+Thai and The noodle are open for Thanksgiving", `held_body_only`, `Error: -`).
+Live read the same day: the intake held exactly three mails and every one was
+wrong. Two Toast promotions (no order, no price, "you signed up for marketing
+communications") had alerted Criss and Matthias for nothing. The third, a
+forwarded Hostinger payment confirmation (invoice H_52366413, "Total paid
+10.99 USD", sent 2026-10-29 from an address nobody had listed), had sat held
+for four weeks. Cause: arrival read body-only mail only from KNOWN senders,
+so a stranger's mail was held whether it was a receipt or an advert. (The
+intake address is on Toast's guest list since someone took a Toast e-receipt
+there; real Toast receipts come from `no-reply@toasttab.com`, promotions from
+`no-reply+…@toast-restaurants.com`.)
+
+Fix (`body_only_verdict` in `web/intake_mail.py`): a known sender's
+body-only mail is read as before; anyone else's is read when its text names a
+price (a currency amount, or a total/paid/amount line); bulk mail (list
+headers, or an unsubscribe line for a forward) that names no price is set
+aside as `dismissed` with `dismissed_by: auto`, `dismissed_reason:
+bulk_no_price`, its own label ("Marketing email with no price, set aside
+automatically"), no alert, no vision call; everything else holds and alerts as
+before. A stranger's priced mail costs the one reading a stranger's PDF always
+has, under the same day cap, and never opens a month. "Retry held emails"
+applies the same rule first, so promotions an older build held are set aside
+for free (`set_aside` count beside `rendered`). The automatic set-aside stays
+renderable through `render-ingest`; an operator's own dismissal stays
+terminal. No new status value, so the SPA needs no change.
+
+Proof: 9 new tests in `tests/test_intake_mail.py` (item 268 section) through
+the router and the routes; arrival wiring and retry wiring each regressed
+green -> red -> green with `tools/regress_check.py`. 13 older tests built
+"a held mail" from a stranger's PRICED mail and were moved to a priceless one
+(`_html_mail(..., priced=False)`), which is the shape that still holds.
+Differential on live text: the rule reads the Hostinger forward and the
+10-14 Charm Taphouse order (became a USD 107.19 expense), and sets aside both
+promotions plus Toast's "Welcome" and "Thank you for your business" (both
+already read at a cost on 10-29 and judged not receipts).
+
+Not done, on purpose: the three live held mails stay as they are until the
+next "Retry held emails" press, which will set aside the two promotions and
+read the Hostinger receipt (dated 2026-10-08) into its month. The alert's `Error: -` line is
+unchanged (pinned byte-for-byte by item 121's test); it now fires only for
+mail a person should look at.
 
 ## Shipped (loop history)
 

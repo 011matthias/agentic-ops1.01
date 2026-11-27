@@ -683,9 +683,11 @@ def test_travel_mail_never_materializes_a_month(client, monkeypatch):
 
 def test_rendered_travel_body_mail_pools_as_travel(client, monkeypatch):
     _set_travel_alias(client)
+    # No price in the text, so a stranger's mail still waits for a click
+    # (item 268 reads a priced one on arrival).
     result = _send(client, _mail(
         OUTSIDE, f"travel@{DOMAIN}", attachments=[],
-        body="Your ride receipt: EUR 23.50",
+        body="Your ride receipt is ready in the app",
     ))
     assert result["status"] == HELD_BODY_ONLY
     assert _meta(client, result["archive"])["pool_kind"] == "travel"
